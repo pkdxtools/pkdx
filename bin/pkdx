@@ -58,6 +58,6 @@ if [ -f "$BINARY" ]; then
   exec "$BINARY" "$@"
 fi
 
-echo "pkdx binary not found. Build locally:" >&2
-echo "  cd pkdx && moon build --target native" >&2
+echo "pkdx binary not found. Run setup:" >&2
+echo "  ./setup.sh" >&2
 exit 1

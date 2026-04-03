@@ -14,9 +14,14 @@ CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリと
 ## Setup
 
 ```bash
-git submodule update --init          # pokedex サブモジュール取得
-cd pokedex && ruby tools/import_db.rb # pokedex.db 生成
-cd pkdx && moon build --target native # pkdx CLIビルド
+./setup.sh    # submodule初期化 + pokedex.db生成 + pkdxバイナリDL を一括実行
+```
+
+手動で行う場合:
+```bash
+git submodule update --init           # pokedex サブモジュール取得
+cd pokedex && ruby tools/import_db.rb # pokedex.db 生成（Ruby必要）
+# pkdx バイナリは bin/pkdx 経由で GitHub Releases から自動DL
 ```
 
 `pokedex.db` と `pkdx` バイナリが存在しないとスキルは動作しない。

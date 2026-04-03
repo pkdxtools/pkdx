@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pkdx"
+VERSION="latest"
+
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
+case "$OS" in
+  darwin)  OS_TAG="darwin" ;;
+  linux)   OS_TAG="linux" ;;
+  mingw*|msys*|cygwin*) OS_TAG="windows" ;;
+  *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
+esac
+
+case "$ARCH" in
+  arm64|aarch64) ARCH_TAG="arm64" ;;
+  x86_64|amd64)  ARCH_TAG="x86_64" ;;
+  *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+esac
+
+BINARY_NAME="pkdx-${OS_TAG}-${ARCH_TAG}"
+if [ "$OS_TAG" = "windows" ]; then
+  BINARY_NAME="${BINARY_NAME}.exe"
+fi
+BINARY="$CACHE_DIR/$BINARY_NAME"
+
+# Check for locally built binary first
+LOCAL_BUILD="$REPO_ROOT/pkdx/_build/native/release/build/src/main/main.exe"
+LOCAL_BUILD_DEBUG="$REPO_ROOT/pkdx/_build/native/debug/build/src/main/main.exe"
+if [ -f "$LOCAL_BUILD" ]; then
+  exec "$LOCAL_BUILD" "$@"
+elif [ -f "$LOCAL_BUILD_DEBUG" ]; then
+  exec "$LOCAL_BUILD_DEBUG" "$@"
+fi
+
+# Check cached binary
+if [ -f "$BINARY" ]; then
+  exec "$BINARY" "$@"
+fi
+
+# Download from GitHub Releases
+REPO="ushironoko/pokemon-builder"
+mkdir -p "$CACHE_DIR"
+
+if command -v gh &>/dev/null; then
+  gh release download "$VERSION" --repo "$REPO" --pattern "$BINARY_NAME" --dir "$CACHE_DIR" 2>/dev/null || true
+elif command -v curl &>/dev/null; then
+  URL="https://github.com/$REPO/releases/$VERSION/download/$BINARY_NAME"
+  curl -sL "$URL" -o "$BINARY" 2>/dev/null || true
+fi
+
+if [ -f "$BINARY" ]; then
+  chmod +x "$BINARY"
+  exec "$BINARY" "$@"
+fi
+
+echo "pkdx binary not found. Run setup:" >&2
+echo "  ./setup.sh" >&2
+exit 1

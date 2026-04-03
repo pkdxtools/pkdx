@@ -1,0 +1,8 @@
+{
+  "name": "ushironoko/pkdx",
+  "version": "0.1.0",
+  "deps": {
+    "moonbitlang/x": "0.4.41"
+  },
+  "preferred-target": "native"
+}

@@ -1,0 +1,9 @@
+{
+  "supported-targets": ["native"],
+  "import": [
+    "ushironoko/pkdx/src/db",
+    "ushironoko/pkdx/src/model",
+    "ushironoko/pkdx/src/types",
+    "ushironoko/pkdx/src/damage"
+  ]
+}

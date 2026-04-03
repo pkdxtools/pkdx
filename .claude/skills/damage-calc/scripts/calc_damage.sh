@@ -1,7 +1,18 @@
 #!/bin/bash
-# calc_damage.sh - ダメージ計算（特化同士, Lv50）
-# Usage: calc_damage.sh <attacker_name> <defender_name> <move_name> [version]
-# Output: パイプ区切りテキスト（条件情報 + 16段階乱数テーブル + 確定数）
+# calc_damage.sh - ダメージ計算（Lv50, 特性・持ち物・天候対応）
+# Usage: calc_damage.sh <attacker> <defender> <move> [options]
+#   --version <ver>       (default: scarlet_violet)
+#   --atk-ability <name>  攻撃側特性
+#   --def-ability <name>  防御側特性
+#   --atk-item <name>     攻撃側持ち物
+#   --def-item <name>     防御側持ち物
+#   --weather <type>      天候
+#   --field <type>        フィールド
+#   --tera-type <type>    テラスタイプ
+#   --critical            急所
+#   --atk-stat <value>    攻撃実数値 (省略: 特化)
+#   --def-stat <value>    防御実数値 (省略: 特化)
+#   --def-hp <value>      HP実数値 (省略: H252)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,10 +26,33 @@ if [ ! -f "$DB_PATH" ]; then
   exit 1
 fi
 
-ATTACKER_NAME="$1"
-DEFENDER_NAME="$2"
-MOVE_NAME="$3"
-VERSION_LOWER="${4:-scarlet_violet}"
+# --- 引数パース ---
+ATTACKER_NAME="$1"; DEFENDER_NAME="$2"; MOVE_NAME="$3"; shift 3
+
+VERSION_LOWER="scarlet_violet"
+ATK_ABILITY="" DEF_ABILITY=""
+ATK_ITEM="" DEF_ITEM=""
+WEATHER="" FIELD="" TERA_TYPE=""
+CRITICAL=false
+ATK_STAT_OVERRIDE="特化" DEF_STAT_OVERRIDE="特化" DEF_HP_OVERRIDE=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --version)     VERSION_LOWER="$2"; shift 2 ;;
+    --atk-ability) ATK_ABILITY="$2"; shift 2 ;;
+    --def-ability) DEF_ABILITY="$2"; shift 2 ;;
+    --atk-item)    ATK_ITEM="$2"; shift 2 ;;
+    --def-item)    DEF_ITEM="$2"; shift 2 ;;
+    --weather)     WEATHER="$2"; shift 2 ;;
+    --field)       FIELD="$2"; shift 2 ;;
+    --tera-type)   TERA_TYPE="$2"; shift 2 ;;
+    --critical)    CRITICAL=true; shift ;;
+    --atk-stat)    ATK_STAT_OVERRIDE="$2"; shift 2 ;;
+    --def-stat)    DEF_STAT_OVERRIDE="$2"; shift 2 ;;
+    --def-hp)      DEF_HP_OVERRIDE="$2"; shift 2 ;;
+    *) VERSION_LOWER="$1"; shift ;;  # 後方互換: 4番目の位置引数=version
+  esac
+done
 
 # wazaテーブル用にMixed Caseに変換
 case "$VERSION_LOWER" in
@@ -28,7 +62,7 @@ case "$VERSION_LOWER" in
   *)              VERSION_WAZA="$VERSION_LOWER" ;;
 esac
 
-# SQLインジェクション対策: シングルクォートをエスケープ
+# SQLインジェクション対策
 escape_sql() {
   echo "$1" | sed "s/'/''/g"
 }
@@ -130,152 +164,59 @@ if [ "$MOVE_POWER" = "-" ] || [ -z "$MOVE_POWER" ]; then
   exit 1
 fi
 
-# --- 物理/特殊判定 → 使用する種族値を決定 ---
-if [ "$MOVE_CATEGORY" = "物理" ]; then
-  ATK_BASE=$ATK_ATK
-  DEF_BASE=$DEF_DEF
-  ATK_STAT_NAME="こうげき"
-  DEF_STAT_NAME="ぼうぎょ"
-elif [ "$MOVE_CATEGORY" = "特殊" ]; then
-  ATK_BASE=$ATK_SPA
-  DEF_BASE=$DEF_SPD
-  ATK_STAT_NAME="とくこう"
-  DEF_STAT_NAME="とくぼう"
-else
-  echo "error|unknown_category|${MOVE_CATEGORY}"
-  exit 1
-fi
-
-# --- Lv50 特化実数値計算 ---
-# 攻撃実数値: floor((base + 52) * 1.1) → (base + 52) * 11 / 10
-ATK_STAT=$(( (ATK_BASE + 52) * 11 / 10 ))
-
-# 防御側HP: base + 107 (Lv50, IV31, EV252)
-DEF_HP_ACTUAL=$(( DEF_HP + 107 ))
-
-# 防御実数値: floor((base + 52) * 1.1) → (base + 52) * 11 / 10
-DEF_STAT=$(( (DEF_BASE + 52) * 11 / 10 ))
-
-# --- STAB判定 ---
-HAS_STAB=0
-if [ "$MOVE_TYPE" = "$ATK_TYPE1" ]; then
-  HAS_STAB=1
-elif [ -n "$ATK_TYPE2" ] && [ "$MOVE_TYPE" = "$ATK_TYPE2" ]; then
-  HAS_STAB=1
-fi
-
-# --- タイプ相性取得 (python3) ---
-TYPE_EFF_DATA=$(python3 -c "
-import json
-from fractions import Fraction
-with open('${TYPE_JSON}') as f:
-    data = json.load(f)
-chart = next(e['type'] for e in data['type'] if 'scarlet_violet' in e['geme_version'])
-move_type = '${MOVE_TYPE}'
-def_type1 = '${DEF_TYPE1}'
-def_type2 = '${DEF_TYPE2}'
-eff1 = chart.get(move_type, {}).get(def_type1, 1)
-eff2 = chart.get(move_type, {}).get(def_type2, 1) if def_type2 else 1
-f1 = Fraction(eff1).limit_denominator(16)
-f2 = Fraction(eff2).limit_denominator(16)
-total_eff = eff1 * eff2
-print(f'{f1.numerator} {f1.denominator} {f2.numerator} {f2.denominator} {total_eff}')
-")
-
-read -r EFF1_NUM EFF1_DEN EFF2_NUM EFF2_DEN TOTAL_EFF <<< "$TYPE_EFF_DATA"
-
-# タイプ無効チェック
-if [ "$EFF1_NUM" -eq 0 ] || [ "$EFF2_NUM" -eq 0 ]; then
-  echo "error|immune|${MOVE_TYPE}→${DEF_TYPE1}/${DEF_TYPE2}"
-  exit 1
-fi
-
-# --- 基礎ダメージ計算 ---
-# floor(floor(22 * power * atk / def) / 50 + 2)
-INNER=$(( 22 * MOVE_POWER * ATK_STAT / DEF_STAT ))
-DAMAGE_BASE=$(( INNER / 50 + 2 ))
-
-# --- タイプ表示用ヘルパー ---
-format_types() {
-  if [ -n "$2" ]; then
-    echo "${1}/${2}"
-  else
-    echo "$1"
-  fi
-}
-
-ATK_TYPES=$(format_types "$ATK_TYPE1" "$ATK_TYPE2")
-DEF_TYPES=$(format_types "$DEF_TYPE1" "$DEF_TYPE2")
-
-# --- メタデータ出力 ---
-echo "=== DAMAGE CALC RESULT ==="
-echo "attacker|${ATK_NAME_JA}|${ATK_TYPES}|${ATK_STAT_NAME}:${ATK_BASE}→${ATK_STAT}"
-echo "defender|${DEF_NAME_JA}|${DEF_TYPES}|HP:${DEF_HP}→${DEF_HP_ACTUAL}|${DEF_STAT_NAME}:${DEF_BASE}→${DEF_STAT}"
-echo "move|${MOVE_NAME}|${MOVE_TYPE}|${MOVE_CATEGORY}|${MOVE_POWER}"
-if [ "$HAS_STAB" -eq 1 ]; then
-  echo "stab|yes"
-else
-  echo "stab|no"
-fi
-echo "type_effectiveness|${TOTAL_EFF}x"
-
-# --- 乱数16段階ダメージ計算 ---
-DAMAGES=()
-for RAND in $(seq 85 100); do
-  DMG=$(( DAMAGE_BASE * RAND / 100 ))
-
-  # STAB適用 (五捨五超入: +2047で整数除算)
-  if [ "$HAS_STAB" -eq 1 ]; then
-    DMG=$(( (DMG * 6144 + 2047) / 4096 ))
-  fi
-
-  # タイプ相性を順次適用 (各タイプごとにfloor)
-  DMG=$(( DMG * EFF1_NUM / EFF1_DEN ))
-  DMG=$(( DMG * EFF2_NUM / EFF2_DEN ))
-
-  # 最低ダメージは1
-  if [ "$DMG" -lt 1 ]; then
-    DMG=1
-  fi
-
-  DAMAGES+=("$DMG")
-done
-
-# --- 乱数テーブル出力 (横軸=乱数値, 縦軸=ラベル) ---
-DAMAGE_LIST=$(IFS=,; echo "${DAMAGES[*]}")
-python3 -c "
-hp = ${DEF_HP_ACTUAL}
-damages = [${DAMAGE_LIST}]
-rands = list(range(85, 101))
-pcts = [d / hp * 100 for d in damages]
-print('label|' + '|'.join(str(r) for r in rands))
-print('damage|' + '|'.join(str(d) for d in damages))
-print('percent|' + '|'.join(f'{p:.1f}%' for p in pcts))
-"
-
-# --- 確定数判定 ---
-MIN_DMG=${DAMAGES[0]}
-MAX_DMG=${DAMAGES[15]}
+# --- JSON安全生成 → damage_engine.py にパイプ ---
+export ATK_NAME="$ATK_NAME_JA" ATK_GNO="$ATK_GLOBALNO"
+export ATK_T1="$ATK_TYPE1" ATK_T2="${ATK_TYPE2:-}"
+export ATK_HP ATK_ATK ATK_DEF ATK_SPA ATK_SPD ATK_SPE
+export DEF_NAME="$DEF_NAME_JA" DEF_GNO="$DEF_GLOBALNO"
+export DEF_T1="$DEF_TYPE1" DEF_T2="${DEF_TYPE2:-}"
+export DEF_HP DEF_ATK DEF_DEF DEF_SPA DEF_SPD DEF_SPE
+export MOVE_NAME MOVE_TYPE="$MOVE_TYPE" MOVE_CAT="$MOVE_CATEGORY" MOVE_PWR="$MOVE_POWER"
+export TYPE_JSON
+export M_ATK_ABILITY="$ATK_ABILITY" M_DEF_ABILITY="$DEF_ABILITY"
+export M_ATK_ITEM="$ATK_ITEM" M_DEF_ITEM="$DEF_ITEM"
+export M_WEATHER="$WEATHER" M_FIELD="$FIELD" M_TERA_TYPE="$TERA_TYPE"
+export M_CRITICAL="$CRITICAL"
+export M_ATK_STAT="$ATK_STAT_OVERRIDE" M_DEF_STAT="$DEF_STAT_OVERRIDE" M_DEF_HP="${DEF_HP_OVERRIDE:-}"
 
 python3 -c "
-min_d = ${MIN_DMG}
-max_d = ${MAX_DMG}
-hp = ${DEF_HP_ACTUAL}
-damages = [${DAMAGE_LIST}]
-
-min_pct = min_d / hp * 100
-max_pct = max_d / hp * 100
-
-print(f'summary|{min_d}~{max_d}|{min_pct:.1f}%~{max_pct:.1f}%')
-
-for n in range(1, 5):
-    ko_count = sum(1 for d in damages if d * n >= hp)
-    if ko_count == 16:
-        print(f'ko|確定{n}発')
-        break
-    elif ko_count > 0:
-        print(f'ko|乱数{n}発({ko_count}/16)')
-        break
-else:
-    print('ko|5発以上')
-"
+import json, os
+print(json.dumps({
+    'attacker': {
+        'name': os.environ['ATK_NAME'], 'globalNo': os.environ['ATK_GNO'],
+        'types': [os.environ['ATK_T1'], os.environ.get('ATK_T2', '')],
+        'base': {
+            'hp': int(os.environ['ATK_HP']), 'atk': int(os.environ['ATK_ATK']),
+            'def': int(os.environ['ATK_DEF']), 'spa': int(os.environ['ATK_SPA']),
+            'spd': int(os.environ['ATK_SPD']), 'spe': int(os.environ['ATK_SPE'])
+        }
+    },
+    'defender': {
+        'name': os.environ['DEF_NAME'], 'globalNo': os.environ['DEF_GNO'],
+        'types': [os.environ['DEF_T1'], os.environ.get('DEF_T2', '')],
+        'base': {
+            'hp': int(os.environ['DEF_HP']), 'atk': int(os.environ['DEF_ATK']),
+            'def': int(os.environ['DEF_DEF']), 'spa': int(os.environ['DEF_SPA']),
+            'spd': int(os.environ['DEF_SPD']), 'spe': int(os.environ['DEF_SPE'])
+        }
+    },
+    'move': {
+        'name': os.environ['MOVE_NAME'], 'type': os.environ['MOVE_TYPE'],
+        'category': os.environ['MOVE_CAT'], 'power': os.environ['MOVE_PWR']
+    },
+    'type_chart_path': os.environ['TYPE_JSON'],
+    'modifiers': {
+        'atk_ability': os.environ.get('M_ATK_ABILITY', ''),
+        'def_ability': os.environ.get('M_DEF_ABILITY', ''),
+        'atk_item': os.environ.get('M_ATK_ITEM', ''),
+        'def_item': os.environ.get('M_DEF_ITEM', ''),
+        'weather': os.environ.get('M_WEATHER', ''),
+        'field': os.environ.get('M_FIELD', ''),
+        'tera_type': os.environ.get('M_TERA_TYPE', ''),
+        'critical': os.environ.get('M_CRITICAL', '') == 'true',
+        'atk_stat': os.environ.get('M_ATK_STAT', '特化'),
+        'def_stat': os.environ.get('M_DEF_STAT', '特化'),
+        'def_hp': os.environ.get('M_DEF_HP', '')
+    }
+}, ensure_ascii=False))
+" | python3 "$SCRIPT_DIR/damage_engine.py"

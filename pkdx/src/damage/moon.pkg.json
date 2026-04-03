@@ -1,0 +1,7 @@
+{
+  "supported-targets": ["native"],
+  "import": [
+    "ushironoko/pkdx/src/model",
+    "ushironoko/pkdx/src/types"
+  ]
+}

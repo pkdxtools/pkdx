@@ -1,0 +1,18 @@
+{
+  "is-main": true,
+  "supported-targets": ["native"],
+  "import": [
+    "ushironoko/pkdx/src/cli",
+    "ushironoko/pkdx/src/db",
+    "ushironoko/pkdx/src/types",
+    "ushironoko/pkdx/src/damage",
+    "ushironoko/pkdx/src/model",
+    "moonbitlang/x/sys"
+  ],
+  "native-stub": ["cwrap.c", "sqlite3.c"],
+  "link": {
+    "native": {
+      "stub-cc-flags": "-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -O2"
+    }
+  }
+}

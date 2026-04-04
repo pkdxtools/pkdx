@@ -16,7 +16,84 @@ allowed-tools: Bash, Read, Write, AskUserQuestion
 SKILL_DIR=（このSKILL.mdが置かれたディレクトリ）
 REPO_ROOT=$SKILL_DIR/../../../..  （.claude/skills/breed/ → repo root）
 PKDX=$REPO_ROOT/bin/pkdx
+CACHE_DIR=$REPO_ROOT/pokedex       # pokedex.dbと同じディレクトリ
 ```
+
+## キャッシュファイル
+
+各Phase完了時に、育成中のデータをJSONファイルとして `$CACHE_DIR/breed_cache_<pokemon_name>.json` に書き出す。ポケモンごとに別ファイルとする。
+
+### 目的
+
+- コンテキスト圧縮やセッション断絶時のデータ復元用中間データ
+- Phase 8で最終保存 or スキル終了時に削除
+
+### ファイルパス
+
+```
+$CACHE_DIR/breed_cache_<pokemon_name>.json
+```
+
+例: `pokedex/breed_cache_ブリジュラス.json`
+
+### スキーマ
+
+```json
+{
+  "version": "<game_version>",
+  "phase": <current_phase_number>,
+  "pokemon": {
+    "name": "<name>",
+    "name_en": "<name_en>",
+    "globalNo": "<globalNo>",
+    "type1": "<type1>",
+    "type2": "<type2>",
+    "base_stats": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 },
+    "abilities": { "ability1": "", "ability2": "", "dream_ability": "" }
+  },
+  "build": {
+    "nature": "<nature_name or null>",
+    "nature_up": "<stat or null>",
+    "nature_down": "<stat or null>",
+    "ability": "<chosen_ability or null>",
+    "item": "<item or null>",
+    "moves": ["<move1 or null>", "<move2 or null>", "<move3 or null>", "<move4 or null>"],
+    "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 },
+    "actual_stats": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+  },
+  "damage_calcs": [
+    {
+      "direction": "attack|defense",
+      "opponent": "<opponent_name>",
+      "move": "<move_name>",
+      "damages": [0],
+      "percents": [0.0],
+      "defender_hp": 0,
+      "ko": "<ko_text>"
+    }
+  ],
+  "updated_at": "<ISO8601>"
+}
+```
+
+### 更新タイミング
+
+各Phaseの「Training State 出力」の直後にキャッシュファイルを書き出す。具体的には:
+
+| Phase | 書き込む内容 |
+|-------|-------------|
+| 1 | pokemon情報 + base_stats + abilities |
+| 2 | + nature / nature_up / nature_down + actual_stats再計算 |
+| 3 | + ability |
+| 4 | + item |
+| 5 | + moves |
+| 6 | + evs + actual_stats最終値 |
+| 7 | + damage_calcs（ダメ計実行ごとに追記） |
+
+### Phase 8での扱い
+
+- 保存完了後、またはユーザーが「いいえ」で保存をスキップした場合、キャッシュファイルを**削除**する
+- 削除に失敗しても警告のみでスキル終了をブロックしない
 
 ## 実数値計算式
 
@@ -403,6 +480,8 @@ calcスキルと同じ形式でダメージテーブルを表示:
 **確定数**: {ko_text}
 ```
 
+**重要**: 各ダメ計結果（攻撃側/防御側、相手名、技名、乱数テーブル、確定数）をPhase 8の保存用に蓄積しておく。
+
 ダメ計後、追加計算するか質問:
 
 **AskUserQuestion**（1問）:
@@ -469,6 +548,29 @@ calcスキルと同じ形式でダメージテーブルを表示:
 | <move3> | <type> | <category> | <power> | <accuracy> |
 | <move4> | <type> | <category> | <power> | <accuracy> |
 
+## ダメージ計算結果
+
+Phase 7でダメージ計算を行った場合、全結果をここに記録する。計算を行わなかった場合はこのセクションを省略する。
+
+各計算結果を以下の形式で列挙:
+
+### <攻撃側 or 防御側> vs <相手名> / <技名>
+
+| 項目 | 値 |
+|------|-----|
+| 攻撃側 | <attacker> (攻撃実数値: <stat_name> <actual>) |
+| 防御側 | <defender> (HP: <hp> / <def_stat_name>: <def_actual>) |
+| 技 | <move> (<type>/<category>, 威力<power>) |
+
+| | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 |
+|---|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|-----|
+| ダメージ | ... |
+| 割合 | ... |
+
+**確定数**: {ko_text}
+
+---
+
 ## ダメージ計算用コマンド
 
 攻撃側として:
@@ -483,9 +585,13 @@ bin/pkdx damage "<相手>" "<name>" "<技>" --def-stat <B or D実数値> --def-h
 ```
 
 保存完了後:
+1. キャッシュファイル `$CACHE_DIR/breed_cache_<pokemon_name>.json` を削除
+2. 完了メッセージを表示:
 ```
 ✓ ./pokemons/<name>/<filename>.md に保存しました。
 ```
+
+「いいえ」の場合もキャッシュファイルを削除してからスキルを終了。
 
 ---
 

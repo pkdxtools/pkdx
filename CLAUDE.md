@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ポケモン対戦構築支援リポジトリ。Claude Codeのスキル群として動作し、以下の2機能を提供する。
 
-- **pokemon-builder** — 6体構築・3体選出のシングルバトル向けチームビルドを対話的にガイド
-- **damage-calc** — Lv50ダメージ計算（特性・持ち物・天候・フィールド・テラスタル・急所対応、16段階乱数テーブル出力）
+- **team-builder** — 6体構築・3体選出のシングルバトル向けチームビルドを対話的にガイド
+- **calc** — Lv50ダメージ計算（特性・持ち物・天候・フィールド・テラスタル・急所対応、16段階乱数テーブル出力）
 
 CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリとダメージ計算を担う。
 
@@ -45,12 +45,12 @@ bin/
   pkdx.cmd                # Windows用ラッパー
 
 .claude/skills/
-  pokemon-builder/
+  team-builder/
     SKILL.md              # 構築スキル本体（Phase 0-8 の対話フロー定義）
     references/
       format_rules.md     # メカニクス定義（メガ/ダイマ/Z/テラスタル）
       stat_thresholds.md  # 種族値ベンチマーク・素早さティア
-  damage-calc/
+  calc/
     SKILL.md              # ダメージ計算スキル本体
 
 pokedex/                  # git submodule (towakey/pokedex)
@@ -94,10 +94,10 @@ bin/pkdx coverage "ほのお,みず,くさ"
 
 ## Skill Flow
 
-### pokemon-builder
+### team-builder
 
 Phase 0（初期化）→ Phase 8（レポート出力）の順に進行。各フェーズ終了時に `=== Team State ===` ブロックを出力し、コンテキスト圧縮後も状態を復元可能にする。最終成果物は `{軸ポケモン名}-build-{YYYY-MM-DD}.md` として出力される。
 
-### damage-calc
+### calc
 
 攻撃側・防御側・技名を受け取り、`pkdx damage` で計算を実行。16段階の乱数テーブル・確定数・割合をJSON出力する。オプションで特性・持ち物・天候・フィールド・テラスタル・急所を指定可能。

@@ -1,5 +1,5 @@
 ---
-name: pokemon-builder
+name: team-builder
 description: "対戦用ポケモン構築支援。軸ポケモンからタイプ補完・メタ分析・選出パターンまでガイドする。構築したい・パーティを組みたい・チーム作成時に使用。"
 allowed-tools: Bash, WebFetch, Read, Write, AskUserQuestion
 ---
@@ -14,7 +14,7 @@ allowed-tools: Bash, WebFetch, Read, Write, AskUserQuestion
 
 ```
 SKILL_DIR=（このSKILL.mdが置かれたディレクトリ）
-REPO_ROOT=$SKILL_DIR/../../../..  （.claude/skills/pokemon-builder/ → repo root）
+REPO_ROOT=$SKILL_DIR/../../../..  （.claude/skills/team-builder/ → repo root）
 PKDX=$REPO_ROOT/bin/pkdx
 ```
 

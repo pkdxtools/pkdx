@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-REPO="ushironoko/pokemon-builder"
+REPO="ushironoko/pkdx"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pkdx"
 
 # --- OS/Arch detection ---
@@ -27,7 +27,7 @@ if [ "$OS_TAG" = "windows" ]; then
   BINARY_NAME="${BINARY_NAME}.exe"
 fi
 
-echo "=== pokemon-builder setup ==="
+echo "=== pkdx setup ==="
 echo ""
 
 # --- Step 1: pokedex submodule ---

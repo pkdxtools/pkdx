@@ -43,7 +43,7 @@ if [ -f "$BINARY" ]; then
 fi
 
 # Download from GitHub Releases
-REPO="ushironoko/pokemon-builder"
+REPO="ushironoko/pkdx"
 mkdir -p "$CACHE_DIR"
 
 if command -v gh &>/dev/null; then

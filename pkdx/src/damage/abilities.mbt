@@ -20,6 +20,18 @@ pub fn apply_atk_ability_stat(
       if weather == "はれ" { atk_stat * 13 / 10 } else { atk_stat }
     "クォークチャージ" =>
       if field == "エレキ" { atk_stat * 13 / 10 } else { atk_stat }
+    "ひひいろのこどう" =>
+      if is_physical && weather == "はれ" {
+        atk_stat * 5461 / 4096
+      } else {
+        atk_stat
+      }
+    "ハドロンエンジン" =>
+      if not(is_physical) && field == "エレキ" {
+        atk_stat * 5461 / 4096
+      } else {
+        atk_stat
+      }
     _ => atk_stat
   }
 }
@@ -109,6 +121,18 @@ pub fn apply_atk_ability_power(
       }
     "すいほう" => if move_type == "みず" { move_power * 2 } else { move_power }
     "もらいび" => if move_type == "ほのお" { move_power * 3 / 2 } else { move_power }
+    "かたいツメ" =>
+      if is_contact_move(move_name) {
+        move_power * 13 / 10
+      } else {
+        move_power
+      }
+    "きれあじ" =>
+      if is_slash_move(move_name) {
+        move_power * 3 / 2
+      } else {
+        move_power
+      }
     _ => move_power
   }
 }
@@ -168,4 +192,28 @@ pub fn get_def_ability_final(
     "かんそうはだ" => if move_type == "ほのお" { 5120 } else { 0 }
     _ => 0
   }
+}
+
+/// Apply ruin ability cross-side stat modifier.
+/// Attacker's ruin ability reduces defender's stat; defender's ruin ability reduces attacker's stat.
+pub fn apply_ruin_cross_stat(
+  atk_ability : String,
+  def_ability : String,
+  is_physical : Bool,
+  atk_stat : Int,
+  def_stat : Int
+) -> (Int, Int) {
+  let mut a = atk_stat
+  let mut d = def_stat
+  match def_ability {
+    "わざわいのおふだ" => if is_physical { a = a * 3 / 4 }
+    "わざわいのうつわ" => if not(is_physical) { a = a * 3 / 4 }
+    _ => ()
+  }
+  match atk_ability {
+    "わざわいのつるぎ" => if is_physical { d = d * 3 / 4 }
+    "わざわいのたま" => if not(is_physical) { d = d * 3 / 4 }
+    _ => ()
+  }
+  (a, d)
 }

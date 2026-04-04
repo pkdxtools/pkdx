@@ -66,6 +66,15 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     def_stat = apply_def_ability_stat(def_ability, is_physical, def_stat)
   }
 
+  // 2b-2. Ruin ability cross-side stat modifiers
+  if atk_ability.length() > 0 || def_ability.length() > 0 {
+    let (new_atk, new_def) = apply_ruin_cross_stat(
+      atk_ability, def_ability, is_physical, atk_stat, def_stat,
+    )
+    atk_stat = new_atk
+    def_stat = new_def
+  }
+
   // 2c. Item stat modifiers
   if atk_item.length() > 0 {
     atk_stat = apply_atk_item_stat(

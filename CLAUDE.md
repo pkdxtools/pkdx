@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ポケモン対戦構築支援リポジトリ。Claude Codeのスキル群として動作し、以下の2機能を提供する。
 
-- **team-builder** — 6体構築・3体選出のシングルバトル向けチームビルドを対話的にガイド
+- **team-builder** — 6体構築のシングル（3体選出）/ダブル（4体選出）対戦チームビルドを対話的にガイド
 - **calc** — Lv50ダメージ計算（特性・持ち物・天候・フィールド・テラスタル・急所対応、16段階乱数テーブル出力）
 - **breed** — ポケモン育成シミュレーション（性格・努力値・実数値の対話的計算、.mdファイル出力）
 

@@ -415,17 +415,22 @@ calcスキルと同じ形式でダメージテーブルを表示:
 
 ## Phase 8: 保存
 
-**AskUserQuestion**（1問）:
+**AskUserQuestion**（2問）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | 育成データを保存しますか？ | 保存 | はい(desc: ./pokemons/<name>.mdに保存), いいえ(desc: 保存せず終了) | false |
+| 1 | 育成データを保存しますか？ | 保存 | はい(desc: ./pokemons/<name>/配下に保存), いいえ(desc: 保存せず終了) | false |
+| 2 | ファイル名を入力してください（拡張子不要） | ファイル名 | Other(desc: 例: スカーフ型, HBゴツメ等。空欄の場合はYYYYMMDD) | false |
 
 「いいえ」の場合はスキルを終了。
 
 「はい」の場合:
 
-1. `./pokemons/` ディレクトリが存在しなければ作成
+ファイル名の決定:
+- ユーザーが入力した場合 → `./pokemons/<pokemon-name>/<入力値>.md`
+- 入力が空または未指定の場合 → `./pokemons/<pokemon-name>/YYYYMMDD.md`（当日の日付）
+
+1. `./pokemons/<pokemon-name>/` ディレクトリが存在しなければ作成
 2. 同名ファイルが存在する場合はAskUserQuestionで上書き確認
 3. 以下の形式でMarkdownファイルを出力
 
@@ -479,7 +484,7 @@ bin/pkdx damage "<相手>" "<name>" "<技>" --def-stat <B or D実数値> --def-h
 
 保存完了後:
 ```
-✓ ./pokemons/<name>.md に保存しました。
+✓ ./pokemons/<name>/<filename>.md に保存しました。
 ```
 
 ---
@@ -497,3 +502,4 @@ bin/pkdx damage "<相手>" "<name>" "<技>" --def-stat <B or D実数値> --def-h
 | ダメ計で免疫 | 「タイプ相性または特性により無効です」と案内 |
 | 変化技でダメ計 | 「この技はダメージを与えません」と案内し攻撃技を再選択 |
 | 同名ファイル存在 | 上書き確認をAskUserQuestionで行う |
+| ファイル名に使用不可文字 | 「ファイル名に使用できない文字が含まれています」と案内し再入力 |

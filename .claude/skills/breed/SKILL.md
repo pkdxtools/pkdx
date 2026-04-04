@@ -1,5 +1,5 @@
 ---
-name: training-sim
+name: breed
 description: "ポケモン育成シミュレーション。性格・特性・持ち物・技・努力値を対話的に設定し、Lv50実数値を算出する。育成したい・実数値計算・努力値配分等の質問時に使用。"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
@@ -14,7 +14,7 @@ allowed-tools: Bash, Read, Write, AskUserQuestion
 
 ```
 SKILL_DIR=（このSKILL.mdが置かれたディレクトリ）
-REPO_ROOT=$SKILL_DIR/../../../..  （.claude/skills/training-sim/ → repo root）
+REPO_ROOT=$SKILL_DIR/../../../..  （.claude/skills/breed/ → repo root）
 PKDX=$REPO_ROOT/bin/pkdx
 ```
 

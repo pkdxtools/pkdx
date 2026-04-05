@@ -7,7 +7,7 @@ pub fn apply_atk_item_stat(
 ) -> Int {
   match item {
     "こだわりハチマキ" => if is_physical { atk_stat * 3 / 2 } else { atk_stat }
-    "こだわりメガネ" => if not(is_physical) { atk_stat * 3 / 2 } else { atk_stat }
+    "こだわりメガネ" => if !is_physical { atk_stat * 3 / 2 } else { atk_stat }
     "ふといホネ" =>
       if is_physical && (global_no == "0104" || global_no == "0105") {
         atk_stat * 2
@@ -29,7 +29,7 @@ pub fn apply_def_item_stat(
   match item {
     "しんかのきせき" => def_stat * 3 / 2
     "とつげきチョッキ" =>
-      if not(is_physical) { def_stat * 3 / 2 } else { def_stat }
+      if !is_physical { def_stat * 3 / 2 } else { def_stat }
     _ => def_stat
   }
 }
@@ -78,7 +78,7 @@ pub fn get_atk_item_final(
     "いのちのたま" => 5324
     "たつじんのおび" => if is_super_effective { 4915 } else { 0 }
     "ちからのハチマキ" => if is_physical { 4505 } else { 0 }
-    "ものしりメガネ" => if not(is_physical) { 4505 } else { 0 }
+    "ものしりメガネ" => if !is_physical { 4505 } else { 0 }
     _ => 0
   }
 }

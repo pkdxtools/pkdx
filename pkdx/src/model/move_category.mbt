@@ -1,5 +1,5 @@
 /// Move damage category.
-pub enum MoveCategory {
+pub(all) enum MoveCategory {
   Physical
   Special
   Status

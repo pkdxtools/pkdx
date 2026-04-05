@@ -1,5 +1,5 @@
 /// Battle field (terrain) conditions.
-pub enum Field {
+pub(all) enum Field {
   None
   Electric
   Grassy

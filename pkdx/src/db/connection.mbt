@@ -65,7 +65,7 @@ pub fn validate_schema(db : Db) -> Result[Unit, String] {
   ]
   let missing : Array[String] = []
   for i = 0; i < required.length(); i = i + 1 {
-    if not(table_exists(db, required[i])) {
+    if !table_exists(db, required[i]) {
       missing.push(required[i])
     }
   }

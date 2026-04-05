@@ -118,7 +118,7 @@ fn parse_int_str(s : String, default : Int) -> Int {
     }
     i = i + 1
   }
-  if not(has_digit) {
+  if !has_digit {
     return default
   }
   if negative { -result } else { result }

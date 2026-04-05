@@ -21,7 +21,7 @@ pub fn apply_weather_def_mod(
   let has_ice = dt1 == "こおり" || dt2 == "こおり"
   match weather {
     Sand =>
-      if has_rock && not(is_physical) {
+      if has_rock && !is_physical {
         // Rock SpD boost 1.5x
         def_stat * 3 / 2
       } else {

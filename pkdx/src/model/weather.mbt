@@ -1,5 +1,5 @@
 /// Battle weather conditions.
-pub enum Weather {
+pub(all) enum Weather {
   None
   Sun
   Rain

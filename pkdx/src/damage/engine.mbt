@@ -6,8 +6,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let mut move_type = mv.type_
   let move_name = mv.name
   let move_power = mv.power
-  let is_physical = mv.category == Physical
-  let is_special = mv.category == Special
+  let is_physical = mv.category == @model.Physical
+  let is_special = mv.category == @model.Special
   let weather = input.weather
   let field = input.field
   let tera_type = input.tera_type

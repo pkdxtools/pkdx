@@ -43,7 +43,7 @@ fn main {
   }
 }
 
-fn with_db[T](f : (@db.Db) -> T) -> T {
+fn[T] with_db(f : (@db.Db) -> T) -> T {
   let db_path = match resolve_db_path() {
     Ok(p) => p
     Err(e) => {

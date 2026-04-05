@@ -154,20 +154,22 @@ pub fn format_search(
 
 /// Print help message.
 pub fn format_help() -> String {
-  #|pkdx - Pokedex CLI tool
-  #|
-  #|Usage:
-  #|  pkdx query <name> [--version V] [--format json|table]
-  #|  pkdx moves <name|globalNo> [--version V] [--format json|table]
-  #|  pkdx search --type <type> [--type2 <type>] [--min-speed N] [--version V]
-  #|  pkdx damage <attacker> <defender> <move> [modifiers...] [--format json|table]
-  #|  pkdx type-chart <move_type> <def_type1> [def_type2]
-  #|  pkdx coverage <type1,type2,...>
-  #|
-  #|Options:
-  #|  --version V       Game version (default: scarlet_violet)
-  #|  --format F        Output format: json or table (default: table)
-  #|  --help            Show this help message
+  let text =
+    #|pkdx - Pokedex CLI tool
+    #|
+    #|Usage:
+    #|  pkdx query <name> [--version V] [--format json|table]
+    #|  pkdx moves <name|globalNo> [--version V] [--format json|table]
+    #|  pkdx search --type <type> [--type2 <type>] [--min-speed N] [--version V]
+    #|  pkdx damage <attacker> <defender> <move> [modifiers...] [--format json|table]
+    #|  pkdx type-chart <move_type> <def_type1> [def_type2]
+    #|  pkdx coverage <type1,type2,...>
+    #|
+    #|Options:
+    #|  --version V       Game version (default: scarlet_violet)
+    #|  --format F        Output format: json or table (default: table)
+    #|  --help            Show this help message
+  text
 }
 
 /// Format damage calculation result.

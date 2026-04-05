@@ -1,16 +1,16 @@
 pub(all) struct DamageCalcInput {
-  pub attacker : Pokemon
-  pub defender : Pokemon
-  pub move_ : Move
-  pub atk_ability : String
-  pub def_ability : String
-  pub atk_item : String
-  pub def_item : String
-  pub weather : Weather
-  pub field : Field
-  pub tera_type : String
-  pub critical : Bool
-  pub atk_stat_override : Int
-  pub def_stat_override : Int
-  pub def_hp_override : Int
+  attacker : Pokemon
+  defender : Pokemon
+  move_ : Move
+  atk_ability : String
+  def_ability : String
+  atk_item : String
+  def_item : String
+  weather : Weather
+  field : Field
+  tera_type : String
+  critical : Bool
+  atk_stat_override : Int
+  def_stat_override : Int
+  def_hp_override : Int
 } derive(Show)

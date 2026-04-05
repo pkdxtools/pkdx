@@ -221,13 +221,13 @@ fn split_string(s : String, sep : Char) -> Array[String] {
   for i = 0; i < s.length(); i = i + 1 {
     if s[i].to_int() == sep_int {
       if i > start {
-        parts.push(s.substring(start~, end=i))
+        parts.push(s[start:i].to_string())
       }
       start = i + 1
     }
   }
   if start < s.length() {
-    parts.push(s.substring(start~, end=s.length()))
+    parts.push(s[start:].to_string())
   }
   parts
 }

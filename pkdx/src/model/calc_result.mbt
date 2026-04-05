@@ -1,11 +1,11 @@
 pub(all) struct DamageCalcResult {
-  pub damages : FixedArray[Int]
-  pub percents : FixedArray[Double]
-  pub min_damage : Int
-  pub max_damage : Int
-  pub min_percent : Double
-  pub max_percent : Double
-  pub ko_text : String
-  pub defender_hp : Int
-  pub is_immune : Bool
+  damages : FixedArray[Int]
+  percents : FixedArray[Double]
+  min_damage : Int
+  max_damage : Int
+  min_percent : Double
+  max_percent : Double
+  ko_text : String
+  defender_hp : Int
+  is_immune : Bool
 } derive(Show)

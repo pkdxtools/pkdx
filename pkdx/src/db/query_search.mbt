@@ -1,16 +1,16 @@
 /// Search result item.
-pub struct SearchResult {
-  pub global_no : String
-  pub name_ja : String
-  pub type1 : String
-  pub type2 : String
-  pub hp : Int
-  pub atk : Int
-  pub def_ : Int
-  pub spa : Int
-  pub spd : Int
-  pub spe : Int
-  pub bst : Int
+pub(all) struct SearchResult {
+  global_no : String
+  name_ja : String
+  type1 : String
+  type2 : String
+  hp : Int
+  atk : Int
+  def_ : Int
+  spa : Int
+  spd : Int
+  spe : Int
+  bst : Int
 } derive(Show)
 
 /// Search Pokemon by type with optional speed minimum.

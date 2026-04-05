@@ -118,7 +118,7 @@ fn parse_int_str(s : String, default : Int) -> Int {
     }
     i = i + 1
   }
-  if not(has_digit) {
+  if !has_digit {
     return default
   }
   if negative { -result } else { result }
@@ -221,13 +221,13 @@ fn split_string(s : String, sep : Char) -> Array[String] {
   for i = 0; i < s.length(); i = i + 1 {
     if s[i].to_int() == sep_int {
       if i > start {
-        parts.push(s.substring(start~, end=i))
+        parts.push(s[start:i].to_string())
       }
       start = i + 1
     }
   }
   if start < s.length() {
-    parts.push(s.substring(start~, end=s.length()))
+    parts.push(s[start:].to_string())
   }
   parts
 }

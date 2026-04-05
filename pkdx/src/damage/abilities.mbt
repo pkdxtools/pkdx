@@ -2,8 +2,8 @@
 pub fn apply_atk_ability_stat(
   ability : String,
   is_physical : Bool,
-  weather : String,
-  field : String,
+  weather : @model.Weather,
+  field : @model.Field,
   atk_stat : Int
 ) -> Int {
   match ability {
@@ -11,23 +11,23 @@ pub fn apply_atk_ability_stat(
       if is_physical { atk_stat * 2 } else { atk_stat }
     "はりきり" => if is_physical { atk_stat * 3 / 2 } else { atk_stat }
     "サンパワー" =>
-      if not(is_physical) && weather == "はれ" {
+      if !is_physical && weather == @model.Sun {
         atk_stat * 3 / 2
       } else {
         atk_stat
       }
     "こだいかっせい" =>
-      if weather == "はれ" { atk_stat * 13 / 10 } else { atk_stat }
+      if weather == @model.Sun { atk_stat * 13 / 10 } else { atk_stat }
     "クォークチャージ" =>
-      if field == "エレキ" { atk_stat * 13 / 10 } else { atk_stat }
+      if field == @model.Electric { atk_stat * 13 / 10 } else { atk_stat }
     "ひひいろのこどう" =>
-      if is_physical && weather == "はれ" {
+      if is_physical && weather == @model.Sun {
         atk_stat * 5461 / 4096
       } else {
         atk_stat
       }
     "ハドロンエンジン" =>
-      if not(is_physical) && field == "エレキ" {
+      if !is_physical && field == @model.Electric {
         atk_stat * 5461 / 4096
       } else {
         atk_stat
@@ -84,7 +84,7 @@ pub fn apply_atk_ability_power(
   move_name : String,
   move_type : String,
   move_power : Int,
-  weather : String
+  weather : @model.Weather
 ) -> Int {
   match ability {
     "テクニシャン" => if move_power <= 60 { move_power * 3 / 2 } else { move_power }
@@ -113,7 +113,7 @@ pub fn apply_atk_ability_power(
         move_power
       }
     "すなのちから" =>
-      if weather == "すなあらし" &&
+      if weather == @model.Sand &&
         (move_type == "いわ" || move_type == "じめん" || move_type == "はがね") {
         move_power * 13 / 10
       } else {
@@ -207,12 +207,12 @@ pub fn apply_ruin_cross_stat(
   let mut d = def_stat
   match def_ability {
     "わざわいのおふだ" => if is_physical { a = a * 3 / 4 }
-    "わざわいのうつわ" => if not(is_physical) { a = a * 3 / 4 }
+    "わざわいのうつわ" => if !is_physical { a = a * 3 / 4 }
     _ => ()
   }
   match atk_ability {
     "わざわいのつるぎ" => if is_physical { d = d * 3 / 4 }
-    "わざわいのたま" => if not(is_physical) { d = d * 3 / 4 }
+    "わざわいのたま" => if !is_physical { d = d * 3 / 4 }
     _ => ()
   }
   (a, d)

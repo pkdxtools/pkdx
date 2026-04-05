@@ -1,6 +1,6 @@
 {
   "is-main": true,
-  "supported-targets": ["native"],
+  "supported-targets": "native",
   "import": [
     "ushironoko/pkdx/src/cli",
     "ushironoko/pkdx/src/db",

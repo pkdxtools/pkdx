@@ -43,7 +43,7 @@ fn main {
   }
 }
 
-fn with_db[T](f : (@db.Db) -> T) -> T {
+fn[T] with_db(f : (@db.Db) -> T) -> T {
   let db_path = match resolve_db_path() {
     Ok(p) => p
     Err(e) => {
@@ -169,8 +169,8 @@ fn run_damage(
       def_ability,
       atk_item,
       def_item,
-      weather,
-      field,
+      weather: @model.weather_from_jp(weather),
+      field: @model.field_from_jp(field),
       tera_type,
       critical,
       atk_stat_override: atk_stat,

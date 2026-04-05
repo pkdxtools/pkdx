@@ -6,8 +6,8 @@ pub(all) struct DamageCalcInput {
   pub def_ability : String
   pub atk_item : String
   pub def_item : String
-  pub weather : String
-  pub field : String
+  pub weather : Weather
+  pub field : Field
   pub tera_type : String
   pub critical : Bool
   pub atk_stat_override : Int

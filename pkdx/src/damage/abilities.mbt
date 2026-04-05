@@ -2,8 +2,8 @@
 pub fn apply_atk_ability_stat(
   ability : String,
   is_physical : Bool,
-  weather : String,
-  field : String,
+  weather : @model.Weather,
+  field : @model.Field,
   atk_stat : Int
 ) -> Int {
   match ability {
@@ -11,23 +11,23 @@ pub fn apply_atk_ability_stat(
       if is_physical { atk_stat * 2 } else { atk_stat }
     "はりきり" => if is_physical { atk_stat * 3 / 2 } else { atk_stat }
     "サンパワー" =>
-      if not(is_physical) && weather == "はれ" {
+      if not(is_physical) && weather == Sun {
         atk_stat * 3 / 2
       } else {
         atk_stat
       }
     "こだいかっせい" =>
-      if weather == "はれ" { atk_stat * 13 / 10 } else { atk_stat }
+      if weather == Sun { atk_stat * 13 / 10 } else { atk_stat }
     "クォークチャージ" =>
-      if field == "エレキ" { atk_stat * 13 / 10 } else { atk_stat }
+      if field == Electric { atk_stat * 13 / 10 } else { atk_stat }
     "ひひいろのこどう" =>
-      if is_physical && weather == "はれ" {
+      if is_physical && weather == Sun {
         atk_stat * 5461 / 4096
       } else {
         atk_stat
       }
     "ハドロンエンジン" =>
-      if not(is_physical) && field == "エレキ" {
+      if not(is_physical) && field == Electric {
         atk_stat * 5461 / 4096
       } else {
         atk_stat
@@ -84,7 +84,7 @@ pub fn apply_atk_ability_power(
   move_name : String,
   move_type : String,
   move_power : Int,
-  weather : String
+  weather : @model.Weather
 ) -> Int {
   match ability {
     "テクニシャン" => if move_power <= 60 { move_power * 3 / 2 } else { move_power }
@@ -113,7 +113,7 @@ pub fn apply_atk_ability_power(
         move_power
       }
     "すなのちから" =>
-      if weather == "すなあらし" &&
+      if weather == Sand &&
         (move_type == "いわ" || move_type == "じめん" || move_type == "はがね") {
         move_power * 13 / 10
       } else {

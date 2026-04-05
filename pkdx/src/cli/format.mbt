@@ -61,8 +61,9 @@ fn moves_to_json(moves : Array[@model.Move]) -> String {
       s = s + ","
     }
     let m = moves[i]
+    let cat_str = @model.category_to_jp(m.category)
     s = s + "{\"name\":\"" + m.name + "\",\"type\":\"" + m.type_ + "\",\"category\":\"" +
-      m.category + "\",\"power\":" + m.power.to_string() + ",\"accuracy\":" +
+      cat_str + "\",\"power\":" + m.power.to_string() + ",\"accuracy\":" +
       m.accuracy.to_string() + ",\"pp\":" + m.pp.to_string() + ",\"learn_method\":\"" +
       m.learn_method + "\"}"
   }
@@ -77,8 +78,9 @@ fn moves_to_table(moves : Array[@model.Move]) -> String {
   s = s + "─".to_string().repeat(60) + "\n"
   for i = 0; i < moves.length(); i = i + 1 {
     let m = moves[i]
+    let cat_str = @model.category_to_jp(m.category)
     s = s + pad_right(m.name, 16) + pad_right(m.type_, 10) + pad_right(
-        m.category, 6,
+        cat_str, 6,
       ) + pad_right(m.power.to_string(), 5) + pad_right(m.accuracy.to_string(), 5) +
       pad_right(m.pp.to_string(), 4) + m.learn_method + "\n"
   }

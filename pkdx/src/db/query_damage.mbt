@@ -22,7 +22,7 @@ pub fn query_move(
   Ok(@model.Move::{
     name: r[0],
     type_: r[1],
-    category: r[2],
+    category: @model.category_from_jp(r[2]),
     power: parse_int(r[3]),
     accuracy: parse_int(r[4]),
     pp: parse_int(r[5]),

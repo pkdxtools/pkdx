@@ -6,8 +6,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let mut move_type = mv.type_
   let move_name = mv.name
   let move_power = mv.power
-  let is_physical = mv.category == "物理"
-  let is_special = mv.category == "特殊"
+  let is_physical = mv.category == Physical
+  let is_special = mv.category == Special
   let weather = input.weather
   let field = input.field
   let tera_type = input.tera_type
@@ -86,7 +86,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // 2d. Weather defense modifiers
-  if weather.length() > 0 {
+  if weather.is_active() {
     def_stat = apply_weather_def_mod(
       weather, (dfn.type1, dfn.type2), is_physical, def_stat,
     )
@@ -94,17 +94,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
   // Immunity check
   if def_ability.length() > 0 && check_def_immunity(def_ability, move_type) {
-    return @model.DamageCalcResult::{
-      damages: FixedArray::make(16, 0),
-      percents: FixedArray::make(16, 0.0),
-      min_damage: 0,
-      max_damage: 0,
-      min_percent: 0.0,
-      max_percent: 0.0,
-      ko_text: "immune",
-      defender_hp: def_hp,
-      is_immune: true,
-    }
+    return immune_result(def_hp)
   }
 
   // Type resist from defender ability
@@ -157,17 +147,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
   // Check for type immunity
   if eff1_x4 == 0 || eff2_x4 == 0 {
-    return @model.DamageCalcResult::{
-      damages: FixedArray::make(16, 0),
-      percents: FixedArray::make(16, 0.0),
-      min_damage: 0,
-      max_damage: 0,
-      min_percent: 0.0,
-      max_percent: 0.0,
-      ko_text: "immune",
-      defender_hp: def_hp,
-      is_immune: true,
-    }
+    return immune_result(def_hp)
   }
 
   let total_eff_x16 = eff1_x4 * eff2_x4
@@ -197,7 +177,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     let mut dmg = damage_base
 
     // Weather damage mod
-    if weather.length() > 0 {
+    if weather.is_active() {
       let w_mod = get_weather_damage_mod(weather, move_type)
       if w_mod > 0 {
         dmg = round5(dmg, w_mod)
@@ -205,7 +185,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
 
     // Field mod
-    if field.length() > 0 {
+    if field.is_active() {
       let f_mod = get_field_damage_mod(field, move_type)
       if f_mod > 0 {
         dmg = round5(dmg, f_mod)
@@ -301,6 +281,20 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     ko_text,
     defender_hp: def_hp,
     is_immune: false,
+  }
+}
+
+fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
+  @model.DamageCalcResult::{
+    damages: FixedArray::make(16, 0),
+    percents: FixedArray::make(16, 0.0),
+    min_damage: 0,
+    max_damage: 0,
+    min_percent: 0.0,
+    max_percent: 0.0,
+    ko_text: "immune",
+    defender_hp: def_hp,
+    is_immune: true,
   }
 }
 

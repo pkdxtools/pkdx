@@ -1,5 +1,5 @@
 ///|
-fn stats_schema_short(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn stats_schema_short(b : @types.Builder) -> @types.JsonSchema {
   b.object(
     properties={
       "h": b.number(),
@@ -14,7 +14,7 @@ fn stats_schema_short(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 }
 
 ///|
-fn stats_schema_long(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn stats_schema_long(b : @types.Builder) -> @types.JsonSchema {
   b.object(
     properties={
       "hp": b.number(),
@@ -29,7 +29,7 @@ fn stats_schema_long(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 }
 
 ///|
-fn move_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn move_schema(b : @types.Builder) -> @types.JsonSchema {
   b.object(
     properties={
       "name": b.string(),
@@ -42,7 +42,7 @@ fn move_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 }
 
 ///|
-fn pokemon_move_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn pokemon_move_schema(b : @types.Builder) -> @types.JsonSchema {
   b.object(
     properties={
       "name": b.string(),
@@ -56,7 +56,7 @@ fn pokemon_move_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 }
 
 ///|
-fn member_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn member_schema(b : @types.Builder) -> @types.JsonSchema {
   b.object(
     properties={
       "name": b.string(),
@@ -72,7 +72,7 @@ fn member_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 }
 
 ///|
-fn team_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn team_schema(b : @types.Builder) -> @types.JsonSchema {
   b.object(
     properties={
       "battle_format": b.string(enum_=["singles", "doubles"]),
@@ -94,7 +94,7 @@ fn team_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 ///|
 /// キャッシュ JSON 互換スキーマ
 /// pokemon.build 以下のフィールドを検証する
-fn pokemon_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
+fn pokemon_schema(b : @types.Builder) -> @types.JsonSchema {
   let pokemon_info = b.object(
     properties={
       "name": b.string(),
@@ -141,7 +141,7 @@ fn pokemon_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 
 ///|
 fn format_errors(
-  errors : Array[@jsonschema.ValidationError],
+  errors : Array[@validate.ValidationError],
 ) -> Array[String] {
   let result : Array[String] = []
   for e in errors {
@@ -152,16 +152,17 @@ fn format_errors(
 
 ///|
 pub fn validate_team_json(json : Json) -> Result[Unit, Array[String]] {
-  let b = @jsonschema.Builder::new()
+  let b = @types.Builder::new()
   let schema = team_schema(b)
-  let resolver = try @jsonschema.build_resolver({}) catch {
+  let resolver = try @validate.build_resolver({}) catch {
     _ => return Err(["internal: failed to build schema resolver"])
   }
-  let errors = schema.validate(
+  let errors = @validate.Validatable::validate(
+    schema,
     json,
     resolver~,
-    json_path=@jsonschema.JsonPointer::Root,
-    schema_path=@jsonschema.JsonPointer::Root,
+    json_path=@types.JsonPointer::Root,
+    schema_path=@types.JsonPointer::Root,
   )
   if errors.is_empty() {
     Ok(())
@@ -172,16 +173,17 @@ pub fn validate_team_json(json : Json) -> Result[Unit, Array[String]] {
 
 ///|
 pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
-  let b = @jsonschema.Builder::new()
+  let b = @types.Builder::new()
   let schema = pokemon_schema(b)
-  let resolver = try @jsonschema.build_resolver({}) catch {
+  let resolver = try @validate.build_resolver({}) catch {
     _ => return Err(["internal: failed to build schema resolver"])
   }
-  let errors = schema.validate(
+  let errors = @validate.Validatable::validate(
+    schema,
     json,
     resolver~,
-    json_path=@jsonschema.JsonPointer::Root,
-    schema_path=@jsonschema.JsonPointer::Root,
+    json_path=@types.JsonPointer::Root,
+    schema_path=@types.JsonPointer::Root,
   )
   let result = format_errors(errors)
   // EV合計510チェック（jsonschemaでは表現不可のビジネスルール）

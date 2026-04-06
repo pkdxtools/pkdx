@@ -1,2 +1,5 @@
 # breed skill cache
 box/cache/breed_cache_*.json
+
+# version管理対象外のスキル出力
+box/**/__no_save.*

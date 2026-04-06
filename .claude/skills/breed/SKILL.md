@@ -494,21 +494,30 @@ calcスキルと同じ形式でダメージテーブルを表示:
 
 ## Phase 8: 保存
 
-**AskUserQuestion**（3問）:
+**AskUserQuestion**（4問）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
 | 1 | 育成データを保存しますか？ | 保存 | はい(desc: box/pokemons/<name>/配下に保存), いいえ(desc: 保存せず終了) | false |
 | 2 | ファイル名を入力してください（拡張子不要） | ファイル名 | Other(desc: 例: スカーフ型, HBゴツメ等。空欄の場合はYYYYMMDD) | false |
 | 3 | ポケソル形式のテキストも出力しますか？ | ポケソル出力 | はい(desc: ダメージ計算SV等で読み込めるテキストを出力), いいえ(desc: md保存のみ) | false |
+| 4 | この育成データをバージョン管理の対象にしますか？ | バージョン管理 | はい(desc: gitで変更履歴を残す。GitHubアカウントがあればクラウドにもバックアップ可能), いいえ(desc: 手元にのみ保存。gitには記録しない) | false |
 
 「いいえ」（質問1）の場合はスキルを終了。
 
 「はい」の場合:
 
 ファイル名の決定:
-- ユーザーが入力した場合 → `box/pokemons/<pokemon-name>/<入力値>.md`
-- 入力が空または未指定の場合 → `box/pokemons/<pokemon-name>/YYYYMMDD.md`（当日の日付）
+- ユーザーが入力した場合 → ベース名 = `<入力値>`
+- 入力が空または未指定の場合 → ベース名 = `YYYYMMDD`（当日の日付）
+
+質問4の回答に基づき `--file` の値を決定:
+- **バージョン管理あり** → `--file "<ベース名>"`
+- **バージョン管理なし** → `--file "__no_save.<ベース名>"`
+
+出力先:
+- バージョン管理あり: `box/pokemons/<pokemon-name>/<ベース名>.md`
+- バージョン管理なし: `box/pokemons/<pokemon-name>/__no_save.<ベース名>.md` （gitignore対象）
 
 1. 同名ファイルが存在する場合はAskUserQuestionで上書き確認
 2. Phase 0-7 で収集した情報を以下の JSON スキーマに従って構造化し、Bash ツールで `pkdx write` に渡す
@@ -518,7 +527,7 @@ calcスキルと同じ形式でダメージテーブルを表示:
 CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
 
 ```bash
-cat <<'POKEMON_JSON' | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename>"
+cat <<'POKEMON_JSON' | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
 {
   "name": "<ポケモン名>",
   "types": ["<type1>", "<type2>"],
@@ -558,7 +567,9 @@ POKEMON_JSON
 
 2. 質問3で「はい」（ポケソル出力）の場合、Writeツールで以下の形式のテキストファイルも書き出す:
 
-**出力先**: `box/pokemons/<pokemon-name>/<filename>_pokesol.txt`
+**出力先**: mdと同じ prefix ルールを適用（`--file` で指定した名前に `_pokesol.txt` を付与）
+- バージョン管理あり: `box/pokemons/<pokemon-name>/<filename>_pokesol.txt`
+- バージョン管理なし: `box/pokemons/<pokemon-name>/__no_save.<filename>_pokesol.txt`
 
 ```
 <ポケモン名> / <特性> / <持ち物>

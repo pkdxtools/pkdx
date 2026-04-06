@@ -534,21 +534,32 @@ megaメカニクスが有効な場合:
 
 ### 8-1: 出力形式の確認
 
-**AskUserQuestion**（1問）:
+**AskUserQuestion**（2問）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
 | 1 | ポケソル形式のテキストも出力しますか？ | ポケソル出力 | はい(desc: ダメージ計算SV等で読み込めるテキストも出力), いいえ(desc: mdレポートのみ) | false |
+| 2 | この構築データをバージョン管理の対象にしますか？ | バージョン管理 | はい(desc: gitで変更履歴を残す。GitHubアカウントがあればクラウドにもバックアップ可能), いいえ(desc: 手元にのみ保存。gitには記録しない) | false |
+
+質問2の回答に基づきファイル名を決定:
+- **はい** → `{軸ポケモン名}-build-{YYYY-MM-DD}` （通常のファイル名）
+- **いいえ** → `__no_save.{軸ポケモン名}-build-{YYYY-MM-DD}` （gitignore対象）
 
 ### 8-2: mdレポート出力（JSON → pkdx write）
 
 Phase 0-7 で収集した情報を以下の JSON スキーマに従って構造化し、Bash ツールで `pkdx write` に渡す。
 CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
 
-**出力先**: `box/teams/{軸ポケモン名}-build-{YYYY-MM-DD}.md`
+**出力先**:
+- バージョン管理あり: `box/teams/{軸ポケモン名}-build-{YYYY-MM-DD}.md`
+- バージョン管理なし: `box/teams/__no_save.{軸ポケモン名}-build-{YYYY-MM-DD}.md`
+
+8-1の回答に基づき `--axis` の値を決定:
+- バージョン管理あり → `--axis "<軸ポケモン名>"`
+- バージョン管理なし → `--axis "__no_save.<軸ポケモン名>"`
 
 ```bash
-cat <<'TEAM_JSON' | $PKDX write --teams --date "YYYY-MM-DD" --axis "<軸ポケモン名>"
+cat <<'TEAM_JSON' | $PKDX write --teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>"
 {
   "battle_format": "singles",
   "mechanics": "<有効メカニクス or バニラ>",
@@ -592,7 +603,9 @@ TEAM_JSON
 
 8-1で「はい」の場合のみ、Writeツールで以下の形式のテキストファイルを書き出す。
 
-**出力先**: `box/teams/{軸ポケモン名}-build-{YYYY-MM-DD}.txt`
+**出力先**: mdレポートと同じ prefix ルールを適用（バージョン管理なしの場合は `__no_save.` 付与）
+- バージョン管理あり: `box/teams/{軸ポケモン名}-build-{YYYY-MM-DD}.txt`
+- バージョン管理なし: `box/teams/__no_save.{軸ポケモン名}-build-{YYYY-MM-DD}.txt`
 
 各ポケモンのブロックを空行区切りで並べる:
 

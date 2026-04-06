@@ -27,10 +27,11 @@ cd $REPO_ROOT && git remote -v
 
 **A. フォーク運用** — `origin` がユーザーのフォーク、`upstream` が本家
 - `upstream` が存在する → そのまま続行
-- `origin` が `ushironoko/pkdx` でない + `upstream` がない → `upstream` を自動設定:
+- `origin` が `ushironoko/pkdx` でない + `upstream` がない → `setup.sh` を実行して自動設定:
   ```bash
-  git remote add upstream https://github.com/ushironoko/pkdx.git
+  cd $REPO_ROOT && ./setup.sh
   ```
+  （`setup.sh` が upstream remote を自動追加する）
 
 **B. clone運用** — `origin` が `ushironoko/pkdx` で、`upstream` が存在しない
 - `origin` から直接 pull する（`upstream` の代わりに `origin` を使う）

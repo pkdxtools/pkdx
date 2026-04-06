@@ -18,37 +18,27 @@ CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、
 ## Setup
 
 ```bash
-./setup.sh    # submodule初期化 + pokedex.db生成 + pkdxバイナリDL を一括実行
+./setup.sh    # remote設定 + submodule初期化 + pokedex.db生成 + pkdxバイナリDL + box/ディレクトリ作成 を一括実行
 ```
 
-手動で行う場合:
-```bash
-git submodule update --init           # pokedex サブモジュール取得
-cd pokedex && ruby tools/import_db.rb # pokedex.db 生成（Ruby必要）
-# pkdx バイナリは bin/pkdx 経由で GitHub Releases から自動DL
-```
+`setup.sh` はフォーク/クローンを自動判定し、フォークの場合は upstream remote を自動設定する。
 
 ### セットアップ方法
 
 #### A. GitHubアカウントがある場合（推奨）
 
-1. GitHub でリポジトリをフォーク
-2. `git clone` してフォークを取得
-3. `git remote add upstream https://github.com/ushironoko/pkdx.git`
-4. `./setup.sh` を実行
-5. スキルを通常通り使用 — 出力は `box/` 配下に保存される
-6. `self-update` スキルで定期的にupstreamに追従
+1. GitHub で `ushironoko/pkdx` をフォーク
+2. `git clone https://github.com/<user>/pkdx.git && cd pkdx && ./setup.sh`
+3. upstream remote は `setup.sh` が自動設定（手動不要）
+4. 出力は `box/` 配下に保存。`self-update` スキルでupstreamに追従
 
-GitHubアカウントがあると、作成した構築・育成データをクラウドにバックアップでき、PC間で共有したり、過去のデータに戻すことができる。
+クラウドバックアップ・PC間共有・変更履歴の保存と復元が利用可能。
 
 #### B. GitHubアカウントがない場合
 
-1. `git clone https://github.com/ushironoko/pkdx.git` でリポジトリを取得
-2. `cd pkdx && ./setup.sh` を実行
-3. スキルを通常通り使用可能
-
-この方法でも全機能が使える。ただしデータは手元のPCにのみ保存される。
-GitHubアカウントを作成してフォークに移行すれば、作成した構築データ・育成データのバージョン管理（変更履歴の保存・復元・クラウドバックアップ）が利用可能になる。
+1. `git clone https://github.com/ushironoko/pkdx.git && cd pkdx && ./setup.sh`
+2. 全機能が利用可能。データは手元のPCにのみ保存される
+3. あとからGitHubアカウントを作成してフォークに移行可能
 
 `pokedex.db` と `pkdx` バイナリが存在しないとスキルは動作しない。
 

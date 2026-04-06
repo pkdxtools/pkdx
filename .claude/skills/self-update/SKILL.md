@@ -6,7 +6,7 @@ allowed-tools: Bash, AskUserQuestion
 
 # Self-Update
 
-最新変更を安全に取り込むスキル。フォーク運用・clone運用どちらにも対応する。
+最新変更を安全に取り込むスキル。フォーク運用・clone運用どちらにも対応する。ユーザーは非技術者を想定し、git関連の技術用語はコミュニケーションではできる限り使わない。
 
 ## パス定義
 
@@ -49,7 +49,7 @@ clone運用の場合、以下のメッセージを表示:
 ```
 ℹ GitHubアカウントを作成してフォークに移行すると、構築・育成データの
   バージョン管理（変更履歴の保存・復元・クラウドバックアップ）が利用できます。
-  詳しくは CLAUDE.md の「セットアップ方法」を参照してください。
+  詳しくは README.md の「セットアップ方法」を参照してください。
 ```
 
 ### 0-2: default branch 検出
@@ -73,7 +73,7 @@ cd $REPO_ROOT && git status --porcelain
 
 | # | 質問 | header | オプション |
 |---|------|--------|-----------|
-| 1 | 未コミットの変更があります。stashして続行しますか？ | 確認 | はい(desc: 変更をstashして続行), いいえ(desc: 中断) |
+| 1 | 未保存の変更があります。バックアップして続行しますか？ | 確認 | はい(desc: 変更をバックアップして続行), いいえ(desc: 中断) |
 
 「いいえ」→ スキル終了。
 「はい」→:
@@ -151,14 +151,14 @@ rm -f "$CACHE_DIR"/pkdx-*
 
 | # | 質問 | header | オプション |
 |---|------|--------|-----------|
-| 1 | pkdxバイナリの更新方法は？ | バイナリ更新 | build(desc: ローカルでビルド/推奨・sourceと一致), download(desc: GitHub Releasesからダウンロード/タグ更新後のみ推奨), skip(desc: スキップ) |
+| 1 | pkdx cliの更新方法は？ | pkdxアップデート | download(desc: GitHub Releasesから最新版ダウンロード/推奨), build(desc: ローカルでビルド), skip(desc: スキップ) |
 
-- **build** (推奨):
+- **build** :
   ```bash
   cd $REPO_ROOT/pkdx && moon build --target native
   ```
 
-- **download**:
+- **download** (推奨) :
   ```bash
   cd $REPO_ROOT && ./setup.sh
   ```
@@ -186,10 +186,10 @@ stash popでコンフリクトが発生した場合:
 ## Phase 4: 完了レポート
 
 ```
-=== Self-Update Complete ===
+=== pkdxバージョンアップ完了 ===
 マージ元: $UPDATE_REMOTE/$UPSTREAM_BRANCH
 新規コミット数: <N>
 コンフリクト解決: <あり/なし>
-バイナリ: <更新済み/スキップ>
-stash: <復元済み/なし>
+pkdx tools: <更新済み/スキップ>
+バックアップ: <復元済み/なし>
 ```

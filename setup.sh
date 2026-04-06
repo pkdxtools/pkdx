@@ -76,18 +76,37 @@ fi
 # --- Step 3: pkdx binary ---
 echo "[3/4] Downloading pkdx binary ($BINARY_NAME)..."
 
-# Skip if local build exists
 LOCAL_BUILD="$REPO_ROOT/pkdx/_build/native/release/build/src/main/main.exe"
 LOCAL_BUILD_DEBUG="$REPO_ROOT/pkdx/_build/native/debug/build/src/main/main.exe"
-if [ -f "$LOCAL_BUILD" ] || [ -f "$LOCAL_BUILD_DEBUG" ]; then
-  echo "  Local build found. Skipping download."
-else
+
+# Detect stale local build: if any source file is newer than the binary, it's outdated
+is_build_stale() {
+  local bin="$1"
+  [ ! -f "$bin" ] && return 1
+  local newest_src
+  newest_src=$(find "$REPO_ROOT/pkdx/src" -name '*.mbt' -newer "$bin" -print -quit 2>/dev/null)
+  [ -n "$newest_src" ]
+}
+
+NEED_DOWNLOAD=true
+if [ -f "$LOCAL_BUILD" ] && ! is_build_stale "$LOCAL_BUILD"; then
+  echo "  Local build is up to date."
+  NEED_DOWNLOAD=false
+elif [ -f "$LOCAL_BUILD_DEBUG" ] && ! is_build_stale "$LOCAL_BUILD_DEBUG"; then
+  echo "  Local build (debug) is up to date."
+  NEED_DOWNLOAD=false
+elif [ -f "$LOCAL_BUILD" ] || [ -f "$LOCAL_BUILD_DEBUG" ]; then
+  echo "  Local build is outdated. Removing stale build..."
+  rm -f "$LOCAL_BUILD" "$LOCAL_BUILD_DEBUG"
+fi
+
+if [ "$NEED_DOWNLOAD" = true ]; then
   mkdir -p "$CACHE_DIR"
   BINARY="$CACHE_DIR/$BINARY_NAME"
 
-  if [ -f "$BINARY" ]; then
-    echo "  Already cached at $BINARY"
-  else
+  # Always re-download to ensure latest release
+  rm -f "$BINARY"
+  {
     DOWNLOADED=false
 
     if command -v gh &>/dev/null; then
@@ -114,7 +133,7 @@ else
       echo "    cd pkdx && moon build --target native"
       echo "  (requires MoonBit toolchain: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash)"
     fi
-  fi
+  }
 fi
 
 # --- Step 4: box directory ---

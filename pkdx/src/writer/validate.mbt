@@ -98,9 +98,18 @@ fn pokemon_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
   let pokemon_info = b.object(
     properties={
       "name": b.string(),
+      "name_en": b.string(),
+      "globalNo": b.string(),
       "type1": b.string(),
       "type2": b.string(),
       "base_stats": stats_schema_long(b),
+      "abilities": b.object(
+        properties={
+          "ability1": b.string(),
+          "ability2": b.string(),
+          "dream_ability": b.string(),
+        },
+      ),
     },
     required=["name", "type1", "base_stats"],
   )

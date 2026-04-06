@@ -34,7 +34,7 @@ PKDX=$REPO_ROOT/bin/pkdx
 $REPO_ROOT/box/cache/team_cache_<axis_name>_<timestamp>.json
 ```
 
-`<timestamp>` はスキル開始時（Phase 0）に `date +%s` で取得した UNIX タイムスタンプ。同じポケモンで複���構築を並行しても衝突しない。以降のフェーズでは `$CACHE_FILE` 変数でパスを参照する。
+`<timestamp>` はスキル開始時（Phase 0）に `date +%s` で取得した UNIX タイムスタンプ。以降のフェーズでは `$CACHE_FILE` 変数でパスを参照する。
 
 ```bash
 CACHE_FILE="$REPO_ROOT/box/cache/team_cache_<axis_name>_$(date +%s).json"
@@ -207,7 +207,7 @@ sqlite3 "$REPO_ROOT/pokedex/pokedex.db" \
   → 戦闘効果: {同上}
 
 特性効果の分類:
-  - 免疫付与: 「ふゆう → じめん無効」
+  - 耐性付与: 「ふゆう → じめん無効」
   - 耐性変化: 「あついしぼう → ほのお/こおり半減」
   - 火力補正: 「ちからもち → 物理火力2倍」
   - 防御補正: 「マルチスケイル → HP満タン時ダメージ半減」
@@ -675,7 +675,7 @@ CLIはキャッシュ JSON のスキーマ（`members` + `coverage` + `defense_m
 
 ## Team State Block
 
-各フェーズ終了時に以下を出力し、会話内の状態を管理する。contextが圧縮された場合も、最新のTeam Stateから状態を復元可能。
+各フェーズ終了時に以下を出力し、会話内の状態を管理する。contextが圧縮された場合も、最新のTeam Stateから状態を復元可能。また、キャッシュファイルからも読み出すことができる。
 
 ```
 === Team State (Phase N完了) ===

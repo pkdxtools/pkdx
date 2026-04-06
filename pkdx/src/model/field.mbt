@@ -1,3 +1,4 @@
+///|
 /// Battle field (terrain) conditions.
 pub(all) enum Field {
   None
@@ -7,6 +8,7 @@ pub(all) enum Field {
   Misty
 } derive(Show, Eq)
 
+///|
 /// Convert Japanese field name to Field enum.
 pub fn field_from_jp(name : String) -> Field {
   match name {
@@ -18,6 +20,7 @@ pub fn field_from_jp(name : String) -> Field {
   }
 }
 
+///|
 /// Check if field is active.
 pub fn Field::is_active(self : Field) -> Bool {
   match self {

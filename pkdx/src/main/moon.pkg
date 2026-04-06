@@ -1,0 +1,22 @@
+import {
+  "ushironoko/pkdx/src/cli",
+  "ushironoko/pkdx/src/db",
+  "ushironoko/pkdx/src/types",
+  "ushironoko/pkdx/src/damage",
+  "ushironoko/pkdx/src/model",
+  "ushironoko/pkdx/src/writer",
+  "mizchi/markdown",
+  "moonbitlang/core/json",
+  "moonbitlang/x/sys",
+}
+
+options(
+  "is-main": true,
+  link: {
+    "native": {
+      "stub-cc-flags": "-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -O2",
+    },
+  },
+  "native-stub": [ "cwrap.c", "sqlite3.c" ],
+  "supported-targets": "native",
+)

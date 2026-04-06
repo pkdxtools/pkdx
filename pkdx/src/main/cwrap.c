@@ -303,3 +303,76 @@ moonbit_bytes_t pkdx_string_to_utf8(moonbit_string_t str, int32_t str_len) {
     out[pos] = 0;
     return out;
 }
+
+#include <stdio.h>
+#include <sys/stat.h>
+#include <errno.h>
+
+#define PKDX_STDIN_MAX (4 * 1024 * 1024)
+
+MOONBIT_FFI_EXPORT
+moonbit_string_t pkdx_read_stdin(void) {
+    size_t capacity = 4096;
+    size_t len = 0;
+    char *buf = (char *)malloc(capacity);
+    if (!buf) return moonbit_make_string(0, 0);
+    int c;
+    while ((c = fgetc(stdin)) != EOF) {
+        if (len + 1 >= capacity) {
+            if (capacity * 2 > PKDX_STDIN_MAX) { free(buf); return moonbit_make_string(0, 0); }
+            capacity *= 2;
+            char *newbuf = (char *)realloc(buf, capacity);
+            if (!newbuf) { free(buf); return moonbit_make_string(0, 0); }
+            buf = newbuf;
+        }
+        buf[len++] = (char)c;
+    }
+    buf[len] = '\0';
+    moonbit_string_t result = utf8_to_moonbit_string(buf);
+    free(buf);
+    return result;
+}
+
+static int pkdx_mkdirs(const char *path) {
+    size_t plen = strlen(path);
+    char *tmp = (char *)malloc(plen + 1);
+    if (!tmp) return -1;
+    memcpy(tmp, path, plen + 1);
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') { *p = '\0'; mkdir(tmp, 0755); *p = '/'; }
+    }
+    int rc = mkdir(tmp, 0755);
+    free(tmp);
+    return rc;
+}
+
+MOONBIT_FFI_EXPORT
+int32_t pkdx_write_file(const uint8_t *path, const uint8_t *content) {
+    const char *p = (const char *)path;
+    const char *last_slash = NULL;
+    for (const char *ch = p; *ch; ch++) { if (*ch == '/') last_slash = ch; }
+    if (last_slash) {
+        size_t dir_len = (size_t)(last_slash - p);
+        char *dir = (char *)malloc(dir_len + 1);
+        if (!dir) return ENOMEM;
+        memcpy(dir, p, dir_len);
+        dir[dir_len] = '\0';
+        pkdx_mkdirs(dir);
+        free(dir);
+    }
+    FILE *f = fopen(p, "w");
+    if (!f) return errno;
+    fputs((const char *)content, f);
+    fclose(f);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT
+void pkdx_exit(int32_t code) {
+    exit(code);
+}
+
+MOONBIT_FFI_EXPORT
+void pkdx_eprintln(const uint8_t *msg) {
+    fprintf(stderr, "%s\n", (const char *)msg);
+}

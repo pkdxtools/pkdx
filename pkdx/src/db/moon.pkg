@@ -1,0 +1,7 @@
+import {
+  "ushironoko/pkdx/src/model",
+}
+
+options(
+  "supported-targets": "native",
+)

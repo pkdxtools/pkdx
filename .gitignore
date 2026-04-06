@@ -1,2 +1,6 @@
-# breed skill cache
-pokedex/breed_cache_*.json
+# skill cache
+box/cache/breed_cache_*.json
+box/cache/team_cache_*.json
+
+# version管理対象外のスキル出力
+box/**/__no_save.*

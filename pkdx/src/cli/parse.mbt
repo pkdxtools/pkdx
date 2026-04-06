@@ -1,8 +1,10 @@
+///|
 pub enum OutputFormat {
   Json
   Table
 } derive(Show)
 
+///|
 pub enum Command {
   Query(name~ : String, version~ : String, format~ : OutputFormat)
   Moves(target~ : String, version~ : String, format~ : OutputFormat)
@@ -11,7 +13,7 @@ pub enum Command {
     type2~ : String,
     min_speed~ : Int,
     version~ : String,
-    format~ : OutputFormat,
+    format~ : OutputFormat
   )
   TypeChart(move_type~ : String, def_type1~ : String, def_type2~ : String)
   Coverage(types~ : Array[String])
@@ -31,12 +33,15 @@ pub enum Command {
     critical~ : Bool,
     atk_stat~ : Int,
     def_stat~ : Int,
-    def_hp~ : Int,
+    def_hp~ : Int
   )
+  WriteTeams(date~ : String, axis~ : String)
+  WritePokemon(name~ : String, file~ : String)
   Help
   Version
 } derive(Show)
 
+///|
 /// Parse CLI arguments into a Command.
 pub fn parse_args(args : Array[String]) -> Result[Command, String] {
   if args.length() < 2 {
@@ -50,12 +55,14 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     "type-chart" => parse_type_chart(args)
     "coverage" => parse_coverage(args)
     "damage" => parse_damage(args)
+    "write" => parse_write(args)
     "help" | "--help" | "-h" => Ok(Help)
     "version" | "--version" | "-v" => Ok(Version)
     _ => Err("Unknown command: " + subcmd + ". Run 'pkdx help' for usage.")
   }
 }
 
+///|
 fn parse_format(args : Array[String]) -> OutputFormat {
   for i = 0; i < args.length() - 1; i = i + 1 {
     if args[i] == "--format" {
@@ -69,6 +76,7 @@ fn parse_format(args : Array[String]) -> OutputFormat {
   Table
 }
 
+///|
 fn get_flag(args : Array[String], flag : String, default : String) -> String {
   for i = 0; i < args.length() - 1; i = i + 1 {
     if args[i] == flag {
@@ -78,6 +86,7 @@ fn get_flag(args : Array[String], flag : String, default : String) -> String {
   default
 }
 
+///|
 fn has_flag(args : Array[String], flag : String) -> Bool {
   for i = 0; i < args.length(); i = i + 1 {
     if args[i] == flag {
@@ -87,11 +96,8 @@ fn has_flag(args : Array[String], flag : String) -> Bool {
   false
 }
 
-fn get_flag_int(
-  args : Array[String],
-  flag : String,
-  default : Int
-) -> Int {
+///|
+fn get_flag_int(args : Array[String], flag : String, default : Int) -> Int {
   let s = get_flag(args, flag, "")
   if s.length() == 0 {
     return default
@@ -99,6 +105,7 @@ fn get_flag_int(
   parse_int_str(s, default)
 }
 
+///|
 fn parse_int_str(s : String, default : Int) -> Int {
   let mut result = 0
   let mut i = 0
@@ -121,9 +128,14 @@ fn parse_int_str(s : String, default : Int) -> Int {
   if !has_digit {
     return default
   }
-  if negative { -result } else { result }
+  if negative {
+    -result
+  } else {
+    result
+  }
 }
 
+///|
 fn parse_query(args : Array[String]) -> Result[Command, String] {
   if args.length() < 3 {
     return Err("Usage: pkdx query <name> [--version V] [--format json|table]")
@@ -137,6 +149,7 @@ fn parse_query(args : Array[String]) -> Result[Command, String] {
   )
 }
 
+///|
 fn parse_moves(args : Array[String]) -> Result[Command, String] {
   if args.length() < 3 {
     return Err(
@@ -152,6 +165,7 @@ fn parse_moves(args : Array[String]) -> Result[Command, String] {
   )
 }
 
+///|
 fn parse_search(args : Array[String]) -> Result[Command, String] {
   let type1 = get_flag(args, "--type", "")
   if type1.length() == 0 {
@@ -170,6 +184,7 @@ fn parse_search(args : Array[String]) -> Result[Command, String] {
   )
 }
 
+///|
 fn parse_type_chart(args : Array[String]) -> Result[Command, String] {
   if args.length() < 4 {
     return Err("Usage: pkdx type-chart <move_type> <def_type1> [def_type2]")
@@ -178,6 +193,7 @@ fn parse_type_chart(args : Array[String]) -> Result[Command, String] {
   Ok(TypeChart(move_type=args[2], def_type1=args[3], def_type2~))
 }
 
+///|
 fn parse_coverage(args : Array[String]) -> Result[Command, String] {
   if args.length() < 3 {
     return Err("Usage: pkdx coverage <type1,type2,...>")
@@ -186,6 +202,7 @@ fn parse_coverage(args : Array[String]) -> Result[Command, String] {
   Ok(Coverage(types~))
 }
 
+///|
 fn parse_damage(args : Array[String]) -> Result[Command, String] {
   if args.length() < 5 {
     return Err(
@@ -214,6 +231,28 @@ fn parse_damage(args : Array[String]) -> Result[Command, String] {
   )
 }
 
+///|
+fn parse_write(args : Array[String]) -> Result[Command, String] {
+  if has_flag(args, "--teams") {
+    let date = get_flag(args, "--date", "")
+    let axis = get_flag(args, "--axis", "")
+    if date.length() == 0 || axis.length() == 0 {
+      return Err("Usage: pkdx write --teams --date YYYY-MM-DD --axis <name>")
+    }
+    Ok(WriteTeams(date~, axis~))
+  } else if has_flag(args, "--pokemon") {
+    let name = get_flag(args, "--name", "")
+    let file = get_flag(args, "--file", "")
+    if name.length() == 0 || file.length() == 0 {
+      return Err("Usage: pkdx write --pokemon --name <name> --file <filename>")
+    }
+    Ok(WritePokemon(name~, file~))
+  } else {
+    Err("Usage: pkdx write --teams|--pokemon [options]")
+  }
+}
+
+///|
 fn split_string(s : String, sep : Char) -> Array[String] {
   let parts : Array[String] = []
   let mut start = 0

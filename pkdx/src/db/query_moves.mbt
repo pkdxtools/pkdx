@@ -1,8 +1,9 @@
+///|
 /// Query all moves a Pokemon can learn (level-up + TM).
 pub fn query_moves(
   db : Db,
   global_no : String,
-  version : String
+  version : String,
 ) -> Result[Array[@model.Move], String] {
   let waza_ver = to_waza_version(version)
   let gno = normalize_global_no(global_no)
@@ -26,8 +27,7 @@ pub fn query_moves(
     #|  AND COALESCE(pm.form, '') = '' AND COALESCE(pm.region, '') = ''
     #|ORDER BY power DESC
   let binds = [
-    waza_ver, waza_ver, gno, waza_ver, waza_ver, waza_ver, waza_ver, gno,
-    waza_ver,
+    waza_ver, waza_ver, gno, waza_ver, waza_ver, waza_ver, waza_ver, gno, waza_ver,
   ]
   let rows = match query(db, sql, binds) {
     Ok(r) => r

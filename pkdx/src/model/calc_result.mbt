@@ -1,3 +1,4 @@
+///|
 pub(all) struct DamageCalcResult {
   damages : FixedArray[Int]
   percents : FixedArray[Double]

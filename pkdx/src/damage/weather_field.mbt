@@ -1,5 +1,9 @@
+///|
 /// Get weather damage modifier (4096 base) for move type.
-pub fn get_weather_damage_mod(weather : @model.Weather, move_type : String) -> Int {
+pub fn get_weather_damage_mod(
+  weather : @model.Weather,
+  move_type : String,
+) -> Int {
   match (weather, move_type) {
     (Sun, "ほのお") => 6144 // 1.5x
     (Sun, "みず") => 2048 // 0.5x
@@ -9,12 +13,13 @@ pub fn get_weather_damage_mod(weather : @model.Weather, move_type : String) -> I
   }
 }
 
+///|
 /// Apply weather stat modifier to defense stat.
 pub fn apply_weather_def_mod(
   weather : @model.Weather,
   def_types : (String, String),
   is_physical : Bool,
-  def_stat : Int
+  def_stat : Int,
 ) -> Int {
   let (dt1, dt2) = def_types
   let has_rock = dt1 == "いわ" || dt2 == "いわ"
@@ -38,6 +43,7 @@ pub fn apply_weather_def_mod(
   }
 }
 
+///|
 /// Get field damage modifier (4096 base) for move type.
 pub fn get_field_damage_mod(field : @model.Field, move_type : String) -> Int {
   match (field, move_type) {

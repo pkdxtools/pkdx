@@ -30,8 +30,28 @@ fi
 echo "=== pkdx setup ==="
 echo ""
 
+# --- Step 0: Remote configuration (fork detection) ---
+UPSTREAM_REPO="ushironoko/pkdx"
+ORIGIN_URL="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
+
+if echo "$ORIGIN_URL" | grep -q "$UPSTREAM_REPO"; then
+  # origin is the upstream repo itself (clone setup)
+  echo "[0/4] Remote configuration..."
+  echo "  Clone setup detected. No additional remote needed."
+else
+  # origin is a fork
+  echo "[0/4] Remote configuration..."
+  if git -C "$REPO_ROOT" remote get-url upstream &>/dev/null; then
+    echo "  upstream remote already configured."
+  else
+    git -C "$REPO_ROOT" remote add upstream "https://github.com/$UPSTREAM_REPO.git"
+    echo "  Added upstream remote: https://github.com/$UPSTREAM_REPO.git"
+  fi
+fi
+echo ""
+
 # --- Step 1: pokedex submodule ---
-echo "[1/3] Initializing pokedex submodule..."
+echo "[1/4] Initializing pokedex submodule..."
 if [ ! -d "$REPO_ROOT/pokedex/.git" ] && [ ! -f "$REPO_ROOT/pokedex/.git" ]; then
   git -C "$REPO_ROOT" submodule update --init
   echo "  Done."
@@ -40,7 +60,7 @@ else
 fi
 
 # --- Step 2: pokedex.db ---
-echo "[2/3] Generating pokedex.db..."
+echo "[2/4] Generating pokedex.db..."
 if [ -f "$REPO_ROOT/pokedex/pokedex.db" ]; then
   echo "  Already exists."
 else
@@ -54,7 +74,7 @@ else
 fi
 
 # --- Step 3: pkdx binary ---
-echo "[3/3] Downloading pkdx binary ($BINARY_NAME)..."
+echo "[3/4] Downloading pkdx binary ($BINARY_NAME)..."
 
 # Skip if local build exists
 LOCAL_BUILD="$REPO_ROOT/pkdx/_build/native/release/build/src/main/main.exe"
@@ -96,6 +116,13 @@ else
     fi
   fi
 fi
+
+# --- Step 4: box directory ---
+echo "[4/4] Initializing data directories..."
+for dir in "$REPO_ROOT/box/teams" "$REPO_ROOT/box/pokemons" "$REPO_ROOT/box/cache"; do
+  mkdir -p "$dir"
+done
+echo "  Done."
 
 # --- Verify ---
 echo ""

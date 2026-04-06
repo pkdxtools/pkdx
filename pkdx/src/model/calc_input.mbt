@@ -1,3 +1,4 @@
+///|
 pub(all) struct DamageCalcInput {
   attacker : Pokemon
   defender : Pokemon

@@ -1,3 +1,4 @@
+///|
 fn main {
   let args = @sys.get_cli_args()
   let cmd = match @cli.parse_args(args) {
@@ -17,6 +18,8 @@ fn main {
     TypeChart(move_type~, def_type1~, def_type2~) =>
       run_type_chart(move_type, def_type1, def_type2)
     Coverage(types~) => run_coverage(types)
+    WriteTeams(date~, axis~) => run_write_teams(date, axis)
+    WritePokemon(name~, file~) => run_write_pokemon(name, file)
     Damage(
       attacker~,
       defender~,
@@ -33,16 +36,17 @@ fn main {
       critical~,
       atk_stat~,
       def_stat~,
-      def_hp~,
+      def_hp~
     ) =>
       run_damage(
-        attacker, defender, move_name, version, format, atk_ability,
-        def_ability, atk_item, def_item, weather, field, tera_type, critical,
-        atk_stat, def_stat, def_hp,
+        attacker, defender, move_name, version, format, atk_ability, def_ability,
+        atk_item, def_item, weather, field, tera_type, critical, atk_stat, def_stat,
+        def_hp,
       )
   }
 }
 
+///|
 fn[T] with_db(f : (@db.Db) -> T) -> T {
   let db_path = match resolve_db_path() {
     Ok(p) => p
@@ -71,7 +75,12 @@ fn[T] with_db(f : (@db.Db) -> T) -> T {
   result
 }
 
-fn run_query(name : String, version : String, format : @cli.OutputFormat) -> Unit {
+///|
+fn run_query(
+  name : String,
+  version : String,
+  format : @cli.OutputFormat,
+) -> Unit {
   with_db(fn(db) {
     match @db.query_pokemon(db, name, version) {
       Ok(p) => println(@cli.format_pokemon(p, format))
@@ -80,10 +89,11 @@ fn run_query(name : String, version : String, format : @cli.OutputFormat) -> Uni
   })
 }
 
+///|
 fn run_moves(
   target : String,
   version : String,
-  format : @cli.OutputFormat
+  format : @cli.OutputFormat,
 ) -> Unit {
   with_db(fn(db) {
     // If target looks like a number, use it as globalNo directly.
@@ -106,12 +116,13 @@ fn run_moves(
   })
 }
 
+///|
 fn run_search(
   type1 : String,
   type2 : String,
   min_speed : Int,
   version : String,
-  format : @cli.OutputFormat
+  format : @cli.OutputFormat,
 ) -> Unit {
   with_db(fn(db) {
     match @db.search_by_type(db, type1, type2, min_speed, version) {
@@ -121,6 +132,7 @@ fn run_search(
   })
 }
 
+///|
 fn run_damage(
   attacker_name : String,
   defender_name : String,
@@ -137,7 +149,7 @@ fn run_damage(
   critical : Bool,
   atk_stat : Int,
   def_stat : Int,
-  def_hp : Int
+  def_hp : Int,
 ) -> Unit {
   with_db(fn(db) {
     let atk_pokemon = match @db.query_pokemon(db, attacker_name, version) {
@@ -182,10 +194,11 @@ fn run_damage(
   })
 }
 
+///|
 fn run_type_chart(
   move_type : String,
   def_type1 : String,
-  def_type2 : String
+  def_type2 : String,
 ) -> Unit {
   let atk = match @types.type_from_jp(move_type) {
     Some(t) => t
@@ -220,6 +233,7 @@ fn run_type_chart(
   println(move_type + " -> " + def_str + ": " + format_effectiveness(eff))
 }
 
+///|
 fn format_effectiveness(eff : Double) -> String {
   if eff == 0.0 {
     "0x (immune)"
@@ -238,6 +252,7 @@ fn format_effectiveness(eff : Double) -> String {
   }
 }
 
+///|
 fn run_coverage(types : Array[String]) -> Unit {
   let atk_types : Array[@types.PokemonType] = []
   for i = 0; i < types.length(); i = i + 1 {
@@ -260,8 +275,11 @@ fn run_coverage(types : Array[String]) -> Unit {
   println("Coverage for [" + type_names + "]:")
   let pct = (result.coverage_rate * 100.0).to_int().to_string()
   println(
-    "  Neutral+ coverage: " + result.covered.length().to_string() + "/18 (" +
-    pct + "%)",
+    "  Neutral+ coverage: " +
+    result.covered.length().to_string() +
+    "/18 (" +
+    pct +
+    "%)",
   )
   if result.not_covered.length() > 0 {
     let mut nc = ""
@@ -275,6 +293,7 @@ fn run_coverage(types : Array[String]) -> Unit {
   }
 }
 
+///|
 fn resolve_db_path() -> Result[String, String] {
   match @sys.get_env_var("POKEDEX_DB") {
     Some(path) => return Ok(path)
@@ -296,6 +315,7 @@ fn resolve_db_path() -> Result[String, String] {
   )
 }
 
+///|
 fn is_numeric(s : String) -> Bool {
   if s.length() == 0 {
     return false
@@ -307,4 +327,108 @@ fn is_numeric(s : String) -> Bool {
     }
   }
   true
+}
+
+///|
+fn is_safe_path_component(s : String) -> Bool {
+  if s.length() == 0 {
+    return false
+  }
+  for i = 0; i < s.length(); i = i + 1 {
+    let c = s[i].to_int()
+    // prevent directory traversal via user-supplied path components
+    if c == 0x2F || c == 0x5C {
+      return false
+    }
+  }
+  for i = 0; i < s.length() - 1; i = i + 1 {
+    if s[i].to_int() == 0x2E && s[i + 1].to_int() == 0x2E {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn exit_error(msg : String) -> Unit {
+  pkdx_eprintln(@db.to_c_bytes("Error: " + msg))
+  pkdx_exit(1)
+}
+
+///|
+fn run_write_teams(date : String, axis : String) -> Unit {
+  if not(is_safe_path_component(axis)) || not(is_safe_path_component(date)) {
+    exit_error("Invalid characters in --axis or --date")
+    return
+  }
+  let raw = pkdx_read_stdin()
+  if raw.length() == 0 {
+    exit_error("No input from stdin")
+    return
+  }
+  let json = @json.parse(raw) catch {
+    e => {
+      exit_error("JSON parse error: " + e.to_string())
+      return
+    }
+  }
+  match @writer.validate_team_json(json) {
+    Err(errors) => {
+      let msg = "Validation errors (" +
+        errors.length().to_string() +
+        "):\n" +
+        errors.map(fn(e) { "  - " + e }).join("\n")
+      exit_error(msg)
+      return
+    }
+    Ok(_) => ()
+  }
+  let doc = @writer.build_team_document(json, axis, date)
+  let md = @markdown.serialize(doc)
+  let path = "box/teams/" + axis + "-build-" + date + ".md"
+  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(md))
+  if rc != 0 {
+    exit_error("Failed to write " + path)
+  } else {
+    println(path)
+  }
+}
+
+///|
+fn run_write_pokemon(name : String, file : String) -> Unit {
+  if not(is_safe_path_component(name)) || not(is_safe_path_component(file)) {
+    exit_error("Invalid characters in --name or --file")
+    return
+  }
+  let raw = pkdx_read_stdin()
+  if raw.length() == 0 {
+    exit_error("No input from stdin")
+    return
+  }
+  let json = @json.parse(raw) catch {
+    e => {
+      exit_error("JSON parse error: " + e.to_string())
+      return
+    }
+  }
+  match @writer.validate_pokemon_json(json) {
+    Err(errors) => {
+      let msg = "Validation errors (" +
+        errors.length().to_string() +
+        "):\n" +
+        errors.map(fn(e) { "  - " + e }).join("\n")
+      exit_error(msg)
+      return
+    }
+    Ok(_) => ()
+  }
+  let doc = @writer.build_pokemon_document(json, name)
+  let md = @markdown.serialize(doc)
+  let path = "box/pokemons/" + name + "/" + file + ".md"
+  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(md))
+  if rc != 0 {
+    exit_error("Failed to write " + path)
+  } else {
+    println(path)
+  }
 }

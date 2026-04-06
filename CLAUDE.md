@@ -28,7 +28,9 @@ cd pokedex && ruby tools/import_db.rb # pokedex.db 生成（Ruby必要）
 # pkdx バイナリは bin/pkdx 経由で GitHub Releases から自動DL
 ```
 
-### Fork Setup
+### セットアップ方法
+
+#### A. GitHubアカウントがある場合（推奨）
 
 1. GitHub でリポジトリをフォーク
 2. `git clone` してフォークを取得
@@ -36,6 +38,17 @@ cd pokedex && ruby tools/import_db.rb # pokedex.db 生成（Ruby必要）
 4. `./setup.sh` を実行
 5. スキルを通常通り使用 — 出力は `box/` 配下に保存される
 6. `self-update` スキルで定期的にupstreamに追従
+
+GitHubアカウントがあると、作成した構築・育成データをクラウドにバックアップでき、PC間で共有したり、過去のデータに戻すことができる。
+
+#### B. GitHubアカウントがない場合
+
+1. `git clone https://github.com/ushironoko/pkdx.git` でリポジトリを取得
+2. `cd pkdx && ./setup.sh` を実行
+3. スキルを通常通り使用可能
+
+この方法でも全機能が使える。ただしデータは手元のPCにのみ保存される。
+GitHubアカウントを作成してフォークに移行すれば、作成した構築データ・育成データのバージョン管理（変更履歴の保存・復元・クラウドバックアップ）が利用可能になる。
 
 `pokedex.db` と `pkdx` バイナリが存在しないとスキルは動作しない。
 

@@ -31,7 +31,13 @@ PKDX=$REPO_ROOT/bin/pkdx
 ### ファイルパス
 
 ```
-$REPO_ROOT/box/cache/team_cache_<axis_name>.json
+$REPO_ROOT/box/cache/team_cache_<axis_name>_<timestamp>.json
+```
+
+`<timestamp>` はスキル開始時（Phase 0）に `date +%s` で取得した UNIX タイムスタンプ。同じポケモンで複���構築を並行しても衝突しない。以降のフェーズでは `$CACHE_FILE` 変数でパスを参照する。
+
+```bash
+CACHE_FILE="$REPO_ROOT/box/cache/team_cache_<axis_name>_$(date +%s).json"
 ```
 
 ### スキーマ
@@ -632,7 +638,7 @@ megaメカニクスが有効な場合:
 - バージョン管理なし → `--axis "__no_save.<軸ポケモン名>"`
 
 ```bash
-cat $REPO_ROOT/box/cache/team_cache_<axis_name>.json | $PKDX write --teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>"
+cat $CACHE_FILE | $PKDX write --teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>"
 ```
 
 CLIはキャッシュ JSON のスキーマ（`members` + `coverage` + `defense_matrix` 等）をバリデーションする。

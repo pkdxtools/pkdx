@@ -31,10 +31,14 @@ CACHE_DIR=$REPO_ROOT/pokedex       # pokedex.dbと同じディレクトリ
 ### ファイルパス
 
 ```
-$REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json
+$REPO_ROOT/box/cache/breed_cache_<pokemon_name>_<timestamp>.json
 ```
 
-例: `pokedex/breed_cache_ブリジュラス.json`
+`<timestamp>` はスキル開始時（Phase 0）に `date +%s` で取得した UNIX タイムスタンプ。同じポケモンを複数回育成しても衝突しない。以降のフェーズでは `$CACHE_FILE` 変数でパスを参照する。
+
+```bash
+CACHE_FILE="$REPO_ROOT/box/cache/breed_cache_<pokemon_name>_$(date +%s).json"
+```
 
 ### スキーマ
 
@@ -532,7 +536,7 @@ calcスキルと同じ形式でダメージテーブルを表示:
 キャッシュ JSON はPhase 0-7で段階的に構築済み。CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
 
 ```bash
-cat $REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
+cat $CACHE_FILE | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
 ```
 
 CLIはキャッシュ JSON のスキーマ（`pokemon` + `build` セクション）をバリデーションする。
@@ -566,9 +570,9 @@ CLIはキャッシュ JSON のスキーマ（`pokemon` + `build` セクション
 ✓ box/pokemons/<name>/<filename>_pokesol.txt に保存しました。
 ```
 
-3. キャッシュファイル `$REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json` を削除
+3. キャッシュファイル `$CACHE_FILE` を削除
 
-「いいえ」（質問1）の場合もキャッシュファイルを削除してからスキルを終了。
+「いいえ」（質問1）の場合もキャッシュファイル `$CACHE_FILE` を削除してからスキルを終了。
 
 ---
 

@@ -336,12 +336,11 @@ fn is_safe_path_component(s : String) -> Bool {
   }
   for i = 0; i < s.length(); i = i + 1 {
     let c = s[i].to_int()
-    // reject '/' (0x2F) and '\' (0x5C)
+    // prevent directory traversal via user-supplied path components
     if c == 0x2F || c == 0x5C {
       return false
     }
   }
-  // reject ".."
   for i = 0; i < s.length() - 1; i = i + 1 {
     if s[i].to_int() == 0x2E && s[i + 1].to_int() == 0x2E {
       return false

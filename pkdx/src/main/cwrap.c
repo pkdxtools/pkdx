@@ -304,7 +304,6 @@ moonbit_bytes_t pkdx_string_to_utf8(moonbit_string_t str, int32_t str_len) {
     return out;
 }
 
-/* ---- File I/O for write command ---- */
 #include <stdio.h>
 #include <sys/stat.h>
 #include <errno.h>

@@ -83,7 +83,6 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
     }
     blocks.push(heading(3, "\{dir_label} vs \{opponent} / \{move_name}"))
 
-    // info table
     let info_header = [cell("項目"), cell("値")]
     let info_rows : Array[Array[@markdown.TableCell]] = [
       [cell("攻撃側実数値"), cell(json_string(calc, "attacker_stat"))],
@@ -91,7 +90,6 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
     ]
     blocks.push(make_table(info_header, none_aligns(2), info_rows))
 
-    // damage table
     let damages = json_array(calc, "damages")
     let percentages = json_string_array(calc, "percentages")
     if damages.length() > 0 {
@@ -118,7 +116,6 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
       )
     }
 
-    // ko text
     let ko_text = json_string(calc, "ko_text")
     if ko_text.length() > 0 {
       let ko_label = "確定数: \{ko_text}"
@@ -145,10 +142,7 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
 pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document {
   let blocks : Array[@markdown.Block] = []
 
-  // # タイトル
   blocks.push(heading(1, "\{name} 育成データ"))
-
-  // ## 基本情報
   blocks.push(heading(2, "基本情報"))
   let types_arr = json_string_array(json, "types")
   let types_str = types_arr.join("/")
@@ -198,18 +192,11 @@ pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document 
   ]
   blocks.push(make_table(info_header, none_aligns(2), info_rows))
 
-  // ## 実数値
   blocks.push(heading(2, "実数値 (Lv50, 6V)"))
   blocks.push(format_stat_table(json))
-
-  // ## 技構成
   blocks.push(heading(2, "技構成"))
   blocks.push(format_move_table(json))
-
-  // ## ダメージ計算結果
   blocks.push_iter(format_damage_calcs(json).iter())
-
-  // ## ダメージ計算用コマンド
   blocks.push(heading(2, "ダメージ計算用コマンド"))
   let a_val = json_int_at(json, "actual_stats", "a").to_string()
   let b_val = json_int_at(json, "actual_stats", "b").to_string()

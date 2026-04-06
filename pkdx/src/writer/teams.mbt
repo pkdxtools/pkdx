@@ -317,10 +317,7 @@ pub fn build_team_document(
   let version = json_string(json, "version")
   let members = json_array(json, "members")
 
-  // # タイトル
   blocks.push(heading(1, "\{axis}軸構築 - \{date}"))
-
-  // ## フォーマット
   blocks.push(heading(2, "フォーマット"))
   blocks.push(
     bullet_list([
@@ -329,44 +326,30 @@ pub fn build_team_document(
       "ゲームバージョン: \{version}",
     ]),
   )
-
-  // ## チーム
   blocks.push(heading(2, "チーム"))
   blocks.push(build_members_table(members))
-
-  // ## 推奨技構成
   blocks.push(heading(2, "推奨技構成"))
   blocks.push_iter(build_moves_section(members).iter())
-
-  // ## 攻撃カバー率
   let coverage = json_array(json, "coverage")
   if coverage.length() > 0 {
     blocks.push(heading(2, "攻撃カバー率"))
     blocks.push(build_coverage_table(coverage))
   }
-
-  // ## 防御相性マトリクス
   let defense = json_array(json, "defense_matrix")
   if defense.length() > 0 {
     blocks.push(heading(2, "防御相性マトリクス"))
     blocks.push(build_defense_table(defense, members))
   }
-
-  // ## 選出パターン
   let plans = json_array(json, "matchup_plans")
   if plans.length() > 0 {
     blocks.push(heading(2, "選出パターン"))
     blocks.push_iter(build_matchup_plans(plans, battle_format).iter())
   }
-
-  // ## 構築の強み
   let strengths = json_string_array(json, "strengths")
   if strengths.length() > 0 {
     blocks.push(heading(2, "構築の強み"))
     blocks.push(bullet_list(strengths))
   }
-
-  // ## 構築の弱み・注意点
   let weaknesses = json_string_array(json, "weaknesses")
   if weaknesses.length() > 0 {
     blocks.push(heading(2, "構築の弱み・注意点"))

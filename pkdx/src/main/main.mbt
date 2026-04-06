@@ -20,6 +20,15 @@ fn main {
     Coverage(types~) => run_coverage(types)
     WriteTeams(date~, axis~) => run_write_teams(date, axis)
     WritePokemon(name~, file~) => run_write_pokemon(name, file)
+    StatCalc(
+      name~, evs~, ivs~, nature~, nature_up~, nature_down~, version~, format~
+    ) =>
+      run_stat_calc(
+        name, evs, ivs, nature, nature_up, nature_down, version, format,
+      )
+    StatReverse(
+      target~, stats~, iv~, ev~, nature_mod~, is_hp~, version~, format~
+    ) => run_stat_reverse(target, stats, iv, ev, nature_mod, is_hp, version, format)
     Damage(
       attacker~,
       defender~,
@@ -430,5 +439,181 @@ fn run_write_pokemon(name : String, file : String) -> Unit {
     exit_error("Failed to write " + path)
   } else {
     println(path)
+  }
+}
+
+///|
+fn parse_csv_ints(s : String, default_val : Int, count : Int) -> FixedArray[Int] {
+  let result : FixedArray[Int] = FixedArray::make(count, default_val)
+  if s.length() == 0 {
+    return result
+  }
+  // Check if contains comma
+  let mut has_comma = false
+  for i = 0; i < s.length(); i = i + 1 {
+    if s[i] == ',' {
+      has_comma = true
+      break
+    }
+  }
+  if has_comma {
+    let mut idx = 0
+    let mut start = 0
+    for i = 0; i <= s.length(); i = i + 1 {
+      if i == s.length() || s[i] == ',' {
+        if idx < count && i > start {
+          result[idx] = parse_int_from_str(s[start:i].to_string(), default_val)
+        }
+        idx = idx + 1
+        start = i + 1
+      }
+    }
+  } else {
+    // Single value applied to all
+    let val = parse_int_from_str(s, default_val)
+    for i = 0; i < count; i = i + 1 {
+      result[i] = val
+    }
+  }
+  result
+}
+
+///|
+fn parse_int_from_str(s : String, default : Int) -> Int {
+  let mut result = 0
+  let mut i = 0
+  let mut negative = false
+  if i < s.length() && s[i] == '-' {
+    negative = true
+    i = i + 1
+  }
+  let mut has_digit = false
+  while i < s.length() {
+    let c = s[i].to_int()
+    if c >= 0x30 && c <= 0x39 {
+      result = result * 10 + (c - 0x30)
+      has_digit = true
+    } else {
+      break
+    }
+    i = i + 1
+  }
+  if not(has_digit) {
+    return default
+  }
+  if negative { -result } else { result }
+}
+
+///|
+fn resolve_nature(
+  nature_name : String,
+  nature_up : String,
+  nature_down : String,
+) -> @model.Nature {
+  // Priority 1: Japanese nature name
+  if nature_name.length() > 0 {
+    match @model.nature_from_ja(nature_name) {
+      Some(n) => return n
+      None => {
+        println("Warning: Unknown nature '" + nature_name + "', using neutral")
+      }
+    }
+  }
+  // Priority 2: up/down stat specification
+  if nature_up.length() > 0 && nature_down.length() > 0 {
+    let up = @model.stat_index_from_str(nature_up)
+    let down = @model.stat_index_from_str(nature_down)
+    match (up, down) {
+      (Some(u), Some(d)) =>
+        return {
+          name_ja: nature_up + "↑" + nature_down + "↓",
+          name_en: "Custom",
+          up: Some(u),
+          down: Some(d),
+        }
+      _ =>
+        println(
+          "Warning: Unknown stat '" +
+          nature_up +
+          "'/'" +
+          nature_down +
+          "', using neutral",
+        )
+    }
+  }
+  // Default: neutral (Hardy)
+  { name_ja: "がんばりや", name_en: "Hardy", up: None, down: None }
+}
+
+///|
+fn run_stat_calc(
+  name : String,
+  evs_str : String,
+  ivs_str : String,
+  nature_name : String,
+  nature_up : String,
+  nature_down : String,
+  version : String,
+  format : @cli.OutputFormat,
+) -> Unit {
+  let evs = parse_csv_ints(evs_str, 0, 6)
+  let ivs = parse_csv_ints(ivs_str, 31, 6)
+  let nature = resolve_nature(nature_name, nature_up, nature_down)
+  with_db(fn(db) {
+    match @db.query_pokemon(db, name, version) {
+      Ok(pokemon) => {
+        let stats = @damage.calc_all_stats(pokemon, ivs, evs, nature)
+        println(@cli.format_stat_calc(pokemon, stats, nature, ivs, evs, format))
+      }
+      Err(e) => println("Error: " + e)
+    }
+  })
+}
+
+///|
+fn run_stat_reverse(
+  target : String,
+  stats_str : String,
+  iv : Int,
+  ev : Int,
+  nature_mod : String,
+  is_hp : Bool,
+  version : String,
+  format : @cli.OutputFormat,
+) -> Unit {
+  if stats_str.length() > 0 {
+    // Pokemon mode
+    let actual_stats = parse_csv_ints(stats_str, 0, 6)
+    with_db(fn(db) {
+      match @db.query_pokemon(db, target, version) {
+        Ok(pokemon) => {
+          let results = @damage.reverse_spread(pokemon, actual_stats, iv)
+          println(
+            @cli.format_stat_reverse_pokemon(
+              pokemon, actual_stats, results, format,
+            ),
+          )
+        }
+        Err(e) => println("Error: " + e)
+      }
+    })
+  } else {
+    // Single stat mode
+    let actual = parse_int_from_str(target, 0)
+    if actual <= 0 {
+      println("Error: Invalid stat value '" + target + "'")
+      return
+    }
+    let (nature_num, nature_den) = match nature_mod {
+      "up" => (11, 10)
+      "down" => (9, 10)
+      _ => (1, 1)
+    }
+    let base = @damage.reverse_base_from_stat(
+      actual, iv, ev, is_hp, nature_num, nature_den,
+    )
+    println(
+      @cli.format_stat_reverse_single(actual, base, iv, ev, is_hp, nature_mod, format),
+    )
   }
 }

@@ -37,6 +37,26 @@ pub enum Command {
   )
   WriteTeams(date~ : String, axis~ : String)
   WritePokemon(name~ : String, file~ : String)
+  StatCalc(
+    name~ : String,
+    evs~ : String,
+    ivs~ : String,
+    nature~ : String,
+    nature_up~ : String,
+    nature_down~ : String,
+    version~ : String,
+    format~ : OutputFormat
+  )
+  StatReverse(
+    target~ : String,
+    stats~ : String,
+    iv~ : Int,
+    ev~ : Int,
+    nature_mod~ : String,
+    is_hp~ : Bool,
+    version~ : String,
+    format~ : OutputFormat
+  )
   Help
   Version
 } derive(Show)
@@ -56,6 +76,8 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     "coverage" => parse_coverage(args)
     "damage" => parse_damage(args)
     "write" => parse_write(args)
+    "stat-calc" => parse_stat_calc(args)
+    "stat-reverse" => parse_stat_reverse(args)
     "help" | "--help" | "-h" => Ok(Help)
     "version" | "--version" | "-v" => Ok(Version)
     _ => Err("Unknown command: " + subcmd + ". Run 'pkdx help' for usage.")
@@ -250,6 +272,48 @@ fn parse_write(args : Array[String]) -> Result[Command, String] {
   } else {
     Err("Usage: pkdx write --teams|--pokemon [options]")
   }
+}
+
+///|
+fn parse_stat_calc(args : Array[String]) -> Result[Command, String] {
+  if args.length() < 3 {
+    return Err(
+      "Usage: pkdx stat-calc <name> [--ev \"H,A,B,C,D,S\"] [--iv N] [--nature name] [--nature-up stat --nature-down stat]",
+    )
+  }
+  Ok(
+    StatCalc(
+      name=args[2],
+      evs=get_flag(args, "--ev", ""),
+      ivs=get_flag(args, "--iv", ""),
+      nature=get_flag(args, "--nature", ""),
+      nature_up=get_flag(args, "--nature-up", ""),
+      nature_down=get_flag(args, "--nature-down", ""),
+      version=get_flag(args, "--version", "scarlet_violet"),
+      format=parse_format(args),
+    ),
+  )
+}
+
+///|
+fn parse_stat_reverse(args : Array[String]) -> Result[Command, String] {
+  if args.length() < 3 {
+    return Err(
+      "Usage: pkdx stat-reverse <value|name> [--stats \"H,A,B,C,D,S\"] [--iv N] [--ev N] [--nature up|down|neutral] [--hp]",
+    )
+  }
+  Ok(
+    StatReverse(
+      target=args[2],
+      stats=get_flag(args, "--stats", ""),
+      iv=get_flag_int(args, "--iv", 31),
+      ev=get_flag_int(args, "--ev", 0),
+      nature_mod=get_flag(args, "--nature", "neutral"),
+      is_hp=has_flag(args, "--hp"),
+      version=get_flag(args, "--version", "scarlet_violet"),
+      format=parse_format(args),
+    ),
+  )
 }
 
 ///|

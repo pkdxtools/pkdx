@@ -57,7 +57,12 @@ $REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json
     "nature_down": "<stat or null>",
     "ability": "<chosen_ability or null>",
     "item": "<item or null>",
-    "moves": ["<move1 or null>", "<move2 or null>", "<move3 or null>", "<move4 or null>"],
+    "moves": [
+      {"name": "<move1 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0},
+      {"name": "<move2 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0},
+      {"name": "<move3 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0},
+      {"name": "<move4 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0}
+    ],
     "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 },
     "actual_stats": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
   },
@@ -86,7 +91,7 @@ $REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json
 | 2 | + nature / nature_up / nature_down + actual_stats再計算 |
 | 3 | + ability |
 | 4 | + item |
-| 5 | + moves |
+| 5 | + moves（name/type/category/power/accuracy を含む詳細オブジェクト） |
 | 6 | + evs + actual_stats最終値 |
 | 7 | + damage_calcs（ダメ計実行ごとに追記） |
 
@@ -520,44 +525,21 @@ calcスキルと同じ形式でダメージテーブルを表示:
 - バージョン管理なし: `box/pokemons/<pokemon-name>/__no_save.<ベース名>.md` （gitignore対象）
 
 1. 同名ファイルが存在する場合はAskUserQuestionで上書き確認
-2. Phase 0-7 で収集した情報を以下の JSON スキーマに従って構造化し、Bash ツールで `pkdx write` に渡す
+2. キャッシュ JSON をそのまま `pkdx write` に渡す
 
-### 出力（JSON → pkdx write）
+### 出力（キャッシュ JSON → pkdx write）
 
-CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
+キャッシュ JSON はPhase 0-7で段階的に構築済み。CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
 
 ```bash
-cat <<'POKEMON_JSON' | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
-{
-  "name": "<ポケモン名>",
-  "types": ["<type1>", "<type2>"],
-  "nature": {"name": "<性格名>", "plus": "<上昇ステ>", "minus": "<下降ステ>"},
-  "ability": "<特性>",
-  "item": "<持ち物>",
-  "base_stats": {"h": <H>, "a": <A>, "b": <B>, "c": <C>, "d": <D>, "s": <S>},
-  "evs": {"h": <H>, "a": <A>, "b": <B>, "c": <C>, "d": <D>, "s": <S>},
-  "actual_stats": {"h": <H>, "a": <A>, "b": <B>, "c": <C>, "d": <D>, "s": <S>},
-  "moves": [
-    {"name": "<技名>", "type": "<タイプ>", "category": "<分類>", "power": <威力>, "accuracy": <命中>}
-  ],
-  "damage_calcs": [
-    {
-      "direction": "attack",
-      "opponent": "<相手名>",
-      "move": "<技名>",
-      "attacker_stat": "A <実数値>",
-      "defender_stat": "HP <値> / B <値>",
-      "damages": [<16段階乱数>],
-      "percentages": ["<割合%>"],
-      "ko_text": "<確定数テキスト>"
-    }
-  ],
-  "filename": "<ファイル名>"
-}
-POKEMON_JSON
+cat $REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
 ```
 
-**エラー時の再試行**: exit code が 0 以外の場合、stderrのエラーメッセージに基づいてJSONを修正し再試行する。最大3回まで。
+CLIはキャッシュ JSON のスキーマ（`pokemon` + `build` セクション）をバリデーションする。
+`build.moves` の各要素は `name/type/category/power/accuracy` を含む詳細オブジェクトである必要がある（Phase 5 で書き込み済み）。
+空の move name がある場合はバリデーションエラーとなる。
+
+**エラー時の再試行**: exit code が 0 以外の場合、stderrのエラーメッセージに基づいてキャッシュ JSON を修正し再試行する。最大3回まで。
 
 保存完了後:
 1. 完了メッセージを表示:

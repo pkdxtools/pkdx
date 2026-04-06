@@ -1,4 +1,38 @@
 ///|
+/// キャッシュ JSON の nested path からオブジェクトを取得
+fn get_nested(json : Json, key1 : String) -> Json {
+  match json {
+    Object(m) =>
+      match m.get(key1) {
+        Some(j) => j
+        _ => Json::null()
+      }
+    _ => Json::null()
+  }
+}
+
+///|
+/// キャッシュ JSON の nested path から int を取得 (long key: hp/atk/def/spa/spd/spe)
+fn nested_int(json : Json, section : String, obj : String, key : String) -> Int {
+  match json {
+    Object(m) =>
+      match m.get(section) {
+        Some(Object(sec)) =>
+          match sec.get(obj) {
+            Some(Object(inner)) =>
+              match inner.get(key) {
+                Some(Number(n, ..)) => n.to_int()
+                _ => 0
+              }
+            _ => 0
+          }
+        _ => 0
+      }
+    _ => 0
+  }
+}
+
+///|
 fn format_stat_table(json : Json) -> @markdown.Block {
   let header = [
     cell("ステータス"),
@@ -9,13 +43,13 @@ fn format_stat_table(json : Json) -> @markdown.Block {
   let stat_labels = [
     "HP", "こうげき", "ぼうぎょ", "とくこう", "とくぼう", "すばやさ",
   ]
-  let stat_keys = ["h", "a", "b", "c", "d", "s"]
+  let stat_keys = ["hp", "atk", "def", "spa", "spd", "spe"]
   let rows : Array[Array[@markdown.TableCell]] = []
   for i, label in stat_labels {
     let key = stat_keys[i]
-    let base = json_int_at(json, "base_stats", key)
-    let ev = json_int_at(json, "evs", key)
-    let actual = json_int_at(json, "actual_stats", key)
+    let base = nested_int(json, "pokemon", "base_stats", key)
+    let ev = nested_int(json, "build", "evs", key)
+    let actual = nested_int(json, "build", "actual_stats", key)
     rows.push([
       cell(label),
       cell(base.to_string()),
@@ -27,22 +61,6 @@ fn format_stat_table(json : Json) -> @markdown.Block {
 }
 
 ///|
-fn json_int_at(json : Json, obj_key : String, key : String) -> Int {
-  match json {
-    Object(m) =>
-      match m.get(obj_key) {
-        Some(Object(inner)) =>
-          match inner.get(key) {
-            Some(Number(n, ..)) => n.to_int()
-            _ => 0
-          }
-        _ => 0
-      }
-    _ => 0
-  }
-}
-
-///|
 fn format_move_table(json : Json) -> @markdown.Block {
   let header = [
     cell("技名"),
@@ -51,8 +69,9 @@ fn format_move_table(json : Json) -> @markdown.Block {
     cell("威力"),
     cell("命中"),
   ]
+  let build = get_nested(json, "build")
   let rows : Array[Array[@markdown.TableCell]] = []
-  for mv in json_array(json, "moves") {
+  for mv in json_array(build, "moves") {
     rows.push([
       cell(json_string(mv, "name")),
       cell(json_string(mv, "type")),
@@ -76,22 +95,10 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
     let direction = json_string(calc, "direction")
     let opponent = json_string(calc, "opponent")
     let move_name = json_string(calc, "move")
-    let dir_label = if direction == "attack" {
-      "攻撃側"
-    } else {
-      "防御側"
-    }
+    let dir_label = if direction == "attack" { "攻撃側" } else { "防御側" }
     blocks.push(heading(3, "\{dir_label} vs \{opponent} / \{move_name}"))
-
-    let info_header = [cell("項目"), cell("値")]
-    let info_rows : Array[Array[@markdown.TableCell]] = [
-      [cell("攻撃側実数値"), cell(json_string(calc, "attacker_stat"))],
-      [cell("防御側実数値"), cell(json_string(calc, "defender_stat"))],
-    ]
-    blocks.push(make_table(info_header, none_aligns(2), info_rows))
-
     let damages = json_array(calc, "damages")
-    let percentages = json_string_array(calc, "percentages")
+    let percents = json_array(calc, "percents")
     if damages.length() > 0 {
       let dmg_header : Array[@markdown.TableCell] = [cell("")]
       let dmg_row : Array[@markdown.TableCell] = [cell("ダメージ")]
@@ -103,8 +110,16 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
           Number(n, ..) => dmg_row.push(cell(n.to_int().to_string()))
           _ => dmg_row.push(cell("-"))
         }
-        if i < percentages.length() {
-          dmg_row.push(cell(percentages[i]))
+        if i < percents.length() {
+          match percents[i] {
+            Number(n, ..) => {
+              let pct = n * 100.0
+              let pct_int = pct.to_int()
+              let frac = ((pct - pct_int.to_double()) * 10.0).to_int()
+              pct_row.push(cell("\{pct_int}.\{frac}%"))
+            }
+            _ => pct_row.push(cell("-"))
+          }
         } else {
           pct_row.push(cell("-"))
         }
@@ -115,10 +130,9 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
         ]),
       )
     }
-
-    let ko_text = json_string(calc, "ko_text")
-    if ko_text.length() > 0 {
-      let ko_label = "確定数: \{ko_text}"
+    let ko = json_string(calc, "ko")
+    if ko.length() > 0 {
+      let ko_label = "確定数: \{ko}"
       blocks.push(
         @markdown.Block::Paragraph(
           children=[
@@ -141,47 +155,24 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
 ///|
 pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document {
   let blocks : Array[@markdown.Block] = []
+  let pokemon = get_nested(json, "pokemon")
+  let build = get_nested(json, "build")
+  let type1 = json_string(pokemon, "type1")
+  let type2 = json_string(pokemon, "type2")
+  let types_str = if type2.length() > 0 {
+    "\{type1}/\{type2}"
+  } else {
+    type1
+  }
+  let nature_name = json_string(build, "nature")
+  let nature_up = json_string(build, "nature_up")
+  let nature_down = json_string(build, "nature_down")
+  let nature_str = "\{nature_name} (\{nature_up}↑ \{nature_down}↓)"
+  let ability = json_string(build, "ability")
+  let item = json_string(build, "item")
 
   blocks.push(heading(1, "\{name} 育成データ"))
   blocks.push(heading(2, "基本情報"))
-  let types_arr = json_string_array(json, "types")
-  let types_str = types_arr.join("/")
-  let nature_name = json_string(
-    match json {
-      Object(m) =>
-        match m.get("nature") {
-          Some(j) => j
-          _ => Json::null()
-        }
-      _ => Json::null()
-    },
-    "name",
-  )
-  let nature_plus = json_string(
-    match json {
-      Object(m) =>
-        match m.get("nature") {
-          Some(j) => j
-          _ => Json::null()
-        }
-      _ => Json::null()
-    },
-    "plus",
-  )
-  let nature_minus = json_string(
-    match json {
-      Object(m) =>
-        match m.get("nature") {
-          Some(j) => j
-          _ => Json::null()
-        }
-      _ => Json::null()
-    },
-    "minus",
-  )
-  let nature_str = "\{nature_name} (\{nature_plus}↑ \{nature_minus}↓)"
-  let ability = json_string(json, "ability")
-  let item = json_string(json, "item")
   let info_header = [cell("項目"), cell("値")]
   let info_rows : Array[Array[@markdown.TableCell]] = [
     [cell("ポケモン"), cell(name)],
@@ -191,16 +182,15 @@ pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document 
     [cell("持ち物"), cell(item)],
   ]
   blocks.push(make_table(info_header, none_aligns(2), info_rows))
-
   blocks.push(heading(2, "実数値 (Lv50, 6V)"))
   blocks.push(format_stat_table(json))
   blocks.push(heading(2, "技構成"))
   blocks.push(format_move_table(json))
   blocks.push_iter(format_damage_calcs(json).iter())
   blocks.push(heading(2, "ダメージ計算用コマンド"))
-  let a_val = json_int_at(json, "actual_stats", "a").to_string()
-  let b_val = json_int_at(json, "actual_stats", "b").to_string()
-  let hp_val = json_int_at(json, "actual_stats", "h").to_string()
+  let a_val = nested_int(json, "build", "actual_stats", "atk").to_string()
+  let b_val = nested_int(json, "build", "actual_stats", "def").to_string()
+  let hp_val = nested_int(json, "build", "actual_stats", "hp").to_string()
   let atk_cmd = "bin/pkdx damage \"\{name}\" \"<相手>\" \"<技>\" --atk-stat \{a_val} --atk-ability \"\{ability}\" --atk-item \"\{item}\""
   let def_cmd = "bin/pkdx damage \"<相手>\" \"\{name}\" \"<技>\" --def-stat \{b_val} --def-hp \{hp_val}"
   blocks.push(

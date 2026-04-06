@@ -2,22 +2,29 @@
 test "build_pokemon_document: deterministic output" {
   let src =
     #|{
-    #|  "name": "ガブリアス",
-    #|  "types": ["ドラゴン", "じめん"],
-    #|  "nature": {"name": "ようき", "plus": "すばやさ", "minus": "とくこう"},
-    #|  "ability": "さめはだ",
-    #|  "item": "こだわりスカーフ",
-    #|  "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
-    #|  "evs": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
-    #|  "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169},
-    #|  "moves": [
-    #|    {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
-    #|    {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
-    #|    {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80,"accuracy":100},
-    #|    {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100,"accuracy":80}
-    #|  ],
-    #|  "damage_calcs": [],
-    #|  "filename": "スカーフ型"
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりスカーフ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80,"accuracy":100},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100,"accuracy":80}
+    #|    ],
+    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  },
+    #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
   let doc = build_pokemon_document(json, "ガブリアス")
@@ -44,61 +51,73 @@ test "build_pokemon_document: deterministic output" {
 test "build_pokemon_document: with damage calcs" {
   let src =
     #|{
-    #|  "name": "ガブリアス",
-    #|  "types": ["ドラゴン", "じめん"],
-    #|  "nature": {"name": "ようき", "plus": "すばやさ", "minus": "とくこう"},
-    #|  "ability": "さめはだ",
-    #|  "item": "きあいのタスキ",
-    #|  "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
-    #|  "evs": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
-    #|  "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169},
-    #|  "moves": [
-    #|    {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
-    #|    {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
-    #|    {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"accuracy":0},
-    #|    {"name":"ステルスロック","type":"いわ","category":"変化","power":0,"accuracy":0}
-    #|  ],
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
+    #|      {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"accuracy":0},
+    #|      {"name":"ステルスロック","type":"いわ","category":"変化","power":0,"accuracy":0}
+    #|    ],
+    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  },
     #|  "damage_calcs": [{
     #|    "direction": "attack",
     #|    "opponent": "サーフゴー",
     #|    "move": "じしん",
-    #|    "attacker_stat": "A 182",
-    #|    "defender_stat": "HP 163 / B 116",
     #|    "damages": [150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180],
-    #|    "percentages": ["92.0%","93.2%","94.4%","95.7%","96.9%","98.1%","99.3%","100.6%","101.8%","103.0%","104.2%","105.5%","106.7%","107.9%","109.2%","110.4%"],
-    #|    "ko_text": "乱数1発 (50.0%)"
-    #|  }],
-    #|  "filename": "タスキ型"
+    #|    "percents": [0.920,0.932,0.944,0.957,0.969,0.981,0.993,1.006,1.018,1.030,1.042,1.055,1.067,1.079,1.092,1.104],
+    #|    "defender_hp": 163,
+    #|    "ko": "乱数1発 (50.0%)"
+    #|  }]
     #|}
   let json = @json.parse(src)
   let doc = build_pokemon_document(json, "ガブリアス")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("## ダメージ計算結果"))
   assert_true(md.contains("### 攻撃側 vs サーフゴー / じしん"))
-  assert_true(md.contains("| 攻撃側実数値 | A 182 |"))
   assert_true(md.contains("確定数: 乱数1発 (50.0%)"))
 }
 
 ///|
-test "build_pokemon_document: single type pokemon" {
+test "build_pokemon_document: dual type pokemon" {
   let src =
     #|{
-    #|  "name": "サーフゴー",
-    #|  "types": ["はがね", "ゴースト"],
-    #|  "nature": {"name": "ひかえめ", "plus": "とくこう", "minus": "こうげき"},
-    #|  "ability": "おうごんのからだ",
-    #|  "item": "こだわりメガネ",
-    #|  "base_stats": {"h":87,"a":60,"b":95,"c":133,"d":91,"s":84},
-    #|  "evs": {"h":0,"a":0,"b":0,"c":252,"d":4,"s":252},
-    #|  "actual_stats": {"h":162,"a":72,"b":115,"c":200,"d":112,"s":136},
-    #|  "moves": [
-    #|    {"name":"ゴールドラッシュ","type":"はがね","category":"特殊","power":120,"accuracy":100},
-    #|    {"name":"シャドーボール","type":"ゴースト","category":"特殊","power":80,"accuracy":100},
-    #|    {"name":"きあいだま","type":"かくとう","category":"特殊","power":120,"accuracy":70},
-    #|    {"name":"トリック","type":"エスパー","category":"変化","power":0,"accuracy":100}
-    #|  ],
-    #|  "damage_calcs": [],
-    #|  "filename": "メガネ型"
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "サーフゴー",
+    #|    "type1": "はがね",
+    #|    "type2": "ゴースト",
+    #|    "base_stats": {"hp":87,"atk":60,"def":95,"spa":133,"spd":91,"spe":84}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ひかえめ",
+    #|    "nature_up": "とくこう",
+    #|    "nature_down": "こうげき",
+    #|    "ability": "おうごんのからだ",
+    #|    "item": "こだわりメガネ",
+    #|    "moves": [
+    #|      {"name":"ゴールドラッシュ","type":"はがね","category":"特殊","power":120,"accuracy":100},
+    #|      {"name":"シャドーボール","type":"ゴースト","category":"特殊","power":80,"accuracy":100},
+    #|      {"name":"きあいだま","type":"かくとう","category":"特殊","power":120,"accuracy":70},
+    #|      {"name":"トリック","type":"エスパー","category":"変化","power":0,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":0,"atk":0,"def":0,"spa":252,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":162,"atk":72,"def":115,"spa":200,"spd":112,"spe":136}
+    #|  },
+    #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
   let doc = build_pokemon_document(json, "サーフゴー")

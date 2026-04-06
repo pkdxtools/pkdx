@@ -108,7 +108,6 @@ test "validate_team_json: wrong moves count" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  // jsonschema reports minItems/maxItems violation
   inspect(
     errors.iter().any(fn(e) { e.contains("moves") || e.contains("Items") }),
     content="true",
@@ -116,25 +115,34 @@ test "validate_team_json: wrong moves count" {
 }
 
 ///|
-test "validate_pokemon_json: valid input" {
+test "validate_pokemon_json: valid cache input" {
   let src =
     #|{
-    #|  "name": "ガブリアス",
-    #|  "types": ["ドラゴン", "じめん"],
-    #|  "nature": {"name": "ようき", "plus": "すばやさ", "minus": "とくこう"},
-    #|  "ability": "さめはだ",
-    #|  "item": "きあいのタスキ",
-    #|  "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
-    #|  "evs": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
-    #|  "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169},
-    #|  "moves": [
-    #|    {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
-    #|    {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
-    #|    {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"accuracy":0},
-    #|    {"name":"ステルスロック","type":"いわ","category":"変化","power":0,"accuracy":0}
-    #|  ],
+    #|  "version": "scarlet_violet",
+    #|  "phase": 7,
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
+    #|      {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"accuracy":0},
+    #|      {"name":"ステルスロック","type":"いわ","category":"変化","power":0,"accuracy":0}
+    #|    ],
+    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  },
     #|  "damage_calcs": [],
-    #|  "filename": "スカーフ型"
+    #|  "updated_at": "2026-04-06T00:00:00Z"
     #|}
   let json = @json.parse(src)
   inspect(validate_pokemon_json(json), content="Ok(())")
@@ -144,22 +152,25 @@ test "validate_pokemon_json: valid input" {
 test "validate_pokemon_json: evs over 510" {
   let src =
     #|{
-    #|  "name": "ガブリアス",
-    #|  "types": ["ドラゴン", "じめん"],
-    #|  "nature": {"name": "ようき", "plus": "すばやさ", "minus": "とくこう"},
-    #|  "ability": "さめはだ",
-    #|  "item": "きあいのタスキ",
-    #|  "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
-    #|  "evs": {"h":252,"a":252,"b":0,"c":0,"d":252,"s":0},
-    #|  "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169},
-    #|  "moves": [
-    #|    {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
-    #|    {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
-    #|    {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"accuracy":0},
-    #|    {"name":"ステルスロック","type":"いわ","category":"変化","power":0,"accuracy":0}
-    #|  ],
-    #|  "damage_calcs": [],
-    #|  "filename": "スカーフ型"
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":252,"atk":252,"def":0,"spa":0,"spd":252,"spe":0},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  },
+    #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
   let result = validate_pokemon_json(json)
@@ -173,21 +184,14 @@ test "validate_pokemon_json: evs over 510" {
 }
 
 ///|
-test "validate_pokemon_json: missing nature" {
+test "validate_pokemon_json: missing build" {
   let src =
     #|{
-    #|  "name": "ガブリアス",
-    #|  "types": ["ドラゴン"],
-    #|  "ability": "さめはだ",
-    #|  "item": "きあいのタスキ",
-    #|  "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
-    #|  "evs": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
-    #|  "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169},
-    #|  "moves": [
-    #|    {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
-    #|  ],
-    #|  "damage_calcs": [],
-    #|  "filename": "テスト"
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  }
     #|}
   let json = @json.parse(src)
   let result = validate_pokemon_json(json)
@@ -195,7 +199,41 @@ test "validate_pokemon_json: missing nature" {
     fail("Expected Err but got Ok")
   }
   inspect(
-    errors.iter().any(fn(e) { e.contains("nature") }),
+    errors.iter().any(fn(e) { e.contains("build") }),
+    content="true",
+  )
+}
+
+///|
+test "validate_pokemon_json: empty move name rejected" {
+  let src =
+    #|{
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("move name must not be empty") }),
     content="true",
   )
 }

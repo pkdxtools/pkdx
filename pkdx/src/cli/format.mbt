@@ -1,10 +1,7 @@
+///|
 /// Format a Pokemon as JSON.
 fn pokemon_to_json(p : @model.Pokemon) -> String {
-  let t2 = if p.type2.length() > 0 {
-    "\"" + p.type2 + "\""
-  } else {
-    "null"
-  }
+  let t2 = if p.type2.length() > 0 { "\"" + p.type2 + "\"" } else { "null" }
   let a2 = if p.ability2.length() > 0 {
     "\"" + p.ability2 + "\""
   } else {
@@ -15,15 +12,40 @@ fn pokemon_to_json(p : @model.Pokemon) -> String {
   } else {
     "null"
   }
-  "{\"globalNo\":\"" + p.global_no + "\",\"name_ja\":\"" + p.name_ja +
-  "\",\"name_en\":\"" + p.name_en + "\",\"type1\":\"" + p.type1 + "\",\"type2\":" +
-  t2 + ",\"hp\":" + p.hp.to_string() + ",\"atk\":" + p.atk.to_string() + ",\"def\":" +
-  p.def_.to_string() + ",\"spa\":" + p.spa.to_string() + ",\"spd\":" + p.spd.to_string() +
-  ",\"spe\":" + p.spe.to_string() + ",\"bst\":" + p.bst.to_string() +
-  ",\"ability1\":\"" + p.ability1 + "\",\"ability2\":" + a2 + ",\"dream_ability\":" +
-  da + "}"
+  "{\"globalNo\":\"" +
+  p.global_no +
+  "\",\"name_ja\":\"" +
+  p.name_ja +
+  "\",\"name_en\":\"" +
+  p.name_en +
+  "\",\"type1\":\"" +
+  p.type1 +
+  "\",\"type2\":" +
+  t2 +
+  ",\"hp\":" +
+  p.hp.to_string() +
+  ",\"atk\":" +
+  p.atk.to_string() +
+  ",\"def\":" +
+  p.def_.to_string() +
+  ",\"spa\":" +
+  p.spa.to_string() +
+  ",\"spd\":" +
+  p.spd.to_string() +
+  ",\"spe\":" +
+  p.spe.to_string() +
+  ",\"bst\":" +
+  p.bst.to_string() +
+  ",\"ability1\":\"" +
+  p.ability1 +
+  "\",\"ability2\":" +
+  a2 +
+  ",\"dream_ability\":" +
+  da +
+  "}"
 }
 
+///|
 /// Format a Pokemon as a table row.
 fn pokemon_to_table(p : @model.Pokemon) -> String {
   let type_str = if p.type2.length() > 0 {
@@ -31,12 +53,32 @@ fn pokemon_to_table(p : @model.Pokemon) -> String {
   } else {
     p.type1
   }
-  p.name_ja + " (" + p.name_en + ")  No." + p.global_no + "\n" + "Type: " +
-  type_str + "\n" + "HP:" + pad_right(p.hp.to_string(), 4) + " Atk:" +
-  pad_right(p.atk.to_string(), 4) + " Def:" + pad_right(p.def_.to_string(), 4) +
-  " SpA:" + pad_right(p.spa.to_string(), 4) + " SpD:" +
-  pad_right(p.spd.to_string(), 4) + " Spe:" + pad_right(p.spe.to_string(), 4) +
-  " BST:" + p.bst.to_string() + "\n" + "Abilities: " + p.ability1 +
+  p.name_ja +
+  " (" +
+  p.name_en +
+  ")  No." +
+  p.global_no +
+  "\n" +
+  "Type: " +
+  type_str +
+  "\n" +
+  "HP:" +
+  pad_right(p.hp.to_string(), 4) +
+  " Atk:" +
+  pad_right(p.atk.to_string(), 4) +
+  " Def:" +
+  pad_right(p.def_.to_string(), 4) +
+  " SpA:" +
+  pad_right(p.spa.to_string(), 4) +
+  " SpD:" +
+  pad_right(p.spd.to_string(), 4) +
+  " Spe:" +
+  pad_right(p.spe.to_string(), 4) +
+  " BST:" +
+  p.bst.to_string() +
+  "\n" +
+  "Abilities: " +
+  p.ability1 +
   (if p.ability2.length() > 0 { " / " + p.ability2 } else { "" }) +
   (if p.dream_ability.length() > 0 {
     " (HA: " + p.dream_ability + ")"
@@ -45,6 +87,7 @@ fn pokemon_to_table(p : @model.Pokemon) -> String {
   })
 }
 
+///|
 /// Output a Pokemon query result.
 pub fn format_pokemon(p : @model.Pokemon, fmt : OutputFormat) -> String {
   match fmt {
@@ -53,6 +96,7 @@ pub fn format_pokemon(p : @model.Pokemon, fmt : OutputFormat) -> String {
   }
 }
 
+///|
 /// Format moves as JSON array.
 fn moves_to_json(moves : Array[@model.Move]) -> String {
   let mut s = "["
@@ -62,31 +106,54 @@ fn moves_to_json(moves : Array[@model.Move]) -> String {
     }
     let m = moves[i]
     let cat_str = @model.category_to_jp(m.category)
-    s = s + "{\"name\":\"" + m.name + "\",\"type\":\"" + m.type_ + "\",\"category\":\"" +
-      cat_str + "\",\"power\":" + m.power.to_string() + ",\"accuracy\":" +
-      m.accuracy.to_string() + ",\"pp\":" + m.pp.to_string() + ",\"learn_method\":\"" +
-      m.learn_method + "\"}"
+    s = s +
+      "{\"name\":\"" +
+      m.name +
+      "\",\"type\":\"" +
+      m.type_ +
+      "\",\"category\":\"" +
+      cat_str +
+      "\",\"power\":" +
+      m.power.to_string() +
+      ",\"accuracy\":" +
+      m.accuracy.to_string() +
+      ",\"pp\":" +
+      m.pp.to_string() +
+      ",\"learn_method\":\"" +
+      m.learn_method +
+      "\"}"
   }
   s + "]"
 }
 
+///|
 /// Format moves as a table.
 fn moves_to_table(moves : Array[@model.Move]) -> String {
-  let mut s = pad_right("Move", 16) + pad_right("Type", 10) + pad_right(
-      "Cat", 6,
-    ) + pad_right("Pow", 5) + pad_right("Acc", 5) + pad_right("PP", 4) + "Method\n"
+  let mut s = pad_right("Move", 16) +
+    pad_right("Type", 10) +
+    pad_right("Cat", 6) +
+    pad_right("Pow", 5) +
+    pad_right("Acc", 5) +
+    pad_right("PP", 4) +
+    "Method\n"
   s = s + "─".to_string().repeat(60) + "\n"
   for i = 0; i < moves.length(); i = i + 1 {
     let m = moves[i]
     let cat_str = @model.category_to_jp(m.category)
-    s = s + pad_right(m.name, 16) + pad_right(m.type_, 10) + pad_right(
-        cat_str, 6,
-      ) + pad_right(m.power.to_string(), 5) + pad_right(m.accuracy.to_string(), 5) +
-      pad_right(m.pp.to_string(), 4) + m.learn_method + "\n"
+    s = s +
+      pad_right(m.name, 16) +
+      pad_right(m.type_, 10) +
+      pad_right(cat_str, 6) +
+      pad_right(m.power.to_string(), 5) +
+      pad_right(m.accuracy.to_string(), 5) +
+      pad_right(m.pp.to_string(), 4) +
+      m.learn_method +
+      "\n"
   }
   s
 }
 
+///|
 /// Output move list.
 pub fn format_moves(moves : Array[@model.Move], fmt : OutputFormat) -> String {
   match fmt {
@@ -95,6 +162,7 @@ pub fn format_moves(moves : Array[@model.Move], fmt : OutputFormat) -> String {
   }
 }
 
+///|
 /// Format search results as JSON.
 fn search_to_json(results : Array[@db.SearchResult]) -> String {
   let mut s = "["
@@ -103,27 +171,47 @@ fn search_to_json(results : Array[@db.SearchResult]) -> String {
       s = s + ","
     }
     let r = results[i]
-    let t2 = if r.type2.length() > 0 {
-      "\"" + r.type2 + "\""
-    } else {
-      "null"
-    }
-    s = s + "{\"globalNo\":\"" + r.global_no + "\",\"name_ja\":\"" + r.name_ja +
-      "\",\"type1\":\"" + r.type1 + "\",\"type2\":" + t2 + ",\"hp\":" +
-      r.hp.to_string() + ",\"atk\":" + r.atk.to_string() + ",\"def\":" +
-      r.def_.to_string() + ",\"spa\":" + r.spa.to_string() + ",\"spd\":" +
-      r.spd.to_string() + ",\"spe\":" + r.spe.to_string() + ",\"bst\":" +
-      r.bst.to_string() + "}"
+    let t2 = if r.type2.length() > 0 { "\"" + r.type2 + "\"" } else { "null" }
+    s = s +
+      "{\"globalNo\":\"" +
+      r.global_no +
+      "\",\"name_ja\":\"" +
+      r.name_ja +
+      "\",\"type1\":\"" +
+      r.type1 +
+      "\",\"type2\":" +
+      t2 +
+      ",\"hp\":" +
+      r.hp.to_string() +
+      ",\"atk\":" +
+      r.atk.to_string() +
+      ",\"def\":" +
+      r.def_.to_string() +
+      ",\"spa\":" +
+      r.spa.to_string() +
+      ",\"spd\":" +
+      r.spd.to_string() +
+      ",\"spe\":" +
+      r.spe.to_string() +
+      ",\"bst\":" +
+      r.bst.to_string() +
+      "}"
   }
   s + "]"
 }
 
+///|
 /// Format search results as a table.
 fn search_to_table(results : Array[@db.SearchResult]) -> String {
-  let mut s = pad_right("Name", 14) + pad_right("Type", 14) + pad_right(
-      "HP", 5,
-    ) + pad_right("Atk", 5) + pad_right("Def", 5) + pad_right("SpA", 5) +
-    pad_right("SpD", 5) + pad_right("Spe", 5) + "BST\n"
+  let mut s = pad_right("Name", 14) +
+    pad_right("Type", 14) +
+    pad_right("HP", 5) +
+    pad_right("Atk", 5) +
+    pad_right("Def", 5) +
+    pad_right("SpA", 5) +
+    pad_right("SpD", 5) +
+    pad_right("Spe", 5) +
+    "BST\n"
   s = s + "─".to_string().repeat(62) + "\n"
   for i = 0; i < results.length(); i = i + 1 {
     let r = results[i]
@@ -132,19 +220,26 @@ fn search_to_table(results : Array[@db.SearchResult]) -> String {
     } else {
       r.type1
     }
-    s = s + pad_right(r.name_ja, 14) + pad_right(type_str, 14) + pad_right(
-        r.hp.to_string(), 5,
-      ) + pad_right(r.atk.to_string(), 5) + pad_right(r.def_.to_string(), 5) +
-      pad_right(r.spa.to_string(), 5) + pad_right(r.spd.to_string(), 5) +
-      pad_right(r.spe.to_string(), 5) + r.bst.to_string() + "\n"
+    s = s +
+      pad_right(r.name_ja, 14) +
+      pad_right(type_str, 14) +
+      pad_right(r.hp.to_string(), 5) +
+      pad_right(r.atk.to_string(), 5) +
+      pad_right(r.def_.to_string(), 5) +
+      pad_right(r.spa.to_string(), 5) +
+      pad_right(r.spd.to_string(), 5) +
+      pad_right(r.spe.to_string(), 5) +
+      r.bst.to_string() +
+      "\n"
   }
   s
 }
 
+///|
 /// Output search results.
 pub fn format_search(
   results : Array[@db.SearchResult],
-  fmt : OutputFormat
+  fmt : OutputFormat,
 ) -> String {
   match fmt {
     Json => search_to_json(results)
@@ -152,6 +247,7 @@ pub fn format_search(
   }
 }
 
+///|
 /// Print help message.
 pub fn format_help() -> String {
   let text =
@@ -164,6 +260,8 @@ pub fn format_help() -> String {
     #|  pkdx damage <attacker> <defender> <move> [modifiers...] [--format json|table]
     #|  pkdx type-chart <move_type> <def_type1> [def_type2]
     #|  pkdx coverage <type1,type2,...>
+    #|  pkdx write --teams --date YYYY-MM-DD --axis <name>    (stdin: JSON -> box/teams/)
+    #|  pkdx write --pokemon --name <name> --file <filename>  (stdin: JSON -> box/pokemons/)
     #|
     #|Options:
     #|  --version V       Game version (default: scarlet_violet)
@@ -172,11 +270,12 @@ pub fn format_help() -> String {
   text
 }
 
+///|
 /// Format damage calculation result.
 pub fn format_damage(
   result : @model.DamageCalcResult,
   input : @model.DamageCalcInput,
-  fmt : OutputFormat
+  fmt : OutputFormat,
 ) -> String {
   if result.is_immune {
     return "Immune (0 damage)"
@@ -187,9 +286,10 @@ pub fn format_damage(
   }
 }
 
+///|
 fn damage_to_json(
   r : @model.DamageCalcResult,
-  input : @model.DamageCalcInput
+  input : @model.DamageCalcInput,
 ) -> String {
   let mut dmg_arr = "["
   for i = 0; i < 16; i = i + 1 {
@@ -207,16 +307,31 @@ fn damage_to_json(
     pct_arr = pct_arr + format_pct(r.percents[i])
   }
   pct_arr = pct_arr + "]"
-  "{\"attacker\":\"" + input.attacker.name_ja + "\",\"defender\":\"" +
-  input.defender.name_ja + "\",\"move\":\"" + input.move_.name + "\",\"damages\":" +
-  dmg_arr + ",\"percents\":" + pct_arr + ",\"min\":" + r.min_damage.to_string() +
-  ",\"max\":" + r.max_damage.to_string() + ",\"defender_hp\":" +
-  r.defender_hp.to_string() + ",\"ko\":\"" + r.ko_text + "\"}"
+  "{\"attacker\":\"" +
+  input.attacker.name_ja +
+  "\",\"defender\":\"" +
+  input.defender.name_ja +
+  "\",\"move\":\"" +
+  input.move_.name +
+  "\",\"damages\":" +
+  dmg_arr +
+  ",\"percents\":" +
+  pct_arr +
+  ",\"min\":" +
+  r.min_damage.to_string() +
+  ",\"max\":" +
+  r.max_damage.to_string() +
+  ",\"defender_hp\":" +
+  r.defender_hp.to_string() +
+  ",\"ko\":\"" +
+  r.ko_text +
+  "\"}"
 }
 
+///|
 fn damage_to_table(
   r : @model.DamageCalcResult,
-  input : @model.DamageCalcInput
+  input : @model.DamageCalcInput,
 ) -> String {
   let atk = input.attacker
   let dfn = input.defender
@@ -224,8 +339,16 @@ fn damage_to_table(
   let mut s = atk.name_ja + " → " + dfn.name_ja + " (" + mv.name + ")\n"
   s = s + "─".to_string().repeat(50) + "\n"
   // Damage range
-  s = s + "Damage: " + r.min_damage.to_string() + " ~ " + r.max_damage.to_string() +
-    " (" + format_pct(r.min_percent) + "% ~ " + format_pct(r.max_percent) + "%)\n"
+  s = s +
+    "Damage: " +
+    r.min_damage.to_string() +
+    " ~ " +
+    r.max_damage.to_string() +
+    " (" +
+    format_pct(r.min_percent) +
+    "% ~ " +
+    format_pct(r.max_percent) +
+    "%)\n"
   s = s + "HP: " + r.defender_hp.to_string() + "\n"
   s = s + "Result: " + r.ko_text + "\n"
   // Full table
@@ -245,12 +368,14 @@ fn damage_to_table(
   s
 }
 
+///|
 fn format_pct(v : Double) -> String {
   let int_part = v.to_int()
   let frac = ((v - int_part.to_double()) * 10.0).to_int().abs()
   int_part.to_string() + "." + frac.to_string()
 }
 
+///|
 fn pad_right(s : String, width : Int) -> String {
   let len = s.length()
   if len >= width {

@@ -1,3 +1,4 @@
+///|
 pub(all) struct Pokemon {
   global_no : String
   name_ja : String

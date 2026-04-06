@@ -1,8 +1,9 @@
+///|
 /// Look up a move by name (Japanese).
 pub fn query_move(
   db : Db,
   move_name : String,
-  version : String
+  version : String,
 ) -> Result[@model.Move, String] {
   let waza_ver = to_waza_version(version)
   let sql =

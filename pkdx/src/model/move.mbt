@@ -1,3 +1,4 @@
+///|
 pub(all) struct Move {
   name : String
   type_ : String

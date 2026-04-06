@@ -1,13 +1,24 @@
+///|
 /// Apply attacker item stat modifier.
 pub fn apply_atk_item_stat(
   item : String,
   is_physical : Bool,
   global_no : String,
-  atk_stat : Int
+  atk_stat : Int,
 ) -> Int {
   match item {
-    "こだわりハチマキ" => if is_physical { atk_stat * 3 / 2 } else { atk_stat }
-    "こだわりメガネ" => if !is_physical { atk_stat * 3 / 2 } else { atk_stat }
+    "こだわりハチマキ" =>
+      if is_physical {
+        atk_stat * 3 / 2
+      } else {
+        atk_stat
+      }
+    "こだわりメガネ" =>
+      if !is_physical {
+        atk_stat * 3 / 2
+      } else {
+        atk_stat
+      }
     "ふといホネ" =>
       if is_physical && (global_no == "0104" || global_no == "0105") {
         atk_stat * 2
@@ -15,30 +26,40 @@ pub fn apply_atk_item_stat(
         atk_stat
       }
     "でんきだま" =>
-      if global_no == "0025" { atk_stat * 2 } else { atk_stat }
+      if global_no == "0025" {
+        atk_stat * 2
+      } else {
+        atk_stat
+      }
     _ => atk_stat
   }
 }
 
+///|
 /// Apply defender item stat modifier.
 pub fn apply_def_item_stat(
   item : String,
   is_physical : Bool,
-  def_stat : Int
+  def_stat : Int,
 ) -> Int {
   match item {
     "しんかのきせき" => def_stat * 3 / 2
     "とつげきチョッキ" =>
-      if !is_physical { def_stat * 3 / 2 } else { def_stat }
+      if !is_physical {
+        def_stat * 3 / 2
+      } else {
+        def_stat
+      }
     _ => def_stat
   }
 }
 
+///|
 /// Get type boost from item. Returns multiplied power if item matches move type.
 pub fn apply_type_boost_item(
   item : String,
   move_type : String,
-  power : Int
+  power : Int,
 ) -> Int {
   let boost_type = match item {
     "もえさかるプレート" | "もくたん" => "ほのお"
@@ -68,11 +89,12 @@ pub fn apply_type_boost_item(
   }
 }
 
+///|
 /// Get attacker item final modifier (4096 base).
 pub fn get_atk_item_final(
   item : String,
   is_physical : Bool,
-  is_super_effective : Bool
+  is_super_effective : Bool,
 ) -> Int {
   match item {
     "いのちのたま" => 5324
@@ -83,6 +105,7 @@ pub fn get_atk_item_final(
   }
 }
 
+///|
 /// Get resist berry type. Returns empty string if not a resist berry.
 pub fn get_resist_berry_type(item : String) -> String {
   match item {

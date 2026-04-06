@@ -1,8 +1,9 @@
+///|
 /// Query a Pokemon by name (Japanese or English).
 pub fn query_pokemon(
   db : Db,
   name : String,
-  version : String
+  version : String,
 ) -> Result[@model.Pokemon, String] {
   let sql =
     #|SELECT
@@ -60,6 +61,7 @@ pub fn query_pokemon(
   })
 }
 
+///|
 fn parse_int(s : String) -> Int {
   let mut result = 0
   let mut i = 0
@@ -75,5 +77,9 @@ fn parse_int(s : String) -> Int {
     }
     i = i + 1
   }
-  if negative { -result } else { result }
+  if negative {
+    -result
+  } else {
+    result
+  }
 }

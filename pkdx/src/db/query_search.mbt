@@ -1,3 +1,4 @@
+///|
 /// Search result item.
 pub(all) struct SearchResult {
   global_no : String
@@ -13,21 +14,21 @@ pub(all) struct SearchResult {
   bst : Int
 } derive(Show)
 
+///|
 /// Search Pokemon by type with optional speed minimum.
 pub fn search_by_type(
   db : Db,
   type1 : String,
   type2 : String,
   min_speed : Int,
-  version : String
+  version : String,
 ) -> Result[Array[SearchResult], String] {
   let type_cond = if type2.length() > 0 {
     "AND ((t.type1 = ? AND t.type2 = ?) OR (t.type1 = ? AND t.type2 = ?))"
   } else {
     "AND (t.type1 = ? OR t.type2 = ?)"
   }
-  let sql =
-    "SELECT p.globalNo, MIN(pn.name) AS name_ja, t.type1, t.type2, s.hp, s.attack, s.defense, s.special_attack, s.special_defense, s.speed, (s.hp + s.attack + s.defense + s.special_attack + s.special_defense + s.speed) AS bst FROM pokedex p JOIN local_pokedex_type t ON p.globalNo = t.globalNo AND t.version = ? JOIN local_pokedex_status s ON p.globalNo = s.globalNo AND s.version = ? JOIN pokedex_name pn ON p.globalNo = pn.globalNo AND pn.language = 'jpn' AND COALESCE(pn.form, '') = '' AND COALESCE(pn.region, '') = '' AND COALESCE(pn.mega_evolution, '') = '' AND COALESCE(pn.gigantamax, '') = '' WHERE COALESCE(p.form, '') = '' AND COALESCE(p.region, '') = '' AND COALESCE(p.mega_evolution, '') = '' AND COALESCE(p.gigantamax, '') = '' " +
+  let sql = "SELECT p.globalNo, MIN(pn.name) AS name_ja, t.type1, t.type2, s.hp, s.attack, s.defense, s.special_attack, s.special_defense, s.speed, (s.hp + s.attack + s.defense + s.special_attack + s.special_defense + s.speed) AS bst FROM pokedex p JOIN local_pokedex_type t ON p.globalNo = t.globalNo AND t.version = ? JOIN local_pokedex_status s ON p.globalNo = s.globalNo AND s.version = ? JOIN pokedex_name pn ON p.globalNo = pn.globalNo AND pn.language = 'jpn' AND COALESCE(pn.form, '') = '' AND COALESCE(pn.region, '') = '' AND COALESCE(pn.mega_evolution, '') = '' AND COALESCE(pn.gigantamax, '') = '' WHERE COALESCE(p.form, '') = '' AND COALESCE(p.region, '') = '' AND COALESCE(p.mega_evolution, '') = '' AND COALESCE(p.gigantamax, '') = '' " +
     type_cond +
     " AND s.speed >= ? GROUP BY p.globalNo ORDER BY bst DESC LIMIT 20"
   let binds : Array[String] = if type2.length() > 0 {

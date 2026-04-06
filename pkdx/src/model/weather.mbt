@@ -1,3 +1,4 @@
+///|
 /// Battle weather conditions.
 pub(all) enum Weather {
   None
@@ -7,6 +8,7 @@ pub(all) enum Weather {
   Snow
 } derive(Show, Eq)
 
+///|
 /// Convert Japanese weather name to Weather enum.
 pub fn weather_from_jp(name : String) -> Weather {
   match name {
@@ -18,6 +20,7 @@ pub fn weather_from_jp(name : String) -> Weather {
   }
 }
 
+///|
 /// Check if weather is active.
 pub fn Weather::is_active(self : Weather) -> Bool {
   match self {

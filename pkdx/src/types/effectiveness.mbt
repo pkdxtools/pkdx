@@ -1,3 +1,4 @@
+///|
 /// Coverage analysis result.
 pub(all) struct CoverageResult {
   covered : Array[PokemonType]
@@ -5,6 +6,7 @@ pub(all) struct CoverageResult {
   coverage_rate : Double
 } derive(Show)
 
+///|
 /// Calculate offensive coverage for a set of attack types.
 /// Returns which defending types are hit for at least neutral (>=1x) damage.
 pub fn calc_coverage(attack_types : Array[PokemonType]) -> CoverageResult {
@@ -29,9 +31,10 @@ pub fn calc_coverage(attack_types : Array[PokemonType]) -> CoverageResult {
   { covered, not_covered, coverage_rate: rate }
 }
 
+///|
 /// Calculate super-effective coverage (>=2x).
 pub fn calc_super_effective_coverage(
-  attack_types : Array[PokemonType]
+  attack_types : Array[PokemonType],
 ) -> CoverageResult {
   let covered : Array[PokemonType] = []
   let not_covered : Array[PokemonType] = []

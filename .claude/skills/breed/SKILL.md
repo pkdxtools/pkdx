@@ -21,7 +21,7 @@ CACHE_DIR=$REPO_ROOT/pokedex       # pokedex.dbと同じディレクトリ
 
 ## キャッシュファイル
 
-各Phase完了時に、育成中のデータをJSONファイルとして `$CACHE_DIR/breed_cache_<pokemon_name>.json` に書き出す。ポケモンごとに別ファイルとする。
+各Phase完了時に、育成中のデータをJSONファイルとして `$REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json` に書き出す。ポケモンごとに別ファイルとする。
 
 ### 目的
 
@@ -31,7 +31,7 @@ CACHE_DIR=$REPO_ROOT/pokedex       # pokedex.dbと同じディレクトリ
 ### ファイルパス
 
 ```
-$CACHE_DIR/breed_cache_<pokemon_name>.json
+$REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json
 ```
 
 例: `pokedex/breed_cache_ブリジュラス.json`
@@ -498,7 +498,7 @@ calcスキルと同じ形式でダメージテーブルを表示:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | 育成データを保存しますか？ | 保存 | はい(desc: ./pokemons/<name>/配下に保存), いいえ(desc: 保存せず終了) | false |
+| 1 | 育成データを保存しますか？ | 保存 | はい(desc: box/pokemons/<name>/配下に保存), いいえ(desc: 保存せず終了) | false |
 | 2 | ファイル名を入力してください（拡張子不要） | ファイル名 | Other(desc: 例: スカーフ型, HBゴツメ等。空欄の場合はYYYYMMDD) | false |
 | 3 | ポケソル形式のテキストも出力しますか？ | ポケソル出力 | はい(desc: ダメージ計算SV等で読み込めるテキストを出力), いいえ(desc: md保存のみ) | false |
 
@@ -507,93 +507,58 @@ calcスキルと同じ形式でダメージテーブルを表示:
 「はい」の場合:
 
 ファイル名の決定:
-- ユーザーが入力した場合 → `./pokemons/<pokemon-name>/<入力値>.md`
-- 入力が空または未指定の場合 → `./pokemons/<pokemon-name>/YYYYMMDD.md`（当日の日付）
+- ユーザーが入力した場合 → `box/pokemons/<pokemon-name>/<入力値>.md`
+- 入力が空または未指定の場合 → `box/pokemons/<pokemon-name>/YYYYMMDD.md`（当日の日付）
 
-1. `./pokemons/<pokemon-name>/` ディレクトリが存在しなければ作成
-2. 同名ファイルが存在する場合はAskUserQuestionで上書き確認
-3. 以下の形式でMarkdownファイルを出力
+1. 同名ファイルが存在する場合はAskUserQuestionで上書き確認
+2. Phase 0-7 で収集した情報を以下の JSON スキーマに従って構造化し、Bash ツールで `pkdx write` に渡す
 
-### 出力形式
+### 出力（JSON → pkdx write）
 
-```markdown
-# <Name> 育成データ
+CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
 
-## 基本情報
-
-| 項目 | 値 |
-|------|-----|
-| ポケモン | <name> |
-| タイプ | <type1>/<type2> |
-| 性格 | <nature> (<stat>↑ <stat>↓) |
-| 特性 | <ability> |
-| 持ち物 | <item> |
-
-## 実数値 (Lv50, 6V)
-
-| ステータス | 種族値 | 努力値 | 実数値 |
-|-----------|--------|--------|--------|
-| HP | <base> | <ev> | <actual> |
-| こうげき | <base> | <ev> | <actual> |
-| ぼうぎょ | <base> | <ev> | <actual> |
-| とくこう | <base> | <ev> | <actual> |
-| とくぼう | <base> | <ev> | <actual> |
-| すばやさ | <base> | <ev> | <actual> |
-
-## 技構成
-
-| 技名 | タイプ | 分類 | 威力 | 命中 |
-|------|--------|------|------|------|
-| <move1> | <type> | <category> | <power> | <accuracy> |
-| <move2> | <type> | <category> | <power> | <accuracy> |
-| <move3> | <type> | <category> | <power> | <accuracy> |
-| <move4> | <type> | <category> | <power> | <accuracy> |
-
-## ダメージ計算結果
-
-Phase 7でダメージ計算を行った場合、全結果をここに記録する。計算を行わなかった場合はこのセクションを省略する。
-
-各計算結果を以下の形式で列挙:
-
-### <攻撃側 or 防御側> vs <相手名> / <技名>
-
-| 項目 | 値 |
-|------|-----|
-| 攻撃側 | <attacker> (攻撃実数値: <stat_name> <actual>) |
-| 防御側 | <defender> (HP: <hp> / <def_stat_name>: <def_actual>) |
-| 技 | <move> (<type>/<category>, 威力<power>) |
-
-| | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 |
-|---|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|-----|
-| ダメージ | ... |
-| 割合 | ... |
-
-**確定数**: {ko_text}
-
----
-
-## ダメージ計算用コマンド
-
-攻撃側として:
-\`\`\`bash
-bin/pkdx damage "<name>" "<相手>" "<技>" --atk-stat <A or C実数値> --atk-ability "<ability>" --atk-item "<item>"
-\`\`\`
-
-防御側として:
-\`\`\`bash
-bin/pkdx damage "<相手>" "<name>" "<技>" --def-stat <B or D実数値> --def-hp <HP実数値>
-\`\`\`
+```bash
+cat <<'POKEMON_JSON' | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename>"
+{
+  "name": "<ポケモン名>",
+  "types": ["<type1>", "<type2>"],
+  "nature": {"name": "<性格名>", "plus": "<上昇ステ>", "minus": "<下降ステ>"},
+  "ability": "<特性>",
+  "item": "<持ち物>",
+  "base_stats": {"h": <H>, "a": <A>, "b": <B>, "c": <C>, "d": <D>, "s": <S>},
+  "evs": {"h": <H>, "a": <A>, "b": <B>, "c": <C>, "d": <D>, "s": <S>},
+  "actual_stats": {"h": <H>, "a": <A>, "b": <B>, "c": <C>, "d": <D>, "s": <S>},
+  "moves": [
+    {"name": "<技名>", "type": "<タイプ>", "category": "<分類>", "power": <威力>, "accuracy": <命中>}
+  ],
+  "damage_calcs": [
+    {
+      "direction": "attack",
+      "opponent": "<相手名>",
+      "move": "<技名>",
+      "attacker_stat": "A <実数値>",
+      "defender_stat": "HP <値> / B <値>",
+      "damages": [<16段階乱数>],
+      "percentages": ["<割合%>"],
+      "ko_text": "<確定数テキスト>"
+    }
+  ],
+  "filename": "<ファイル名>"
+}
+POKEMON_JSON
 ```
+
+**エラー時の再試行**: exit code が 0 以外の場合、stderrのエラーメッセージに基づいてJSONを修正し再試行する。最大3回まで。
 
 保存完了後:
 1. 完了メッセージを表示:
 ```
-✓ ./pokemons/<name>/<filename>.md に保存しました。
+✓ box/pokemons/<name>/<filename>.md に保存しました。
 ```
 
 2. 質問3で「はい」（ポケソル出力）の場合、Writeツールで以下の形式のテキストファイルも書き出す:
 
-**出力先**: `./pokemons/<pokemon-name>/<filename>_pokesol.txt`
+**出力先**: `box/pokemons/<pokemon-name>/<filename>_pokesol.txt`
 
 ```
 <ポケモン名> / <特性> / <持ち物>
@@ -605,10 +570,10 @@ bin/pkdx damage "<相手>" "<name>" "<技>" --def-stat <B or D実数値> --def-h
 
 出力後:
 ```
-✓ ./pokemons/<name>/<filename>_pokesol.txt に保存しました。
+✓ box/pokemons/<name>/<filename>_pokesol.txt に保存しました。
 ```
 
-3. キャッシュファイル `$CACHE_DIR/breed_cache_<pokemon_name>.json` を削除
+3. キャッシュファイル `$REPO_ROOT/box/cache/breed_cache_<pokemon_name>.json` を削除
 
 「いいえ」（質問1）の場合もキャッシュファイルを削除してからスキルを終了。
 

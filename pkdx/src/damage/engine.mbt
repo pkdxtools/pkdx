@@ -1,3 +1,4 @@
+///|
 /// Main damage calculation function.
 pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let atk = input.attacker
@@ -32,7 +33,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let mut tera_stab_bonus = false
   if tera_type.length() > 0 {
     stab_types.push(tera_type)
-    if (tera_type == atk.type1 || tera_type == atk.type2) && move_type == tera_type {
+    if (tera_type == atk.type1 || tera_type == atk.type2) &&
+      move_type == tera_type {
       tera_stab_bonus = true
     }
   }
@@ -42,19 +44,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let def_base_hp = dfn.hp
   let def_base = if is_physical { dfn.def_ } else { dfn.spd }
 
-  let mut atk_stat = calc_stat(
-    atk_base,
-    custom=input.atk_stat_override,
-  )
-  let def_hp = calc_stat(
-    def_base_hp,
-    is_hp=true,
-    custom=input.def_hp_override,
-  )
-  let mut def_stat = calc_stat(
-    def_base,
-    custom=input.def_stat_override,
-  )
+  let mut atk_stat = calc_stat(atk_base, custom=input.atk_stat_override)
+  let def_hp = calc_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
+  let mut def_stat = calc_stat(def_base, custom=input.def_stat_override)
 
   // 2b. Ability stat modifiers
   if atk_ability.length() > 0 {
@@ -78,7 +70,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 2c. Item stat modifiers
   if atk_item.length() > 0 {
     atk_stat = apply_atk_item_stat(
-      atk_item, is_physical, atk.global_no, atk_stat,
+      atk_item,
+      is_physical,
+      atk.global_no,
+      atk_stat,
     )
   }
   if def_item.length() > 0 {
@@ -88,7 +83,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 2d. Weather defense modifiers
   if weather.is_active() {
     def_stat = apply_weather_def_mod(
-      weather, (dfn.type1, dfn.type2), is_physical, def_stat,
+      weather,
+      (dfn.type1, dfn.type2),
+      is_physical,
+      def_stat,
     )
   }
 
@@ -112,12 +110,18 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     )
   }
   if atk_item.length() > 0 {
-    effective_power = apply_type_boost_item(atk_item, move_type, effective_power)
+    effective_power = apply_type_boost_item(
+      atk_item, move_type, effective_power,
+    )
   }
   if type_resist_mult != 1.0 {
     effective_power = {
       let p = (effective_power.to_double() * type_resist_mult).to_int()
-      if p < 1 { 1 } else { p }
+      if p < 1 {
+        1
+      } else {
+        p
+      }
     }
   }
 
@@ -163,7 +167,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
   }
   let stab_mult = if has_stab {
-    if atk_ability == "てきおうりょく" || tera_stab_bonus { 8192 } else { 6144 }
+    if atk_ability == "てきおうりょく" || tera_stab_bonus {
+      8192
+    } else {
+      6144
+    }
   } else {
     4096
   }
@@ -239,9 +247,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
     // Attacker item final
     if atk_item.length() > 0 {
-      let i_mod = get_atk_item_final(
-        atk_item, is_physical, is_super_effective,
-      )
+      let i_mod = get_atk_item_final(atk_item, is_physical, is_super_effective)
       if i_mod > 0 {
         dmg = round5(dmg, i_mod)
       }
@@ -284,6 +290,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 }
 
+///|
 fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
   @model.DamageCalcResult::{
     damages: FixedArray::make(16, 0),
@@ -298,6 +305,7 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
   }
 }
 
+///|
 fn calc_ko_text(damages : FixedArray[Int], def_hp : Int) -> String {
   for n = 1; n < 5; n = n + 1 {
     let mut ko_count = 0
@@ -309,7 +317,10 @@ fn calc_ko_text(damages : FixedArray[Int], def_hp : Int) -> String {
     if ko_count == 16 {
       return "\u{78BA}\u{5B9A}" + n.to_string() + "\u{767A}"
     } else if ko_count > 0 {
-      return "\u{4E71}\u{6570}" + n.to_string() + "\u{767A}(" + ko_count.to_string() +
+      return "\u{4E71}\u{6570}" +
+        n.to_string() +
+        "\u{767A}(" +
+        ko_count.to_string() +
         "/16)"
     }
   }

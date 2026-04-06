@@ -1,3 +1,4 @@
+///|
 /// Move damage category.
 pub(all) enum MoveCategory {
   Physical
@@ -5,6 +6,7 @@ pub(all) enum MoveCategory {
   Status
 } derive(Show, Eq)
 
+///|
 /// Convert Japanese category name to MoveCategory enum.
 pub fn category_from_jp(name : String) -> MoveCategory {
   match name {
@@ -14,6 +16,7 @@ pub fn category_from_jp(name : String) -> MoveCategory {
   }
 }
 
+///|
 /// Convert MoveCategory to Japanese name.
 pub fn category_to_jp(cat : MoveCategory) -> String {
   match cat {

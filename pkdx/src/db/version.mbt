@@ -1,3 +1,4 @@
+///|
 /// Convert user-facing version string to the Mixed Case format used by waza tables.
 pub fn to_waza_version(version : String) -> String {
   match version {
@@ -8,6 +9,7 @@ pub fn to_waza_version(version : String) -> String {
   }
 }
 
+///|
 /// Normalize globalNo to zero-padded 4-digit format (e.g. "445" -> "0445").
 pub fn normalize_global_no(input : String) -> String {
   let len = input.length()

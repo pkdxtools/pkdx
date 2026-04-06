@@ -78,14 +78,16 @@ fn team_schema(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
       "battle_format": b.string(enum_=["singles", "doubles"]),
       "mechanics": b.string(),
       "version": b.string(),
+      "phase": b.number(),
       "members": b.array(items=member_schema(b), min_items=1, max_items=6),
       "coverage": b.array(items=b.any()),
       "defense_matrix": b.array(items=b.any()),
       "matchup_plans": b.array(items=b.any()),
       "strengths": b.array(items=b.string()),
       "weaknesses": b.array(items=b.string()),
+      "updated_at": b.string(),
     },
-    required_all=true,
+    required=["battle_format", "mechanics", "version", "members", "coverage", "defense_matrix", "matchup_plans", "strengths", "weaknesses"],
   )
 }
 

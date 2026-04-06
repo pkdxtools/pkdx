@@ -1,0 +1,8 @@
+{
+  "import": [
+    {
+      "path": "src",
+      "alias": "jsonschema"
+    }
+  ]
+}

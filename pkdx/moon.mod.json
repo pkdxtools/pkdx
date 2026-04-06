@@ -4,7 +4,7 @@
   "deps": {
     "moonbitlang/x": "0.4.41",
     "mizchi/markdown": "0.4.7",
-    "mizchi/jsonschema": "0.6.0"
+    "mizchi/jsonschema": { "path": "vendor_jsonschema" }
   },
   "preferred-target": "native"
 }

@@ -1,0 +1,16 @@
+{
+  "name": "mizchi/jsonschema",
+  "version": "0.6.0",
+  "readme": "README.md",
+  "repository": "https:://github.com/mizchi/moonbit-jsonschema",
+  "license": "MIT",
+  "keywords": [
+    "jsonschema",
+    "validation",
+    "json"
+  ],
+  "description": "jsonschema validation",
+  "source": "src",
+  "warn-list": "-29-28-6",
+  "alert-list": "-24-test_import_all-28"
+}

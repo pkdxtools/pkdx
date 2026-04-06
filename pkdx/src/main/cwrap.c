@@ -333,15 +333,23 @@ moonbit_string_t pkdx_read_stdin(void) {
     return result;
 }
 
+#ifdef _WIN32
+#define PKDX_MKDIR(p) mkdir(p)
+#define PKDX_IS_SEP(c) ((c) == '/' || (c) == '\\')
+#else
+#define PKDX_MKDIR(p) mkdir(p, 0755)
+#define PKDX_IS_SEP(c) ((c) == '/')
+#endif
+
 static int pkdx_mkdirs(const char *path) {
     size_t plen = strlen(path);
     char *tmp = (char *)malloc(plen + 1);
     if (!tmp) return -1;
     memcpy(tmp, path, plen + 1);
     for (char *p = tmp + 1; *p; p++) {
-        if (*p == '/') { *p = '\0'; mkdir(tmp, 0755); *p = '/'; }
+        if (PKDX_IS_SEP(*p)) { *p = '\0'; PKDX_MKDIR(tmp); *p = '/'; }
     }
-    int rc = mkdir(tmp, 0755);
+    int rc = PKDX_MKDIR(tmp);
     free(tmp);
     return rc;
 }

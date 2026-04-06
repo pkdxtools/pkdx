@@ -357,7 +357,7 @@ fn exit_error(msg : String) -> Unit {
 
 ///|
 fn run_write_teams(date : String, axis : String) -> Unit {
-  if not(is_safe_path_component(axis)) || not(is_safe_path_component(date)) {
+  if !(is_safe_path_component(axis)) || !(is_safe_path_component(date)) {
     exit_error("Invalid characters in --axis or --date")
     return
   }
@@ -396,7 +396,7 @@ fn run_write_teams(date : String, axis : String) -> Unit {
 
 ///|
 fn run_write_pokemon(name : String, file : String) -> Unit {
-  if not(is_safe_path_component(name)) || not(is_safe_path_component(file)) {
+  if !(is_safe_path_component(name)) || !(is_safe_path_component(file)) {
     exit_error("Invalid characters in --name or --file")
     return
   }

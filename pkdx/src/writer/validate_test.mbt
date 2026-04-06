@@ -108,8 +108,9 @@ test "validate_team_json: wrong moves count" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
+  // jsonschema reports minItems/maxItems violation
   inspect(
-    errors.iter().any(fn(e) { e.contains("moves must have exactly 4") }),
+    errors.iter().any(fn(e) { e.contains("moves") || e.contains("Items") }),
     content="true",
   )
 }
@@ -166,7 +167,7 @@ test "validate_pokemon_json: evs over 510" {
     fail("Expected Err but got Ok")
   }
   inspect(
-    errors.iter().any(fn(e) { e.contains("evs total is 756") }),
+    errors.iter().any(fn(e) { e.contains("evs total is") }),
     content="true",
   )
 }

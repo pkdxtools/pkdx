@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "deps": {
     "moonbitlang/x": "0.4.41",
-    "mizchi/markdown": "0.4.7"
+    "mizchi/markdown": "0.4.7",
+    "mizchi/jsonschema": "0.4.0"
   },
   "preferred-target": "native"
 }

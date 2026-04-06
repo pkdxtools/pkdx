@@ -15,20 +15,16 @@ pub fn query_pokemon(
     #|  (s.hp + s.attack + s.defense + s.special_attack + s.special_defense + s.speed) AS bst,
     #|  a.ability1, a.ability2, a.dream_ability
     #|FROM pokedex_name pn
-    #|JOIN pokedex_name pne ON pn.globalNo = pne.globalNo
+    #|JOIN pokedex_name pne ON pn.id = pne.id
     #|  AND pne.language = 'eng'
-    #|  AND COALESCE(pne.form, '') = '' AND COALESCE(pne.region, '') = ''
-    #|  AND COALESCE(pne.mega_evolution, '') = '' AND COALESCE(pne.gigantamax, '') = ''
-    #|JOIN local_pokedex_type t ON pn.globalNo = t.globalNo
+    #|JOIN local_pokedex_type t ON pn.id = t.id
     #|  AND t.version = ?
-    #|JOIN local_pokedex_status s ON pn.globalNo = s.globalNo
+    #|JOIN local_pokedex_status s ON pn.id = s.id
     #|  AND s.version = ?
-    #|JOIN local_pokedex_ability a ON pn.globalNo = a.globalNo
+    #|JOIN local_pokedex_ability a ON pn.id = a.id
     #|  AND a.version = ?
     #|WHERE COALESCE(pn.form, '') = ''
     #|  AND COALESCE(pn.region, '') = ''
-    #|  AND COALESCE(pn.mega_evolution, '') = ''
-    #|  AND COALESCE(pn.gigantamax, '') = ''
     #|  AND (
     #|    (pn.language = 'jpn' AND pn.name = ?)
     #|    OR (pn.language = 'eng' AND LOWER(pn.name) = LOWER(?))

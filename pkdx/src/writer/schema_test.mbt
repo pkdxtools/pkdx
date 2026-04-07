@@ -2,12 +2,10 @@
 fn validate_with_schema(
   schema : @jsonschema.JsonSchema,
   json : Json,
-) -> Array[@jsonschema.ValidationError] {
-  let resolver = try {
-    @jsonschema.build_resolver(({} : Map[String, Json]).to_json())
-  } catch {
-    _ => return []
-  }
+) -> Array[@jsonschema.ValidationError] raise {
+  let resolver = @jsonschema.build_resolver(
+    ({} : Map[String, Json]).to_json(),
+  )
   @jsonschema.Validatable::validate(
     schema,
     json,

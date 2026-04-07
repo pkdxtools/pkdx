@@ -265,6 +265,7 @@ pub fn format_help() -> String {
     #|  pkdx stat-calc <name> [--ev "H,A,B,C,D,S"] [--iv N] [--nature name]
     #|  pkdx stat-reverse <value> [--iv N] [--ev N] [--nature up|down|neutral] [--hp]
     #|  pkdx stat-reverse <name> --stats "H,A,B,C,D,S" [--iv N] [--version V]
+    #|  pkdx init-cache --team|--pokemon                          (output placeholder JSON)
     #|
     #|Options:
     #|  --version V       Game version (default: scarlet_violet)

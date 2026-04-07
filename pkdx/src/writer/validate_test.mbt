@@ -237,3 +237,75 @@ test "validate_pokemon_json: empty move name rejected" {
     content="true",
   )
 }
+
+///|
+test "validate_pokemon_json: empty string nature rejected by strict schema" {
+  let src =
+    #|{
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("nature") }),
+    content="true",
+  )
+}
+
+///|
+test "validate_team_json: empty string mechanics rejected by strict schema" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": ["テスト"],
+    #|  "weaknesses": ["テスト"]
+    #|}
+  let json = @json.parse(src)
+  let result = validate_team_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("mechanics") }),
+    content="true",
+  )
+}

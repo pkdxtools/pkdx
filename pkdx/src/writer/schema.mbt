@@ -250,14 +250,17 @@ pub fn generate_placeholder(schema : @jsonschema.JsonSchema) -> Json {
 fn patch_pokemon_moves(json : Json) -> Json {
   guard json is Object(root) else { return json }
   guard root.get("build") is Some(Object(build)) else { return json }
-  let move_placeholder : Json = {
-    "name": Json::null(),
-    "type": "",
-    "category": "",
-    "power": 0,
-    "accuracy": 0,
+  fn fresh_move() -> Json {
+    {
+      "name": Json::null(),
+      "type": "",
+      "category": "",
+      "power": 0,
+      "accuracy": 0,
+    }
   }
-  build.set("moves", [move_placeholder, move_placeholder, move_placeholder, move_placeholder])
+
+  build.set("moves", [fresh_move(), fresh_move(), fresh_move(), fresh_move()])
   json
 }
 

@@ -129,6 +129,10 @@ bin/pkdx stat-reverse 130 --iv 31 --ev 252 --nature up
 # 逆算: ポケモン名+実数値6種→努力値を逆引き（ポケモンモード）
 bin/pkdx stat-reverse "ガブリアス" --stats "183,200,115,90,106,169" --iv 31
 
+# キャッシュ雛形生成（skillがPhase 0で呼び出す。JSONスキーマ由来のプレースホルダを出力）
+bin/pkdx init-cache --team     > box/cache/team_cache_xxx.json
+bin/pkdx init-cache --pokemon  > box/cache/breed_cache_xxx.json
+
 # チーム構築レポート保存（skillキャッシュJSON→box/teams/にmd出力）
 cat box/cache/team_cache_ガブリアス_*.json | bin/pkdx write --teams --date 2026-04-06 --axis "ガブリアス"
 

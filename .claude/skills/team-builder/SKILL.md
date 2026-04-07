@@ -453,6 +453,21 @@ AskUserQuestionで素早さ枠の方針を確認。
 3. 推奨持ち物を提案（既使用持ち物を除外。スカーフ枠ならこだわりスカーフを優先提案）
 4. AskUserQuestionで持ち物を確定
 
+### 5-6: 耐久重視ポケモンのEV最適化
+
+耐久寄りのポケモン（HP/防御型アタッカー、壁役、受けポケ等）にEVを振る際は、`pkdx hbd` で総合耐久指数 HBD/(B+D) を最大化する配分を自動算出できる。S振りを固定して残りを H/B/D に最適配分:
+
+```bash
+$PKDX hbd "<name>" --nature "<nature>" --fixed-ev "_,0,_,0,_,<S_ev>" [--hp-snap leftovers|residual|sitrus|lifeorb] [--phys-weight P] [--spec-weight S] [--top N]
+```
+
+- `--hp-snap leftovers`: たべのこし持ちは 16n+1（H ≡ 1 mod 16）
+- `--hp-snap residual`: 定数ダメ耐性重視は 16n-1
+- `--phys-weight P --spec-weight S`: 物理/特殊のメタを反映した非対称重み（例: 物理多なら `--phys-weight 2`）
+- `--top N`: 上位 N 候補を比較（微差の配分を選択）
+
+アルゴリズムの詳細・H=B+D の導出・11n調整との関係は `.claude/skills/team-builder/references/bulk_theory.md` を参照。
+
 ---
 
 ## Phase 6: 仮想敵分析

@@ -248,34 +248,6 @@ pub fn format_search(
 }
 
 ///|
-/// Print help message.
-pub fn format_help() -> String {
-  let text =
-    #|pkdx - Pokedex CLI tool
-    #|
-    #|Usage:
-    #|  pkdx query <name> [--version V] [--format json|table]
-    #|  pkdx moves <name|globalNo> [--version V] [--format json|table]
-    #|  pkdx search --type <type> [--type2 <type>] [--min-speed N] [--version V]
-    #|  pkdx damage <attacker> <defender> <move> [modifiers...] [--format json|table]
-    #|  pkdx type-chart <move_type> <def_type1> [def_type2]
-    #|  pkdx coverage <type1,type2,...>
-    #|  pkdx write --teams --date YYYY-MM-DD --axis <name>    (stdin: JSON -> box/teams/)
-    #|  pkdx write --pokemon --name <name> --file <filename>  (stdin: JSON -> box/pokemons/)
-    #|  pkdx stat-calc <name> [--ev "H,A,B,C,D,S"] [--iv N] [--nature name]
-    #|  pkdx stat-reverse <value> [--iv N] [--ev N] [--nature up|down|neutral] [--hp]
-    #|  pkdx stat-reverse <name> --stats "H,A,B,C,D,S" [--iv N] [--version V]
-    #|  pkdx init-cache --team|--pokemon                          (output placeholder JSON)
-    #|  pkdx hbd <name> [--fixed-ev H,A,B,C,D,S] [--nature N] [--hp-snap S] [--phys-weight P] [--spec-weight S] [--top N]
-    #|
-    #|Options:
-    #|  --version V       Game version (default: scarlet_violet)
-    #|  --format F        Output format: json or table (default: table)
-    #|  --help            Show this help message
-  text
-}
-
-///|
 /// Format damage calculation result.
 pub fn format_damage(
   result : @model.DamageCalcResult,

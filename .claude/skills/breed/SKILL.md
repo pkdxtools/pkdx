@@ -40,50 +40,21 @@ $REPO_ROOT/box/cache/breed_cache_<pokemon_name>_<timestamp>.json
 CACHE_FILE="$REPO_ROOT/box/cache/breed_cache_<pokemon_name>_$(date +%s).json"
 ```
 
-### スキーマ
+### キャッシュの初期化
 
-```json
-{
-  "version": "<game_version>",
-  "phase": <current_phase_number>,
-  "pokemon": {
-    "name": "<name>",
-    "name_en": "<name_en>",
-    "globalNo": "<globalNo>",
-    "type1": "<type1>",
-    "type2": "<type2>",
-    "base_stats": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 },
-    "abilities": { "ability1": "", "ability2": "", "dream_ability": "" }
-  },
-  "build": {
-    "nature": "<nature_name or null>",
-    "nature_up": "<stat or null>",
-    "nature_down": "<stat or null>",
-    "ability": "<chosen_ability or null>",
-    "item": "<item or null>",
-    "moves": [
-      {"name": "<move1 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0},
-      {"name": "<move2 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0},
-      {"name": "<move3 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0},
-      {"name": "<move4 or null>", "type": "<タイプ>", "category": "<分類>", "power": 0, "accuracy": 0}
-    ],
-    "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 },
-    "actual_stats": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
-  },
-  "damage_calcs": [
-    {
-      "direction": "attack|defense",
-      "opponent": "<opponent_name>",
-      "move": "<move_name>",
-      "damages": [0],
-      "percents": [0.0],
-      "defender_hp": 0,
-      "ko": "<ko_text>"
-    }
-  ],
-  "updated_at": "<ISO8601>"
-}
+スキーマ定義は `pkdx/src/writer/schema.mbt` の `pokemon_schema()` がSSoT。初期JSONは以下のコマンドで生成する:
+
+```bash
+bin/pkdx init-cache --pokemon > "$CACHE_FILE"
 ```
+
+生成されるJSONの特徴:
+- nullableフィールド（nature, ability, item, moves[].name）は `null`
+- 数値フィールド（stats, evs）は `0`
+- 配列（damage_calcs）は `[]`
+- 技スロットは4枠分のプレースホルダが生成される
+
+Phase 1でDB結果を `pokemon` オブジェクトにマージし、以降のPhaseで `build` フィールドを段階的に埋めていく。
 
 ### 更新タイミング
 

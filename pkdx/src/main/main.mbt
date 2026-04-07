@@ -18,6 +18,7 @@ fn main {
     TypeChart(move_type~, def_type1~, def_type2~) =>
       run_type_chart(move_type, def_type1, def_type2)
     Coverage(types~) => run_coverage(types)
+    InitCache(kind~) => run_init_cache(kind)
     WriteTeams(date~, axis~) => run_write_teams(date, axis)
     WritePokemon(name~, file~) => run_write_pokemon(name, file)
     StatCalc(
@@ -616,4 +617,13 @@ fn run_stat_reverse(
       @cli.format_stat_reverse_single(actual, base, iv, ev, is_hp, nature_mod, format),
     )
   }
+}
+
+///|
+fn run_init_cache(kind : @cli.CacheKind) -> Unit {
+  let json = match kind {
+    Team => @writer.generate_team_placeholder()
+    Pokemon => @writer.generate_pokemon_placeholder()
+  }
+  println(json.stringify())
 }

@@ -40,41 +40,20 @@ $REPO_ROOT/box/cache/team_cache_<axis_name>_<timestamp>.json
 CACHE_FILE="$REPO_ROOT/box/cache/team_cache_<axis_name>_$(date +%s).json"
 ```
 
-### スキーマ
+### キャッシュの初期化
 
-```json
-{
-  "battle_format": "singles",
-  "mechanics": "<有効メカニクス or バニラ>",
-  "version": "<game_version>",
-  "phase": 0,
-  "members": [
-    {
-      "name": "<ポケモン名>",
-      "types": ["<type1>", "<type2>"],
-      "base_stats": {"h": 0, "a": 0, "b": 0, "c": 0, "d": 0, "s": 0},
-      "ability": "<特性>",
-      "item": "<持ち物>",
-      "role": "<軸|攻め補完|受け補完|素早さ枠|メタ対策|汎用>",
-      "moves": [
-        {"name": "<技名>", "type": "<タイプ>", "category": "<分類>", "power": 0}
-      ]
-    }
-  ],
-  "coverage": [
-    {"def_type": "<防御タイプ>", "best_move_type": "<技タイプ>", "user": "<使用者>", "multiplier": "<倍率>"}
-  ],
-  "defense_matrix": [
-    {"atk_type": "<攻撃タイプ>", "matchups": {"<メンバー名>": "<倍率>"}, "best_switch": "<最善受け先>"}
-  ],
-  "matchup_plans": [
-    {"opponent": "<仮想敵>", "opponent_type": "<タイプ>", "leads": ["<先発>"], "backs": ["<後発>"], "reason": "<理由>"}
-  ],
-  "strengths": ["<強み>"],
-  "weaknesses": ["<弱み>"],
-  "updated_at": "<ISO8601>"
-}
+スキーマ定義は `pkdx/src/writer/schema.mbt` の `team_schema()` がSSoT。初期JSONは以下のコマンドで生成する:
+
+```bash
+bin/pkdx init-cache --team > "$CACHE_FILE"
 ```
+
+生成されるJSONの特徴:
+- nullableフィールド（battle_format, mechanics, version）は `null`
+- 数値フィールド（phase）は `0`
+- 配列（members, coverage, defense_matrix, matchup_plans, strengths, weaknesses）は `[]`
+
+Phase 0でユーザー選択値（battle_format, mechanics, version）をマージし、以降のPhaseで members を段階的に追加していく。
 
 ### 更新タイミング
 

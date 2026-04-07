@@ -1,7 +1,6 @@
 import {
   "mizchi/markdown",
-  "mizchi/jsonschema/types",
-  "mizchi/jsonschema/validate",
+  "mizchi/jsonschema",
 }
 
 import {

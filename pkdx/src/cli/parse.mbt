@@ -57,8 +57,15 @@ pub enum Command {
     version~ : String,
     format~ : OutputFormat
   )
+  InitCache(kind~ : CacheKind)
   Help
   Version
+} derive(Show)
+
+///|
+pub enum CacheKind {
+  Team
+  Pokemon
 } derive(Show)
 
 ///|
@@ -78,6 +85,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     "write" => parse_write(args)
     "stat-calc" => parse_stat_calc(args)
     "stat-reverse" => parse_stat_reverse(args)
+    "init-cache" => parse_init_cache(args)
     "help" | "--help" | "-h" => Ok(Help)
     "version" | "--version" | "-v" => Ok(Version)
     _ => Err("Unknown command: " + subcmd + ". Run 'pkdx help' for usage.")
@@ -333,4 +341,20 @@ fn split_string(s : String, sep : Char) -> Array[String] {
     parts.push(s[start:].to_string())
   }
   parts
+}
+
+///|
+fn parse_init_cache(args : Array[String]) -> Result[Command, String] {
+  let has_team = has_flag(args, "--team")
+  let has_pokemon = has_flag(args, "--pokemon")
+  if has_team && has_pokemon {
+    return Err("Usage: pkdx init-cache --team|--pokemon (choose one)")
+  }
+  if has_team {
+    Ok(InitCache(kind=Team))
+  } else if has_pokemon {
+    Ok(InitCache(kind=Pokemon))
+  } else {
+    Err("Usage: pkdx init-cache --team|--pokemon")
+  }
 }

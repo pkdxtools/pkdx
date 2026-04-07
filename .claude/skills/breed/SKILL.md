@@ -314,6 +314,23 @@ Stat Card を更新（技構成を表示に追加）。
 
 ## Phase 6: 努力値配分
 
+### 6-0: 耐久指数最適化オプション
+
+耐久寄りのポケモンで総合耐久（被物理+被特殊ダメージ合計）を最大化したい場合は、`pkdx hbd` を使って H/B/D の最適EV配分を自動算出できる。これは HBD/(B+D) を最大化する勾配法ベースの最適化で、H=B+D 則や 11n調整を暗黙に考慮する。
+
+```bash
+# S振り固定、H/B/D を最適化
+$PKDX hbd "<pokemon>" --nature "<nature>" --fixed-ev "_,0,_,0,_,252" --hp-snap <leftovers|residual|sitrus|lifeorb|none>
+
+# 物理多想定で非対称配分
+$PKDX hbd "<pokemon>" --nature "<nature>" --phys-weight 2 --spec-weight 1
+
+# 上位N候補を比較
+$PKDX hbd "<pokemon>" --nature "<nature>" --top 5
+```
+
+このオプションを提示するかは Phase 1-2 で選んだ性格と種族値から自動判定（耐久上昇性格 or 耐久型種族値のポケモンに対して推奨）。理論的背景は `.claude/skills/team-builder/references/bulk_theory.md` を参照。
+
 ### 6-1: 推奨配分提案
 
 種族値と性格を分析し、典型的な配分パターンを3つ提案する。

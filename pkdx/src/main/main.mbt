@@ -53,6 +53,24 @@ fn main {
         atk_item, def_item, weather, field, tera_type, critical, atk_stat, def_stat,
         def_hp,
       )
+    Hbd(
+      name~,
+      fixed_ev~,
+      ivs~,
+      nature~,
+      nature_up~,
+      nature_down~,
+      hp_snap~,
+      phys_weight~,
+      spec_weight~,
+      top~,
+      version~,
+      format~
+    ) =>
+      run_hbd(
+        name, fixed_ev, ivs, nature, nature_up, nature_down, hp_snap, phys_weight,
+        spec_weight, top, version, format,
+      )
   }
 }
 
@@ -626,4 +644,62 @@ fn run_init_cache(kind : @cli.CacheKind) -> Unit {
     Pokemon => @writer.generate_pokemon_placeholder()
   }
   println(json.stringify())
+}
+
+///|
+fn run_hbd(
+  name : String,
+  fixed_ev_str : String,
+  ivs_str : String,
+  nature_name : String,
+  nature_up : String,
+  nature_down : String,
+  hp_snap_str : String,
+  phys_weight : Int,
+  spec_weight : Int,
+  top : Int,
+  version : String,
+  format : @cli.OutputFormat,
+) -> Unit {
+  // Default fixed_ev: optimize H/B/D, zero A/C/S.
+  let fixed_ev = if fixed_ev_str.length() == 0 {
+    let arr : FixedArray[Int] = FixedArray::make(6, 0)
+    arr[0] = -1
+    arr[2] = -1
+    arr[4] = -1
+    arr
+  } else {
+    match @cli.parse_fixed_ev(fixed_ev_str) {
+      Ok(arr) => arr
+      Err(e) => {
+        println("Error: " + e)
+        return
+      }
+    }
+  }
+  let ivs = parse_csv_ints(ivs_str, 31, 6)
+  let nature = resolve_nature(nature_name, nature_up, nature_down)
+  let snap = match @model.hp_snap_from_str(hp_snap_str) {
+    Some(s) => s
+    None => {
+      println("Error: unknown --hp-snap value '" + hp_snap_str + "'")
+      return
+    }
+  }
+  let weights : @damage.HbdWeights = { phys: phys_weight, spec: spec_weight }
+  with_db(fn(db) {
+    match @db.query_pokemon(db, name, version) {
+      Ok(pokemon) => {
+        let result = if top <= 1 {
+          @damage.optimize_hbd(pokemon, fixed_ev, ivs, nature, snap, weights)
+        } else {
+          @damage.optimize_hbd_topn(
+            pokemon, fixed_ev, ivs, nature, snap, weights, top,
+          )
+        }
+        println(@cli.format_hbd(pokemon, nature, snap, weights, result, format))
+      }
+      Err(e) => println("Error: " + e)
+    }
+  })
 }

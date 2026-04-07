@@ -176,3 +176,91 @@ test "reverse_spread: ガブリアス 183/200/115/90/106/154" {
   }
   assert_true(found)
 }
+
+///|
+test "ev_for_hp: ガブリアス HP108 target=183 (=EV0 value)" {
+  // calc_hp_full(108, 31, 0) == 183, so target 183 should need EV 0
+  inspect(ev_for_hp(108, 31, 183), content="0")
+}
+
+///|
+test "ev_for_hp: ガブリアス target=184 one above baseline" {
+  // inner(0)=247 → 247*50/100=123 → HP 183
+  // inner(4 EV, f(4/4)=1)=248 → 124 → HP 184
+  inspect(ev_for_hp(108, 31, 184), content="4")
+}
+
+///|
+test "ev_for_hp: ガブリアス target=215 (=EV252 value)" {
+  inspect(ev_for_hp(108, 31, 215), content="252")
+}
+
+///|
+test "ev_for_hp: target unreachable → 256 sentinel" {
+  inspect(ev_for_hp(108, 31, 999), content="256")
+}
+
+///|
+test "ev_for_hp: monotonic forward↔reverse" {
+  let base = 100
+  for ev_idx = 0; ev_idx <= 63; ev_idx = ev_idx + 1 {
+    let ev = ev_idx * 4
+    let stat = calc_hp_full(base, 31, ev)
+    let back = ev_for_hp(base, 31, stat)
+    assert_true(back <= ev)
+    assert_true(calc_hp_full(base, 31, back) == stat)
+  }
+}
+
+///|
+test "ev_for_non_hp: neutral nature" {
+  // base=95 iv=31 ev=0: inner=221, floor(221/2)=110, raw=115
+  inspect(calc_other_full(95, 31, 0, 1, 1), content="115")
+  inspect(ev_for_non_hp(95, 31, 115, 1, 1), content="0")
+  // ev=4: inner=222, floor=111, raw=116
+  inspect(calc_other_full(95, 31, 4, 1, 1), content="116")
+  inspect(ev_for_non_hp(95, 31, 116, 1, 1), content="4")
+}
+
+///|
+test "ev_for_non_hp: +10% nature" {
+  // calc_other_full(108, 31, 252, 11, 10): raw=(108*2+31+63)*50/100+5=floor(310/2)+5=155+5=160, then 160*11/10=176
+  inspect(calc_other_full(108, 31, 252, 11, 10), content="176")
+  inspect(ev_for_non_hp(108, 31, 176, 11, 10), content="252")
+}
+
+///|
+test "ev_for_non_hp: -10% nature" {
+  // calc_other_full(95, 31, 0, 9, 10): raw=115, 115*9/10=103
+  inspect(calc_other_full(95, 31, 0, 9, 10), content="103")
+  inspect(ev_for_non_hp(95, 31, 103, 9, 10), content="0")
+}
+
+///|
+test "ev_for_non_hp: unreachable → 256" {
+  inspect(ev_for_non_hp(95, 31, 9999, 11, 10), content="256")
+}
+
+///|
+test "ev_for_non_hp: monotonic forward↔reverse (neutral)" {
+  let base = 85
+  for ev_idx = 0; ev_idx <= 63; ev_idx = ev_idx + 1 {
+    let ev = ev_idx * 4
+    let stat = calc_other_full(base, 31, ev, 1, 1)
+    let back = ev_for_non_hp(base, 31, stat, 1, 1)
+    assert_true(back <= ev)
+    assert_true(calc_other_full(base, 31, back, 1, 1) == stat)
+  }
+}
+
+///|
+test "ev_for_non_hp: monotonic forward↔reverse (+10%)" {
+  let base = 85
+  for ev_idx = 0; ev_idx <= 63; ev_idx = ev_idx + 1 {
+    let ev = ev_idx * 4
+    let stat = calc_other_full(base, 31, ev, 11, 10)
+    let back = ev_for_non_hp(base, 31, stat, 11, 10)
+    assert_true(back <= ev)
+    assert_true(calc_other_full(base, 31, back, 11, 10) == stat)
+  }
+}

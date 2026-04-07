@@ -73,6 +73,85 @@ pub fn calc_all_stats(
 }
 
 ///|
+/// Minimum EV (0..=252, multiple of 4) required to reach a given HP actual value,
+/// given base and IV. Returns 256 sentinel if unreachable (target too high for EV 252).
+///
+/// Forward: actual = floor((base*2 + iv + floor(ev/4)) * 50 / 100) + 60
+/// Solve:   floor((base*2+iv+q)/2) ≥ target-60
+///          base*2+iv+q ≥ 2*(target-60)
+///          q ≥ 2*(target-60) - base*2 - iv         where q = floor(ev/4)
+pub fn ev_for_hp(base : Int, iv : Int, target : Int) -> Int {
+  let needed_q = 2 * (target - 60) - base * 2 - iv
+  let q = if needed_q < 0 { 0 } else { needed_q }
+  let ev = q * 4
+  if ev > 252 {
+    return 256
+  }
+  // Forward-verify; if off by one due to parity, bump by +4.
+  if calc_hp_full(base, iv, ev) >= target {
+    return ev
+  }
+  let ev2 = ev + 4
+  if ev2 > 252 {
+    return 256
+  }
+  ev2
+}
+
+///|
+/// Minimum EV (0..=252, multiple of 4) required to reach a given non-HP actual value
+/// under the specified nature multiplier. Returns 256 sentinel if unreachable.
+///
+/// Forward: actual = floor((floor((base*2+iv+floor(ev/4))/2) + 5) * nature_num / nature_den)
+/// Solve for minimum ev:
+///   raw_min = ceil(target * nature_den / nature_num)
+///   inner_floor_min = raw_min - 5
+///   q_min = max(0, 2*inner_floor_min - base*2 - iv)
+///   ev = q_min * 4
+pub fn ev_for_non_hp(
+  base : Int,
+  iv : Int,
+  target : Int,
+  nature_num : Int,
+  nature_den : Int,
+) -> Int {
+  // raw_min such that floor(raw_min * num / den) >= target
+  //   raw_min * num >= target * den
+  //   raw_min >= ceil(target * den / num)
+  let raw_min = if nature_num == nature_den {
+    target
+  } else {
+    (target * nature_den + nature_num - 1) / nature_num
+  }
+  let inner_floor_min = raw_min - 5
+  // floor((base*2+iv+q)/2) >= inner_floor_min
+  //   base*2+iv+q >= 2*inner_floor_min
+  let needed = 2 * inner_floor_min - base * 2 - iv
+  let q = if needed < 0 { 0 } else { needed }
+  let ev = q * 4
+  if ev > 252 {
+    return 256
+  }
+  // Forward-verify; bump by +4 if off-by-one.
+  if calc_other_full(base, iv, ev, nature_num, nature_den) >= target {
+    return ev
+  }
+  let ev2 = ev + 4
+  if ev2 > 252 {
+    return 256
+  }
+  if calc_other_full(base, iv, ev2, nature_num, nature_den) >= target {
+    return ev2
+  }
+  // If still not reached, keep bumping (rare: nature division rounding)
+  let ev3 = ev2 + 4
+  if ev3 > 252 {
+    return 256
+  }
+  ev3
+}
+
+///|
 /// Reverse: given actual stat value, derive the base stat.
 /// Uses algebraic inversion + forward verification with ±1 adjustment.
 pub fn reverse_base_from_stat(

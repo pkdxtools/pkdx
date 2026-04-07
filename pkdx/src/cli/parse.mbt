@@ -58,6 +58,20 @@ pub enum Command {
     format~ : OutputFormat
   )
   InitCache(kind~ : CacheKind)
+  Hbd(
+    name~ : String,
+    fixed_ev~ : String,
+    ivs~ : String,
+    nature~ : String,
+    nature_up~ : String,
+    nature_down~ : String,
+    hp_snap~ : String,
+    phys_weight~ : Int,
+    spec_weight~ : Int,
+    top~ : Int,
+    version~ : String,
+    format~ : OutputFormat
+  )
   Help
   Version
 } derive(Show)
@@ -86,6 +100,7 @@ pub fn parse_args(args : Array[String]) -> Result[Command, String] {
     "stat-calc" => parse_stat_calc(args)
     "stat-reverse" => parse_stat_reverse(args)
     "init-cache" => parse_init_cache(args)
+    "hbd" => parse_hbd(args)
     "help" | "--help" | "-h" => Ok(Help)
     "version" | "--version" | "-v" => Ok(Version)
     _ => Err("Unknown command: " + subcmd + ". Run 'pkdx help' for usage.")
@@ -341,6 +356,65 @@ fn split_string(s : String, sep : Char) -> Array[String] {
     parts.push(s[start:].to_string())
   }
   parts
+}
+
+///|
+/// Parse `--fixed-ev` value into six slots. `_` marks a slot as an optimization target
+/// and is represented by -1 in the output array. Non-integer tokens return Err.
+pub fn parse_fixed_ev(s : String) -> Result[FixedArray[Int], String] {
+  let parts = split_string(s, ',')
+  if parts.length() != 6 {
+    return Err(
+      "--fixed-ev must have 6 comma-separated values (H,A,B,C,D,S); got " +
+      parts.length().to_string(),
+    )
+  }
+  let out : FixedArray[Int] = FixedArray::make(6, 0)
+  for i = 0; i < 6; i = i + 1 {
+    let tok = parts[i]
+    if tok == "_" {
+      out[i] = -1
+    } else {
+      // parse_int_str returns default on parse failure — guard by scanning digits explicitly
+      let mut all_digits = tok.length() > 0
+      for j = 0; j < tok.length(); j = j + 1 {
+        let c = tok[j].to_int()
+        if c < 0x30 || c > 0x39 {
+          all_digits = false
+        }
+      }
+      if not(all_digits) {
+        return Err("invalid --fixed-ev token: " + tok)
+      }
+      out[i] = parse_int_str(tok, 0)
+    }
+  }
+  Ok(out)
+}
+
+///|
+fn parse_hbd(args : Array[String]) -> Result[Command, String] {
+  if args.length() < 3 {
+    return Err(
+      "Usage: pkdx hbd <name> [--fixed-ev \"H,A,B,C,D,S\"] [--nature name] [--hp-snap snap] [--phys-weight N] [--spec-weight N] [--top N]",
+    )
+  }
+  Ok(
+    Hbd(
+      name=args[2],
+      fixed_ev=get_flag(args, "--fixed-ev", ""),
+      ivs=get_flag(args, "--iv", ""),
+      nature=get_flag(args, "--nature", ""),
+      nature_up=get_flag(args, "--nature-up", ""),
+      nature_down=get_flag(args, "--nature-down", ""),
+      hp_snap=get_flag(args, "--hp-snap", "none"),
+      phys_weight=get_flag_int(args, "--phys-weight", 1),
+      spec_weight=get_flag_int(args, "--spec-weight", 1),
+      top=get_flag_int(args, "--top", 1),
+      version=get_flag(args, "--version", "scarlet_violet"),
+      format=parse_format(args),
+    ),
+  )
 }
 
 ///|

@@ -134,7 +134,21 @@ cat box/cache/team_cache_ガブリアス_*.json | bin/pkdx write --teams --date 
 
 # 育成データ保存（skillキャッシュJSON→box/pokemons/にmd出力）
 cat box/cache/breed_cache_ガブリアス_*.json | bin/pkdx write --pokemon --name "ガブリアス" --file "スカーフ型"
+
+# 耐久指数最適化（H/B/D の EV を最適化、HP条件・火力比重・top-N 対応）
+bin/pkdx hbd "ガブリアス" --nature ようき
+bin/pkdx hbd "ガブリアス" --nature ようき --fixed-ev "_,0,_,0,_,252" --hp-snap leftovers
+bin/pkdx hbd "カビゴン" --nature ずぶとい --phys-weight 2 --spec-weight 1 --top 5
 ```
+
+## Reference documents
+
+ドメイン理論・設計背景・数式導出など、コードからは読み取れない知識は `.claude/skills/*/references/` に置き、エージェントが質問に自力で回答できるようにする。
+
+- **`.claude/skills/team-builder/references/bulk_theory.md`** — 耐久指数 HBD/(B+D) の導出、H=B+D 則、greedy 勾配法アルゴリズム、11n調整との関係、HP条件の根拠。`hbd` サブコマンドや努力値配分に関する質問はここを第一参照。
+- **`.claude/skills/team-builder/references/format_rules.md`** — メガ/ダイマ/Z/テラスタル等のメカニクス定義
+- **`.claude/skills/team-builder/references/stat_thresholds.md`** — 種族値ベンチマーク・素早さティア
+- **`.claude/skills/team-builder/references/items_abilities.md`** — 道具・特性の考察用データ
 
 ## Skill Flow
 

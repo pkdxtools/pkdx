@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **breed** — ポケモン育成シミュレーション（性格・努力値・実数値の対話的計算、.mdファイル出力）
 - **self-update** — フォーク先でupstreamの最新変更を安全にマージ
 
-CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、ダメージ計算、および構築・育成データのマークダウン出力を担う。
+CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、ダメージ計算、実数値計算・逆算、および構築・育成データのマークダウン出力を担う。
 
 **運用モデル**: fork-based。ユーザーはリポジトリをフォークし、`box/` 配下に構築・育成データを蓄積。`self-update` スキルでupstreamに追従する。
 
@@ -67,7 +67,7 @@ bin/
 box/                      # ユーザーデータ出力先（フォーク先でgit管理）
   teams/                   # team-builder出力 (.md)
   pokemons/                # breed出力 (.md)
-  cache/                   # breed skill キャッシュ (.json, gitignored)
+  cache/                   # skill キャッシュ (.json, gitignored / team-builder・breed が使用)
 
 .claude/skills/
   team-builder/
@@ -120,11 +120,20 @@ bin/pkdx type-chart "ほのお" "くさ"
 # 攻撃範囲カバー率
 bin/pkdx coverage "ほのお,みず,くさ"
 
-# チーム構築レポート保存（stdinからJSON読み取り→box/teams/にmd出力）
-cat team.json | bin/pkdx write --teams --date 2026-04-06 --axis "ガブリアス"
+# 実数値計算（種族値+努力値+性格→Lv50実数値）
+bin/pkdx stat-calc "ガブリアス" --ev "0,252,0,0,4,252" --nature "ようき" --format json
+bin/pkdx stat-calc "ガブリアス" --ev "0,252,0,0,4,252" --nature-up S --nature-down C
 
-# 育成データ保存（stdinからJSON読み取り→box/pokemons/にmd出力）
-cat pokemon.json | bin/pkdx write --pokemon --name "ガブリアス" --file "スカーフ型"
+# 逆算: 実数値→必要な種族値を逆引き（単一値モード）
+bin/pkdx stat-reverse 130 --iv 31 --ev 252 --nature up
+# 逆算: ポケモン名+実数値6種→努力値を逆引き（ポケモンモード）
+bin/pkdx stat-reverse "ガブリアス" --stats "183,200,115,90,106,169" --iv 31
+
+# チーム構築レポート保存（skillキャッシュJSON→box/teams/にmd出力）
+cat box/cache/team_cache_ガブリアス_*.json | bin/pkdx write --teams --date 2026-04-06 --axis "ガブリアス"
+
+# 育成データ保存（skillキャッシュJSON→box/pokemons/にmd出力）
+cat box/cache/breed_cache_ガブリアス_*.json | bin/pkdx write --pokemon --name "ガブリアス" --file "スカーフ型"
 ```
 
 ## Skill Flow

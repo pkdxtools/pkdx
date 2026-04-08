@@ -5,6 +5,29 @@ pub enum OutputFormat {
 } derive(Show)
 
 ///|
+/// Normalize the user-supplied CLI args (i.e. `argv` minus the program name)
+/// into the form admiral expects, preserving the legacy entry points that the
+/// hand-rolled parser used to handle:
+///
+///   * bare invocation       (`pkdx`)         -> `["--help"]`
+///   * legacy help subcmd    (`pkdx help`)    -> `["--help"]`
+///   * legacy version subcmd (`pkdx version`) -> `["--version"]`
+///
+/// Without this shim `admiral` raises `no command specified` for the bare
+/// invocation, and rejects `help` / `version` as unknown subcommands.
+/// Anything else is returned unchanged so admiral handles it natively.
+pub fn normalize_argv(args : Array[String]) -> Array[String] {
+  if args.length() == 0 {
+    return ["--help"]
+  }
+  match args[0] {
+    "help" => ["--help"]
+    "version" => ["--version"]
+    _ => args
+  }
+}
+
+///|
 /// Parse `--format` value into OutputFormat. Defaults to Table on unknown.
 pub fn parse_output_format(s : String) -> OutputFormat {
   match s {

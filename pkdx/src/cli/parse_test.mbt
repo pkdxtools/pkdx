@@ -1,4 +1,67 @@
 ///|
+test "normalize_argv: empty input becomes --help (bare pkdx)" {
+  // Regression: previously `pkdx` (no args) errored with
+  // "no command specified" because admiral has no built-in fallback.
+  let out = normalize_argv([])
+  inspect(out.length(), content="1")
+  inspect(out[0], content="--help")
+}
+
+///|
+test "normalize_argv: 'help' subcommand becomes --help" {
+  // Regression: `pkdx help` used to print usage. admiral does not register
+  // `help` as a subcommand of pkdx, so without this shim it would error.
+  let out = normalize_argv(["help"])
+  inspect(out.length(), content="1")
+  inspect(out[0], content="--help")
+}
+
+///|
+test "normalize_argv: 'version' subcommand becomes --version" {
+  // Regression: `pkdx version` used to print the version. Same reasoning as
+  // the `help` case above.
+  let out = normalize_argv(["version"])
+  inspect(out.length(), content="1")
+  inspect(out[0], content="--version")
+}
+
+///|
+test "normalize_argv: real subcommand passes through unchanged" {
+  let input = ["query", "ガブリアス", "--format", "json"]
+  let out = normalize_argv(input)
+  inspect(out.length(), content="4")
+  inspect(out[0], content="query")
+  inspect(out[1], content="ガブリアス")
+  inspect(out[2], content="--format")
+  inspect(out[3], content="json")
+}
+
+///|
+test "normalize_argv: write teams subcommand passes through" {
+  // Coverage for the new `write teams` (vs old `write --teams`) routing.
+  let out = normalize_argv(["write", "teams", "--date", "2026-04-08", "--axis", "ガブリアス"])
+  inspect(out.length(), content="6")
+  inspect(out[0], content="write")
+  inspect(out[1], content="teams")
+}
+
+///|
+test "normalize_argv: init-cache team subcommand passes through" {
+  // Coverage for the new `init-cache team` (vs old `init-cache --team`) routing.
+  let out = normalize_argv(["init-cache", "team"])
+  inspect(out.length(), content="2")
+  inspect(out[0], content="init-cache")
+  inspect(out[1], content="team")
+}
+
+///|
+test "normalize_argv: --help flag passes through unchanged" {
+  let out = normalize_argv(["--help"])
+  inspect(out.length(), content="1")
+  inspect(out[0], content="--help")
+}
+
+///|
 test "parse_fixed_ev: _ placeholder slots" {
   let result = parse_fixed_ev("_,0,_,0,_,252")
   guard result is Ok(arr) else { fail("Expected Ok, got \{result}") }

@@ -1,8 +1,19 @@
 ///|
 fn main {
+  // @sys.get_cli_args() returns the program name as the first element. admiral
+  // expects argv to begin with the first user-supplied token, so strip args[0]
+  // before normalization. The normalizer then restores the legacy behaviors of
+  // bare `pkdx`, `pkdx help`, and `pkdx version`, which admiral does not
+  // provide on its own.
+  let raw = @sys.get_cli_args()
+  let user_args : Array[String] = []
+  for i = 1; i < raw.length(); i = i + 1 {
+    user_args.push(raw[i])
+  }
+  let argv = @cli.normalize_argv(user_args)
   let app = build_cli()
   try {
-    app.run()
+    app.run(argv=Some(argv))
   } catch {
     err => {
       pkdx_eprintln(@db.to_c_bytes("Error: " + err.to_string()))

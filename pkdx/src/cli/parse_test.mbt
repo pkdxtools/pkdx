@@ -40,3 +40,103 @@ test "parse_output_format" {
   inspect(parse_output_format("table"), content="Table")
   inspect(parse_output_format("garbage"), content="Table")
 }
+
+///|
+test "parse_int: basic" {
+  inspect(parse_int("0", 99), content="0")
+  inspect(parse_int("42", 99), content="42")
+  inspect(parse_int("252", 99), content="252")
+}
+
+///|
+test "parse_int: negative" {
+  inspect(parse_int("-1", 99), content="-1")
+  inspect(parse_int("-2147483648", 0), content="-2147483648")
+}
+
+///|
+test "parse_int: empty and invalid fall back to default" {
+  inspect(parse_int("", 31), content="31")
+  inspect(parse_int("abc", 31), content="31")
+  inspect(parse_int("-", 31), content="31")
+}
+
+///|
+test "parse_int: stops at first non-digit after digits" {
+  // matches old parse_int_from_str behavior: "12abc" -> 12
+  inspect(parse_int("12abc", 0), content="12")
+}
+
+///|
+test "parse_csv_ints: empty string fills defaults" {
+  let arr = parse_csv_ints("", 31, 6)
+  inspect(arr[0], content="31")
+  inspect(arr[5], content="31")
+}
+
+///|
+test "parse_csv_ints: comma-separated six values" {
+  let arr = parse_csv_ints("0,252,0,0,4,252", 0, 6)
+  inspect(arr[0], content="0")
+  inspect(arr[1], content="252")
+  inspect(arr[2], content="0")
+  inspect(arr[3], content="0")
+  inspect(arr[4], content="4")
+  inspect(arr[5], content="252")
+}
+
+///|
+test "parse_csv_ints: single value broadcasts" {
+  // `--iv 31` shorthand: one value applied to all slots
+  let arr = parse_csv_ints("31", 0, 6)
+  for i = 0; i < 6; i = i + 1 {
+    inspect(arr[i], content="31")
+  }
+}
+
+///|
+test "parse_csv_ints: invalid token falls back to default_val" {
+  let arr = parse_csv_ints("252,abc,0,0,0,0", 7, 6)
+  inspect(arr[0], content="252")
+  inspect(arr[1], content="7")
+}
+
+///|
+test "parse_csv_ints: fewer tokens than count leaves tail at default" {
+  let arr = parse_csv_ints("1,2,3", 9, 6)
+  inspect(arr[0], content="1")
+  inspect(arr[1], content="2")
+  inspect(arr[2], content="3")
+  inspect(arr[3], content="9")
+  inspect(arr[4], content="9")
+  inspect(arr[5], content="9")
+}
+
+///|
+test "parse_csv_ints: extra tokens beyond count are ignored" {
+  let arr = parse_csv_ints("1,2,3,4,5,6,7,8", 0, 6)
+  inspect(arr[0], content="1")
+  inspect(arr[5], content="6")
+}
+
+///|
+test "split_csv: basic" {
+  let parts = split_csv("ほのお,みず,くさ")
+  inspect(parts.length(), content="3")
+  inspect(parts[0], content="ほのお")
+  inspect(parts[1], content="みず")
+  inspect(parts[2], content="くさ")
+}
+
+///|
+test "split_csv: single element" {
+  let parts = split_csv("ドラゴン")
+  inspect(parts.length(), content="1")
+  inspect(parts[0], content="ドラゴン")
+}
+
+///|
+test "split_csv: empty string yields empty array" {
+  let parts = split_csv("")
+  inspect(parts.length(), content="0")
+}

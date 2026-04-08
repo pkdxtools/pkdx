@@ -34,6 +34,15 @@ fn split_string(s : String, sep : Char) -> Array[String] {
 }
 
 ///|
+/// Parse a string of ASCII digits into an Int. Leading `-` is accepted.
+/// Returns `default` if the string is empty or contains any non-digit character
+/// before the first non-digit (partial-prefix parses are not supported — callers
+/// that need stricter behavior should validate the token themselves).
+pub fn parse_int(s : String, default : Int) -> Int {
+  parse_int_str(s, default)
+}
+
+///|
 fn parse_int_str(s : String, default : Int) -> Int {
   let mut result = 0
   let mut i = 0
@@ -68,6 +77,49 @@ fn parse_int_str(s : String, default : Int) -> Int {
 /// callers (e.g. main) can reuse the same splitter that `parse_fixed_ev` uses.
 pub fn split_csv(s : String) -> Array[String] {
   split_string(s, ',')
+}
+
+///|
+/// Parse a comma-separated list of integers into a fixed-size array of length
+/// `count`. If `s` is empty, every slot is filled with `default_val`. If `s`
+/// has no comma, the single value is broadcast to every slot (matching the
+/// `--iv 31` shorthand behavior). Individual tokens that fail to parse fall
+/// back to `default_val`. Extra tokens beyond `count` are ignored.
+pub fn parse_csv_ints(
+  s : String,
+  default_val : Int,
+  count : Int,
+) -> FixedArray[Int] {
+  let result : FixedArray[Int] = FixedArray::make(count, default_val)
+  if s.length() == 0 {
+    return result
+  }
+  let mut has_comma = false
+  for i = 0; i < s.length(); i = i + 1 {
+    if s[i] == ',' {
+      has_comma = true
+      break
+    }
+  }
+  if has_comma {
+    let mut idx = 0
+    let mut start = 0
+    for i = 0; i <= s.length(); i = i + 1 {
+      if i == s.length() || s[i] == ',' {
+        if idx < count && i > start {
+          result[idx] = parse_int_str(s[start:i].to_string(), default_val)
+        }
+        idx = idx + 1
+        start = i + 1
+      }
+    }
+  } else {
+    let val = parse_int_str(s, default_val)
+    for i = 0; i < count; i = i + 1 {
+      result[i] = val
+    }
+  }
+  result
 }
 
 ///|

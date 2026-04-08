@@ -51,7 +51,7 @@ fi
 echo ""
 
 # --- Step 1: pokedex submodule ---
-echo "[1/4] Initializing pokedex submodule..."
+echo "[1/5] Initializing pokedex submodule..."
 if [ ! -d "$REPO_ROOT/pokedex/.git" ] && [ ! -f "$REPO_ROOT/pokedex/.git" ]; then
   git -C "$REPO_ROOT" submodule update --init
   echo "  Done."
@@ -60,7 +60,7 @@ else
 fi
 
 # --- Step 2: pokedex.db ---
-echo "[2/4] Generating pokedex.db..."
+echo "[2/5] Generating pokedex.db..."
 if [ -f "$REPO_ROOT/pokedex/pokedex.db" ]; then
   echo "  Already exists."
 else
@@ -74,7 +74,7 @@ else
 fi
 
 # --- Step 3: pkdx binary ---
-echo "[3/4] Downloading pkdx binary ($BINARY_NAME)..."
+echo "[3/5] Downloading pkdx binary ($BINARY_NAME)..."
 
 LOCAL_BUILD="$REPO_ROOT/pkdx/_build/native/release/build/src/main/main.exe"
 LOCAL_BUILD_DEBUG="$REPO_ROOT/pkdx/_build/native/debug/build/src/main/main.exe"
@@ -137,11 +137,51 @@ if [ "$NEED_DOWNLOAD" = true ]; then
 fi
 
 # --- Step 4: box directory ---
-echo "[4/4] Initializing data directories..."
+echo "[4/5] Initializing data directories..."
 for dir in "$REPO_ROOT/box/teams" "$REPO_ROOT/box/pokemons" "$REPO_ROOT/box/cache"; do
   mkdir -p "$dir"
 done
 echo "  Done."
+
+# --- Step 5: Codex CLI compatibility (Windows symlink repair) ---
+# AGENTS.md と .agents/skills は git にシムリンクとしてコミットされている。
+# Windows Git は core.symlinks=false の場合シムリンクを「リンク先パス文字列を含む通常ファイル」として
+# チェックアウトしてしまうため、Codex CLI から正しく読めない。ここで検出して修復する。
+echo "[5/5] Codex CLI compatibility..."
+if [ "$OS_TAG" = "windows" ]; then
+  cd "$REPO_ROOT"
+
+  # AGENTS.md: 通常ファイル化されていれば hardlink で再作成
+  if [ -f AGENTS.md ] && [ ! -L AGENTS.md ]; then
+    content="$(cat AGENTS.md)"
+    if [ "$content" = "CLAUDE.md" ]; then
+      rm -f AGENTS.md
+      if cmd //c "mklink /H AGENTS.md CLAUDE.md" >/dev/null 2>&1; then
+        echo "  AGENTS.md: hardlinked to CLAUDE.md"
+      else
+        cp CLAUDE.md AGENTS.md
+        echo "  AGENTS.md: copied from CLAUDE.md (mklink unavailable)"
+      fi
+    fi
+  fi
+
+  # .agents/skills: 通常ファイル化されていれば junction で再作成
+  if [ -f .agents/skills ] && [ ! -L .agents/skills ] && [ ! -d .agents/skills ]; then
+    content="$(cat .agents/skills)"
+    if [ "$content" = "../.claude/skills" ]; then
+      rm -f .agents/skills
+      if cmd //c "mklink /J .agents\\skills .claude\\skills" >/dev/null 2>&1; then
+        echo "  .agents/skills: junction to .claude/skills"
+      else
+        cp -r .claude/skills .agents/skills
+        echo "  .agents/skills: copied from .claude/skills (mklink unavailable)"
+      fi
+    fi
+  fi
+else
+  # Mac/Linux: シムリンクはそのまま動作するので何もしない
+  echo "  Symlinks active (non-Windows)."
+fi
 
 # --- Verify ---
 echo ""

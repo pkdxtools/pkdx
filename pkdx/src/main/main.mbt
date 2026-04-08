@@ -1,77 +1,440 @@
 ///|
 fn main {
-  let args = @sys.get_cli_args()
-  let cmd = match @cli.parse_args(args) {
-    Ok(c) => c
-    Err(e) => {
-      println("Error: " + e)
-      return
+  // @sys.get_cli_args() returns the program name as the first element. admiral
+  // expects argv to begin with the first user-supplied token, so strip args[0]
+  // before normalization. The normalizer then restores the legacy behaviors of
+  // bare `pkdx`, `pkdx help`, and `pkdx version`, which admiral does not
+  // provide on its own.
+  let raw = @sys.get_cli_args()
+  let user_args : Array[String] = []
+  for i = 1; i < raw.length(); i = i + 1 {
+    user_args.push(raw[i])
+  }
+  let argv = @cli.normalize_argv(user_args)
+  let app = build_cli()
+  try {
+    app.run(argv=Some(argv))
+  } catch {
+    err => {
+      pkdx_eprintln(@db.to_c_bytes("Error: " + err.to_string()))
+      pkdx_exit(1)
     }
   }
-  match cmd {
-    Help => println(@cli.format_help())
-    Version => println("pkdx 0.1.0")
-    Query(name~, version~, format~) => run_query(name, version, format)
-    Moves(target~, version~, format~) => run_moves(target, version, format)
-    Search(type1~, type2~, min_speed~, version~, format~) =>
-      run_search(type1, type2, min_speed, version, format)
-    TypeChart(move_type~, def_type1~, def_type2~) =>
-      run_type_chart(move_type, def_type1, def_type2)
-    Coverage(types~) => run_coverage(types)
-    InitCache(kind~) => run_init_cache(kind)
-    WriteTeams(date~, axis~) => run_write_teams(date, axis)
-    WritePokemon(name~, file~) => run_write_pokemon(name, file)
-    StatCalc(
-      name~, evs~, ivs~, nature~, nature_up~, nature_down~, version~, format~
-    ) =>
-      run_stat_calc(
-        name, evs, ivs, nature, nature_up, nature_down, version, format,
-      )
-    StatReverse(
-      target~, stats~, iv~, ev~, nature_mod~, is_hp~, version~, format~
-    ) => run_stat_reverse(target, stats, iv, ev, nature_mod, is_hp, version, format)
-    Damage(
-      attacker~,
-      defender~,
-      move_name~,
-      version~,
-      format~,
-      atk_ability~,
-      def_ability~,
-      atk_item~,
-      def_item~,
-      weather~,
-      field~,
-      tera_type~,
-      critical~,
-      atk_stat~,
-      def_stat~,
-      def_hp~
-    ) =>
-      run_damage(
-        attacker, defender, move_name, version, format, atk_ability, def_ability,
-        atk_item, def_item, weather, field, tera_type, critical, atk_stat, def_stat,
-        def_hp,
-      )
-    Hbd(
-      name~,
-      fixed_ev~,
-      ivs~,
-      nature~,
-      nature_up~,
-      nature_down~,
-      hp_snap~,
-      phys_weight~,
-      spec_weight~,
-      top~,
-      version~,
-      format~
-    ) =>
-      run_hbd(
-        name, fixed_ev, ivs, nature, nature_up, nature_down, hp_snap, phys_weight,
-        spec_weight, top, version, format,
-      )
+}
+
+///|
+/// Read a string option/positional that admiral guarantees to populate
+/// (either because the option was declared with `default=Some(...)` or the
+/// positional was declared `required=true`). Crashes loudly if the key is
+/// missing — this indicates a programming error (typo, or a caller forgot to
+/// declare the option), not a user error.
+fn ctx_str(ctx : @admiral.Context, name : String) -> String {
+  match ctx.get_string(name) {
+    Some(s) => s
+    None => {
+      println("Internal error: missing CLI value for '" + name + "'")
+      panic()
+    }
   }
+}
+
+///|
+/// Read an optional string — returns "" when the flag was not supplied and
+/// no default is registered with admiral. Use for truly optional flags such
+/// as `--nature`, `--atk-ability`, etc. where empty string is the sentinel
+/// for "not set" throughout the codebase.
+fn ctx_str_opt(ctx : @admiral.Context, name : String) -> String {
+  ctx.get_string(name).unwrap_or("")
+}
+
+///|
+/// Read an int option. Same contract as `ctx_str`: the option must have been
+/// declared with `default=Some(...)` so admiral always populates a value.
+fn ctx_int(ctx : @admiral.Context, name : String) -> Int {
+  match ctx.get_int(name) {
+    Some(n) => n
+    None => {
+      println("Internal error: missing CLI value for '" + name + "'")
+      panic()
+    }
+  }
+}
+
+///|
+/// Read --format option as OutputFormat. All commands declare `--format`
+/// with default="table", so ctx_str is safe here.
+fn ctx_format(ctx : @admiral.Context) -> @cli.OutputFormat {
+  @cli.parse_output_format(ctx_str(ctx, "format"))
+}
+
+///|
+fn build_cli() -> @admiral.CliApp {
+  @admiral.cli(
+    name="pkdx",
+    version="0.1.0",
+    description="Pokedex CLI tool",
+    commands=[
+      cmd_query(),
+      cmd_moves(),
+      cmd_search(),
+      cmd_type_chart(),
+      cmd_coverage(),
+      cmd_damage(),
+      cmd_write(),
+      cmd_stat_calc(),
+      cmd_stat_reverse(),
+      cmd_init_cache(),
+      cmd_hbd(),
+    ],
+  )
+}
+
+///|
+fn cmd_query() -> @admiral.CommandDef {
+  @admiral.command(
+    name="query",
+    description="Look up a Pokemon by name or globalNo",
+    options=[
+      @admiral.string(
+        "version", description="Game version", default=Some("scarlet_violet"),
+      ),
+      @admiral.string(
+        "format", description="Output format: json|table", default=Some("table"),
+      ),
+    ],
+    positionals=[
+      @admiral.positional(
+        "name", description="Pokemon name (ja or en)", required=true,
+      ),
+    ],
+    examples=["pkdx query ガブリアス --format json"],
+    run=Some(fn(ctx) {
+      run_query(
+        ctx_str(ctx, "name"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_moves() -> @admiral.CommandDef {
+  @admiral.command(
+    name="moves",
+    description="List moves a Pokemon can learn",
+    options=[
+      @admiral.string(
+        "version", description="Game version", default=Some("scarlet_violet"),
+      ),
+      @admiral.string(
+        "format", description="Output format: json|table", default=Some("table"),
+      ),
+    ],
+    positionals=[
+      @admiral.positional(
+        "target",
+        description="Pokemon name or globalNo",
+        required=true,
+      ),
+    ],
+    run=Some(fn(ctx) {
+      run_moves(
+        ctx_str(ctx, "target"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_search() -> @admiral.CommandDef {
+  @admiral.command(
+    name="search",
+    description="Search Pokemon by type and minimum speed",
+    options=[
+      @admiral.string("type", description="Primary type (ja)", required=true),
+      @admiral.string("type2", description="Secondary type (ja)", default=Some("")),
+      @admiral.int("min-speed", description="Minimum base speed", default=Some(0)),
+      @admiral.string(
+        "version", description="Game version", default=Some("scarlet_violet"),
+      ),
+      @admiral.string(
+        "format", description="Output format: json|table", default=Some("table"),
+      ),
+    ],
+    run=Some(fn(ctx) {
+      run_search(
+        ctx_str(ctx, "type"),
+        ctx_str(ctx, "type2"),
+        ctx_int(ctx, "min-speed"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_type_chart() -> @admiral.CommandDef {
+  @admiral.command(
+    name="type-chart",
+    description="Show type effectiveness multiplier",
+    positionals=[
+      @admiral.positional("move_type", description="Attacking move type", required=true),
+      @admiral.positional("def_type1", description="Defender primary type", required=true),
+      @admiral.positional("def_type2", description="Defender secondary type", required=false),
+    ],
+    run=Some(fn(ctx) {
+      run_type_chart(
+        ctx_str(ctx, "move_type"),
+        ctx_str(ctx, "def_type1"),
+        // def_type2 is optional (required=false); ctx_str_opt returns "" when absent
+        ctx_str_opt(ctx, "def_type2"),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_coverage() -> @admiral.CommandDef {
+  @admiral.command(
+    name="coverage",
+    description="Compute neutral+ coverage rate of a list of attacking types",
+    positionals=[
+      @admiral.positional(
+        "types",
+        description="Comma-separated type list (ja), e.g. 'ほのお,みず,くさ'",
+        required=true,
+      ),
+    ],
+    run=Some(fn(ctx) {
+      run_coverage(@cli.split_csv(ctx_str(ctx, "types")))
+    }),
+  )
+}
+
+///|
+fn cmd_damage() -> @admiral.CommandDef {
+  @admiral.command(
+    name="damage",
+    description="Compute Lv50 damage roll",
+    options=[
+      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
+      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+      @admiral.string("atk-ability", description="Attacker ability (ja)", default=Some("")),
+      @admiral.string("def-ability", description="Defender ability (ja)", default=Some("")),
+      @admiral.string("atk-item", description="Attacker held item (ja)", default=Some("")),
+      @admiral.string("def-item", description="Defender held item (ja)", default=Some("")),
+      @admiral.string("weather", description="Weather (ja): はれ|あめ|すなあらし|ゆき", default=Some("")),
+      @admiral.string("field", description="Terrain (ja): エレキ|グラス|ミスト|サイコ", default=Some("")),
+      @admiral.string("tera-type", description="Tera type (ja)", default=Some("")),
+      @admiral.bool("critical", description="Treat the hit as a critical"),
+      @admiral.int("atk-stat", description="Override attacker attack/special stat", default=Some(0)),
+      @admiral.int("def-stat", description="Override defender defense/special stat", default=Some(0)),
+      @admiral.int("def-hp", description="Override defender HP", default=Some(0)),
+    ],
+    positionals=[
+      @admiral.positional("attacker", description="Attacker Pokemon name", required=true),
+      @admiral.positional("defender", description="Defender Pokemon name", required=true),
+      @admiral.positional("move", description="Move name", required=true),
+    ],
+    run=Some(fn(ctx) {
+      // Convert string CLI values to domain enums at the ADT boundary, before
+      // handing them to run_damage. This matches the `weather_from_jp` /
+      // `field_from_jp` idiom used elsewhere in the project.
+      let weather = @model.weather_from_jp(ctx_str(ctx, "weather"))
+      let field = @model.field_from_jp(ctx_str(ctx, "field"))
+      run_damage(
+        ctx_str(ctx, "attacker"),
+        ctx_str(ctx, "defender"),
+        ctx_str(ctx, "move"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+        ctx_str(ctx, "atk-ability"),
+        ctx_str(ctx, "def-ability"),
+        ctx_str(ctx, "atk-item"),
+        ctx_str(ctx, "def-item"),
+        weather,
+        field,
+        ctx_str(ctx, "tera-type"),
+        ctx.get_bool("critical"),
+        ctx_int(ctx, "atk-stat"),
+        ctx_int(ctx, "def-stat"),
+        ctx_int(ctx, "def-hp"),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_write() -> @admiral.CommandDef {
+  @admiral.command(
+    name="write",
+    description="Write skill cache JSON (stdin) to a markdown file",
+    subcommands=[
+      @admiral.command(
+        name="teams",
+        description="Write a team build report to box/teams/",
+        options=[
+          @admiral.string("date", description="YYYY-MM-DD", required=true),
+          @admiral.string("axis", description="Axis Pokemon name", required=true),
+        ],
+        run=Some(fn(ctx) {
+          run_write_teams(ctx_str(ctx, "date"), ctx_str(ctx, "axis"))
+        }),
+      ),
+      @admiral.command(
+        name="pokemon",
+        description="Write a Pokemon build to box/pokemons/",
+        options=[
+          @admiral.string("name", description="Pokemon name", required=true),
+          @admiral.string("file", description="Output filename (no extension)", required=true),
+        ],
+        run=Some(fn(ctx) {
+          run_write_pokemon(ctx_str(ctx, "name"), ctx_str(ctx, "file"))
+        }),
+      ),
+    ],
+  )
+}
+
+///|
+fn cmd_stat_calc() -> @admiral.CommandDef {
+  @admiral.command(
+    name="stat-calc",
+    description="Compute Lv50 stats from base + EV/IV + nature",
+    options=[
+      @admiral.string("ev", description="EVs as 'H,A,B,C,D,S'", default=Some("")),
+      @admiral.string("iv", description="IVs as 'H,A,B,C,D,S' or single value", default=Some("")),
+      @admiral.string("nature", description="Nature name (ja)", default=Some("")),
+      @admiral.string("nature-up", description="Stat that nature boosts", default=Some("")),
+      @admiral.string("nature-down", description="Stat that nature lowers", default=Some("")),
+      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
+      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+    ],
+    positionals=[
+      @admiral.positional("name", description="Pokemon name (ja or en)", required=true),
+    ],
+    run=Some(fn(ctx) {
+      run_stat_calc(
+        ctx_str(ctx, "name"),
+        ctx_str(ctx, "ev"),
+        ctx_str(ctx, "iv"),
+        ctx_str(ctx, "nature"),
+        ctx_str(ctx, "nature-up"),
+        ctx_str(ctx, "nature-down"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_stat_reverse() -> @admiral.CommandDef {
+  @admiral.command(
+    name="stat-reverse",
+    description="Reverse-derive base stat (single mode) or EV spread (pokemon mode)",
+    options=[
+      @admiral.string("stats", description="Actual stats 'H,A,B,C,D,S' (pokemon mode)", default=Some("")),
+      @admiral.int("iv", description="IV", default=Some(31)),
+      @admiral.int("ev", description="EV", default=Some(0)),
+      @admiral.string("nature", description="Nature mod: up|down|neutral", default=Some("neutral")),
+      @admiral.bool("hp", description="Treat target as HP stat (single mode)"),
+      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
+      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+    ],
+    positionals=[
+      @admiral.positional(
+        "target", description="Stat value (single mode) or Pokemon name (pokemon mode)", required=true,
+      ),
+    ],
+    run=Some(fn(ctx) {
+      run_stat_reverse(
+        ctx_str(ctx, "target"),
+        ctx_str(ctx, "stats"),
+        ctx_int(ctx, "iv"),
+        ctx_int(ctx, "ev"),
+        ctx_str(ctx, "nature"),
+        ctx.get_bool("hp"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+      )
+    }),
+  )
+}
+
+///|
+fn cmd_init_cache() -> @admiral.CommandDef {
+  @admiral.command(
+    name="init-cache",
+    description="Output a placeholder JSON skeleton for skill caches",
+    subcommands=[
+      @admiral.command(
+        name="team",
+        description="Team cache placeholder",
+        run=Some(fn(_ctx) { run_init_cache_team() }),
+      ),
+      @admiral.command(
+        name="pokemon",
+        description="Pokemon cache placeholder",
+        run=Some(fn(_ctx) { run_init_cache_pokemon() }),
+      ),
+    ],
+  )
+}
+
+///|
+fn cmd_hbd() -> @admiral.CommandDef {
+  @admiral.command(
+    name="hbd",
+    description="Optimize H/B/D EV spread under HBD/(p*B+s*D) objective",
+    options=[
+      @admiral.string("fixed-ev", description="Fixed EVs 'H,A,B,C,D,S' (_ to optimize)", default=Some("")),
+      @admiral.string("iv", description="IVs as 'H,A,B,C,D,S' or single value", default=Some("")),
+      @admiral.string("nature", description="Nature name (ja)", default=Some("")),
+      @admiral.string("nature-up", description="Stat that nature boosts", default=Some("")),
+      @admiral.string("nature-down", description="Stat that nature lowers", default=Some("")),
+      @admiral.string("hp-snap", description="HP snap mode: none|leftovers|residual|sitrus|lifeorb", default=Some("none")),
+      @admiral.int("phys-weight", description="Weight applied to B term", default=Some(1)),
+      @admiral.int("spec-weight", description="Weight applied to D term", default=Some(1)),
+      @admiral.int("top", description="Number of candidates to return", default=Some(1)),
+      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
+      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+    ],
+    positionals=[
+      @admiral.positional("name", description="Pokemon name (ja or en)", required=true),
+    ],
+    run=Some(fn(ctx) {
+      // Convert --hp-snap string to the HpSnap ADT at the CLI boundary.
+      // Unknown values are a user error, not a programming error, so print
+      // and exit instead of panicking.
+      let hp_snap_str = ctx_str(ctx, "hp-snap")
+      let snap = match @model.hp_snap_from_str(hp_snap_str) {
+        Some(s) => s
+        None => {
+          exit_error("unknown --hp-snap value '" + hp_snap_str + "'")
+          return
+        }
+      }
+      run_hbd(
+        ctx_str(ctx, "name"),
+        ctx_str(ctx, "fixed-ev"),
+        ctx_str(ctx, "iv"),
+        ctx_str(ctx, "nature"),
+        ctx_str(ctx, "nature-up"),
+        ctx_str(ctx, "nature-down"),
+        snap,
+        ctx_int(ctx, "phys-weight"),
+        ctx_int(ctx, "spec-weight"),
+        ctx_int(ctx, "top"),
+        ctx_str(ctx, "version"),
+        ctx_format(ctx),
+      )
+    }),
+  )
 }
 
 ///|
@@ -171,8 +534,8 @@ fn run_damage(
   def_ability : String,
   atk_item : String,
   def_item : String,
-  weather : String,
-  field : String,
+  weather : @model.Weather,
+  field : @model.Field,
   tera_type : String,
   critical : Bool,
   atk_stat : Int,
@@ -209,8 +572,8 @@ fn run_damage(
       def_ability,
       atk_item,
       def_item,
-      weather: @model.weather_from_jp(weather),
-      field: @model.field_from_jp(field),
+      weather,
+      field,
       tera_type,
       critical,
       atk_stat_override: atk_stat,
@@ -378,9 +741,16 @@ fn is_safe_path_component(s : String) -> Bool {
 }
 
 ///|
+/// Print an error to stderr and terminate with exit code 1. Never returns at
+/// runtime: the trailing panic() is a guard in case the FFI exit call ever
+/// returns unexpectedly. Callers still include an explicit `return` after
+/// calling this, as a readability marker — moonbit's type system cannot
+/// express "does not return" across an FFI boundary, so the explicit return
+/// makes the control flow unambiguous to readers.
 fn exit_error(msg : String) -> Unit {
   pkdx_eprintln(@db.to_c_bytes("Error: " + msg))
   pkdx_exit(1)
+  panic()
 }
 
 ///|
@@ -462,68 +832,6 @@ fn run_write_pokemon(name : String, file : String) -> Unit {
 }
 
 ///|
-fn parse_csv_ints(s : String, default_val : Int, count : Int) -> FixedArray[Int] {
-  let result : FixedArray[Int] = FixedArray::make(count, default_val)
-  if s.length() == 0 {
-    return result
-  }
-  // Check if contains comma
-  let mut has_comma = false
-  for i = 0; i < s.length(); i = i + 1 {
-    if s[i] == ',' {
-      has_comma = true
-      break
-    }
-  }
-  if has_comma {
-    let mut idx = 0
-    let mut start = 0
-    for i = 0; i <= s.length(); i = i + 1 {
-      if i == s.length() || s[i] == ',' {
-        if idx < count && i > start {
-          result[idx] = parse_int_from_str(s[start:i].to_string(), default_val)
-        }
-        idx = idx + 1
-        start = i + 1
-      }
-    }
-  } else {
-    // Single value applied to all
-    let val = parse_int_from_str(s, default_val)
-    for i = 0; i < count; i = i + 1 {
-      result[i] = val
-    }
-  }
-  result
-}
-
-///|
-fn parse_int_from_str(s : String, default : Int) -> Int {
-  let mut result = 0
-  let mut i = 0
-  let mut negative = false
-  if i < s.length() && s[i] == '-' {
-    negative = true
-    i = i + 1
-  }
-  let mut has_digit = false
-  while i < s.length() {
-    let c = s[i].to_int()
-    if c >= 0x30 && c <= 0x39 {
-      result = result * 10 + (c - 0x30)
-      has_digit = true
-    } else {
-      break
-    }
-    i = i + 1
-  }
-  if not(has_digit) {
-    return default
-  }
-  if negative { -result } else { result }
-}
-
-///|
 fn resolve_nature(
   nature_name : String,
   nature_up : String,
@@ -575,8 +883,8 @@ fn run_stat_calc(
   version : String,
   format : @cli.OutputFormat,
 ) -> Unit {
-  let evs = parse_csv_ints(evs_str, 0, 6)
-  let ivs = parse_csv_ints(ivs_str, 31, 6)
+  let evs = @cli.parse_csv_ints(evs_str, 0, 6)
+  let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
   let nature = resolve_nature(nature_name, nature_up, nature_down)
   with_db(fn(db) {
     match @db.query_pokemon(db, name, version) {
@@ -602,7 +910,7 @@ fn run_stat_reverse(
 ) -> Unit {
   if stats_str.length() > 0 {
     // Pokemon mode
-    let actual_stats = parse_csv_ints(stats_str, 0, 6)
+    let actual_stats = @cli.parse_csv_ints(stats_str, 0, 6)
     with_db(fn(db) {
       match @db.query_pokemon(db, target, version) {
         Ok(pokemon) => {
@@ -618,7 +926,7 @@ fn run_stat_reverse(
     })
   } else {
     // Single stat mode
-    let actual = parse_int_from_str(target, 0)
+    let actual = @cli.parse_int(target, 0)
     if actual <= 0 {
       println("Error: Invalid stat value '" + target + "'")
       return
@@ -638,12 +946,13 @@ fn run_stat_reverse(
 }
 
 ///|
-fn run_init_cache(kind : @cli.CacheKind) -> Unit {
-  let json = match kind {
-    Team => @writer.generate_team_placeholder()
-    Pokemon => @writer.generate_pokemon_placeholder()
-  }
-  println(json.stringify())
+fn run_init_cache_team() -> Unit {
+  println(@writer.generate_team_placeholder().stringify())
+}
+
+///|
+fn run_init_cache_pokemon() -> Unit {
+  println(@writer.generate_pokemon_placeholder().stringify())
 }
 
 ///|
@@ -654,7 +963,7 @@ fn run_hbd(
   nature_name : String,
   nature_up : String,
   nature_down : String,
-  hp_snap_str : String,
+  snap : @model.HpSnap,
   phys_weight : Int,
   spec_weight : Int,
   top : Int,
@@ -677,15 +986,8 @@ fn run_hbd(
       }
     }
   }
-  let ivs = parse_csv_ints(ivs_str, 31, 6)
+  let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
   let nature = resolve_nature(nature_name, nature_up, nature_down)
-  let snap = match @model.hp_snap_from_str(hp_snap_str) {
-    Some(s) => s
-    None => {
-      println("Error: unknown --hp-snap value '" + hp_snap_str + "'")
-      return
-    }
-  }
   let weights : @damage.HbdWeights = { phys: phys_weight, spec: spec_weight }
   with_db(fn(db) {
     match @db.query_pokemon(db, name, version) {

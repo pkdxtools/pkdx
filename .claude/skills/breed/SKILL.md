@@ -45,7 +45,7 @@ CACHE_FILE="$REPO_ROOT/box/cache/breed_cache_<pokemon_name>_$(date +%s).json"
 スキーマ定義は `pkdx/src/writer/schema.mbt` の `pokemon_schema()` がSSoT。初期JSONは以下のコマンドで生成する:
 
 ```bash
-bin/pkdx init-cache --pokemon > "$CACHE_FILE"
+bin/pkdx init-cache pokemon > "$CACHE_FILE"
 ```
 
 生成されるJSONの特徴:
@@ -542,7 +542,7 @@ calcスキルと同じ形式でダメージテーブルを表示:
 キャッシュ JSON はPhase 0-7で段階的に構築済み。CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。
 
 ```bash
-cat $CACHE_FILE | $PKDX write --pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
+cat $CACHE_FILE | $PKDX write pokemon --name "<pokemon-name>" --file "<filename or __no_save.filename>"
 ```
 
 CLIはキャッシュ JSON のスキーマ（`pokemon` + `build` セクション）をバリデーションする。

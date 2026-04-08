@@ -6,6 +6,7 @@ import {
   "ushironoko/pkdx/src/model",
   "ushironoko/pkdx/src/writer",
   "mizchi/markdown",
+  "mizchi/admiral",
   "moonbitlang/core/json",
   "moonbitlang/x/sys",
 }

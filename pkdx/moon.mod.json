@@ -1,6 +1,6 @@
 {
   "name": "ushironoko/pkdx",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "deps": {
     "moonbitlang/x": "0.4.41",
     "mizchi/markdown": "0.4.7",

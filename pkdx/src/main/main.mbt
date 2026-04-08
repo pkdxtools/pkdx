@@ -71,7 +71,7 @@ fn ctx_format(ctx : @admiral.Context) -> @cli.OutputFormat {
 fn build_cli() -> @admiral.CliApp {
   @admiral.cli(
     name="pkdx",
-    version="0.2.3",
+    version="0.2.4",
     description="Pokedex CLI tool",
     commands=[
       cmd_query(),

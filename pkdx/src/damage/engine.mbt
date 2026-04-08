@@ -39,8 +39,21 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
   }
 
+  // ボディプレスは攻撃側のDefenseを攻撃値として使う物理技。
+  // Attack系の補正（ちからもち・はりきり・ハチマキ等）は適用されず、
+  // Defense系の補正（ファーコート・しんかのきせき等）が適用される。
+  let is_body_press = move_name == "ボディプレス"
+
   // 2. Stat calculation
-  let atk_base = if is_physical { atk.atk } else { atk.spa }
+  let atk_base = if is_physical {
+    if is_body_press {
+      atk.def_
+    } else {
+      atk.atk
+    }
+  } else {
+    atk.spa
+  }
   let def_base_hp = dfn.hp
   let def_base = if is_physical { dfn.def_ } else { dfn.spd }
 
@@ -49,7 +62,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let mut def_stat = calc_stat(def_base, custom=input.def_stat_override)
 
   // 2b. Ability stat modifiers
-  if atk_ability.length() > 0 {
+  if is_body_press {
+    if atk_ability.length() > 0 {
+      atk_stat = apply_def_ability_stat(atk_ability, true, atk_stat)
+    }
+  } else if atk_ability.length() > 0 {
     atk_stat = apply_atk_ability_stat(
       atk_ability, is_physical, weather, field, atk_stat,
     )
@@ -59,7 +76,14 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // 2b-2. Ruin ability cross-side stat modifiers
-  if atk_ability.length() > 0 || def_ability.length() > 0 {
+  // ボディプレスの場合、攻撃値として使われるのは自身のDefenseなので
+  // わざわいのおふだ（相手の物理Atkを下げる）は影響しない。
+  // わざわいのつるぎ（相手の物理Defを下げる）は通常通り適用される。
+  if is_body_press {
+    if atk_ability == "わざわいのつるぎ" {
+      def_stat = def_stat * 3 / 4
+    }
+  } else if atk_ability.length() > 0 || def_ability.length() > 0 {
     let (new_atk, new_def) = apply_ruin_cross_stat(
       atk_ability, def_ability, is_physical, atk_stat, def_stat,
     )
@@ -68,7 +92,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // 2c. Item stat modifiers
-  if atk_item.length() > 0 {
+  if is_body_press {
+    if atk_item.length() > 0 {
+      atk_stat = apply_def_item_stat(atk_item, true, atk_stat)
+    }
+  } else if atk_item.length() > 0 {
     atk_stat = apply_atk_item_stat(
       atk_item,
       is_physical,
@@ -88,6 +116,16 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       is_physical,
       def_stat,
     )
+    // ボディプレスは自身のDefenseが攻撃値なので、攻撃側にも雪×こおりの
+    // Def 1.5倍補正を適用する。
+    if is_body_press {
+      atk_stat = apply_weather_def_mod(
+        weather,
+        (atk.type1, atk.type2),
+        true,
+        atk_stat,
+      )
+    }
   }
 
   // Immunity check
@@ -104,6 +142,17 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
   // 3. Power calculation
   let mut effective_power = move_power
+
+  // 体重参照技は固定威力を上書きする（後続のテクニシャン等の補正は通常通り乗る）。
+  if move_name == "けたぐり" || move_name == "くさむすび" {
+    let dw = effective_weight(dfn.weight, def_ability)
+    effective_power = weight_based_power(dw)
+  } else if move_name == "ヘビーボンバー" || move_name == "ヒートスタンプ" {
+    let aw = effective_weight(atk.weight, atk_ability)
+    let dw = effective_weight(dfn.weight, def_ability)
+    effective_power = weight_ratio_power(aw, dw)
+  }
+
   if atk_ability.length() > 0 {
     effective_power = apply_atk_ability_power(
       atk_ability, move_name, move_type, effective_power, weather,
@@ -287,6 +336,57 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     ko_text,
     defender_hp: def_hp,
     is_immune: false,
+  }
+}
+
+///|
+/// ヘヴィメタル / ライトメタルによる体重補正。
+/// ヘヴィメタル: 自身の体重×2, ライトメタル: 自身の体重×1/2。
+fn effective_weight(base : Double, ability : String) -> Double {
+  if ability == "ヘヴィメタル" {
+    base * 2.0
+  } else if ability == "ライトメタル" {
+    base * 0.5
+  } else {
+    base
+  }
+}
+
+///|
+/// けたぐり / くさむすび の威力決定（相手の体重基準）。
+fn weight_based_power(weight : Double) -> Int {
+  if weight <= 10.0 {
+    20
+  } else if weight <= 25.0 {
+    40
+  } else if weight <= 50.0 {
+    60
+  } else if weight <= 100.0 {
+    80
+  } else if weight <= 200.0 {
+    100
+  } else {
+    120
+  }
+}
+
+///|
+/// ヘビーボンバー / ヒートスタンプ の威力決定（自身 / 相手 の体重比）。
+/// 体重が相手の 5倍以上→120, 4倍以上→100, 3倍以上→80, 2倍以上→60, それ未満→40。
+fn weight_ratio_power(atk_weight : Double, def_weight : Double) -> Int {
+  if def_weight <= 0.0 {
+    return 40
+  }
+  if def_weight * 5.0 <= atk_weight {
+    120
+  } else if def_weight * 4.0 <= atk_weight {
+    100
+  } else if def_weight * 3.0 <= atk_weight {
+    80
+  } else if def_weight * 2.0 <= atk_weight {
+    60
+  } else {
+    40
   }
 }
 

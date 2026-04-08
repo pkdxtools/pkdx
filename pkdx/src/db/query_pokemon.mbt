@@ -13,7 +13,8 @@ pub fn query_pokemon(
     #|  t.type1, t.type2,
     #|  s.hp, s.attack, s.defense, s.special_attack, s.special_defense, s.speed,
     #|  (s.hp + s.attack + s.defense + s.special_attack + s.special_defense + s.speed) AS bst,
-    #|  a.ability1, a.ability2, a.dream_ability
+    #|  a.ability1, a.ability2, a.dream_ability,
+    #|  p.weight
     #|FROM pokedex_name pn
     #|JOIN pokedex_name pne ON pn.id = pne.id
     #|  AND pne.language = 'eng'
@@ -23,6 +24,7 @@ pub fn query_pokemon(
     #|  AND s.version = ?
     #|JOIN local_pokedex_ability a ON pn.id = a.id
     #|  AND a.version = ?
+    #|JOIN pokedex p ON pn.id = p.id
     #|WHERE COALESCE(pn.form, '') = ''
     #|  AND COALESCE(pn.region, '') = ''
     #|  AND (
@@ -54,7 +56,54 @@ pub fn query_pokemon(
     ability1: r[12],
     ability2: r[13],
     dream_ability: r[14],
+    weight: parse_double(r[15]),
   })
+}
+
+///|
+/// DBの weight カラムは "460.0" や "-" などの文字列。
+/// "-" や解析不能値は 0.0 を返す。
+fn parse_double(s : String) -> Double {
+  if s.length() == 0 {
+    return 0.0
+  }
+  let mut i = 0
+  let mut negative = false
+  if s[i] == '-' {
+    // 単独の "-" はデータ欠損マーカー
+    if s.length() == 1 {
+      return 0.0
+    }
+    negative = true
+    i = i + 1
+  }
+  let mut int_part = 0.0
+  while i < s.length() && s[i] != '.' {
+    let c = s[i].to_int()
+    if c >= 0x30 && c <= 0x39 {
+      int_part = int_part * 10.0 + (c - 0x30).to_double()
+    }
+    i = i + 1
+  }
+  let mut frac = 0.0
+  let mut div = 1.0
+  if i < s.length() && s[i] == '.' {
+    i = i + 1
+    while i < s.length() {
+      let c = s[i].to_int()
+      if c >= 0x30 && c <= 0x39 {
+        frac = frac * 10.0 + (c - 0x30).to_double()
+        div = div * 10.0
+      }
+      i = i + 1
+    }
+  }
+  let result = int_part + frac / div
+  if negative {
+    -result
+  } else {
+    result
+  }
 }
 
 ///|

@@ -25,6 +25,7 @@ fn mk_pokemon(
     ability1: "",
     ability2: "",
     dream_ability: "",
+    weight: 0.0,
   }
 }
 

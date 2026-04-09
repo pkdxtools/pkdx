@@ -13,11 +13,5 @@ import {
 
 options(
   "is-main": true,
-  link: {
-    "native": {
-      "stub-cc-flags": "-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -O2",
-    },
-  },
-  "native-stub": [ "cwrap.c", "sqlite3.c" ],
   "supported-targets": "native",
 )

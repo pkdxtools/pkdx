@@ -2,6 +2,16 @@ import {
   "ushironoko/pkdx/src/model",
 }
 
+import {
+  "moonbitlang/x/sys",
+} for "test"
+
 options(
   "supported-targets": "native",
+  "native-stub": [ "cwrap.c", "sqlite3.c" ],
+  link: {
+    "native": {
+      "stub-cc-flags": "-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DQS=0 -O2",
+    },
+  },
 )

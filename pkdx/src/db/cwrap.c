@@ -128,9 +128,27 @@ void pkdx_db_close(PkdxDb *wrapper) {
     }
 }
 
+/* PkdxResultSet を MoonBit の external_object として確保することで、
+   MoonBit 側の incref/decref がダミーながら整合する。
+   destructor はセル本体（libc_malloc 済み）を解放する。
+   この対応をしないと、MoonBit が `void* rs` を refcounted オブジェクトと
+   見なして関数末尾で moonbit_decref(rs) を挿入し、`(rs - 8)` に rc-1 を
+   書き込むことで隣接する String バッファ先頭バイトを破壊する。 */
+static void pkdx_rs_destructor(void *self) {
+    PkdxResultSet *rs = (PkdxResultSet *)self;
+    if (!rs->cells) return;
+    int32_t total = rs->row_count * rs->col_count;
+    for (int32_t i = 0; i < total; i++) {
+        if (rs->cells[i]) libc_free(rs->cells[i]);
+    }
+    libc_free(rs->cells);
+    rs->cells = NULL;
+}
+
 MOONBIT_FFI_EXPORT
 PkdxResultSet *pkdx_null_rs(void) {
-    PkdxResultSet *rs = (PkdxResultSet *)libc_malloc(sizeof(PkdxResultSet));
+    PkdxResultSet *rs = (PkdxResultSet *)moonbit_make_external_object(
+        &pkdx_rs_destructor, sizeof(PkdxResultSet));
     rs->row_count = 0;
     rs->col_count = 0;
     rs->cells = NULL;
@@ -187,7 +205,11 @@ int32_t pkdx_exec_query(
 
     sqlite3_finalize(stmt);
 
-    PkdxResultSet *rs = (PkdxResultSet *)libc_malloc(sizeof(PkdxResultSet));
+    /* moonbit_make_external_object でラップ。
+       null 用にすでに `out[0]` に渡された rs があるはずだが、それは
+       捨てて新規に作る（destructor が cells=NULL を見て何もしない）。 */
+    PkdxResultSet *rs = (PkdxResultSet *)moonbit_make_external_object(
+        &pkdx_rs_destructor, sizeof(PkdxResultSet));
     rs->row_count = row_count;
     rs->col_count = col_count;
     rs->cells = cells;
@@ -215,15 +237,16 @@ moonbit_string_t pkdx_result_get(PkdxResultSet *rs, int32_t row, int32_t col) {
     return utf8_to_moonbit_string(cell);
 }
 
+/* moonbit_make_external_object 化した今、解放は destructor 経由で行われる。
+   既存の呼び出し元（旧 query 経路）からの明示解放にも対応するため、
+   セルだけ早期解放してオブジェクト本体は GC に任せる no-op に近い形にする。 */
 MOONBIT_FFI_EXPORT
 void pkdx_result_free(PkdxResultSet *rs) {
     if (!rs) return;
-    int32_t total = rs->row_count * rs->col_count;
-    for (int32_t i = 0; i < total; i++) {
-        if (rs->cells[i]) libc_free(rs->cells[i]);
-    }
-    libc_free(rs->cells);
-    libc_free(rs);
+    /* セル配列だけ解放。rs 本体は moonbit_make_external_object 由来なので
+       MoonBit ランタイム側の rc=0 で destructor が再呼び出しされても
+       cells == NULL を見て早抜けするので二重 free にはならない。 */
+    pkdx_rs_destructor(rs);
 }
 
 /* ---- Schema check ---- */

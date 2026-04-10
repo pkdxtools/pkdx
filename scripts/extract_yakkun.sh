@@ -36,7 +36,7 @@ if input =~ /### Result\n([\s\S]*?)(?:\n###|\z)/
 end
 '
 
-# 種族値
+# 種族値・特性
 playwright-cli eval '() => {
   const t = document.querySelector("table.center");
   const r = Array.from(t.querySelectorAll("tr"));
@@ -45,7 +45,21 @@ playwright-cli eval '() => {
   const name = document.querySelector("h1").textContent.replace(/[-–].*/,"").trim();
   const typeImgs = document.querySelectorAll("img[alt*=タイプ]");
   const types = Array.from(typeImgs).map(i=>i.alt.replace("タイプ","").trim()).filter(Boolean);
-  return {name,types,stats};
+  const abilities = [];
+  let dreamAbility = null;
+  const ths = document.querySelectorAll("th.left");
+  for (const th of ths) {
+    const txt = th.textContent.trim();
+    if (txt.includes("特性") && !txt.includes("隠れ")) {
+      const next = th.closest("tr")?.nextElementSibling;
+      if (next) next.querySelectorAll("a").forEach(a => abilities.push(a.textContent.trim()));
+    }
+    if (txt.includes("隠れ特性")) {
+      const next = th.closest("tr")?.nextElementSibling;
+      if (next) { const a = next.querySelector("a"); if (a) dreamAbility = a.textContent.trim().replace(/^\*/, ""); }
+    }
+  }
+  return {name,types,stats,abilities,dreamAbility};
 }' 2>&1 | ruby -e '
 require "json"
 input=STDIN.read
@@ -53,6 +67,8 @@ if input =~ /### Result\n([\s\S]*?)(?:\n###|\z)/
   j=JSON.parse($1.strip)
   File.write("'"$OUT_DIR/$PREFIX"'_stats.json",JSON.pretty_generate(j))
   s=j["stats"]
-  STDERR.puts "stats: #{j["name"]} H#{s["hp"]}A#{s["atk"]}B#{s["def"]}C#{s["spa"]}D#{s["spd"]}S#{s["spe"]}"
+  a = j["abilities"] || []
+  d = j["dreamAbility"]
+  STDERR.puts "stats: #{j["name"]} H#{s["hp"]}A#{s["atk"]}B#{s["def"]}C#{s["spa"]}D#{s["spd"]}S#{s["spe"]} abilities:#{a.join("/")}#{d ? " dream:#{d}" : ""}"
 end
 '

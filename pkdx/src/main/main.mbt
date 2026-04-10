@@ -70,7 +70,7 @@ fn ctx_format(ctx : @admiral.Context) -> @cli.OutputFormat {
 ///|
 fn version_option() -> @admiral.OptionDef {
   @admiral.string(
-    "version", description="Game version", default=Some("scarlet_violet"),
+    "version", description="Game version", default=Some("champions"),
   )
 }
 

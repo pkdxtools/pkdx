@@ -86,7 +86,8 @@ $PKDX query "<ポケモン名>" --version "<version>" --format json
 
 ```bash
 $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
-  [--version <ver>] \
+  [--version <ver>] \                    # champions を指定可能
+  [--regulation <reg>] \                # M-A 等（champions 時のみ有効）
   [--atk-ability <name>] [--def-ability <name>] \
   [--atk-item <name>] [--def-item <name>] \
   [--weather <type>] [--field <type>] \

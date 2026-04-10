@@ -273,6 +273,70 @@ test "validate_pokemon_json: empty string nature rejected by strict schema" {
 }
 
 ///|
+test "validate_team_json: with regulation field" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル,メガシンカ",
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": ["テスト"],
+    #|  "weaknesses": ["テスト"]
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_team_json(json), content="Ok(())")
+}
+
+///|
+test "validate_team_json: regulation null is valid (backward compat)" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "regulation": null,
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": ["テスト"],
+    #|  "weaknesses": ["テスト"]
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_team_json(json), content="Ok(())")
+}
+
+///|
 test "validate_team_json: empty string mechanics rejected by strict schema" {
   let src =
     #|{

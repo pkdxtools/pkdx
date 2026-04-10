@@ -4,6 +4,7 @@ pub fn to_waza_version(version : String) -> String {
   match version {
     "scarlet_violet" => "Scarlet_Violet"
     "legendsza" => "LegendsZA"
+    "champions" => "Champions"
     "sword_shield" => "sword_shield"
     _ => version
   }

@@ -121,6 +121,7 @@ pub fn team_schema(
       "battle_format": battle_format,
       "mechanics": strict_string(b, strict~),
       "version": strict_string(b, strict~),
+      "regulation": nullable(b, b.string()),
       "phase": b.number(),
       "members": b.array(
         items=member_schema(b, strict~),
@@ -188,6 +189,7 @@ pub fn pokemon_schema(
   b.object(
     properties={
       "version": b.string(),
+      "regulation": nullable(b, b.string()),
       "phase": b.number(),
       "pokemon": pokemon_info,
       "build": build_info,

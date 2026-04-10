@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 1ページ分のスクレイピングを実行
-# Usage: scrape_one.sh <url> <output_prefix>
-# Example: scrape_one.sh https://yakkun.com/ch/zukan/n3 n3
+# yakkun.com から1ページ分の技データ・種族値を抽出する
+# Usage: extract_yakkun.sh <url> <output_prefix>
+# Example: extract_yakkun.sh https://yakkun.com/ch/zukan/n3 n3
 set -euo pipefail
 
 URL="$1"

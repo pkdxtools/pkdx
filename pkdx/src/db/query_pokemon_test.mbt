@@ -96,6 +96,120 @@ test "query_pokemon: リザードン scarlet_violet" {
 /// 複数の数値フィールドをすべて検証する。バグは先頭 codeunit の -1 という
 /// 値依存で起きるので、フィールドによって壊れる/壊れないが変わる。数値を
 /// 網羅的に assert しておく。
+///|
+/// champions (デフォルトversion) でメガポケモンが正しくクエリできること。
+test "query_pokemon: メガピクシー champions" {
+  let db_path = match find_test_db() {
+    Some(p) => p
+    None => return
+  }
+  let db = match open(db_path) {
+    Ok(d) => d
+    Err(e) => fail("failed to open test db: " + e)
+  }
+  let result = query_pokemon(db, "メガピクシー", "champions")
+  close(db)
+  match result {
+    Ok(p) => {
+      inspect(p.hp, content="95")
+      inspect(p.atk, content="80")
+      inspect(p.def_, content="93")
+      inspect(p.spa, content="135")
+      inspect(p.spd, content="110")
+      inspect(p.spe, content="70")
+      inspect(p.bst, content="583")
+      inspect(p.type1, content="フェアリー")
+      inspect(p.type2, content="ひこう")
+      inspect(p.name_ja, content="メガピクシー")
+      inspect(p.global_no, content="0036")
+    }
+    Err(e) => fail("query_pokemon failed: " + e)
+  }
+}
+
+///|
+/// champions で通常ポケモンのクエリとステータスが正しいこと。
+test "query_pokemon: ガブリアス champions stats" {
+  let db_path = match find_test_db() {
+    Some(p) => p
+    None => return
+  }
+  let db = match open(db_path) {
+    Ok(d) => d
+    Err(e) => fail("failed to open test db: " + e)
+  }
+  let result = query_pokemon(db, "ガブリアス", "champions")
+  close(db)
+  match result {
+    Ok(p) => {
+      inspect(p.hp, content="108")
+      inspect(p.atk, content="130")
+      inspect(p.def_, content="95")
+      inspect(p.spa, content="80")
+      inspect(p.spd, content="85")
+      inspect(p.spe, content="102")
+      inspect(p.type1, content="ドラゴン")
+      inspect(p.type2, content="じめん")
+    }
+    Err(e) => fail("query_pokemon failed: " + e)
+  }
+}
+
+///|
+/// champions で技クエリが正しく動作すること。
+test "query_moves: ガブリアス champions" {
+  let db_path = match find_test_db() {
+    Some(p) => p
+    None => return
+  }
+  let db = match open(db_path) {
+    Ok(d) => d
+    Err(e) => fail("failed to open test db: " + e)
+  }
+  let result = query_moves(db, "0445", "champions")
+  close(db)
+  match result {
+    Ok(moves) => {
+      // ガブリアスは champions で97技を覚える
+      assert_true(moves.length() > 0)
+      // じしんが含まれていること
+      let mut found_eq = false
+      for i = 0; i < moves.length(); i = i + 1 {
+        if moves[i].name == "じしん" {
+          found_eq = true
+          inspect(moves[i].type_, content="じめん")
+        }
+      }
+      assert_true(found_eq)
+    }
+    Err(e) => fail("query_moves failed: " + e)
+  }
+}
+
+///|
+/// yakkun番号とglobalNoが異なるGen9ポケモンが正しいglobalNoで登録されていること。
+test "query_pokemon: スコヴィラン champions globalNo" {
+  let db_path = match find_test_db() {
+    Some(p) => p
+    None => return
+  }
+  let db = match open(db_path) {
+    Ok(d) => d
+    Err(e) => fail("failed to open test db: " + e)
+  }
+  let result = query_pokemon(db, "スコヴィラン", "champions")
+  close(db)
+  match result {
+    Ok(p) => {
+      // yakkun n939 だが正しい globalNo は 0952
+      inspect(p.global_no, content="0952")
+      inspect(p.name_ja, content="スコヴィラン")
+    }
+    Err(e) => fail("query_pokemon failed: " + e)
+  }
+}
+
+///|
 test "query_pokemon: ガブリアス scarlet_violet stats" {
   let db_path = match find_test_db() {
     Some(p) => p

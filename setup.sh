@@ -73,6 +73,15 @@ else
   echo "  Done."
 fi
 
+# --- Step 2.5: pkdx_patch ---
+echo "[2.5/5] Applying pkdx patches..."
+if [ -f "$REPO_ROOT/pkdx_patch/apply.rb" ]; then
+  ruby "$REPO_ROOT/pkdx_patch/apply.rb"
+  echo "  Done."
+else
+  echo "  No patch runner found. Skipping."
+fi
+
 # --- Step 3: pkdx binary ---
 echo "[3/5] Downloading pkdx binary ($BINARY_NAME)..."
 

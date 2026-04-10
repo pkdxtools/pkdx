@@ -68,6 +68,51 @@ fn ctx_format(ctx : @admiral.Context) -> @cli.OutputFormat {
 }
 
 ///|
+fn version_option() -> @admiral.OptionDef {
+  @admiral.string(
+    "version", description="Game version", default=Some("champions"),
+  )
+}
+
+///|
+fn regulation_option() -> @admiral.OptionDef {
+  @admiral.string(
+    "regulation",
+    description="Regulation filter (e.g. M-A). Only valid with --version champions",
+    default=Some(""),
+  )
+}
+
+///|
+fn format_option() -> @admiral.OptionDef {
+  @admiral.string(
+    "format", description="Output format: json|table", default=Some("table"),
+  )
+}
+
+///|
+pub(all) struct GameContext {
+  version : String
+  regulation : String
+}
+
+///|
+/// Build GameContext from CLI context. Validates that --regulation is only used with --version champions.
+fn ctx_game(ctx : @admiral.Context) -> GameContext {
+  let version = ctx_str(ctx, "version")
+  let regulation = ctx_str_opt(ctx, "regulation")
+  if regulation != "" && version != "champions" {
+    pkdx_eprintln(
+      @db.to_c_bytes(
+        "Error: --regulation is only valid with --version champions",
+      ),
+    )
+    pkdx_exit(1)
+  }
+  { version, regulation }
+}
+
+///|
 fn build_cli() -> @admiral.CliApp {
   @admiral.cli(
     name="pkdx",
@@ -94,14 +139,7 @@ fn cmd_query() -> @admiral.CommandDef {
   @admiral.command(
     name="query",
     description="Look up a Pokemon by name or globalNo",
-    options=[
-      @admiral.string(
-        "version", description="Game version", default=Some("scarlet_violet"),
-      ),
-      @admiral.string(
-        "format", description="Output format: json|table", default=Some("table"),
-      ),
-    ],
+    options=[version_option(), regulation_option(), format_option()],
     positionals=[
       @admiral.positional(
         "name", description="Pokemon name (ja or en)", required=true,
@@ -109,11 +147,7 @@ fn cmd_query() -> @admiral.CommandDef {
     ],
     examples=["pkdx query ガブリアス --format json"],
     run=Some(fn(ctx) {
-      run_query(
-        ctx_str(ctx, "name"),
-        ctx_str(ctx, "version"),
-        ctx_format(ctx),
-      )
+      run_query(ctx_str(ctx, "name"), ctx_game(ctx), ctx_format(ctx))
     }),
   )
 }
@@ -123,14 +157,7 @@ fn cmd_moves() -> @admiral.CommandDef {
   @admiral.command(
     name="moves",
     description="List moves a Pokemon can learn",
-    options=[
-      @admiral.string(
-        "version", description="Game version", default=Some("scarlet_violet"),
-      ),
-      @admiral.string(
-        "format", description="Output format: json|table", default=Some("table"),
-      ),
-    ],
+    options=[version_option(), regulation_option(), format_option()],
     positionals=[
       @admiral.positional(
         "target",
@@ -139,11 +166,7 @@ fn cmd_moves() -> @admiral.CommandDef {
       ),
     ],
     run=Some(fn(ctx) {
-      run_moves(
-        ctx_str(ctx, "target"),
-        ctx_str(ctx, "version"),
-        ctx_format(ctx),
-      )
+      run_moves(ctx_str(ctx, "target"), ctx_game(ctx), ctx_format(ctx))
     }),
   )
 }
@@ -157,19 +180,16 @@ fn cmd_search() -> @admiral.CommandDef {
       @admiral.string("type", description="Primary type (ja)", required=true),
       @admiral.string("type2", description="Secondary type (ja)", default=Some("")),
       @admiral.int("min-speed", description="Minimum base speed", default=Some(0)),
-      @admiral.string(
-        "version", description="Game version", default=Some("scarlet_violet"),
-      ),
-      @admiral.string(
-        "format", description="Output format: json|table", default=Some("table"),
-      ),
+      version_option(),
+      regulation_option(),
+      format_option(),
     ],
     run=Some(fn(ctx) {
       run_search(
         ctx_str(ctx, "type"),
         ctx_str(ctx, "type2"),
         ctx_int(ctx, "min-speed"),
-        ctx_str(ctx, "version"),
+        ctx_game(ctx),
         ctx_format(ctx),
       )
     }),
@@ -221,8 +241,9 @@ fn cmd_damage() -> @admiral.CommandDef {
     name="damage",
     description="Compute Lv50 damage roll",
     options=[
-      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
-      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+      version_option(),
+      regulation_option(),
+      format_option(),
       @admiral.string("atk-ability", description="Attacker ability (ja)", default=Some("")),
       @admiral.string("def-ability", description="Defender ability (ja)", default=Some("")),
       @admiral.string("atk-item", description="Attacker held item (ja)", default=Some("")),
@@ -250,7 +271,7 @@ fn cmd_damage() -> @admiral.CommandDef {
         ctx_str(ctx, "attacker"),
         ctx_str(ctx, "defender"),
         ctx_str(ctx, "move"),
-        ctx_str(ctx, "version"),
+        ctx_game(ctx),
         ctx_format(ctx),
         ctx_str(ctx, "atk-ability"),
         ctx_str(ctx, "def-ability"),
@@ -311,8 +332,9 @@ fn cmd_stat_calc() -> @admiral.CommandDef {
       @admiral.string("nature", description="Nature name (ja)", default=Some("")),
       @admiral.string("nature-up", description="Stat that nature boosts", default=Some("")),
       @admiral.string("nature-down", description="Stat that nature lowers", default=Some("")),
-      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
-      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+      version_option(),
+      regulation_option(),
+      format_option(),
     ],
     positionals=[
       @admiral.positional("name", description="Pokemon name (ja or en)", required=true),
@@ -325,7 +347,7 @@ fn cmd_stat_calc() -> @admiral.CommandDef {
         ctx_str(ctx, "nature"),
         ctx_str(ctx, "nature-up"),
         ctx_str(ctx, "nature-down"),
-        ctx_str(ctx, "version"),
+        ctx_game(ctx),
         ctx_format(ctx),
       )
     }),
@@ -343,8 +365,9 @@ fn cmd_stat_reverse() -> @admiral.CommandDef {
       @admiral.int("ev", description="EV", default=Some(0)),
       @admiral.string("nature", description="Nature mod: up|down|neutral", default=Some("neutral")),
       @admiral.bool("hp", description="Treat target as HP stat (single mode)"),
-      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
-      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+      version_option(),
+      regulation_option(),
+      format_option(),
     ],
     positionals=[
       @admiral.positional(
@@ -359,7 +382,7 @@ fn cmd_stat_reverse() -> @admiral.CommandDef {
         ctx_int(ctx, "ev"),
         ctx_str(ctx, "nature"),
         ctx.get_bool("hp"),
-        ctx_str(ctx, "version"),
+        ctx_game(ctx),
         ctx_format(ctx),
       )
     }),
@@ -401,8 +424,9 @@ fn cmd_hbd() -> @admiral.CommandDef {
       @admiral.int("phys-weight", description="Weight applied to B term", default=Some(1)),
       @admiral.int("spec-weight", description="Weight applied to D term", default=Some(1)),
       @admiral.int("top", description="Number of candidates to return", default=Some(1)),
-      @admiral.string("version", description="Game version", default=Some("scarlet_violet")),
-      @admiral.string("format", description="Output format: json|table", default=Some("table")),
+      version_option(),
+      regulation_option(),
+      format_option(),
     ],
     positionals=[
       @admiral.positional("name", description="Pokemon name (ja or en)", required=true),
@@ -430,7 +454,7 @@ fn cmd_hbd() -> @admiral.CommandDef {
         ctx_int(ctx, "phys-weight"),
         ctx_int(ctx, "spec-weight"),
         ctx_int(ctx, "top"),
-        ctx_str(ctx, "version"),
+        ctx_game(ctx),
         ctx_format(ctx),
       )
     }),
@@ -469,11 +493,11 @@ fn[T] with_db(f : (@db.Db) -> T) -> T {
 ///|
 fn run_query(
   name : String,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
   with_db(fn(db) {
-    match @db.query_pokemon(db, name, version) {
+    match @db.query_pokemon(db, name, game.version) {
       Ok(p) => println(@cli.format_pokemon(p, format))
       Err(e) => println("Error: " + e)
     }
@@ -483,16 +507,14 @@ fn run_query(
 ///|
 fn run_moves(
   target : String,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
   with_db(fn(db) {
-    // If target looks like a number, use it as globalNo directly.
-    // Otherwise, look up the Pokemon first to get globalNo.
     let global_no = if is_numeric(target) {
       @db.normalize_global_no(target)
     } else {
-      match @db.query_pokemon(db, target, version) {
+      match @db.query_pokemon(db, target, game.version) {
         Ok(p) => p.global_no
         Err(e) => {
           println("Error: " + e)
@@ -500,7 +522,7 @@ fn run_moves(
         }
       }
     }
-    match @db.query_moves(db, global_no, version) {
+    match @db.query_moves(db, global_no, game.version) {
       Ok(moves) => println(@cli.format_moves(moves, format))
       Err(e) => println("Error: " + e)
     }
@@ -512,12 +534,19 @@ fn run_search(
   type1 : String,
   type2 : String,
   min_speed : Int,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
   with_db(fn(db) {
-    match @db.search_by_type(db, type1, type2, min_speed, version) {
-      Ok(results) => println(@cli.format_search(results, format))
+    match @db.search_by_type(db, type1, type2, min_speed, game.version) {
+      Ok(results) => {
+        let filtered = if game.regulation != "" {
+          results.filter(fn(p) { @db.is_available(p.global_no, game.regulation) })
+        } else {
+          results
+        }
+        println(@cli.format_search(filtered, format))
+      }
       Err(e) => println("Error: " + e)
     }
   })
@@ -528,7 +557,7 @@ fn run_damage(
   attacker_name : String,
   defender_name : String,
   move_name : String,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
   atk_ability : String,
   def_ability : String,
@@ -543,21 +572,21 @@ fn run_damage(
   def_hp : Int,
 ) -> Unit {
   with_db(fn(db) {
-    let atk_pokemon = match @db.query_pokemon(db, attacker_name, version) {
+    let atk_pokemon = match @db.query_pokemon(db, attacker_name, game.version) {
       Ok(p) => p
       Err(e) => {
         println("Error: " + e)
         return
       }
     }
-    let def_pokemon = match @db.query_pokemon(db, defender_name, version) {
+    let def_pokemon = match @db.query_pokemon(db, defender_name, game.version) {
       Ok(p) => p
       Err(e) => {
         println("Error: " + e)
         return
       }
     }
-    let move_ = match @db.query_move(db, move_name, version) {
+    let move_ = match @db.query_move(db, move_name, game.version) {
       Ok(m) => m
       Err(e) => {
         println("Error: " + e)
@@ -880,14 +909,14 @@ fn run_stat_calc(
   nature_name : String,
   nature_up : String,
   nature_down : String,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
   let evs = @cli.parse_csv_ints(evs_str, 0, 6)
   let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
   let nature = resolve_nature(nature_name, nature_up, nature_down)
   with_db(fn(db) {
-    match @db.query_pokemon(db, name, version) {
+    match @db.query_pokemon(db, name, game.version) {
       Ok(pokemon) => {
         let stats = @damage.calc_all_stats(pokemon, ivs, evs, nature)
         println(@cli.format_stat_calc(pokemon, stats, nature, ivs, evs, format))
@@ -905,14 +934,14 @@ fn run_stat_reverse(
   ev : Int,
   nature_mod : String,
   is_hp : Bool,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
   if stats_str.length() > 0 {
     // Pokemon mode
     let actual_stats = @cli.parse_csv_ints(stats_str, 0, 6)
     with_db(fn(db) {
-      match @db.query_pokemon(db, target, version) {
+      match @db.query_pokemon(db, target, game.version) {
         Ok(pokemon) => {
           let results = @damage.reverse_spread(pokemon, actual_stats, iv)
           println(
@@ -967,7 +996,7 @@ fn run_hbd(
   phys_weight : Int,
   spec_weight : Int,
   top : Int,
-  version : String,
+  game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
   // Default fixed_ev: optimize H/B/D, zero A/C/S.
@@ -990,7 +1019,7 @@ fn run_hbd(
   let nature = resolve_nature(nature_name, nature_up, nature_down)
   let weights : @damage.HbdWeights = { phys: phys_weight, spec: spec_weight }
   with_db(fn(db) {
-    match @db.query_pokemon(db, name, version) {
+    match @db.query_pokemon(db, name, game.version) {
       Ok(pokemon) => {
         let result = if top <= 1 {
           @damage.optimize_hbd(pokemon, fixed_ev, ivs, nature, snap, weights)

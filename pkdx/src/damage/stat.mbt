@@ -5,6 +5,18 @@ pub fn round5(value : Int, mult_4096 : Int) -> Int {
 }
 
 ///|
+/// stage >= 0: stat * (2 + stage) / 2
+/// stage <  0: stat * 2 / (2 - stage)
+pub fn apply_rank(stat : Int, stage : Int) -> Int {
+  let s = if stage > 6 { 6 } else if stage < -6 { -6 } else { stage }
+  if s >= 0 {
+    stat * (2 + s) / 2
+  } else {
+    stat * 2 / (2 - s)
+  }
+}
+
+///|
 /// Full HP stat calculation at Lv50.
 /// floor((base*2 + iv + floor(ev/4)) * 50 / 100) + 60
 pub fn calc_hp_full(base : Int, iv : Int, ev : Int) -> Int {

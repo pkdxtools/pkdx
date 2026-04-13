@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, AskUserQuestion
 
 # Damage Calculator
 
-Lv50ダメージ計算スキル。特性・持ち物・天候・フィールド・テラスタル・急所に対応。16段階の乱数テーブルと確定数を出力する。
+Lv50ダメージ計算スキル。特性・持ち物・天候・フィールド・テラスタル・急所・ランク補正に対応。16段階の乱数テーブルと確定数を出力する。
 
 ## パス定義
 
@@ -80,6 +80,17 @@ $PKDX query "<ポケモン名>" --version "<version>" --format json
 | 2 | 防御側の実数値は？ | 防御数値 | 特化(default), Other(数値入力) |
 | 3 | 天候は？ | 天候 | なし(default), はれ, あめ, すなあらし |
 
+**AskUserQuestion 3**（2問、ランク補正）:
+
+| # | 質問 | header | オプション |
+|---|------|--------|-----------|
+| 1 | 攻撃側のランクは？ | 攻撃ランク | 0(default), +1, +2, +4, -1, Other |
+| 2 | 防御側のランクは？ | 防御ランク | 0(default), +1, +2, -1, -2, Other |
+
+ボディプレスが技として選択されている場合は、攻撃ランクの質問に「※ボディプレスでは攻撃ランク＝Bランクを入力」と注記を追加する。
+
+`--atk-stat` / `--def-stat` で実数値をoverride指定している場合、ランク補正は無視されるため、ランク質問はスキップする。
+
 ---
 
 ## Phase 2: 計算実行
@@ -93,6 +104,7 @@ $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
   [--weather <type>] [--field <type>] \
   [--tera-type <type>] [--critical] \
   [--atk-stat <value>] [--def-stat <value>] [--def-hp <value>] \
+  [--atk-rank <n>] [--def-rank <n>] \
   --format json
 ```
 
@@ -104,7 +116,8 @@ $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
 - **攻撃側**: 該当攻撃ステータス 252振り + 性格補正↑（物理技→A特化、特殊技→C特化）
 - **防御側**: HP 252振り + 該当防御ステータス 252振り + 性格補正↑（物理技→HB特化、特殊技→HD特化）
 - **個体値**: 全て31
-- **カスタム数値指定時**: `--atk-stat`, `--def-stat`, `--def-hp` で実数値を直接上書き
+- **カスタム数値指定時**: `--atk-stat`, `--def-stat`, `--def-hp` で実数値を直接上書き（ランク補正は無視される）
+- **ランク補正**: `--atk-rank`, `--def-rank` で -6〜+6 の段階を指定（0 = 補正なし）
 
 ### pkdx 出力形式（JSON）
 
@@ -140,11 +153,13 @@ $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
 | 攻撃特性 | {ability or なし} |
 | 攻撃持ち物 | {item or なし} |
 | 攻撃実数値 | {stat_name} {actual} ({detail}) |
+| 攻撃ランク | {+n or -n} |
 | 防御側 | {name} ({types}) |
 | 防御特性 | {ability or なし} |
 | 防御持ち物 | {item or なし} |
 | HP実数値 | {hp_actual} ({detail}) |
 | 防御実数値 | {stat_name} {actual} ({detail}) |
+| 防御ランク | {+n or -n} |
 | 天候 | {weather or なし} |
 | 技 | {move_name} ({type}/{category}, 威力{power}) |
 | タイプ一致 | {あり/なし} ({mult}x) |
@@ -206,4 +221,4 @@ pkdx が `Error:` で始まる出力を返した場合、またはJSON出力の 
 はれ, あめ, すなあらし, ゆき, エレキフィールド, グラスフィールド, サイコフィールド, ミストフィールド
 
 ### その他
-テラスタル（`--tera-type`）, 急所（`--critical`）
+テラスタル（`--tera-type`）, 急所（`--critical`）, ランク補正（`--atk-rank`, `--def-rank`、-6〜+6、第3世代以降仕様。急所時は攻撃側の負ランク・防御側の正ランクを無視。`--atk-stat`/`--def-stat` 併用時は override 優先）

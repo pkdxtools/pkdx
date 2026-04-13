@@ -46,10 +46,11 @@ CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、
 
 ```
 pkdx/                     # MoonBit CLI ツール (native binary)
-  moon.mod.json            # モジュール定義 (deps: moonbitlang/x, mizchi/markdown)
+  moon.mod.json            # モジュール定義 (deps: moonbitlang/x, mizchi/markdown) — バージョンの SSoT
   src/
     main/                  # エントリポイント + SQLite C-FFI + File I/O FFI
       main.mbt, cwrap.c, sqlite3.c, io_ffi.mbt
+      version.mbt           # 自動生成 (scripts/sync_version.sh → moon.mod.json から同期)
     db/                    # DB接続 + クエリ関数
     damage/                # Gen9ダメージ計算エンジン (4096丸め, 16段階乱数)
     types/                 # 18x18タイプ相性テーブル (ハードコード)
@@ -63,6 +64,9 @@ pkdx/                     # MoonBit CLI ツール (native binary)
 bin/
   pkdx                    # Unix用ラッパースクリプト (ローカルビルド優先)
   pkdx.cmd                # Windows用ラッパー
+
+scripts/
+  sync_version.sh          # moon.mod.json → version.mbt バージョン同期
 
 box/                      # ユーザーデータ出力先（フォーク先でgit管理）
   teams/                   # team-builder出力 (.md)
@@ -96,6 +100,17 @@ pokedex/                  # git submodule (towakey/pokedex)
 - タイプ名は日本語（`ほのお`, `みず` 等）
 - `globalNo` はゼロ埋め4桁（`0445`）— pkdx は入力を自動正規化
 
+## Version Management
+
+バージョンは `pkdx/moon.mod.json` の `version` フィールドが SSoT。変更時:
+
+```bash
+# 1. moon.mod.json の version を編集
+# 2. 同期スクリプトを実行
+scripts/sync_version.sh
+# 3. moon.mod.json と version.mbt をコミット
+```
+
 ## CLI Usage (pkdx)
 
 `POKEDEX_DB` 環境変数またはリポジトリルートからの自動解決で DB パスを決定する。
@@ -110,9 +125,12 @@ bin/pkdx moves "ガブリアス" --version scarlet_violet --format json
 # タイプ検索（タイプ名は日本語、最低素早さ指定可）
 bin/pkdx search --type "ドラゴン" --min-speed 100 --version scarlet_violet
 
-# ダメージ計算（特性・持ち物・天候等はオプション）
+# ダメージ計算（特性・持ち物・天候・ランク補正等はオプション）
 bin/pkdx damage "ガブリアス" "サーフゴー" "じしん" \
   --atk-ability "すながくれ" --weather "すなあらし" --format json
+
+# ランク補正付きダメージ計算（つるぎのまい+2の状態）
+bin/pkdx damage "ガブリアス" "ガブリアス" "じしん" --atk-rank 2 --format json
 
 # タイプ相性
 bin/pkdx type-chart "ほのお" "くさ"
@@ -162,7 +180,7 @@ Phase 0（初期化）→ Phase 8（レポート出力）の順に進行。各�
 
 ### calc
 
-攻撃側・防御側・技名を受け取り、`pkdx damage` で計算を実行。16段階の乱数テーブル・確定数・割合をJSON出力する。オプションで特性・持ち物・天候・フィールド・テラスタル・急所を指定可能。
+攻撃側・防御側・技名を受け取り、`pkdx damage` で計算を実行。16段階の乱数テーブル・確定数・割合をJSON出力する。オプションで特性・持ち物・天候・フィールド・テラスタル・急所・ランク補正を指定可能。
 
 ### breed
 

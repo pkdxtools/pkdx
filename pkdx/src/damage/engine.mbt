@@ -61,6 +61,24 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let def_hp = calc_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
   let mut def_stat = calc_stat(def_base, custom=input.def_stat_override)
 
+  // 2a-2. Rank (stat stage) modifiers
+  if input.atk_stat_override <= 0 {
+    let atk_stage = if input.critical && input.atk_rank < 0 {
+      0
+    } else {
+      input.atk_rank
+    }
+    atk_stat = apply_rank(atk_stat, atk_stage)
+  }
+  if input.def_stat_override <= 0 {
+    let def_stage = if input.critical && input.def_rank > 0 {
+      0
+    } else {
+      input.def_rank
+    }
+    def_stat = apply_rank(def_stat, def_stage)
+  }
+
   // 2b. Ability stat modifiers
   if is_body_press {
     if atk_ability.length() > 0 {

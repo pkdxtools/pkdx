@@ -266,3 +266,53 @@ test "ev_for_non_hp: monotonic forward↔reverse (+10%)" {
     assert_true(calc_other_full(base, 31, back, 11, 10) == stat)
   }
 }
+
+///|
+test "apply_rank: stage 0" {
+  inspect(apply_rank(100, 0), content="100")
+}
+
+///|
+test "apply_rank: stage +1" {
+  inspect(apply_rank(100, 1), content="150")
+}
+
+///|
+test "apply_rank: stage +2" {
+  inspect(apply_rank(100, 2), content="200")
+}
+
+///|
+test "apply_rank: stage +6" {
+  inspect(apply_rank(100, 6), content="400")
+}
+
+///|
+test "apply_rank: stage -1" {
+  inspect(apply_rank(100, -1), content="66")
+}
+
+///|
+test "apply_rank: stage -2" {
+  inspect(apply_rank(100, -2), content="50")
+}
+
+///|
+test "apply_rank: stage -6" {
+  inspect(apply_rank(100, -6), content="25")
+}
+
+///|
+test "apply_rank: floor -1 on 133" {
+  inspect(apply_rank(133, -1), content="88")
+}
+
+///|
+test "apply_rank: clamp upper" {
+  inspect(apply_rank(100, 10), content="400")
+}
+
+///|
+test "apply_rank: clamp lower" {
+  inspect(apply_rank(100, -10), content="25")
+}

@@ -116,7 +116,7 @@ fn ctx_game(ctx : @admiral.Context) -> GameContext {
 fn build_cli() -> @admiral.CliApp {
   @admiral.cli(
     name="pkdx",
-    version="0.2.5",
+    version=pkdx_version,
     description="Pokedex CLI tool",
     commands=[
       cmd_query(),
@@ -255,6 +255,8 @@ fn cmd_damage() -> @admiral.CommandDef {
       @admiral.int("atk-stat", description="Override attacker attack/special stat", default=Some(0)),
       @admiral.int("def-stat", description="Override defender defense/special stat", default=Some(0)),
       @admiral.int("def-hp", description="Override defender HP", default=Some(0)),
+      @admiral.int("atk-rank", description="Attacker stat stage (-6..+6). For Body Press this is the Defense stage", default=Some(0)),
+      @admiral.int("def-rank", description="Defender stat stage (-6..+6)", default=Some(0)),
     ],
     positionals=[
       @admiral.positional("attacker", description="Attacker Pokemon name", required=true),
@@ -284,6 +286,8 @@ fn cmd_damage() -> @admiral.CommandDef {
         ctx_int(ctx, "atk-stat"),
         ctx_int(ctx, "def-stat"),
         ctx_int(ctx, "def-hp"),
+        ctx_int(ctx, "atk-rank"),
+        ctx_int(ctx, "def-rank"),
       )
     }),
   )
@@ -570,7 +574,17 @@ fn run_damage(
   atk_stat : Int,
   def_stat : Int,
   def_hp : Int,
+  atk_rank : Int,
+  def_rank : Int,
 ) -> Unit {
+  if atk_rank < -6 || atk_rank > 6 {
+    println("Error: --atk-rank must be in [-6, 6]")
+    return
+  }
+  if def_rank < -6 || def_rank > 6 {
+    println("Error: --def-rank must be in [-6, 6]")
+    return
+  }
   with_db(fn(db) {
     let atk_pokemon = match @db.query_pokemon(db, attacker_name, game.version) {
       Ok(p) => p
@@ -608,6 +622,8 @@ fn run_damage(
       atk_stat_override: atk_stat,
       def_stat_override: def_stat,
       def_hp_override: def_hp,
+      atk_rank,
+      def_rank,
     }
     let result = @damage.calc_damage(input)
     println(@cli.format_damage(result, input, format))

@@ -1,48 +1,7 @@
 ///|
-/// Mock Pokemon factory for HBD tests (base stats only, ignore other fields).
-fn mk_pokemon(
-  name : String,
-  hp : Int,
-  atk : Int,
-  def_ : Int,
-  spa : Int,
-  spd : Int,
-  spe : Int,
-) -> @model.Pokemon {
-  {
-    global_no: "0000",
-    name_ja: name,
-    name_en: name,
-    type1: "",
-    type2: "",
-    hp,
-    atk,
-    def_,
-    spa,
-    spd,
-    spe,
-    bst: hp + atk + def_ + spa + spd + spe,
-    ability1: "",
-    ability2: "",
-    dream_ability: "",
-    weight: 0.0,
-  }
-}
-
-///|
-fn default_ivs() -> FixedArray[Int] {
-  [31, 31, 31, 31, 31, 31]
-}
-
-///|
 fn all_optimize_evs() -> FixedArray[Int] {
   // A/C/S fixed at 0; H/B/D = -1 (optimize targets)
   [-1, 0, -1, 0, -1, 0]
-}
-
-///|
-fn neutral_nature() -> @model.Nature {
-  { name_ja: "まじめ", name_en: "Serious", up: None, down: None }
 }
 
 ///|

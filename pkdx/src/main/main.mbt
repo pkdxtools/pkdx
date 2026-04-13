@@ -202,17 +202,17 @@ fn cmd_type_chart() -> @admiral.CommandDef {
     name="type-chart",
     description="Show type effectiveness multiplier",
     positionals=[
-      @admiral.positional("move_type", description="Attacking move type", required=true),
-      @admiral.positional("def_type1", description="Defender primary type", required=true),
-      @admiral.positional("def_type2", description="Defender secondary type", required=false),
+      @admiral.positional(
+        "move_type", description="Attacking move type", required=true,
+      ),
+      @admiral.positional(
+        "def_types",
+        description="Defender type(s), comma-separated for dual type (e.g. 'ひこう,はがね')",
+        required=true,
+      ),
     ],
     run=Some(fn(ctx) {
-      run_type_chart(
-        ctx_str(ctx, "move_type"),
-        ctx_str(ctx, "def_type1"),
-        // def_type2 is optional (required=false); ctx_str_opt returns "" when absent
-        ctx_str_opt(ctx, "def_type2"),
-      )
+      run_type_chart(ctx_str(ctx, "move_type"), ctx_str(ctx, "def_types"))
     }),
   )
 }
@@ -631,11 +631,7 @@ fn run_damage(
 }
 
 ///|
-fn run_type_chart(
-  move_type : String,
-  def_type1 : String,
-  def_type2 : String,
-) -> Unit {
+fn run_type_chart(move_type : String, def_types_csv : String) -> Unit {
   let atk = match @types.type_from_jp(move_type) {
     Some(t) => t
     None => {
@@ -643,18 +639,23 @@ fn run_type_chart(
       return
     }
   }
-  let d1 = match @types.type_from_jp(def_type1) {
+  let parts = @cli.split_csv(def_types_csv)
+  if parts.length() == 0 || parts.length() > 2 {
+    println("Error: Specify 1 or 2 defender types (comma-separated), got " + parts.length().to_string())
+    return
+  }
+  let d1 = match @types.type_from_jp(parts[0]) {
     Some(t) => t
     None => {
-      println("Error: Unknown type: " + def_type1)
+      println("Error: Unknown type: " + parts[0])
       return
     }
   }
-  let d2 : @types.PokemonType? = if def_type2.length() > 0 {
-    match @types.type_from_jp(def_type2) {
+  let d2 : @types.PokemonType? = if parts.length() == 2 {
+    match @types.type_from_jp(parts[1]) {
       Some(t) => Some(t)
       None => {
-        println("Error: Unknown type: " + def_type2)
+        println("Error: Unknown type: " + parts[1])
         return
       }
     }
@@ -663,8 +664,8 @@ fn run_type_chart(
   }
   let eff = @types.get_dual_effectiveness(atk, d1, d2)
   let def_str = match d2 {
-    Some(t2) => def_type1 + "/" + @types.type_to_jp(t2)
-    None => def_type1
+    Some(t2) => parts[0] + "/" + @types.type_to_jp(t2)
+    None => parts[0]
   }
   println(move_type + " -> " + def_str + ": " + format_effectiveness(eff))
 }

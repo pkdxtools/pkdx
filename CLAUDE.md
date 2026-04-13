@@ -132,8 +132,9 @@ bin/pkdx damage "ガブリアス" "サーフゴー" "じしん" \
 # ランク補正付きダメージ計算（つるぎのまい+2の状態）
 bin/pkdx damage "ガブリアス" "ガブリアス" "じしん" --atk-rank 2 --format json
 
-# タイプ相性
+# タイプ相性（複合タイプはカンマ区切り）
 bin/pkdx type-chart "ほのお" "くさ"
+bin/pkdx type-chart "じめん" "ひこう,はがね"
 
 # 攻撃範囲カバー率
 bin/pkdx coverage "ほのお,みず,くさ"

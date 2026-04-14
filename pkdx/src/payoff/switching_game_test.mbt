@@ -244,7 +244,10 @@ test "value_returns_terminal_value_for_terminal_state" {
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
-  let v = value(state, team_a, team_b, 5, cache, stats, dmg_cache)
+  let meta_cache = new_move_meta_cache()
+  let v = value(
+    state, team_a, team_b, 5, cache, stats, dmg_cache, meta_cache,
+  )
   assert_eq(v, 0.0)
 }
 
@@ -280,9 +283,14 @@ test "value_caches_result_via_value_stats" {
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
-  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
+  let meta_cache = new_move_meta_cache()
+  let _ = value(
+    state, team_a, team_b, 2, cache, stats, dmg_cache, meta_cache,
+  )
   let hits_before = stats.hits
-  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
+  let _ = value(
+    state, team_a, team_b, 2, cache, stats, dmg_cache, meta_cache,
+  )
   assert_true(stats.hits > hits_before)
 }
 

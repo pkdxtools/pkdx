@@ -179,12 +179,27 @@ pub fn nash_responses_winrate(a : Combatant, b : Combatant) -> Double {
 }
 
 ///|
-/// Winrate for `a` vs `b` under the given model, in [0, 1].
+/// Winrate for `a` vs `b` under the given model, in [0, 1]. The empty meta
+/// cache forwards only fallback-curated priority / stat_effects data; use
+/// `winrate_with_meta` to thread a DB-sourced cache.
 pub fn winrate(a : Combatant, b : Combatant, model : PayoffModel) -> Double {
+  winrate_with_meta(a, b, model, new_move_meta_cache())
+}
+
+///|
+/// Meta-cache-aware winrate. Propagates `meta_cache` to `monte_carlo_winrate`
+/// so rollouts see the DB-sourced priority / stat_effects data.
+pub fn winrate_with_meta(
+  a : Combatant,
+  b : Combatant,
+  model : PayoffModel,
+  meta_cache : MoveMetaCache,
+) -> Double {
   match model {
     Best1v1 => best1v1_winrate(a, b)
     NashResponses => nash_responses_winrate(a, b)
-    MonteCarloSim(trials, seed) => monte_carlo_winrate(a, b, trials, seed)
+    MonteCarloSim(trials, seed) =>
+      monte_carlo_winrate_with_meta(a, b, trials, seed, meta_cache)
   }
 }
 
@@ -199,6 +214,17 @@ pub fn winrate(a : Combatant, b : Combatant, model : PayoffModel) -> Double {
 pub fn from_combatants(
   combatants : Array[Combatant],
   model : PayoffModel,
+) -> @nash.FiniteMatrix raise PayoffError {
+  from_combatants_with_meta(combatants, model, new_move_meta_cache())
+}
+
+///|
+/// Meta-cache-aware variant of `from_combatants`. Used by `pkdx select`
+/// after populating the cache from the DB at entry.
+pub fn from_combatants_with_meta(
+  combatants : Array[Combatant],
+  model : PayoffModel,
+  meta_cache : MoveMetaCache,
 ) -> @nash.FiniteMatrix raise PayoffError {
   let n = combatants.length()
   if n == 0 {
@@ -217,7 +243,9 @@ pub fn from_combatants(
     MonteCarloSim(_, _) =>
       for i in 0..<n {
         for j in (i + 1)..<n {
-          let wr = winrate(combatants[i], combatants[j], model)
+          let wr = winrate_with_meta(
+            combatants[i], combatants[j], model, meta_cache,
+          )
           let payoff = 2.0 * wr - 1.0
           data[i][j] = payoff
           data[j][i] = -payoff
@@ -226,7 +254,9 @@ pub fn from_combatants(
     _ =>
       for i in 0..<n {
         for j in 0..<n {
-          let wr = winrate(combatants[i], combatants[j], model)
+          let wr = winrate_with_meta(
+            combatants[i], combatants[j], model, meta_cache,
+          )
           data[i][j] = 2.0 * wr - 1.0
         }
       }

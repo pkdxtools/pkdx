@@ -320,6 +320,7 @@ pub fn compute_select_with_team_model(
   opponent : Array[Combatant],
   format : BattleFormat,
   team_model : TeamPayoffModel,
+  meta_cache~ : MoveMetaCache = new_move_meta_cache(),
 ) -> SelectResult raise NashCliError {
   let k = match format {
     Single => 3
@@ -330,8 +331,8 @@ pub fn compute_select_with_team_model(
       "team and opponent must each have at least " + k.to_string() + " members",
     )
   }
-  let m = try team_payoff_matrix_with_team_model(
-      team, opponent, format, team_model,
+  let m = try team_payoff_matrix_with_team_model_and_meta(
+      team, opponent, format, team_model, meta_cache,
     ) catch {
     err => raise InnerError(err.to_string())
   }
@@ -418,9 +419,80 @@ fn format_label(f : BattleFormat) -> String {
 }
 
 ///|
+/// Collect the unique move names (Japanese) referenced anywhere under
+/// `team[*].moves[*].name` or `opponent[*].moves[*].name` in `input_json`.
+/// Used by `main.mbt` to issue a single `move_meta` batch query before
+/// handing the JSON to `run_select_with_meta`. Malformed JSON returns an
+/// empty array rather than raising — `run_select_with_meta` will raise
+/// the structured error when it parses the full payload.
+pub fn extract_move_names_from_select_input(
+  input_json : String,
+) -> Array[String] {
+  let out : Array[String] = []
+  let seen : @hashmap.HashMap[String, Bool] = @hashmap.HashMap::new()
+  let root = try @json.parse(input_json) catch {
+    _ => return out
+  }
+  let obj = match root {
+    Object(m) => m
+    _ => return out
+  }
+  let collect = fn(key : String) -> Unit {
+    match obj.get(key) {
+      Some(Array(team)) =>
+        for m in team {
+          match m {
+            Object(mo) =>
+              match mo.get("moves") {
+                Some(Array(moves)) =>
+                  for mv in moves {
+                    match mv {
+                      Object(mvm) =>
+                        match mvm.get("name") {
+                          Some(String(s)) =>
+                            match seen.get(s) {
+                              Some(_) => ()
+                              None => {
+                                seen[s] = true
+                                out.push(s)
+                              }
+                            }
+                          _ => ()
+                        }
+                      _ => ()
+                    }
+                  }
+                _ => ()
+              }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  collect("team")
+  collect("opponent")
+  out
+}
+
+///|
 /// Run `pkdx select`. Returns a JSON string with the Nash-equilibrium
-/// distribution over k-selections.
+/// distribution over k-selections. Uses an empty `MoveMetaCache` (curated
+/// fallback only) — the DB-backed entry point is `run_select_with_meta`,
+/// which `main.mbt` wires with data queried from `move_meta` at startup.
 pub fn run_select(input_json : String) -> String raise NashCliError {
+  run_select_with_meta(input_json, new_move_meta_cache())
+}
+
+///|
+/// Meta-cache-aware variant of `run_select`. `main.mbt` populates the cache
+/// from `db.query_move_meta` (once, on entry) so both the pairwise
+/// (MonteCarloSim) and switching-game evaluators see DB-sourced priority /
+/// stat-effects data instead of the hardcoded fallback.
+pub fn run_select_with_meta(
+  input_json : String,
+  meta_cache : MoveMetaCache,
+) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
     err => raise InvalidJson(err.to_string())
   }
@@ -453,7 +525,9 @@ pub fn run_select(input_json : String) -> String raise NashCliError {
         None => Pairwise(Best1v1)
       }
   }
-  let r = compute_select_with_team_model(team, opp, format, team_model)
+  let r = compute_select_with_team_model(
+    team, opp, format, team_model, meta_cache~,
+  )
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()

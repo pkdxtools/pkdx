@@ -91,8 +91,9 @@ MonteCarloSim(trials: Int, seed: UInt64)
 **意図**: ダメージ乱数を陽に取り込んだ確率モデル。Best1v1 の三値 (0/0.5/1) より細かい連続値で、近接対面の優劣を粒度高く表現。
 
 **限界**:
-- 変化技 (power=0) はサンプルされても効果は未反映 (ランクアップ / 状態異常等の damage 外効果は無視される)。ただし ε-greedy により「変化技ターン = 相手のみ進行」として winrate に影響する
-- ランク補正・状態異常・天候・特性発動・テラスタル等は計算しない
+- 変化技で拾える効果は `MoveMeta.stat_effects` に登録された自己ランク補正のみ (つるぎのまい / りゅうのまい等)。状態異常 / 天候 / フィールド変化 / 交代・ひるみ系の副次効果はまだ反映しない
+- 特性発動・テラスタルは計算しない
+- ε-greedy で変化技がサンプルされた場合、登録済みの積み技はランクに反映され次ターン以降のダメージが上がる。登録なしの変化技は「1 ターン相手のみ進行」として winrate に影響する
 - turn_limit=200 を超える長期戦は draw 扱い
 - 各 trial 独立サンプルなので有限試行ノイズあり (zero-sum 補完で対称性のみは保証)
 - ε が大きすぎると変化技の偶発選択が winrate を潰すリスクあり。デフォルト 0.1 は実戦的バランスで、必要に応じて simulate_battle の `epsilon` 引数で調整可能
@@ -186,6 +187,22 @@ value(state, ..., cache, stats):
 
 実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。N=3 の実測では turn_limit=2〜5 まで無理なく完走する（各ノードの Nash LP は最大 6×6 で数μs、到達 state は memoization でカバー）。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて 5 程度まで設定してよい。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
 
+### `MoveMetaCache` (技メタのキャッシュ)
+
+`SwitchingGame` / `MonteCarloSim` は技の priority と自己ランク補正 (`stat_effects`) を毎ターン参照する。データは `pokedex.db` の `move_meta` テーブル (パッチ `pkdx_patch/006_move_meta` が生成) に載っており、`pkdx select` のエントリで `db.query_move_meta(db, names)` を 1 回叩いて `MoveMetaCache` に詰める。以降の再帰 / rollout では DB に一切触らない。
+
+```moonbit
+MoveMeta { priority : Int, stat_effects : Array[(Int, Int)] }
+MoveMetaCache { data, mut hits, mut misses, mut fallbacks }
+```
+
+- `lookup_priority(cache, name)` — cache hit → そのまま返す / miss → `move_priority_fallback` (curated table)
+- `lookup_stat_effects(cache, name)` — 同上 (`stat_boost_effect_fallback`)
+
+curated table は DB に未登録の新技が混ざっても動くようにする保険で、`move_priority_fallback` / `stat_boost_effect_fallback` として `move_meta.mbt` に残っている。正規のパスは DB 経由。
+
+キー空間は技数に線形 (6v6 の 48 技 → 重複排除で 20〜30 件)。DB クエリは `IN (?, ?, ...)` 一発、ホットループ内には現れない。テスト / 単体呼び出しの `switching_game_winrate` / `monte_carlo_winrate` は `new_move_meta_cache()` (空) を使うため、curated fallback のみで動く。
+
 ### `ValueStats` / `DamageCache` (memoization 観測)
 
 ```moonbit
@@ -254,7 +271,7 @@ JSON 互換ルール:
 - `ChampionsSP(stat_system: StatSystem)` — SP 合計 66 制約下の最適化 (pairwise variant)
 - `SwitchingGame` の Double format 対応 (現在 Single 専用)
 - 状態異常 / 天候 / フィールドのモデル化 (MonteCarloSim と SwitchingGame の双方)
-- ランク補正技の拡充 (現状 `move_meta.stat_boost_effect` の表を拡張するだけで対応可能)
+- 変化技の効果拡充 — 現状は `MoveMeta.stat_effects` 経由の自己ランク補正のみ。`pkdx_patch/006_move_meta/data.json` に行を足すだけで追加可能。状態異常・交代・ひるみ系に拡張する場合は `MoveMeta` のスキーマ (`stat_effects_json` 以外の effect kind 列) 追加を検討
 - MonteCarloSim の ε-greedy から局所 Nash LP への切替 (rollout の変化技評価を精緻化)
 - αβ pruning / iterative deepening — `SwitchingGameState` は不変・ハッシャブルで αβ 前提を満たすため、`value` に `alpha` / `beta` 引数を足してノード順序を勾配ヒューリスティックで並べれば実装可能 (状態表現の変更不要)
 

@@ -129,3 +129,77 @@ test "turn_order_sign_higher_priority_dominates_lower_priority" {
   // +3 (ねこだまし) beats +1 (バレットパンチ).
   assert_eq(turn_order_sign(a, 3, 100, b, 1, 100), 1)
 }
+
+///|
+test "load_move_meta_from_rows_populates_cache_for_queried_names" {
+  let cache = new_move_meta_cache()
+  load_move_meta_from_rows(cache, [
+    ("つるぎのまい", 0, "[[0,2]]"),
+    ("バレットパンチ", 1, "[]"),
+  ])
+  // lookup_priority prefers the cache (hit), not the fallback.
+  assert_eq(lookup_priority(cache, "バレットパンチ"), 1)
+  assert_eq(cache.hits, 1)
+  // つるぎのまい has priority 0 in the DB; stat_effects hit the cache.
+  let effs = lookup_stat_effects(cache, "つるぎのまい")
+  assert_eq(effs.length(), 1)
+  assert_eq(effs[0], (0, 2))
+}
+
+///|
+test "lookup_priority_misses_fall_back_to_curated_table_and_bump_counters" {
+  // Fresh empty cache: curated fallback for known moves should still fire.
+  let cache = new_move_meta_cache()
+  assert_eq(lookup_priority(cache, "しんそく"), 2)
+  assert_eq(cache.misses, 1)
+  assert_eq(cache.fallbacks, 1)
+  // Unknown name: fallback returns 0 but does NOT count as a fallback hit.
+  assert_eq(lookup_priority(cache, "存在しない技"), 0)
+  assert_eq(cache.misses, 2)
+  assert_eq(cache.fallbacks, 1)
+}
+
+///|
+test "lookup_stat_effects_prefers_cache_over_curated_table" {
+  // Cache entry differs from curated table for the same name — cache wins.
+  let cache = new_move_meta_cache()
+  load_move_meta_from_rows(cache, [("つるぎのまい", 0, "[[0,1]]")])
+  let effs = lookup_stat_effects(cache, "つるぎのまい")
+  assert_eq(effs.length(), 1)
+  // Cached value is +1 (test override), curated is +2.
+  assert_eq(effs[0], (0, 1))
+}
+
+///|
+test "load_move_meta_from_rows_tolerates_malformed_json" {
+  // Malformed JSON for stat_effects must not abort — entry is kept with an
+  // empty effects list so one corrupt DB row cannot break a whole run.
+  let cache = new_move_meta_cache()
+  load_move_meta_from_rows(cache, [
+    ("ブロークンJSON", 3, "[not-a-valid-json"),
+  ])
+  let effs = lookup_stat_effects(cache, "ブロークンJSON")
+  assert_eq(effs.length(), 0)
+  assert_eq(lookup_priority(cache, "ブロークンJSON"), 3)
+}
+
+///|
+test "collect_move_names_dedupes_across_teams" {
+  let a = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [
+      mk_move("じしん", "じめん", @model.Physical, 100),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+    ],
+  )
+  let b = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [
+      mk_move("じしん", "じめん", @model.Physical, 100),
+      mk_move("バレットパンチ", "はがね", @model.Physical, 40),
+    ],
+  )
+  let names = collect_move_names([a, b], [a])
+  // じしん appears twice (a and b share it); dedupe removes one.
+  assert_eq(names.length(), 3)
+}

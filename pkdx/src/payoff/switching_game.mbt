@@ -133,20 +133,84 @@ pub fn terminal_value(
 }
 
 ///|
-/// Deterministic expected damage of `attacker`'s `move_idx`-th move against
-/// `defender`, measured as the mean of the 16-roll damage table under the
-/// given attacker / defender rank vectors. Stat ranks feed `atk_rank` /
-/// `def_rank` in the damage calc, picking `A` vs `B` for physical moves and
-/// `C` vs `D` for special moves (stat indices 0/1 vs 2/3 in the 5-slot rank
-/// vector).
-fn mean_damage_idx(
+/// Compute the mean damage for the given `(attacker, defender, move, ranks)`
+/// tuple directly, without cache lookup. The numeric kernel underneath
+/// `mean_damage_cached` — call-sites should reach it via the cache wrapper
+/// so the 16-roll table is not recomputed on every state transition.
+fn compute_mean_damage(
   attacker : Combatant,
-  atk_ranks : Array[Int],
   defender : Combatant,
-  def_ranks : Array[Int],
-  move_idx : Int,
+  mv : @model.Move,
+  atk_rank : Int,
+  def_rank : Int,
 ) -> Int {
-  let mv = attacker.moves[move_idx]
+  let r = @damage.calc_damage(
+    build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
+  )
+  if r.is_immune {
+    return 0
+  }
+  let mut s = 0
+  for i in 0..<16 {
+    s += r.damages[i]
+  }
+  s / 16
+}
+
+///|
+/// Cache key for memoized mean damage. `my_attacker` distinguishes which
+/// side's team the attacker/defender indices reference — without it my_team[0]
+/// and opp_team[0] would collide. Ranks are stored pre-resolved (already
+/// dispatched by move category in `mean_damage_cached`), so the key contains
+/// only the values that change the damage output.
+pub(all) struct DamageKey {
+  my_attacker : Bool
+  atk_idx : Int
+  def_idx : Int
+  mv_idx : Int
+  atk_rank : Int
+  def_rank : Int
+} derive(Eq, Hash)
+
+///|
+/// Memoized mean-damage cache for a single SwitchingGame evaluation. Stores
+/// `DamageKey → Int` (mean damage) and tracks hit/miss counts for
+/// observability.
+///
+/// Lifetime is one `switching_game_winrate*` call: teams / abilities / items /
+/// stat_system / tera_type are all fixed across the recursion, so the cache
+/// stays valid. Reusing the same cache across calls with different teams
+/// would be unsound (indices rebind).
+pub(all) struct DamageCache {
+  data : @hashmap.HashMap[DamageKey, Int]
+  mut hits : Int
+  mut misses : Int
+}
+
+///|
+pub fn new_damage_cache() -> DamageCache {
+  { data: @hashmap.HashMap::new(), hits: 0, misses: 0 }
+}
+
+///|
+/// Cached mean-damage lookup. `my_attacker = true` means the attacker is in
+/// `my_team` (and defender in `opp_team`); swap otherwise. `atk_ranks` /
+/// `def_ranks` are the 5-slot rank vectors of the attacker / defender side
+/// respectively. Public so external tests can observe cache counters.
+pub fn mean_damage_cached(
+  cache : DamageCache,
+  my_attacker : Bool,
+  atk_idx : Int,
+  atk_ranks : Array[Int],
+  def_idx : Int,
+  def_ranks : Array[Int],
+  mv_idx : Int,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+) -> Int {
+  let attacker = if my_attacker { my_team[atk_idx] } else { opp_team[atk_idx] }
+  let defender = if my_attacker { opp_team[def_idx] } else { my_team[def_idx] }
+  let mv = attacker.moves[mv_idx]
   if mv.power <= 0 {
     return 0
   }
@@ -160,17 +224,26 @@ fn mean_damage_idx(
     @model.Special => def_ranks[3]
     @model.Status => 0
   }
-  let r = @damage.calc_damage(
-    build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
-  )
-  if r.is_immune {
-    return 0
+  let key : DamageKey = {
+    my_attacker,
+    atk_idx,
+    def_idx,
+    mv_idx,
+    atk_rank,
+    def_rank,
   }
-  let mut s = 0
-  for i in 0..<16 {
-    s += r.damages[i]
+  match cache.data.get(key) {
+    Some(v) => {
+      cache.hits = cache.hits + 1
+      v
+    }
+    None => {
+      cache.misses = cache.misses + 1
+      let v = compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
+      cache.data[key] = v
+      v
+    }
   }
-  s / 16
 }
 
 ///|
@@ -218,16 +291,18 @@ fn move_turn_sign(
 }
 
 ///|
-/// Apply one game step to `state` given both players' actions. Damage is
-/// applied in action-order (priority → effective speed; first KO skips the
-/// slower side's attack), switches reset the switcher's ranks, stat-boost
-/// moves update the user's ranks. Always advances `turn` by 1.
-pub fn transition(
+/// Apply one game step to `state` given both players' actions, using
+/// `dmg_cache` to memoize the 16-roll damage computations. Damage is applied
+/// in action-order (priority → effective speed; first KO skips the slower
+/// side's attack), switches reset the switcher's ranks, stat-boost moves
+/// update the user's ranks. Always advances `turn` by 1.
+pub fn transition_with_cache(
   state : SwitchingGameState,
   my_action : ActionKind,
   opp_action : ActionKind,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
 ) -> SwitchingGameState {
   let my_hps_new = state.my_hps.copy()
   let opp_hps_new = state.opp_hps.copy()
@@ -251,12 +326,16 @@ pub fn transition(
         my_ranks_new[k] = 0
       }
       // Attack hits the freshly switched-in target (fresh ranks = 0).
-      let dmg = mean_damage_idx(
-        opp_team[state.opp_active],
+      let dmg = mean_damage_cached(
+        dmg_cache,
+        false,
+        state.opp_active,
         opp_ranks_new,
-        my_team[i],
+        i,
         my_ranks_new,
         mj,
+        my_team,
+        opp_team,
       )
       my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
       // Opp's own stat-boost (if status move) still resolves on user.
@@ -267,12 +346,16 @@ pub fn transition(
       for k in 0..<5 {
         opp_ranks_new[k] = 0
       }
-      let dmg = mean_damage_idx(
-        my_team[state.my_active],
+      let dmg = mean_damage_cached(
+        dmg_cache,
+        true,
+        state.my_active,
         my_ranks_new,
-        opp_team[j],
+        j,
         opp_ranks_new,
         mi,
+        my_team,
+        opp_team,
       )
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
       apply_stat_boost(my_ranks_new, my_team[state.my_active].moves[mi].name)
@@ -285,11 +368,27 @@ pub fn transition(
       let s = move_turn_sign(
         me, my_ranks_new, mv_me, opp, opp_ranks_new, mv_opp,
       )
-      let dmg_mo = mean_damage_idx(
-        me, my_ranks_new, opp, opp_ranks_new, mi,
+      let dmg_mo = mean_damage_cached(
+        dmg_cache,
+        true,
+        state.my_active,
+        my_ranks_new,
+        state.opp_active,
+        opp_ranks_new,
+        mi,
+        my_team,
+        opp_team,
       )
-      let dmg_om = mean_damage_idx(
-        opp, opp_ranks_new, me, my_ranks_new, mj,
+      let dmg_om = mean_damage_cached(
+        dmg_cache,
+        false,
+        state.opp_active,
+        opp_ranks_new,
+        state.my_active,
+        my_ranks_new,
+        mj,
+        my_team,
+        opp_team,
       )
       if s == 0 {
         // Simultaneous: both sides' damage applied independently.
@@ -340,9 +439,28 @@ pub fn transition(
 }
 
 ///|
+/// Backwards-compatible wrapper around `transition_with_cache` that allocates
+/// a fresh single-use `DamageCache`. Suitable for standalone calls (unit
+/// tests, one-off transitions); inside a recursion prefer `transition_with_cache`
+/// with a shared cache so repeated damage computations are memoized.
+pub fn transition(
+  state : SwitchingGameState,
+  my_action : ActionKind,
+  opp_action : ActionKind,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+) -> SwitchingGameState {
+  transition_with_cache(
+    state, my_action, opp_action, my_team, opp_team, new_damage_cache(),
+  )
+}
+
+///|
 /// Recursive Nash value of a `SwitchingGameState`. Solves a per-state zero-sum
 /// matrix whose cells are `value(next_state, ...)` for each action pair.
-/// Memoized by `cache`; cache hit/miss counters are recorded in `stats`.
+/// Memoized by `cache` (state-value memo) and `dmg_cache` (damage-table memo);
+/// both caches' hit/miss counters are recorded on `stats` and `dmg_cache`
+/// respectively.
 pub fn value(
   state : SwitchingGameState,
   my_team : Array[Combatant],
@@ -350,6 +468,7 @@ pub fn value(
   turn_limit : Int,
   cache : @hashmap.HashMap[SwitchingGameState, Double],
   stats : ValueStats,
+  dmg_cache : DamageCache,
 ) -> Double {
   match terminal_value(state, my_team, opp_team, turn_limit) {
     Some(v) => return v
@@ -376,10 +495,12 @@ pub fn value(
   }
   for i in 0..<actions_me.length() {
     for j in 0..<actions_opp.length() {
-      let next = transition(
-        state, actions_me[i], actions_opp[j], my_team, opp_team,
+      let next = transition_with_cache(
+        state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
       )
-      data[i][j] = value(next, my_team, opp_team, turn_limit, cache, stats)
+      data[i][j] = value(
+        next, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
+      )
     }
   }
   let m = match @nash.FiniteMatrix::new(data) {
@@ -406,19 +527,22 @@ pub fn switching_game_winrate(
   opp_team : Array[Combatant],
   turn_limit : Int,
 ) -> Double {
-  let (v, _) = switching_game_winrate_stats(my_team, opp_team, turn_limit)
+  let (v, _, _) = switching_game_winrate_stats(my_team, opp_team, turn_limit)
   v
 }
 
 ///|
-/// Same as `switching_game_winrate`, but also returns the `ValueStats`
-/// collected during the recursion. Useful for CI smoke tests and diagnostics
-/// that need to sanity-check cache behaviour at larger `turn_limit`.
+/// Same as `switching_game_winrate`, but also returns the `ValueStats` and
+/// `DamageCache` collected during the recursion. Useful for CI smoke tests
+/// and diagnostics that need to sanity-check cache behaviour at larger
+/// `turn_limit`: `ValueStats` observes the state-value memo (one entry per
+/// reached state), `DamageCache` observes the damage-table memo (one entry
+/// per `(side, atk, def, move, atk_rank, def_rank)` tuple).
 pub fn switching_game_winrate_stats(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
-) -> (Double, ValueStats) {
+) -> (Double, ValueStats, DamageCache) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
   for i in 0..<my_team.length() {
@@ -438,8 +562,9 @@ pub fn switching_game_winrate_stats(
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
-  let v = value(state, my_team, opp_team, turn_limit, cache, stats)
-  (v, stats)
+  let dmg_cache = new_damage_cache()
+  let v = value(state, my_team, opp_team, turn_limit, cache, stats, dmg_cache)
+  (v, stats, dmg_cache)
 }
 
 ///|

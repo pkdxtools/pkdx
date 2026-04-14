@@ -243,7 +243,8 @@ test "value_returns_terminal_value_for_terminal_state" {
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
-  let v = value(state, team_a, team_b, 5, cache, stats)
+  let dmg_cache = new_damage_cache()
+  let v = value(state, team_a, team_b, 5, cache, stats, dmg_cache)
   assert_eq(v, 0.0)
 }
 
@@ -278,9 +279,10 @@ test "value_caches_result_via_value_stats" {
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
-  let _ = value(state, team_a, team_b, 2, cache, stats)
+  let dmg_cache = new_damage_cache()
+  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
   let hits_before = stats.hits
-  let _ = value(state, team_a, team_b, 2, cache, stats)
+  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
   assert_true(stats.hits > hits_before)
 }
 
@@ -661,7 +663,7 @@ test "switching_game_winrate_stats_completes_at_turn_limit_five" {
   )
   let team_a = [strong, strong]
   let team_b = [ok, ok]
-  let (v, stats) = switching_game_winrate_stats(team_a, team_b, 5)
+  let (v, stats, _) = switching_game_winrate_stats(team_a, team_b, 5)
   assert_true(v >= -1.0 && v <= 1.0)
   assert_true(v.is_nan() == false)
   // The recursion must have run (at least one miss observed).
@@ -674,6 +676,110 @@ test "switching_game_winrate_stats_mirror_match_still_zero_at_turn_limit_five" {
     mk_pokemon("M", "ノーマル", "", 120, 120, 120, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 60)],
   )
-  let (v, _) = switching_game_winrate_stats([team, team], [team, team], 5)
+  let (v, _, _) = switching_game_winrate_stats([team, team], [team, team], 5)
   assert_true(v.abs() < 1.0e-6)
+}
+
+///|
+test "damage_cache_hits_dominate_misses_on_repeated_recursion" {
+  // A 2v2 SwitchingGame with turn_limit=3 visits the same
+  // (attacker, defender, move, rank) tuple many times across states. After
+  // one run, the damage cache should have hits ≫ misses because the rank /
+  // index space is vastly smaller than the state space.
+  let a = mk_combatant(
+    mk_pokemon("A0", "ノーマル", "", 120, 120, 100, 100, 100, 110),
+    [mk_move("mv", "ノーマル", @model.Physical, 70)],
+  )
+  let b = mk_combatant(
+    mk_pokemon("B0", "ノーマル", "", 120, 110, 110, 100, 100, 100),
+    [mk_move("mv", "ノーマル", @model.Physical, 60)],
+  )
+  let (_, _, dmg) = switching_game_winrate_stats([a, a], [b, b], 3)
+  assert_true(dmg.misses >= 1)
+  assert_true(dmg.hits >= dmg.misses)
+}
+
+///|
+test "damage_cache_misses_bounded_by_key_space" {
+  // The cache key space is (side × atk_idx × def_idx × mv_idx × atk_rank ×
+  // def_rank). For a 2v2 team with 1 move each and ranks staying at 0
+  // (no stat-boost moves in the set), the upper bound is
+  // 2 (side) × 2 (atk) × 2 (def) × 1 (mv) × 1 (rank pair used) = 8.
+  // In practice only attacker ↔ defender index pairs reachable by the game
+  // appear, so misses must be ≤ 8.
+  let a = mk_combatant(
+    mk_pokemon("A0", "ノーマル", "", 120, 120, 100, 100, 100, 110),
+    [mk_move("mv", "ノーマル", @model.Physical, 70)],
+  )
+  let b = mk_combatant(
+    mk_pokemon("B0", "ノーマル", "", 120, 110, 110, 100, 100, 100),
+    [mk_move("mv", "ノーマル", @model.Physical, 60)],
+  )
+  let (_, _, dmg) = switching_game_winrate_stats([a, a], [b, b], 3)
+  assert_true(dmg.misses <= 8)
+}
+
+///|
+test "damage_cache_single_turn_uses_at_most_two_unique_keys" {
+  // One turn, two actives, one move each, no stat-boost moves → at most
+  // two unique damage keys (me → opp, opp → me). After one turn the cache
+  // must hold ≤ 2 misses regardless of recursion depth.
+  let fast = mk_combatant(
+    mk_pokemon("Fast", "ノーマル", "", 100, 200, 100, 100, 100, 200),
+    [mk_move("mv", "ノーマル", @model.Physical, 60)],
+  )
+  let slow = mk_combatant(
+    mk_pokemon("Slow", "ノーマル", "", 100, 200, 100, 100, 100, 50),
+    [mk_move("mv", "ノーマル", @model.Physical, 60)],
+  )
+  let (_, _, dmg) = switching_game_winrate_stats([fast], [slow], 2)
+  assert_true(dmg.misses <= 2)
+}
+
+///|
+test "damage_cache_hits_increment_on_repeated_identical_transitions" {
+  // Calling mean_damage_cached twice with the same key should produce the
+  // same result and record one miss + one hit.
+  let a = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),
+    [mk_move("mv", "ノーマル", @model.Physical, 80)],
+  )
+  let b = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 200, 100, 100, 100, 100, 100),
+    [mk_move("mv", "ノーマル", @model.Physical, 40)],
+  )
+  let cache = new_damage_cache()
+  let ranks = [0, 0, 0, 0, 0]
+  let d1 = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
+  let d2 = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
+  assert_eq(d1, d2)
+  assert_eq(cache.misses, 1)
+  assert_eq(cache.hits, 1)
+}
+
+///|
+test "damage_cache_distinguishes_sides_for_symmetric_teams" {
+  // Identical teams on both sides: atk_idx=0 / def_idx=0 on `my_attacker=true`
+  // must not collide with atk_idx=0 / def_idx=0 on `my_attacker=false`
+  // (different combatants, different abilities/items/tera in general).
+  let a = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),
+    [mk_move("mv", "ノーマル", @model.Physical, 80)],
+  )
+  let b = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 100, 80, 100, 100, 100, 100),
+    [mk_move("mv", "ノーマル", @model.Physical, 80)],
+  )
+  let cache = new_damage_cache()
+  let ranks = [0, 0, 0, 0, 0]
+  let d_mine = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
+  let d_opp = mean_damage_cached(
+    cache, false, 0, ranks, 0, ranks, 0, [a], [b],
+  )
+  // Both entries are fresh misses, not collisions.
+  assert_eq(cache.misses, 2)
+  assert_eq(cache.hits, 0)
+  // Damage values differ because the attackers differ (A has ATK=150,
+  // B has ATK=80).
+  assert_true(d_mine > d_opp)
 }

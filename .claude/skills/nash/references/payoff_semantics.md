@@ -186,13 +186,21 @@ value(state, ..., cache, stats):
 
 実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。N=3 の実測では turn_limit=2〜5 まで無理なく完走する（各ノードの Nash LP は最大 6×6 で数μs、到達 state は memoization でカバー）。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて 5 程度まで設定してよい。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
 
-### `ValueStats` (memoization 観測)
+### `ValueStats` / `DamageCache` (memoization 観測)
 
 ```moonbit
 ValueStats { mut hits : Int, mut misses : Int }
+DamageCache { data : HashMap[DamageKey, Int], mut hits : Int, mut misses : Int }
+
+DamageKey { my_attacker : Bool, atk_idx, def_idx, mv_idx, atk_rank, def_rank : Int }
 ```
 
-production 呼び出し (`switching_game_winrate`) は内部で `new_stats()` を作って捨てる。test では stats.hits を観測してキャッシュ動作を black-box で検証。
+2 段のキャッシュを持つ:
+
+- **ValueStats** — state-value memo。`HashMap[SwitchingGameState, Double]` が保持する「state → Nash 値」の hit/miss を記録。
+- **DamageCache** — damage-table memo。`(side, atk_idx, def_idx, mv_idx, atk_rank, def_rank)` をキーに 16-roll 平均ダメージをキャッシュ。1 turn 内の `transition` からも、異なる state からの遷移からも再利用される。
+
+`switching_game_winrate` は両キャッシュを内部で作って捨てる。`switching_game_winrate_stats` は `(Double, ValueStats, DamageCache)` を返し、テスト / 診断でキャッシュ動作を black-box 観測可能。production で `DamageCache` のキー空間は `2 × N_atk × N_def × N_mv × 5 × 5` で上限されるため (ランクは `[-2, +2]` クランプ)、state 数より圧倒的に小さく hit 比率は `misses ≪ hits` になる。
 
 ### CLI 文字列
 

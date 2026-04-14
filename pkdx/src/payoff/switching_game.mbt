@@ -1,19 +1,40 @@
 ///|
 /// Phase 13 SwitchingGame: turn-limited extensive-form 2-player zero-sum
-/// game that models Pokemon switching. Each turn both players simultaneously
-/// choose an action (use a move or switch), transitions advance the state by
-/// one turn, and the value is computed recursively from terminal HP via Nash
-/// equilibria of the induced payoff matrix.
+/// game that models Pokemon switching, stat-rank-affecting setup moves, and
+/// priority-aware action order. Each turn both players simultaneously choose
+/// an action (use a move or switch), transitions advance the state by one
+/// turn, and the value is computed recursively from terminal HP via Nash
+/// equilibria of the induced per-turn payoff matrix.
+///
+/// ## αβ-pruning readiness
+///
+/// The state representation is intentionally αβ-friendly: it is immutable
+/// (`derive(Eq, Hash)`), all side-effects of a turn are captured in the
+/// returned next-state, and `value` is a pure recursion over the state-action
+/// tree with `solve_zero_sum` as the per-node aggregator. Adding αβ bounds
+/// (minimax with bound propagation) amounts to threading `alpha` / `beta`
+/// arguments through `value`, walking rows / columns with an ordering
+/// heuristic (e.g. by negated expected payoff), and pruning when the running
+/// upper/lower bounds cross. No state-structure changes are required — the
+/// existing `SwitchingGameState` + per-state Nash solve is the structure αβ
+/// expects.
 
 ///|
 /// Immutable state of a `SwitchingGame`: which Pokemon is active on each
-/// side, HPs for all Pokemon, and turn counter. Used as a `HashMap` key for
-/// the memoized `value` recursion.
+/// side, HPs for all Pokemon, stat ranks of the current actives (clamped to
+/// `[-2, +2]` per the payoff-layer convention, reset on switch), and turn
+/// counter. Used as a `HashMap` key for the memoized `value` recursion.
+///
+/// `my_ranks` / `opp_ranks` have length 5: `[A, B, C, D, S]` (see
+/// `move_meta.mbt` for the index convention). They track only the currently-
+/// active Pokemon; a `Switch` action resets them to `[0, 0, 0, 0, 0]`.
 pub(all) struct SwitchingGameState {
   my_active : Int
   opp_active : Int
   my_hps : Array[Int]
   opp_hps : Array[Int]
+  my_ranks : Array[Int]
+  opp_ranks : Array[Int]
   turn : Int
 } derive(Show, Eq, Hash)
 
@@ -27,7 +48,8 @@ pub(all) enum ActionKind {
 
 ///|
 /// Observability hooks for memoization: callers can inspect hit/miss counts
-/// without relying on wall-clock timing.
+/// without relying on wall-clock timing. Used by tests and by CLI diagnostics
+/// to verify that larger `turn_limit` values stay cache-bound.
 pub(all) struct ValueStats {
   mut hits : Int
   mut misses : Int
@@ -36,6 +58,12 @@ pub(all) struct ValueStats {
 ///|
 pub fn new_stats() -> ValueStats {
   { hits: 0, misses: 0 }
+}
+
+///|
+/// Fresh zero-rank vector for a newly switched-in Pokemon.
+fn zero_ranks() -> Array[Int] {
+  [0, 0, 0, 0, 0]
 }
 
 ///|
@@ -71,7 +99,7 @@ fn hp_ratio(hps : Array[Int], team : Array[Combatant]) -> Double {
 /// Terminal value of `state`:
 /// - `Some(-1.0)` if all `my_hps` are 0 (my team wiped)
 /// - `Some(+1.0)` if all `opp_hps` are 0 (opp team wiped)
-/// - `Some((opp_ratio - my_ratio) / 2)` if both still alive but
+/// - `Some((my_ratio - opp_ratio) / 2)` if both still alive but
 ///   `turn >= turn_limit`; clamped to [-1, +1]
 /// - `None` otherwise (non-terminal)
 pub fn terminal_value(
@@ -91,8 +119,6 @@ pub fn terminal_value(
   if state.turn >= turn_limit {
     let my_r = hp_ratio(state.my_hps, my_team)
     let opp_r = hp_ratio(state.opp_hps, opp_team)
-    // Row player (my team) sees positive value when winning, so use
-    // my_r - opp_r (not opp - my).
     let delta = (my_r - opp_r) / 2.0
     let clamped = if delta > 1.0 {
       1.0
@@ -108,18 +134,35 @@ pub fn terminal_value(
 
 ///|
 /// Deterministic expected damage of `attacker`'s `move_idx`-th move against
-/// `defender`, measured as the mean of the 16-roll damage table. Used as the
-/// transition payload in `SwitchingGame` (no RNG at state-transition level).
+/// `defender`, measured as the mean of the 16-roll damage table under the
+/// given attacker / defender rank vectors. Stat ranks feed `atk_rank` /
+/// `def_rank` in the damage calc, picking `A` vs `B` for physical moves and
+/// `C` vs `D` for special moves (stat indices 0/1 vs 2/3 in the 5-slot rank
+/// vector).
 fn mean_damage_idx(
   attacker : Combatant,
+  atk_ranks : Array[Int],
   defender : Combatant,
+  def_ranks : Array[Int],
   move_idx : Int,
 ) -> Int {
   let mv = attacker.moves[move_idx]
   if mv.power <= 0 {
     return 0
   }
-  let r = @damage.calc_damage(build_input(attacker, defender, mv))
+  let atk_rank = match mv.category {
+    @model.Physical => atk_ranks[0]
+    @model.Special => atk_ranks[2]
+    @model.Status => 0
+  }
+  let def_rank = match mv.category {
+    @model.Physical => def_ranks[1]
+    @model.Special => def_ranks[3]
+    @model.Status => 0
+  }
+  let r = @damage.calc_damage(
+    build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
+  )
   if r.is_immune {
     return 0
   }
@@ -140,10 +183,45 @@ fn clamp_zero(x : Int) -> Int {
 }
 
 ///|
+/// Apply the stat-boost effects (if any) of `mv_name` to `ranks` in-place.
+/// Each delta is added and clamped to `[-2, +2]` via `clamp_rank`.
+fn apply_stat_boost(ranks : Array[Int], mv_name : String) -> Unit {
+  match stat_boost_effect(mv_name) {
+    Some(effs) =>
+      for eff in effs {
+        let (idx, delta) = eff
+        if idx >= 0 && idx < ranks.length() {
+          ranks[idx] = clamp_rank(ranks[idx] + delta)
+        }
+      }
+    None => ()
+  }
+}
+
+///|
+/// Priority-aware, rank-aware turn order sign between the two actives for the
+/// given moves. Returns `+1` if my active acts first, `-1` if opp acts first,
+/// `0` on full ties.
+fn move_turn_sign(
+  me : Combatant,
+  me_ranks : Array[Int],
+  mv_me : @model.Move,
+  opp : Combatant,
+  opp_ranks : Array[Int],
+  mv_opp : @model.Move,
+) -> Int {
+  let prio_me = move_priority(mv_me.name)
+  let prio_opp = move_priority(mv_opp.name)
+  let eff_me = effective_speed(me.pokemon.spe, me_ranks[4])
+  let eff_opp = effective_speed(opp.pokemon.spe, opp_ranks[4])
+  turn_order_sign(me, prio_me, eff_me, opp, prio_opp, eff_opp)
+}
+
+///|
 /// Apply one game step to `state` given both players' actions. Damage is
-/// applied in speed order (first KO skips the slower side's attack), both
-/// switches happen simultaneously, and attack-vs-switch damages the newly
-/// switched-in Pokemon. Always advances `turn` by 1.
+/// applied in action-order (priority → effective speed; first KO skips the
+/// slower side's attack), switches reset the switcher's ranks, stat-boost
+/// moves update the user's ranks. Always advances `turn` by 1.
 pub fn transition(
   state : SwitchingGameState,
   my_action : ActionKind,
@@ -155,58 +233,97 @@ pub fn transition(
   let opp_hps_new = state.opp_hps.copy()
   let mut my_active_new = state.my_active
   let mut opp_active_new = state.opp_active
+  let my_ranks_new = state.my_ranks.copy()
+  let opp_ranks_new = state.opp_ranks.copy()
   match (my_action, opp_action) {
     (Switch(i), Switch(j)) => {
       my_active_new = i
       opp_active_new = j
+      // Ranks reset on switch-in.
+      for k in 0..<5 {
+        my_ranks_new[k] = 0
+        opp_ranks_new[k] = 0
+      }
     }
     (Switch(i), UseMove(mj)) => {
       my_active_new = i
-      let dmg = mean_damage_idx(opp_team[state.opp_active], my_team[i], mj)
+      for k in 0..<5 {
+        my_ranks_new[k] = 0
+      }
+      // Attack hits the freshly switched-in target (fresh ranks = 0).
+      let dmg = mean_damage_idx(
+        opp_team[state.opp_active],
+        opp_ranks_new,
+        my_team[i],
+        my_ranks_new,
+        mj,
+      )
       my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
+      // Opp's own stat-boost (if status move) still resolves on user.
+      apply_stat_boost(opp_ranks_new, opp_team[state.opp_active].moves[mj].name)
     }
     (UseMove(mi), Switch(j)) => {
       opp_active_new = j
-      let dmg = mean_damage_idx(my_team[state.my_active], opp_team[j], mi)
+      for k in 0..<5 {
+        opp_ranks_new[k] = 0
+      }
+      let dmg = mean_damage_idx(
+        my_team[state.my_active],
+        my_ranks_new,
+        opp_team[j],
+        opp_ranks_new,
+        mi,
+      )
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
+      apply_stat_boost(my_ranks_new, my_team[state.my_active].moves[mi].name)
     }
     (UseMove(mi), UseMove(mj)) => {
       let me = my_team[state.my_active]
       let opp = opp_team[state.opp_active]
-      let s = speed_sign(me, opp)
+      let mv_me = me.moves[mi]
+      let mv_opp = opp.moves[mj]
+      let s = move_turn_sign(
+        me, my_ranks_new, mv_me, opp, opp_ranks_new, mv_opp,
+      )
+      let dmg_mo = mean_damage_idx(
+        me, my_ranks_new, opp, opp_ranks_new, mi,
+      )
+      let dmg_om = mean_damage_idx(
+        opp, opp_ranks_new, me, my_ranks_new, mj,
+      )
       if s == 0 {
-        // Simultaneous: independently apply both sides' damage.
-        let dmg_mo = mean_damage_idx(me, opp, mi)
-        let dmg_om = mean_damage_idx(opp, me, mj)
+        // Simultaneous: both sides' damage applied independently.
         opp_hps_new[state.opp_active] = clamp_zero(
           opp_hps_new[state.opp_active] - dmg_mo,
         )
         my_hps_new[state.my_active] = clamp_zero(
           my_hps_new[state.my_active] - dmg_om,
         )
+        apply_stat_boost(my_ranks_new, mv_me.name)
+        apply_stat_boost(opp_ranks_new, mv_opp.name)
       } else if s > 0 {
-        // My attacks first.
-        let dmg_mo = mean_damage_idx(me, opp, mi)
+        // My active attacks first. Rank-ups on my side apply regardless of
+        // whether the move damages (status moves).
         opp_hps_new[state.opp_active] = clamp_zero(
           opp_hps_new[state.opp_active] - dmg_mo,
         )
+        apply_stat_boost(my_ranks_new, mv_me.name)
         if opp_hps_new[state.opp_active] > 0 {
-          let dmg_om = mean_damage_idx(opp, me, mj)
           my_hps_new[state.my_active] = clamp_zero(
             my_hps_new[state.my_active] - dmg_om,
           )
+          apply_stat_boost(opp_ranks_new, mv_opp.name)
         }
       } else {
-        // Opp attacks first.
-        let dmg_om = mean_damage_idx(opp, me, mj)
         my_hps_new[state.my_active] = clamp_zero(
           my_hps_new[state.my_active] - dmg_om,
         )
+        apply_stat_boost(opp_ranks_new, mv_opp.name)
         if my_hps_new[state.my_active] > 0 {
-          let dmg_mo = mean_damage_idx(me, opp, mi)
           opp_hps_new[state.opp_active] = clamp_zero(
             opp_hps_new[state.opp_active] - dmg_mo,
           )
+          apply_stat_boost(my_ranks_new, mv_me.name)
         }
       }
     }
@@ -216,6 +333,8 @@ pub fn transition(
     opp_active: opp_active_new,
     my_hps: my_hps_new,
     opp_hps: opp_hps_new,
+    my_ranks: my_ranks_new,
+    opp_ranks: opp_ranks_new,
     turn: state.turn + 1,
   }
 }
@@ -280,13 +399,26 @@ pub fn value(
 
 ///|
 /// Entry point: compute the Nash value of a SwitchingGame between `my_team`
-/// and `opp_team` starting at full HP with active slot 0 on each side and
-/// `turn = 0`. Return value is in `[-1, +1]`.
+/// and `opp_team` starting at full HP with active slot 0 on each side, zero
+/// ranks, and `turn = 0`. Return value is in `[-1, +1]`.
 pub fn switching_game_winrate(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
 ) -> Double {
+  let (v, _) = switching_game_winrate_stats(my_team, opp_team, turn_limit)
+  v
+}
+
+///|
+/// Same as `switching_game_winrate`, but also returns the `ValueStats`
+/// collected during the recursion. Useful for CI smoke tests and diagnostics
+/// that need to sanity-check cache behaviour at larger `turn_limit`.
+pub fn switching_game_winrate_stats(
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  turn_limit : Int,
+) -> (Double, ValueStats) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
   for i in 0..<my_team.length() {
@@ -300,11 +432,14 @@ pub fn switching_game_winrate(
     opp_active: 0,
     my_hps,
     opp_hps,
+    my_ranks: zero_ranks(),
+    opp_ranks: zero_ranks(),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
-  value(state, my_team, opp_team, turn_limit, cache, stats)
+  let v = value(state, my_team, opp_team, turn_limit, cache, stats)
+  (v, stats)
 }
 
 ///|

@@ -74,12 +74,13 @@ MonteCarloSim(trials: Int, seed: UInt64)
 
 `@moonbitlang/core/random` の `Rand::chacha8` で seeded RNG を作成。N trials × turn loop:
 
-1. 先攻決定: `speed_sign(a, b)`、同速なら RNG coin flip
-2. 速度順逐次解決:
-   - 先攻 → `pick_best_move` (power > 0 の中で平均ダメージ最大) → 16-roll table から `rng.int(limit=16)` でサンプル → defender HP 減算
-   - defender HP > 0 なら後攻も同様に攻撃
-3. HP=0 で勝者確定 (1.0 / 0.0)、200 turn 上限で 0.5 (draw)
-4. trials 回累積 → `winrate = total / trials ∈ [0, 1]`
+1. 各側が `rollout_pick_move` (ε-greedy) で技を選択。ε=`default_rollout_epsilon = 0.1` の確率で全 move から一様、残りの確率で `pick_best_move` (power > 0 の中で平均ダメージ最大)。変化技も ε で非ゼロ確率で標本化される
+2. 先攻決定: `turn_order_sign(a, 優先度_a, Spe_a, b, 優先度_b, Spe_b)`。優先度は `move_meta.move_priority` で解決、素早さ同値は RNG coin flip
+3. 優先度順逐次解決:
+   - 先攻 → 選ばれた技が power > 0 なら 16-roll table から `rng.int(limit=16)` でサンプル → defender HP 減算。power = 0 (status) の場合は damage なし
+   - defender HP > 0 なら後攻も同様に行動
+4. HP=0 で勝者確定 (1.0 / 0.0)、200 turn 上限で 0.5 (draw)
+5. trials 回累積 → `winrate = total / trials ∈ [0, 1]`
 
 ### Seed 仕様
 
@@ -90,10 +91,11 @@ MonteCarloSim(trials: Int, seed: UInt64)
 **意図**: ダメージ乱数を陽に取り込んだ確率モデル。Best1v1 の三値 (0/0.5/1) より細かい連続値で、近接対面の優劣を粒度高く表現。
 
 **限界**:
-- 変化技 (power=0) は `pick_best_move` から除外 → 「攻撃しないターン」として相手のみ進行
+- 変化技 (power=0) はサンプルされても効果は未反映 (ランクアップ / 状態異常等の damage 外効果は無視される)。ただし ε-greedy により「変化技ターン = 相手のみ進行」として winrate に影響する
 - ランク補正・状態異常・天候・特性発動・テラスタル等は計算しない
 - turn_limit=200 を超える長期戦は draw 扱い
 - 各 trial 独立サンプルなので有限試行ノイズあり (zero-sum 補完で対称性のみは保証)
+- ε が大きすぎると変化技の偶発選択が winrate を潰すリスクあり。デフォルト 0.1 は実戦的バランスで、必要に応じて simulate_battle の `epsilon` 引数で調整可能
 
 **使いどころ**: Best1v1 / NashResponses が三値で潰れる対面 (火力拮抗・ダメージ範囲が広い) の優劣判定。trials を増やすほど誤差は減るが、6v6 で C(6,3)² = 400 セルの上三角だと cell あたり trials 回 → 慎重に。
 
@@ -122,11 +124,13 @@ SwitchingGameState {
   opp_active : Int
   my_hps : Array[Int]        // 長さ N
   opp_hps : Array[Int]
+  my_ranks : Array[Int]      // 長さ 5: [A, B, C, D, S]、active のランクのみ追跡
+  opp_ranks : Array[Int]     // 長さ 5、交代でリセット
   turn : Int                 // 0..turn_limit
 } derive(Show, Eq, Hash)
 ```
 
-`HashMap[SwitchingGameState, Double]` (`StateCache`) に値を memoize。
+`HashMap[SwitchingGameState, Double]` (`StateCache`) に値を memoize。ランクは `[-2, +2]` にクランプして状態爆発を抑える（通常攻略で支配的な範囲を保ちつつ、±2 の飽和で `からをやぶる` 等の混合ランクアップを表現可能）。ランクはダメージ計算（`atk_rank` / `def_rank` 経由で `(2+|r|)/2` / `2/(2+|r|)` の乗数）と先制順序（実効素早さ）に反映される。
 
 ### Action space
 
@@ -139,12 +143,18 @@ active 自身が HP=0 の場合は forced switch のみ。
 
 ### Transition
 
-- **交代 vs 交代**: 両者 active 更新、damage なし、turn+1
-- **交代 vs 技**: 交代側 active 更新、技側は新しい active に damage
-- **技 vs 技**: `speed_sign` で先攻決定して逐次解決
-  - 先攻 attack → defender HP 減算 → KO 判定 → 後攻 alive なら attack
+- **交代 vs 交代**: 両者 active 更新、ランクを `[0, 0, 0, 0, 0]` にリセット、damage なし、turn+1
+- **交代 vs 技**: 交代側 active 更新 / ランクリセット、技側は新しい active に damage (新しいランク=0 で計算)。技側の自己積み効果も適用
+- **技 vs 技**: 優先度→実効素早さ (`turn_order_sign`) で先攻決定して逐次解決
+  - 優先度は `move_meta.move_priority` で判定 (例: しんそく=+2, バレットパンチ=+1)
+  - 実効素早さは Spe ランク (`effective_speed(base, rank)`) を反映
+  - 先攻 attack → defender HP 減算 → 先攻の積み技効果を反映 → KO 判定 → 後攻 alive なら attack / 積み効果
   - 先制 KO の場合、後攻の action は実行されない (リアル戦闘準拠)
-  - 同速 (`speed_sign = 0`) は両者同時に damage 適用
+  - 優先度・実効素早さが完全一致 (`turn_order_sign = 0`) のときは両者同時に damage を適用
+
+### 積み技 (ランク補正)
+
+`move_meta.stat_boost_effect` が `Some([(stat_idx, delta), ...])` を返す技は、使用者のランクベクトルを `clamp_rank` (`[-2, +2]`) しながら更新する。サポート対象の主要な積み技は `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし（将来拡張時に `move_meta.mbt` の表を更新）。
 
 ### Terminal value
 
@@ -174,7 +184,7 @@ value(state, ..., cache, stats):
 
 ### 計算量・推奨値
 
-実到達 state は damage が整数刻みで離散化されるため有限。N=3, turn_limit=2 で実測数百〜数千 state、`turn_limit ≤ 3` を**推奨値**として運用。turn_limit ≥ 5 はメモリ/CPU 急増リスクあり、CI smoke では最大 turn_limit=2 で回す。
+実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。N=3 の実測では turn_limit=2〜5 まで無理なく完走する（各ノードの Nash LP は最大 6×6 で数μs、到達 state は memoization でカバー）。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて 5 程度まで設定してよい。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
 
 ### `ValueStats` (memoization 観測)
 
@@ -207,7 +217,7 @@ JSON 互換ルール:
 | 交代 | 無視 | 無視 | 無視 | **モデル化** |
 | 確率性 | 決定的 | 決定的 | seeded RNG | 決定的 (期待ダメージ) |
 | 連続値 | {0, 0.5, 1} 三値 | 同上 (内部 Nash で粒度) | [0, 1] 連続 | [-1, +1] 連続 |
-| 推奨場面 | 通常の選出最適 | 技循環中心 | 火力拮抗 / 範囲広いダメージ | 交代戦が決定的 / turn_limit ≤ 3 |
+| 推奨場面 | 通常の選出最適 | 技循環中心 | 火力拮抗 / 範囲広いダメージ | 交代戦が決定的 / 積み技や先制技が重要 |
 
 ## CLI / JSON フィールド
 
@@ -236,7 +246,8 @@ JSON 互換ルール:
 - `ChampionsSP(stat_system: StatSystem)` — SP 合計 66 制約下の最適化 (pairwise variant)
 - `SwitchingGame` の Double format 対応 (現在 Single 専用)
 - 状態異常 / 天候 / フィールドのモデル化 (MonteCarloSim と SwitchingGame の双方)
-- ランク補正技 (つるぎのまい等) の効果反映
-- αβ pruning / iterative deepening (SwitchingGame の turn_limit 拡張時)
+- ランク補正技の拡充 (現状 `move_meta.stat_boost_effect` の表を拡張するだけで対応可能)
+- MonteCarloSim の ε-greedy から局所 Nash LP への切替 (rollout の変化技評価を精緻化)
+- αβ pruning / iterative deepening — `SwitchingGameState` は不変・ハッシャブルで αβ 前提を満たすため、`value` に `alpha` / `beta` 引数を足してノード順序を勾配ヒューリスティックで並べれば実装可能 (状態表現の変更不要)
 
 新 pairwise variant は `from_damage.mbt` の `winrate` match に分岐を足し、`payoff_model_enum_exhaustive` test を更新する。team-level variant は `TeamPayoffModel` enum と `team_payoff_matrix_with_team_model` ディスパッチに分岐を足す。

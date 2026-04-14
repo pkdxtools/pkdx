@@ -186,6 +186,104 @@ test "from_combatants_with_monte_carlo_diagonal_is_zero" {
 }
 
 ///|
+test "rollout_pick_move_epsilon_one_samples_uniformly_across_all_moves" {
+  // With ε=1.0 every selection is uniform over all moves, including status
+  // moves. Over N trials each index should appear at least once (with high
+  // probability for N=50 and 3 moves).
+  let atk = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+      mk_move("weak", "ノーマル", @model.Physical, 40),
+      mk_move("strong", "ノーマル", @model.Physical, 120),
+    ],
+  )
+  let dfn = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [mk_move("x", "ノーマル", @model.Physical, 80)],
+  )
+  let rng = seeded_rng(123UL)
+  let seen = Array::make(3, false)
+  for _ in 0..<50 {
+    match rollout_pick_move(atk, dfn, rng, 1.0) {
+      Some(i) => seen[i] = true
+      None => assert_true(false)
+    }
+  }
+  // All three moves must have been picked at least once.
+  for s in seen {
+    assert_true(s)
+  }
+}
+
+///|
+test "rollout_pick_move_epsilon_zero_always_picks_greedy_damaging_move" {
+  // With ε=0.0 behaviour collapses to pick_best_move. For an attacker with a
+  // status move, a weak move, and a strong move, the index must be the strong
+  // one on every draw.
+  let atk = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),
+    [
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+      mk_move("weak", "ノーマル", @model.Physical, 40),
+      mk_move("strong", "ノーマル", @model.Physical, 120),
+    ],
+  )
+  let dfn = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [mk_move("x", "ノーマル", @model.Physical, 80)],
+  )
+  let rng = seeded_rng(456UL)
+  for _ in 0..<20 {
+    match rollout_pick_move(atk, dfn, rng, 0.0) {
+      Some(i) => assert_eq(i, 2)
+      None => assert_true(false)
+    }
+  }
+}
+
+///|
+test "rollout_pick_move_status_only_moveset_still_returns_some" {
+  // Reviewer's concern: status-only movesets previously returned None and
+  // their effects were structurally ignored. ε-greedy now always returns a
+  // move when any are present.
+  let atk = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+      mk_move("りゅうのまい", "ノーマル", @model.Status, 0),
+    ],
+  )
+  let dfn = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
+    [mk_move("x", "ノーマル", @model.Physical, 80)],
+  )
+  let rng = seeded_rng(789UL)
+  match rollout_pick_move(atk, dfn, rng, 0.0) {
+    Some(i) => assert_true(i >= 0 && i < 2)
+    None => assert_true(false)
+  }
+}
+
+///|
+test "simulate_battle_priority_move_wins_over_faster_opponent" {
+  // Slow side uses バレットパンチ (priority +1) with enough power to OHKO;
+  // fast side is 1 HP with a normal-priority move. The slow side must win
+  // deterministically because priority resolves before speed.
+  let slow_prio = mk_combatant(
+    mk_pokemon("SlowP", "はがね", "", 100, 250, 100, 100, 100, 50),
+    [mk_move("バレットパンチ", "はがね", @model.Physical, 250)],
+  )
+  let fast_normal = mk_combatant(
+    mk_pokemon("FastN", "ノーマル", "", 1, 250, 100, 100, 100, 200),
+    [mk_move("じしん", "じめん", @model.Physical, 250)],
+  )
+  let rng = seeded_rng(0UL)
+  // ε=0 to make the greedy choice deterministic on the single damaging move.
+  assert_eq(simulate_battle(slow_prio, fast_normal, rng, epsilon=0.0), 1.0)
+}
+
+///|
 test "pick_best_move_selects_highest_average_damage_and_excludes_power_zero" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),

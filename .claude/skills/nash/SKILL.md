@@ -140,7 +140,7 @@ team (6 体), opponent (6 体), format (single/double), payoff_model (pairwise) 
 
 **team-level (`team_payoff_model` フィールド、Phase 13)**:
 - `"pairwise:<model_string>"` — 上記 pairwise のラッパー (`"pairwise:best1v1"` 等)
-- `"switching_game:<turn_limit>"` — 交代込み extensive-form ゲーム木 (`turn_limit ≤ 3` 推奨)
+- `"switching_game:<turn_limit>"` — 交代込み extensive-form ゲーム木 (先制技 / ランク補正技に対応)
 
 両方指定された場合は `team_payoff_model` 優先。詳細は `references/payoff_semantics.md`。
 

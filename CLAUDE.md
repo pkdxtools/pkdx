@@ -207,7 +207,7 @@ echo '{"team":[...],"opponent":[...],"format":"single","payoff_model":"monte_car
 
 # 選出最適化: team-level TeamPayoffModel (Phase 13 新軸)
 # - "pairwise:<model>": 既存 PayoffModel をラップ ("pairwise:best1v1" 等)
-# - "switching_game:<turn_limit>": 交代込み extensive-form ゲーム木 (turn_limit ≤ 3 推奨)
+# - "switching_game:<turn_limit>": 交代込み extensive-form ゲーム木 (先制技 / ランク補正対応)
 echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"switching_game:2"}' | bin/pkdx select
 
 # メタ乖離分析（usage + matrix JSON を stdin）

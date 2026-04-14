@@ -21,13 +21,17 @@ fn avg_damage(r : @model.DamageCalcResult) -> Double {
 }
 
 ///|
-/// Build a `DamageCalcInput` with the combatants' abilities/items/tera and no
-/// weather/field/ranks. Used as the canonical reference input for payoff
-/// computation.
-fn build_input(
+/// Build a `DamageCalcInput` with the combatants' abilities/items/tera, the
+/// given attacker/defender ranks, and no weather/field. Used as the canonical
+/// reference input for payoff computation — existing call-sites should use
+/// `build_input` (ranks=0) unless they specifically need rank-aware damage
+/// (`SwitchingGame`'s rank-tracked state).
+fn build_input_with_ranks(
   atk : Combatant,
   dfn : Combatant,
   mv : @model.Move,
+  atk_rank : Int,
+  def_rank : Int,
 ) -> @model.DamageCalcInput {
   {
     attacker: atk.pokemon,
@@ -44,12 +48,22 @@ fn build_input(
     atk_stat_override: 0,
     def_stat_override: 0,
     def_hp_override: 0,
-    atk_rank: 0,
-    def_rank: 0,
+    atk_rank,
+    def_rank,
     fainted_count: 0,
     is_double: false,
     stat_system: atk.stat_system,
   }
+}
+
+///|
+/// Rank-less build_input. Equivalent to `build_input_with_ranks(..., 0, 0)`.
+fn build_input(
+  atk : Combatant,
+  dfn : Combatant,
+  mv : @model.Move,
+) -> @model.DamageCalcInput {
+  build_input_with_ranks(atk, dfn, mv, 0, 0)
 }
 
 ///|

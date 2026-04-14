@@ -64,7 +64,7 @@ patches.each do |patch_dir|
     db.transaction do
       # migration.rb を実行。db と patch_dir をバインディングとして渡す
       patch_context = binding
-      eval(File.read(migration_rb), patch_context, migration_rb)
+      eval(File.read(migration_rb, encoding: 'utf-8'), patch_context, migration_rb)
 
       db.execute('INSERT INTO pkdx_migrations (name) VALUES (?)', [name])
     end

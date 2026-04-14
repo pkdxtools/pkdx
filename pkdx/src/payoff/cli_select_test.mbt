@@ -16,7 +16,7 @@ fn build_team_json(n : Int, prefix : String, speeds : Array[Int]) -> String {
       speeds[i].to_string() +
       "," +
       "\"ability\":\"\",\"item\":\"\",\"tera\":\"\"," +
-      "\"moves\":[{\"name\":\"のしかかり\",\"type\":\"ノーマル\",\"category\":\"physical\",\"power\":85}]}"
+      "\"moves\":[{\"name\":\"のしかかり\",\"type\":\"ノーマル\",\"category\":\"物理\",\"power\":85}]}"
   }
   s + "]"
 }
@@ -281,82 +281,39 @@ test "run_select_json_rejects_malformed_team_payoff_model" {
 }
 
 ///|
-test "extract_move_names_from_select_input_collects_unique_names" {
-  let raw =
-    #|{
-    #|  "team": [
-    #|    {"name":"A","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[
-    #|       {"name":"じしん","type":"じめん","category":"physical","power":100},
-    #|       {"name":"つるぎのまい","type":"ノーマル","category":"status","power":0}
-    #|     ]}
-    #|  ],
-    #|  "opponent": [
-    #|    {"name":"B","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[
-    #|       {"name":"じしん","type":"じめん","category":"physical","power":100},
-    #|       {"name":"バレットパンチ","type":"はがね","category":"physical","power":40}
-    #|     ]}
-    #|  ],
-    #|  "format": "single"
-    #|}
-  let names = extract_move_names_from_select_input(raw)
-  // じしん appears in both teams but dedupes → 3 unique names.
-  assert_eq(names.length(), 3)
-  // Names present (order may vary by insertion).
-  let mut has_jishin = false
-  let mut has_turugi = false
-  let mut has_bullet = false
-  for n in names {
-    if n == "じしん" { has_jishin = true }
-    if n == "つるぎのまい" { has_turugi = true }
-    if n == "バレットパンチ" { has_bullet = true }
-  }
-  assert_true(has_jishin)
-  assert_true(has_turugi)
-  assert_true(has_bullet)
-}
-
-///|
-test "extract_move_names_from_select_input_returns_empty_on_malformed_json" {
-  assert_eq(extract_move_names_from_select_input("not-json").length(), 0)
-  assert_eq(extract_move_names_from_select_input("{").length(), 0)
-  assert_eq(extract_move_names_from_select_input("[]").length(), 0)
-}
-
-///|
-test "run_select_with_meta_consults_cache_for_switching_game_payoff" {
-  // Best1v1 / NashResponses do not invoke the meta cache (they ignore
-  // priority and stat_boost). SwitchingGame does — every transition looks
-  // up priority via `move_turn_sign` and stat_boost via `apply_stat_boost`.
-  // Verify that passing a populated cache through `run_select_with_meta`
-  // with `team_payoff_model = "switching_game:1"` causes at least one
-  // lookup hit.
+test "parse_move_json_reads_priority_and_stat_effects" {
+  // Move metadata rides inline on the JSON payload — skills forward
+  // `priority` / `stat_effects` from `pkdx moves` output straight through.
   let raw =
     #|{
     #|  "team": [
     #|    {"name":"A0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
+    #|     "moves":[{"name":"バレットパンチ","type":"はがね","category":"物理","power":40,"priority":1}]},
     #|    {"name":"A1","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
+    #|     "moves":[{"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"priority":0,"stat_effects":[[0,2]]}]},
     #|    {"name":"A2","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]}
-    #|  ],
-    #|  "opponent": [
-    #|    {"name":"B0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|    {"name":"B1","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|    {"name":"B2","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
-    #|     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]}
-    #|  ],
-    #|  "format": "single",
-    #|  "team_payoff_model": "switching_game:1"
+    #|     "moves":[{"name":"じしん","type":"じめん","category":"物理","power":100}]}
+    #|  ]
     #|}
-  let cache = new_move_meta_cache()
-  load_move_meta_from_rows(cache, [("のしかかり", 0, "[]")])
-  let _ = run_select_with_meta(raw, cache)
-  // Switching game's `move_turn_sign` / `apply_stat_boost` consult the
-  // cache for every (UseMove, UseMove) transition.
-  assert_true(cache.hits >= 1)
+  let parsed = match @json.parse(raw) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => parse_team_array(t, "team")
+        _ => {
+          assert_true(false)
+          return
+        }
+      }
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  assert_eq(parsed[0].moves[0].priority, 1)
+  assert_eq(parsed[1].moves[0].priority, 0)
+  assert_eq(parsed[1].moves[0].stat_effects.length(), 1)
+  assert_eq(parsed[1].moves[0].stat_effects[0], (0, 2))
+  // Missing optional fields default to 0 / []
+  assert_eq(parsed[2].moves[0].priority, 0)
+  assert_eq(parsed[2].moves[0].stat_effects.length(), 0)
 }

@@ -38,8 +38,20 @@ fn mk_move(
   type_ : String,
   category : @model.MoveCategory,
   power : Int,
+  priority~ : Int = 0,
+  stat_effects~ : Array[(Int, Int)] = [],
 ) -> @model.Move {
-  { name, type_, category, power, accuracy: 100, pp: 10, learn_method: "" }
+  {
+    name,
+    type_,
+    category,
+    power,
+    accuracy: 100,
+    pp: 10,
+    learn_method: "",
+    priority,
+    stat_effects,
+  }
 }
 
 ///|

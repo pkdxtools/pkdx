@@ -244,10 +244,7 @@ test "value_returns_terminal_value_for_terminal_state" {
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
-  let meta_cache = new_move_meta_cache()
-  let v = value(
-    state, team_a, team_b, 5, cache, stats, dmg_cache, meta_cache,
-  )
+  let v = value(state, team_a, team_b, 5, cache, stats, dmg_cache)
   assert_eq(v, 0.0)
 }
 
@@ -283,14 +280,9 @@ test "value_caches_result_via_value_stats" {
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
-  let meta_cache = new_move_meta_cache()
-  let _ = value(
-    state, team_a, team_b, 2, cache, stats, dmg_cache, meta_cache,
-  )
+  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
   let hits_before = stats.hits
-  let _ = value(
-    state, team_a, team_b, 2, cache, stats, dmg_cache, meta_cache,
-  )
+  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
   assert_true(stats.hits > hits_before)
 }
 
@@ -516,7 +508,7 @@ test "transition_priority_move_outpaces_faster_opponent" {
   // attacker should resolve first and can KO before the fast side acts.
   let slow_prio = mk_combatant(
     mk_pokemon("SlowP", "はがね", "", 100, 250, 100, 100, 100, 50),
-    [mk_move("バレットパンチ", "はがね", @model.Physical, 250)],
+    [mk_move("バレットパンチ", "はがね", @model.Physical, 250, priority=1)],
   )
   let fast_normal = mk_combatant(
     mk_pokemon("FastN", "ノーマル", "", 1, 250, 100, 100, 100, 200),
@@ -543,7 +535,7 @@ test "transition_priority_move_outpaces_faster_opponent" {
 test "transition_sword_dance_raises_attacker_rank_by_two" {
   let me = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
-    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0)],
+    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)])],
   )
   let opp = mk_combatant(
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
@@ -566,7 +558,7 @@ test "transition_sword_dance_raises_attacker_rank_by_two" {
 test "transition_rank_clamps_to_plus_two_after_two_sword_dances" {
   let me = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 200),
-    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0)],
+    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)])],
   )
   let opp = mk_combatant(
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),

@@ -11,9 +11,9 @@
 /// discarded as a wasted turn. Damage is applied in priority → effective-
 /// speed order until one side is KO'd (or the safety turn limit is reached).
 ///
-/// Move metadata (priority, stat_effects) is looked up through the
-/// `MoveMetaCache` that the caller built from `db.query_move_meta`; a fresh
-/// empty cache falls back to the curated table (see `move_meta.mbt`).
+/// Priority and stat-boost metadata are read directly from each
+/// `@model.Move` (populated upstream by `query_moves` via the `move_meta`
+/// DB JOIN), so no per-run cache or lookup layer is required here.
 
 ///|
 /// Default ε for ε-greedy rollout move selection. Rationale: 10% keeps the
@@ -130,25 +130,14 @@ pub fn rollout_pick_move(
 /// Compute Monte Carlo winrate for `a` vs `b` over `trials` seeded
 /// simulations. Returns a value in `[0, 1]` matching the existing `winrate`
 /// contract (1.0 → `a` always wins, 0.0 → `b` always wins, 0.5 → draw).
-/// Returns `0.5` immediately when `trials <= 0`. Uses an empty meta cache;
-/// prefer `monte_carlo_winrate_with_meta` to thread a DB-sourced cache in.
+/// Returns `0.5` immediately when `trials <= 0`. Move priority and
+/// stat-boost effects are read from each `Move.priority` /
+/// `Move.stat_effects`; populate those before constructing the combatants.
 pub fn monte_carlo_winrate(
   a : Combatant,
   b : Combatant,
   trials : Int,
   seed : UInt64,
-) -> Double {
-  monte_carlo_winrate_with_meta(a, b, trials, seed, new_move_meta_cache())
-}
-
-///|
-/// Meta-cache-aware variant of `monte_carlo_winrate`.
-pub fn monte_carlo_winrate_with_meta(
-  a : Combatant,
-  b : Combatant,
-  trials : Int,
-  seed : UInt64,
-  meta_cache : MoveMetaCache,
 ) -> Double {
   if trials <= 0 {
     return 0.5
@@ -156,7 +145,7 @@ pub fn monte_carlo_winrate_with_meta(
   let rng = seeded_rng(seed)
   let mut total = 0.0
   for _ in 0..<trials {
-    total += simulate_battle(a, b, rng, meta_cache~)
+    total += simulate_battle(a, b, rng)
   }
   total / trials.to_double()
 }
@@ -169,26 +158,24 @@ pub fn monte_carlo_winrate_with_meta(
 ///
 /// `turn_limit` / `epsilon` are injected so tests can keep runtime bounded
 /// and exercise both pure-greedy and ε-greedy code paths. Action order uses
-/// priority → effective speed (so priority moves like バレットパンチ can
-/// out-turn faster opponents, and Speed-stage boosts shift the cutoff);
-/// speed ties are broken by RNG. Rank state tracked locally: each status
-/// move drawn from the moveset applies its `stat_effects` to the user before
-/// damage on the next turn.
+/// priority → effective speed (priority moves like バレットパンチ out-turn
+/// faster opponents; Speed-stage boosts shift the cutoff). Speed ties are
+/// broken by RNG. Rank state tracked locally: each status move drawn from
+/// the moveset applies its `stat_effects` to the user before damage on the
+/// next turn.
 pub fn simulate_battle(
   a : Combatant,
   b : Combatant,
   rng : @random.Rand,
   turn_limit~ : Int = 200,
   epsilon~ : Double = default_rollout_epsilon,
-  meta_cache~ : MoveMetaCache = new_move_meta_cache(),
 ) -> Double {
   let mut a_hp = a.pokemon.hp
   let mut b_hp = b.pokemon.hp
   let a_ranks = [0, 0, 0, 0, 0]
   let b_ranks = [0, 0, 0, 0, 0]
   for _ in 0..<turn_limit {
-    // Resolve each side's chosen move up-front (rank-aware so boosted
-    // attackers pick moves that scale with their current stat stage).
+    // Resolve each side's chosen move up-front (rank-aware).
     let idx_a = match rollout_pick_move(
       a, b, rng, epsilon, atk_ranks=a_ranks, def_ranks=b_ranks,
     ) {
@@ -201,16 +188,8 @@ pub fn simulate_battle(
       Some(i) => i
       None => -1
     }
-    let prio_a = if idx_a >= 0 {
-      lookup_priority(meta_cache, a.moves[idx_a].name)
-    } else {
-      0
-    }
-    let prio_b = if idx_b >= 0 {
-      lookup_priority(meta_cache, b.moves[idx_b].name)
-    } else {
-      0
-    }
+    let prio_a = if idx_a >= 0 { a.moves[idx_a].priority } else { 0 }
+    let prio_b = if idx_b >= 0 { b.moves[idx_b].priority } else { 0 }
     let eff_spe_a = effective_speed(a.pokemon.spe, a_ranks[4])
     let eff_spe_b = effective_speed(b.pokemon.spe, b_ranks[4])
     let s = turn_order_sign(a, prio_a, eff_spe_a, b, prio_b, eff_spe_b)
@@ -222,28 +201,20 @@ pub fn simulate_battle(
       rng.boolean()
     }
     if a_first {
-      b_hp = perform_attack_with(
-        a, b, b_hp, idx_a, rng, a_ranks, b_ranks, meta_cache,
-      )
+      b_hp = perform_attack_with(a, b, b_hp, idx_a, rng, a_ranks, b_ranks)
       if b_hp <= 0 {
         return 1.0
       }
-      a_hp = perform_attack_with(
-        b, a, a_hp, idx_b, rng, b_ranks, a_ranks, meta_cache,
-      )
+      a_hp = perform_attack_with(b, a, a_hp, idx_b, rng, b_ranks, a_ranks)
       if a_hp <= 0 {
         return 0.0
       }
     } else {
-      a_hp = perform_attack_with(
-        b, a, a_hp, idx_b, rng, b_ranks, a_ranks, meta_cache,
-      )
+      a_hp = perform_attack_with(b, a, a_hp, idx_b, rng, b_ranks, a_ranks)
       if a_hp <= 0 {
         return 0.0
       }
-      b_hp = perform_attack_with(
-        a, b, b_hp, idx_a, rng, a_ranks, b_ranks, meta_cache,
-      )
+      b_hp = perform_attack_with(a, b, b_hp, idx_a, rng, a_ranks, b_ranks)
       if b_hp <= 0 {
         return 1.0
       }
@@ -256,9 +227,9 @@ pub fn simulate_battle(
 /// Apply one pre-selected attack (move index `idx`, already ε-greedy-chosen).
 /// `idx < 0` means the attacker has no legal move this turn — HP is
 /// unchanged. For damaging moves, ranks scale the damage calc (attacker
-/// offensive stage, defender defensive stage). For status moves with a
-/// `stat_effects` entry in the cache, the user's own ranks are mutated
-/// in-place (clamped to `[-2, +2]`) so the boost persists across turns.
+/// offensive stage, defender defensive stage). For status moves with
+/// `stat_effects`, the user's own ranks are mutated in-place (clamped to
+/// `[-2, +2]`) so the boost persists across turns.
 fn perform_attack_with(
   attacker : Combatant,
   defender : Combatant,
@@ -267,7 +238,6 @@ fn perform_attack_with(
   rng : @random.Rand,
   atk_ranks : Array[Int],
   def_ranks : Array[Int],
-  meta_cache : MoveMetaCache,
 ) -> Int {
   if idx < 0 {
     return defender_hp
@@ -276,8 +246,7 @@ fn perform_attack_with(
   // Status / non-damaging move: apply stat_effects to the attacker's own
   // ranks, leave HP unchanged.
   if mv.power <= 0 {
-    let effs = lookup_stat_effects(meta_cache, mv.name)
-    for eff in effs {
+    for eff in mv.stat_effects {
       let (i, delta) = eff
       if i >= 0 && i < atk_ranks.length() {
         atk_ranks[i] = clamp_rank(atk_ranks[i] + delta)

@@ -1,5 +1,6 @@
 import {
   "ushironoko/pkdx/src/model",
+  "moonbitlang/core/json" @json,
 }
 
 import {

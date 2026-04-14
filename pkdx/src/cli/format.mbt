@@ -97,7 +97,10 @@ pub fn format_pokemon(p : @model.Pokemon, fmt : OutputFormat) -> String {
 }
 
 ///|
-/// Format moves as JSON array.
+/// Format moves as JSON array. Includes `priority` and `stat_effects`
+/// (payoff-layer metadata populated from `move_meta` via `query_moves`);
+/// skills consuming this output can forward it to `pkdx select` without
+/// a separate DB query.
 fn moves_to_json(moves : Array[@model.Move]) -> String {
   let mut s = "["
   for i = 0; i < moves.length(); i = i + 1 {
@@ -121,7 +124,25 @@ fn moves_to_json(moves : Array[@model.Move]) -> String {
       m.pp.to_string() +
       ",\"learn_method\":\"" +
       m.learn_method +
-      "\"}"
+      "\",\"priority\":" +
+      m.priority.to_string() +
+      ",\"stat_effects\":" +
+      stat_effects_to_json(m.stat_effects) +
+      "}"
+  }
+  s + "]"
+}
+
+///|
+/// Format stat_effects as JSON `[[stat, delta], ...]`.
+fn stat_effects_to_json(effs : Array[(Int, Int)]) -> String {
+  let mut s = "["
+  for i = 0; i < effs.length(); i = i + 1 {
+    if i > 0 {
+      s = s + ","
+    }
+    let (a, b) = effs[i]
+    s = s + "[" + a.to_string() + "," + b.to_string() + "]"
   }
   s + "]"
 }

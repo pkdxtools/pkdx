@@ -75,7 +75,7 @@ MonteCarloSim(trials: Int, seed: UInt64)
 `@moonbitlang/core/random` の `Rand::chacha8` で seeded RNG を作成。N trials × turn loop:
 
 1. 各側が `rollout_pick_move` (ε-greedy) で技を選択。ε=`default_rollout_epsilon = 0.1` の確率で全 move から一様、残りの確率で `pick_best_move` (power > 0 の中で平均ダメージ最大)。変化技も ε で非ゼロ確率で標本化される
-2. 先攻決定: `turn_order_sign(a, 優先度_a, Spe_a, b, 優先度_b, Spe_b)`。優先度は `move_meta.move_priority` で解決、素早さ同値は RNG coin flip
+2. 先攻決定: `turn_order_sign(a, 優先度_a, Spe_a, b, 優先度_b, Spe_b)`。優先度は `move.priority` を参照、素早さ同値は RNG coin flip
 3. 優先度順逐次解決:
    - 先攻 → 選ばれた技が power > 0 なら 16-roll table から `rng.int(limit=16)` でサンプル → defender HP 減算。power = 0 (status) の場合は damage なし
    - defender HP > 0 なら後攻も同様に行動
@@ -147,7 +147,7 @@ active 自身が HP=0 の場合は forced switch のみ。
 - **交代 vs 交代**: 両者 active 更新、ランクを `[0, 0, 0, 0, 0]` にリセット、damage なし、turn+1
 - **交代 vs 技**: 交代側 active 更新 / ランクリセット、技側は新しい active に damage (新しいランク=0 で計算)。技側の自己積み効果も適用
 - **技 vs 技**: 優先度→実効素早さ (`turn_order_sign`) で先攻決定して逐次解決
-  - 優先度は `move_meta.move_priority` で判定 (例: しんそく=+2, バレットパンチ=+1)
+  - 優先度は `move.priority` を直接参照 (例: しんそく=+2, バレットパンチ=+1)
   - 実効素早さは Spe ランク (`effective_speed(base, rank)`) を反映
   - 先攻 attack → defender HP 減算 → 先攻の積み技効果を反映 → KO 判定 → 後攻 alive なら attack / 積み効果
   - 先制 KO の場合、後攻の action は実行されない (リアル戦闘準拠)
@@ -155,7 +155,7 @@ active 自身が HP=0 の場合は forced switch のみ。
 
 ### 積み技 (ランク補正)
 
-`move_meta.stat_boost_effect` が `Some([(stat_idx, delta), ...])` を返す技は、使用者のランクベクトルを `clamp_rank` (`[-2, +2]`) しながら更新する。サポート対象の主要な積み技は `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし（将来拡張時に `move_meta.mbt` の表を更新）。
+`move.stat_effects` が `[(stat_idx, delta), ...]` の形で載っている技 (DB の `move_meta` テーブルから populate) は、使用者のランクベクトルを `clamp_rank` (`[-2, +2]`) しながら更新する。`pkdx_patch/006_move_meta/data.json` に収録済みの主要な積み技: `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし — 追加は `data.json` に行を 1 つ足して `./setup.sh` を走らせれば反映される。
 
 ### Terminal value
 
@@ -187,21 +187,20 @@ value(state, ..., cache, stats):
 
 実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。N=3 の実測では turn_limit=2〜5 まで無理なく完走する（各ノードの Nash LP は最大 6×6 で数μs、到達 state は memoization でカバー）。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて 5 程度まで設定してよい。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
 
-### `MoveMetaCache` (技メタのキャッシュ)
+### 技メタ (`priority` / `stat_effects`)
 
-`SwitchingGame` / `MonteCarloSim` は技の priority と自己ランク補正 (`stat_effects`) を毎ターン参照する。データは `pokedex.db` の `move_meta` テーブル (パッチ `pkdx_patch/006_move_meta` が生成) に載っており、`pkdx select` のエントリで `db.query_move_meta(db, names)` を 1 回叩いて `MoveMetaCache` に詰める。以降の再帰 / rollout では DB に一切触らない。
+技の `priority` と自己ランク補正 (`stat_effects`) は `@model.Move` 構造体に載っていて、`pkdx moves` / `pkdx damage` のクエリ時に `local_waza` と `pkdx_patch/006_move_meta` の `move_meta` テーブルを LEFT JOIN して自動的に populate される (未登録技はデフォルト `priority=0` / `stat_effects=[]`)。
 
 ```moonbit
-MoveMeta { priority : Int, stat_effects : Array[(Int, Int)] }
-MoveMetaCache { data, mut hits, mut misses, mut fallbacks }
+// @model.Move (抜粋)
+pub(all) struct Move {
+  ..., priority : Int, stat_effects : Array[(Int, Int)]
+}
 ```
 
-- `lookup_priority(cache, name)` — cache hit → そのまま返す / miss → `move_priority_fallback` (curated table)
-- `lookup_stat_effects(cache, name)` — 同上 (`stat_boost_effect_fallback`)
+payoff 層 (`SwitchingGame` / `MonteCarloSim`) は再帰 / rollout 内で `move.priority` / `move.stat_effects` を直接参照するだけ。別キャッシュや lookup 関数は不要。
 
-curated table は DB に未登録の新技が混ざっても動くようにする保険で、`move_priority_fallback` / `stat_boost_effect_fallback` として `move_meta.mbt` に残っている。正規のパスは DB 経由。
-
-キー空間は技数に線形 (6v6 の 48 技 → 重複排除で 20〜30 件)。DB クエリは `IN (?, ?, ...)` 一発、ホットループ内には現れない。テスト / 単体呼び出しの `switching_game_winrate` / `monte_carlo_winrate` は `new_move_meta_cache()` (空) を使うため、curated fallback のみで動く。
+スキル側は `pkdx moves` 出力 (priority / stat_effects 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。新技を追加するときは `pkdx_patch/006_move_meta/data.json` に行を追加するだけ — コード変更は不要。
 
 ### `ValueStats` / `DamageCache` (memoization 観測)
 
@@ -271,7 +270,7 @@ JSON 互換ルール:
 - `ChampionsSP(stat_system: StatSystem)` — SP 合計 66 制約下の最適化 (pairwise variant)
 - `SwitchingGame` の Double format 対応 (現在 Single 専用)
 - 状態異常 / 天候 / フィールドのモデル化 (MonteCarloSim と SwitchingGame の双方)
-- 変化技の効果拡充 — 現状は `MoveMeta.stat_effects` 経由の自己ランク補正のみ。`pkdx_patch/006_move_meta/data.json` に行を足すだけで追加可能。状態異常・交代・ひるみ系に拡張する場合は `MoveMeta` のスキーマ (`stat_effects_json` 以外の effect kind 列) 追加を検討
+- 変化技の効果拡充 — 現状は `move.stat_effects` 経由の自己ランク補正のみ。`pkdx_patch/006_move_meta/data.json` に行を足すだけで追加可能。状態異常・交代・ひるみ系に拡張する場合は `move_meta` テーブルのスキーマ (`stat_effects_json` 以外の effect kind 列) 追加と `@model.Move` 側のフィールド追加を検討
 - MonteCarloSim の ε-greedy から局所 Nash LP への切替 (rollout の変化技評価を精緻化)
 - αβ pruning / iterative deepening — `SwitchingGameState` は不変・ハッシャブルで αβ 前提を満たすため、`value` に `alpha` / `beta` 引数を足してノード順序を勾配ヒューリスティックで並べれば実装可能 (状態表現の変更不要)
 

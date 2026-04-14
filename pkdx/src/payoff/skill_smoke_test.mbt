@@ -49,12 +49,12 @@ test "team_builder_phase7_invokes_select_smoke" {
   // `pkdx select`. We verify the handler produces a well-formed distribution.
   let team =
     #|[
-    #|  {"name":"P0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":100,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|  {"name":"P1","type1":"ノーマル","type2":"","hp":100,"atk":105,"def":80,"spa":80,"spd":80,"spe":95,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|  {"name":"P2","type1":"ノーマル","type2":"","hp":100,"atk":110,"def":80,"spa":80,"spd":80,"spe":90,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|  {"name":"P3","type1":"ノーマル","type2":"","hp":100,"atk":95,"def":80,"spa":80,"spd":80,"spe":105,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|  {"name":"P4","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":110,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
-    #|  {"name":"P5","type1":"ノーマル","type2":"","hp":100,"atk":90,"def":80,"spa":80,"spd":80,"spe":85,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]}
+    #|  {"name":"P0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":100,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|  {"name":"P1","type1":"ノーマル","type2":"","hp":100,"atk":105,"def":80,"spa":80,"spd":80,"spe":95,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|  {"name":"P2","type1":"ノーマル","type2":"","hp":100,"atk":110,"def":80,"spa":80,"spd":80,"spe":90,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|  {"name":"P3","type1":"ノーマル","type2":"","hp":100,"atk":95,"def":80,"spa":80,"spd":80,"spe":105,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|  {"name":"P4","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":110,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|  {"name":"P5","type1":"ノーマル","type2":"","hp":100,"atk":90,"def":80,"spa":80,"spd":80,"spe":85,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]}
     #|]
   let input = "{\"team\":" + team + ",\"opponent\":" + team + ",\"format\":\"single\"}"
   let out = run_select(input)

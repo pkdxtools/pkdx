@@ -1,4 +1,19 @@
 ///|
+/// A move (technique) usable by a Pokemon. Move metadata used by the payoff
+/// layer (SwitchingGame / MonteCarloSim) travels inline on this struct:
+///
+/// - `priority ∈ [-7, +5]` — in-game action-order bucket. `0` for regular
+///   moves, positive for priority moves (しんそく=+2, バレットパンチ=+1,
+///   ねこだまし=+3, まもる=+4).
+/// - `stat_effects` — list of `(stat_index, delta)` pairs applied to the
+///   user on use. Stat indices: `0=A, 1=B, 2=C, 3=D, 4=S`. つるぎのまい is
+///   `[(0, 2)]`, りゅうのまい is `[(0, 1), (4, 1)]`, からをやぶる is
+///   `[(0, 2), (2, 2), (4, 2), (1, -1), (3, -1)]`. Empty for damaging-only
+///   and unrecognised moves.
+///
+/// Both fields default to `0` / `[]` so code that constructs `Move` values
+/// without this metadata (legacy paths, tests) stays valid; the payoff
+/// layer interprets the defaults as "no priority / no boost".
 pub(all) struct Move {
   name : String
   type_ : String
@@ -7,4 +22,6 @@ pub(all) struct Move {
   accuracy : Int
   pp : Int
   learn_method : String
+  priority : Int
+  stat_effects : Array[(Int, Int)]
 } derive(Show, Eq)

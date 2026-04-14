@@ -256,16 +256,12 @@ fn clamp_zero(x : Int) -> Int {
 }
 
 ///|
-/// Apply the stat-boost effects (if any) of `mv_name` to `ranks` in-place.
-/// Each delta is added and clamped to `[-2, +2]` via `clamp_rank`. Uses
-/// `meta_cache` (DB-sourced) with curated-table fallback.
-fn apply_stat_boost(
-  ranks : Array[Int],
-  mv_name : String,
-  meta_cache : MoveMetaCache,
-) -> Unit {
-  let effs = lookup_stat_effects(meta_cache, mv_name)
-  for eff in effs {
+/// Apply the stat-boost effects carried on `mv.stat_effects` to `ranks`
+/// in-place. Each delta is added and clamped to `[-2, +2]` via `clamp_rank`.
+/// Metadata is populated upstream in `query_moves` (DB) or in the JSON
+/// payload consumed by `parse_move_json`.
+fn apply_stat_boost(ranks : Array[Int], mv : @model.Move) -> Unit {
+  for eff in mv.stat_effects {
     let (idx, delta) = eff
     if idx >= 0 && idx < ranks.length() {
       ranks[idx] = clamp_rank(ranks[idx] + delta)
@@ -276,7 +272,8 @@ fn apply_stat_boost(
 ///|
 /// Priority-aware, rank-aware turn order sign between the two actives for the
 /// given moves. Returns `+1` if my active acts first, `-1` if opp acts first,
-/// `0` on full ties. Uses `meta_cache` for priority lookup.
+/// `0` on full ties. Reads priority directly from `@model.Move.priority`
+/// (populated by `query_moves` via the `move_meta` DB JOIN).
 fn move_turn_sign(
   me : Combatant,
   me_ranks : Array[Int],
@@ -284,13 +281,10 @@ fn move_turn_sign(
   opp : Combatant,
   opp_ranks : Array[Int],
   mv_opp : @model.Move,
-  meta_cache : MoveMetaCache,
 ) -> Int {
-  let prio_me = lookup_priority(meta_cache, mv_me.name)
-  let prio_opp = lookup_priority(meta_cache, mv_opp.name)
   let eff_me = effective_speed(me.pokemon.spe, me_ranks[4])
   let eff_opp = effective_speed(opp.pokemon.spe, opp_ranks[4])
-  turn_order_sign(me, prio_me, eff_me, opp, prio_opp, eff_opp)
+  turn_order_sign(me, mv_me.priority, eff_me, opp, mv_opp.priority, eff_opp)
 }
 
 ///|
@@ -306,7 +300,6 @@ pub fn transition_with_cache(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
-  meta_cache : MoveMetaCache,
 ) -> SwitchingGameState {
   let my_hps_new = state.my_hps.copy()
   let opp_hps_new = state.opp_hps.copy()
@@ -345,8 +338,7 @@ pub fn transition_with_cache(
       // Opp's own stat-boost (if status move) still resolves on user.
       apply_stat_boost(
         opp_ranks_new,
-        opp_team[state.opp_active].moves[mj].name,
-        meta_cache,
+        opp_team[state.opp_active].moves[mj],
       )
     }
     (UseMove(mi), Switch(j)) => {
@@ -366,11 +358,7 @@ pub fn transition_with_cache(
         opp_team,
       )
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
-      apply_stat_boost(
-        my_ranks_new,
-        my_team[state.my_active].moves[mi].name,
-        meta_cache,
-      )
+      apply_stat_boost(my_ranks_new, my_team[state.my_active].moves[mi])
     }
     (UseMove(mi), UseMove(mj)) => {
       let me = my_team[state.my_active]
@@ -378,7 +366,7 @@ pub fn transition_with_cache(
       let mv_me = me.moves[mi]
       let mv_opp = opp.moves[mj]
       let s = move_turn_sign(
-        me, my_ranks_new, mv_me, opp, opp_ranks_new, mv_opp, meta_cache,
+        me, my_ranks_new, mv_me, opp, opp_ranks_new, mv_opp,
       )
       let dmg_mo = mean_damage_cached(
         dmg_cache,
@@ -410,31 +398,31 @@ pub fn transition_with_cache(
         my_hps_new[state.my_active] = clamp_zero(
           my_hps_new[state.my_active] - dmg_om,
         )
-        apply_stat_boost(my_ranks_new, mv_me.name, meta_cache)
-        apply_stat_boost(opp_ranks_new, mv_opp.name, meta_cache)
+        apply_stat_boost(my_ranks_new, mv_me)
+        apply_stat_boost(opp_ranks_new, mv_opp)
       } else if s > 0 {
         // My active attacks first. Rank-ups on my side apply regardless of
         // whether the move damages (status moves).
         opp_hps_new[state.opp_active] = clamp_zero(
           opp_hps_new[state.opp_active] - dmg_mo,
         )
-        apply_stat_boost(my_ranks_new, mv_me.name, meta_cache)
+        apply_stat_boost(my_ranks_new, mv_me)
         if opp_hps_new[state.opp_active] > 0 {
           my_hps_new[state.my_active] = clamp_zero(
             my_hps_new[state.my_active] - dmg_om,
           )
-          apply_stat_boost(opp_ranks_new, mv_opp.name, meta_cache)
+          apply_stat_boost(opp_ranks_new, mv_opp)
         }
       } else {
         my_hps_new[state.my_active] = clamp_zero(
           my_hps_new[state.my_active] - dmg_om,
         )
-        apply_stat_boost(opp_ranks_new, mv_opp.name, meta_cache)
+        apply_stat_boost(opp_ranks_new, mv_opp)
         if my_hps_new[state.my_active] > 0 {
           opp_hps_new[state.opp_active] = clamp_zero(
             opp_hps_new[state.opp_active] - dmg_mo,
           )
-          apply_stat_boost(my_ranks_new, mv_me.name, meta_cache)
+          apply_stat_boost(my_ranks_new, mv_me)
         }
       }
     }
@@ -463,13 +451,7 @@ pub fn transition(
   opp_team : Array[Combatant],
 ) -> SwitchingGameState {
   transition_with_cache(
-    state,
-    my_action,
-    opp_action,
-    my_team,
-    opp_team,
-    new_damage_cache(),
-    new_move_meta_cache(),
+    state, my_action, opp_action, my_team, opp_team, new_damage_cache(),
   )
 }
 
@@ -487,7 +469,6 @@ pub fn value(
   cache : @hashmap.HashMap[SwitchingGameState, Double],
   stats : ValueStats,
   dmg_cache : DamageCache,
-  meta_cache : MoveMetaCache,
 ) -> Double {
   match terminal_value(state, my_team, opp_team, turn_limit) {
     Some(v) => return v
@@ -515,23 +496,10 @@ pub fn value(
   for i in 0..<actions_me.length() {
     for j in 0..<actions_opp.length() {
       let next = transition_with_cache(
-        state,
-        actions_me[i],
-        actions_opp[j],
-        my_team,
-        opp_team,
-        dmg_cache,
-        meta_cache,
+        state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
       )
       data[i][j] = value(
-        next,
-        my_team,
-        opp_team,
-        turn_limit,
-        cache,
-        stats,
-        dmg_cache,
-        meta_cache,
+        next, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
       )
     }
   }
@@ -553,33 +521,16 @@ pub fn value(
 ///|
 /// Entry point: compute the Nash value of a SwitchingGame between `my_team`
 /// and `opp_team` starting at full HP with active slot 0 on each side, zero
-/// ranks, and `turn = 0`. Return value is in `[-1, +1]`. Uses an empty
-/// `MoveMetaCache` (curated-table fallback only); for DB-sourced metadata
-/// prefer `switching_game_winrate_with_meta`.
+/// ranks, and `turn = 0`. Return value is in `[-1, +1]`. Priority and
+/// stat-boost metadata are read directly from each `move.priority` /
+/// `move.stat_effects` — populate those fields via `pkdx moves` (which JOINs
+/// `move_meta`) before building the combatants.
 pub fn switching_game_winrate(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
 ) -> Double {
-  switching_game_winrate_with_meta(
-    my_team, opp_team, turn_limit, new_move_meta_cache(),
-  )
-}
-
-///|
-/// Same as `switching_game_winrate` but threads a caller-provided
-/// `MoveMetaCache`. Lets `pkdx select` populate move metadata from the DB
-/// once per run; internal lookups then use the cache instead of the
-/// hardcoded fallback.
-pub fn switching_game_winrate_with_meta(
-  my_team : Array[Combatant],
-  opp_team : Array[Combatant],
-  turn_limit : Int,
-  meta_cache : MoveMetaCache,
-) -> Double {
-  let (v, _, _) = switching_game_winrate_stats_with_meta(
-    my_team, opp_team, turn_limit, meta_cache,
-  )
+  let (v, _, _) = switching_game_winrate_stats(my_team, opp_team, turn_limit)
   v
 }
 
@@ -587,27 +538,11 @@ pub fn switching_game_winrate_with_meta(
 /// Same as `switching_game_winrate`, but also returns the `ValueStats` and
 /// `DamageCache` collected during the recursion. Useful for CI smoke tests
 /// and diagnostics that need to sanity-check cache behaviour at larger
-/// `turn_limit`: `ValueStats` observes the state-value memo (one entry per
-/// reached state), `DamageCache` observes the damage-table memo (one entry
-/// per `(side, atk, def, move, atk_rank, def_rank)` tuple).
+/// `turn_limit`.
 pub fn switching_game_winrate_stats(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
-) -> (Double, ValueStats, DamageCache) {
-  switching_game_winrate_stats_with_meta(
-    my_team, opp_team, turn_limit, new_move_meta_cache(),
-  )
-}
-
-///|
-/// Meta-aware stats variant. Same contract as
-/// `switching_game_winrate_stats` plus an explicit `MoveMetaCache` input.
-pub fn switching_game_winrate_stats_with_meta(
-  my_team : Array[Combatant],
-  opp_team : Array[Combatant],
-  turn_limit : Int,
-  meta_cache : MoveMetaCache,
 ) -> (Double, ValueStats, DamageCache) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
@@ -629,16 +564,7 @@ pub fn switching_game_winrate_stats_with_meta(
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
-  let v = value(
-    state,
-    my_team,
-    opp_team,
-    turn_limit,
-    cache,
-    stats,
-    dmg_cache,
-    meta_cache,
-  )
+  let v = value(state, my_team, opp_team, turn_limit, cache, stats, dmg_cache)
   (v, stats, dmg_cache)
 }
 

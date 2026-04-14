@@ -646,7 +646,7 @@ cat <<'JSON' | $PKDX select
   "team": [
     {"name":"<name>","type1":"<t1>","type2":"<t2>","hp":<h>,"atk":<a>,"def":<b>,
      "spa":<c>,"spd":<d>,"spe":<s>,"ability":"<abil>","item":"<item>","tera":"<tera>",
-     "moves":[{"name":"<mv>","type":"<t>","category":"physical|special","power":<p>}, ...]},
+     "moves":[{"name":"<mv>","type":"<t>","category":"物理|特殊|変化","power":<p>,"priority":<int>,"stat_effects":[[<stat>,<delta>],...]}, ...]},
     ... (6 体ぶん)
   ],
   "opponent": [ ... (仮想敵 6 体) ],

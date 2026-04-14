@@ -62,17 +62,6 @@ pub fn cross_payoff(
   team_b : Array[Combatant],
   model : PayoffModel,
 ) -> @nash.FiniteMatrix raise PayoffError {
-  cross_payoff_with_meta(team_a, team_b, model, new_move_meta_cache())
-}
-
-///|
-/// Meta-cache-aware variant of `cross_payoff`.
-pub fn cross_payoff_with_meta(
-  team_a : Array[Combatant],
-  team_b : Array[Combatant],
-  model : PayoffModel,
-  meta_cache : MoveMetaCache,
-) -> @nash.FiniteMatrix raise PayoffError {
   let na = team_a.length()
   let nb = team_b.length()
   if na == 0 || nb == 0 {
@@ -92,10 +81,7 @@ pub fn cross_payoff_with_meta(
   for i in 0..<na {
     let row = Array::make(nb, 0.0)
     for j in 0..<nb {
-      row[j] = 2.0 * winrate_with_meta(
-          team_a[i], team_b[j], model, meta_cache,
-        ) -
-        1.0
+      row[j] = 2.0 * winrate(team_a[i], team_b[j], model) - 1.0
     }
     data[i] = row
   }
@@ -161,7 +147,6 @@ fn team_payoff_matrix_switching(
   team_b : Array[Combatant],
   format : BattleFormat,
   turn_limit : Int,
-  meta_cache : MoveMetaCache,
 ) -> @nash.FiniteMatrix raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -189,9 +174,7 @@ fn team_payoff_matrix_switching(
     for j in 0..<size_b {
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
-      row[j] = switching_game_winrate_with_meta(
-        picked_a, picked_b, turn_limit, meta_cache,
-      )
+      row[j] = switching_game_winrate(picked_a, picked_b, turn_limit)
     }
     data[i] = row
   }
@@ -213,28 +196,10 @@ pub fn team_payoff_matrix_with_team_model(
   format : BattleFormat,
   team_model : TeamPayoffModel,
 ) -> @nash.FiniteMatrix raise PayoffError {
-  team_payoff_matrix_with_team_model_and_meta(
-    team_a, team_b, format, team_model, new_move_meta_cache(),
-  )
-}
-
-///|
-/// Meta-cache-aware dispatcher. Threads `meta_cache` into both the
-/// pairwise and switching branches.
-pub fn team_payoff_matrix_with_team_model_and_meta(
-  team_a : Array[Combatant],
-  team_b : Array[Combatant],
-  format : BattleFormat,
-  team_model : TeamPayoffModel,
-  meta_cache : MoveMetaCache,
-) -> @nash.FiniteMatrix raise PayoffError {
   match team_model {
-    Pairwise(model) =>
-      team_payoff_matrix_with_meta(team_a, team_b, format, model, meta_cache)
+    Pairwise(model) => team_payoff_matrix(team_a, team_b, format, model)
     SwitchingGame(turn_limit) =>
-      team_payoff_matrix_switching(
-        team_a, team_b, format, turn_limit, meta_cache,
-      )
+      team_payoff_matrix_switching(team_a, team_b, format, turn_limit)
   }
 }
 
@@ -248,27 +213,13 @@ pub fn team_payoff_matrix(
   format : BattleFormat,
   model : PayoffModel,
 ) -> @nash.FiniteMatrix raise PayoffError {
-  team_payoff_matrix_with_meta(
-    team_a, team_b, format, model, new_move_meta_cache(),
-  )
-}
-
-///|
-/// Meta-cache-aware variant of `team_payoff_matrix`.
-pub fn team_payoff_matrix_with_meta(
-  team_a : Array[Combatant],
-  team_b : Array[Combatant],
-  format : BattleFormat,
-  model : PayoffModel,
-  meta_cache : MoveMetaCache,
-) -> @nash.FiniteMatrix raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
   let nb = team_b.length()
   if na < k || nb < k {
     raise EmptyCombatants
   }
-  let individual = cross_payoff_with_meta(team_a, team_b, model, meta_cache)
+  let individual = cross_payoff(team_a, team_b, model)
   let sel_a = combinations(na, k)
   let sel_b = combinations(nb, k)
   let size_a = sel_a.length()

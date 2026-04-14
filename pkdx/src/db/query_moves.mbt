@@ -31,13 +31,19 @@ fn query_moves_champions(
   // can distinguish confiscated moves. For legacy versions this stays as
   // 'basic' / 'TM' — a small but visible shift in semantics worth noting
   // if you touch the formatter.
+  // LEFT JOIN move_meta (pkdx_patch/006_move_meta) so payoff metadata flows
+  // inline on the returned `@model.Move`. Missing rows default to priority=0
+  // and empty stat_effects via COALESCE.
   let sql_head =
     #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
-    #|       w.power, w.accuracy, w.pp, cl.state AS learn_method
+    #|       w.power, w.accuracy, w.pp, cl.state AS learn_method,
+    #|       COALESCE(mm.priority, 0) AS priority,
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
     #|FROM champions_learnset cl
     #|JOIN local_waza w ON cl.waza = w.waza AND w.version = 'Champions'
     #|JOIN local_waza_language wl ON cl.waza = wl.waza
     #|  AND wl.version = 'Champions' AND wl.language = 'jpn'
+    #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
     #|WHERE cl.globalNo = ?
     #|  AND COALESCE(cl.form, '') = '' AND COALESCE(cl.region, '') = ''
     #|  AND COALESCE(cl.mega_evolution, '') = '' AND COALESCE(cl.gigantamax, '') = ''
@@ -55,22 +61,31 @@ fn query_moves_legacy(
 ) -> Result[Array[@model.Move], String] {
   let waza_ver = to_waza_version(version)
   let gno = normalize_global_no(global_no)
+  // LEFT JOIN move_meta per both UNION branches so priority / stat_effects
+  // ride along on the returned Move. COALESCE defaults preserve the legacy
+  // "no metadata" behaviour for moves not in the seed table.
   let sql =
     #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
-    #|       w.power, w.accuracy, w.pp, pw.conditions AS learn_method
+    #|       w.power, w.accuracy, w.pp, pw.conditions AS learn_method,
+    #|       COALESCE(mm.priority, 0) AS priority,
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
     #|FROM local_pokedex_waza pw
     #|JOIN local_waza w ON pw.waza = w.waza AND w.version = ?
     #|JOIN local_waza_language wl ON pw.waza = wl.waza
     #|  AND wl.version = ? AND wl.language = 'jpn'
+    #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
     #|WHERE pw.globalNo = ? AND pw.version = ?
     #|UNION
     #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
-    #|       w.power, w.accuracy, w.pp, 'TM' AS learn_method
+    #|       w.power, w.accuracy, w.pp, 'TM' AS learn_method,
+    #|       COALESCE(mm.priority, 0) AS priority,
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
     #|FROM local_pokedex_waza_machine pm
     #|JOIN local_waza_machine wm ON pm.machine_no = wm.waza AND wm.version = ?
     #|JOIN local_waza w ON wm.machine_no = w.waza AND w.version = ?
     #|JOIN local_waza_language wl ON w.waza = wl.waza
     #|  AND wl.version = ? AND wl.language = 'jpn'
+    #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
     #|WHERE pm.globalNo = ? AND pm.version = ?
     #|  AND COALESCE(pm.form, '') = '' AND COALESCE(pm.region, '') = ''
     #|ORDER BY power DESC
@@ -93,6 +108,12 @@ fn collect_moves_rows(
   let moves : Array[@model.Move] = []
   for i = 0; i < rows.length(); i = i + 1 {
     let r = rows[i]
+    let priority = if r.length() > 7 { parse_int(r[7]) } else { 0 }
+    let stat_effects = if r.length() > 8 {
+      parse_stat_effects_json(r[8])
+    } else {
+      []
+    }
     moves.push(@model.Move::{
       name: r[0],
       type_: r[1],
@@ -101,7 +122,48 @@ fn collect_moves_rows(
       accuracy: parse_int(r[4]),
       pp: parse_int(r[5]),
       learn_method: r[6],
+      priority,
+      stat_effects,
     })
   }
   Ok(moves)
+}
+
+///|
+/// Parse a JSON-encoded array of `[stat, delta]` pairs (e.g. `"[[0,2]]"`)
+/// into an `Array[(Int, Int)]`. Returns `[]` on any parse error or
+/// non-conforming shape so a single malformed DB row cannot break a whole
+/// moveset query.
+fn parse_stat_effects_json(raw : String) -> Array[(Int, Int)] {
+  let out : Array[(Int, Int)] = []
+  let json = try @json.parse(raw) catch {
+    _ => return out
+  }
+  match json {
+    Array(arr) =>
+      for item in arr {
+        match item {
+          Array(pair) =>
+            if pair.length() == 2 {
+              let a = json_number_to_int(pair[0])
+              let b = json_number_to_int(pair[1])
+              match (a, b) {
+                (Some(ai), Some(bi)) => out.push((ai, bi))
+                _ => ()
+              }
+            }
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  out
+}
+
+///|
+fn json_number_to_int(j : Json) -> Int? {
+  match j {
+    Number(n, ..) => Some(n.to_int())
+    _ => None
+  }
 }

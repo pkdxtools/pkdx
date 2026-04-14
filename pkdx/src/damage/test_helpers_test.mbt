@@ -77,7 +77,17 @@ fn mk_move(
   category : @model.MoveCategory,
   power : Int,
 ) -> @model.Move {
-  { name, type_, category, power, accuracy: 100, pp: 10, learn_method: "" }
+  {
+    name,
+    type_,
+    category,
+    power,
+    accuracy: 100,
+    pp: 10,
+    learn_method: "",
+    priority: 0,
+    stat_effects: [],
+  }
 }
 
 ///|

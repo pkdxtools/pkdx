@@ -147,12 +147,15 @@ team (6 体), opponent (6 体), format (single/double), payoff_model (pairwise) 
 ### 実行
 
 ```bash
+# 技の priority / stat_effects は `pkdx moves` の出力にそのまま乗ってくる
+# ので、stdin JSON にはそのままコピペすれば DB 由来の情報が伝わる。
+# 省略した場合はデフォルト (priority=0 / stat_effects=[]) で扱われる。
 cat <<'JSON' | $PKDX select
 {
   "team": [
     {"name":"P0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":100,
      "ability":"","item":"","tera":"",
-     "moves":[{"name":"のしかかり","type":"ノーマル","category":"physical","power":85}]},
+     "moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85,"priority":0,"stat_effects":[]}]},
     ...
   ],
   "opponent": [...],

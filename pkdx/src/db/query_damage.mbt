@@ -7,9 +7,12 @@ pub fn query_move(
 ) -> Result[@model.Move, String] {
   let waza_ver = to_waza_version(version)
   let sql =
-    #|SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp
+    #|SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,
+    #|       COALESCE(mm.priority, 0) AS priority,
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
     #|FROM local_waza_language wl
     #|JOIN local_waza w ON wl.waza = w.waza AND w.version = ?
+    #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
     #|WHERE wl.version = ? AND wl.language = 'jpn' AND wl.name = ?
     #|LIMIT 1
   let rows = match query(db, sql, [waza_ver, waza_ver, move_name]) {
@@ -20,6 +23,12 @@ pub fn query_move(
     return Err("Move not found: " + move_name)
   }
   let r = rows[0]
+  let priority = if r.length() > 6 { parse_int(r[6]) } else { 0 }
+  let stat_effects = if r.length() > 7 {
+    parse_stat_effects_json(r[7])
+  } else {
+    []
+  }
   Ok(@model.Move::{
     name: r[0],
     type_: r[1],
@@ -28,5 +37,7 @@ pub fn query_move(
     accuracy: parse_int(r[4]),
     pp: parse_int(r[5]),
     learn_method: "",
+    priority,
+    stat_effects,
   })
 }

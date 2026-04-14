@@ -1403,30 +1403,7 @@ fn cmd_select() -> @admiral.CommandDef {
 ///|
 fn run_select_cmd() -> Unit {
   let raw = read_stdin_json()
-  // Collect move names referenced in the JSON, populate the meta cache from
-  // the `move_meta` table (best-effort), then hand both to the payoff
-  // entry point. If the DB is unavailable or the table is missing, fall
-  // back to the in-code curated table — the CLI must stay usable even if
-  // `pkdx_patch` has not been applied.
-  let meta_cache = @payoff.new_move_meta_cache()
-  let names = @payoff.extract_move_names_from_select_input(raw)
-  if names.length() > 0 {
-    match resolve_db_path() {
-      Ok(db_path) =>
-        match @db.open(db_path) {
-          Ok(db) => {
-            match @db.query_move_meta(db, names) {
-              Ok(rows) => @payoff.load_move_meta_from_rows(meta_cache, rows)
-              Err(_) => ()
-            }
-            @db.close(db)
-          }
-          Err(_) => ()
-        }
-      Err(_) => ()
-    }
-  }
-  let out = try @payoff.run_select_with_meta(raw, meta_cache) catch {
+  let out = try @payoff.run_select(raw) catch {
     err => {
       exit_error(nash_cli_error_message(err))
       return

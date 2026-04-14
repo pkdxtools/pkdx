@@ -193,7 +193,7 @@ test "rollout_pick_move_epsilon_one_samples_uniformly_across_all_moves" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
       mk_move("weak", "ノーマル", @model.Physical, 40),
       mk_move("strong", "ノーマル", @model.Physical, 120),
     ],
@@ -224,7 +224,7 @@ test "rollout_pick_move_epsilon_zero_always_picks_greedy_damaging_move" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
       mk_move("weak", "ノーマル", @model.Physical, 40),
       mk_move("strong", "ノーマル", @model.Physical, 120),
     ],
@@ -250,8 +250,8 @@ test "rollout_pick_move_status_only_moveset_still_returns_some" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
-      mk_move("りゅうのまい", "ノーマル", @model.Status, 0),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
+      mk_move("りゅうのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 1), (4, 1)]),
     ],
   )
   let dfn = mk_combatant(
@@ -272,7 +272,7 @@ test "simulate_battle_priority_move_wins_over_faster_opponent" {
   // deterministically because priority resolves before speed.
   let slow_prio = mk_combatant(
     mk_pokemon("SlowP", "はがね", "", 100, 250, 100, 100, 100, 50),
-    [mk_move("バレットパンチ", "はがね", @model.Physical, 250)],
+    [mk_move("バレットパンチ", "はがね", @model.Physical, 250, priority=1)],
   )
   let fast_normal = mk_combatant(
     mk_pokemon("FastN", "ノーマル", "", 1, 250, 100, 100, 100, 200),
@@ -316,7 +316,7 @@ test "simulate_battle_setup_move_increases_subsequent_damage" {
   let a_setup = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 200, 80, 100, 80, 100, 90),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
       mk_move("のしかかり", "ノーマル", @model.Physical, 85),
     ],
   )
@@ -343,7 +343,7 @@ test "simulate_battle_status_move_does_not_damage_opponent" {
   // skips damage but stat_effects apply internally.
   let a = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),
-    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0)],
+    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)])],
   )
   let b = mk_combatant(
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
@@ -356,31 +356,18 @@ test "simulate_battle_status_move_does_not_damage_opponent" {
 }
 
 ///|
-test "perform_attack_with_status_move_updates_attacker_ranks" {
-  // Direct unit test of stat-boost propagation in the rollout step.
+test "simulate_battle_status_only_does_not_abort_and_hits_turn_limit" {
+  // Attacker's sole move is a stat-boost status move; opponent's is also
+  // status-only. Rollout must survive the boost application path (no
+  // out-of-bounds / crash) and fall through to the turn_limit draw.
   let a = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
-    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0)],
+    [mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)])],
   )
   let b = mk_combatant(
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
-    [mk_move("x", "ノーマル", @model.Physical, 40)],
+    [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
   let rng = seeded_rng(0UL)
-  let a_ranks = [0, 0, 0, 0, 0]
-  let b_ranks = [0, 0, 0, 0, 0]
-  let meta_cache = new_move_meta_cache()
-  // perform_attack_with is private — exercise it transitively via
-  // simulate_battle, which calls it on every rollout turn. One turn of
-  // つるぎのまい bumps the attacker's A-rank by +2.
-  let _ = simulate_battle(
-    a, b, rng, turn_limit=1, epsilon=0.0, meta_cache=meta_cache,
-  )
-  // Cache counters reflect the lookup; unused in the assertion but verifies
-  // that the status move flowed through the meta path.
-  assert_true(meta_cache.misses >= 1 || meta_cache.hits >= 1)
-  // Whitebox access to the module's internal ranks is not available from
-  // blackbox tests, so the HP-based sanity check above is sufficient.
-  let _ = a_ranks
-  let _ = b_ranks
+  assert_eq(simulate_battle(a, b, rng, turn_limit=5), 0.5)
 }

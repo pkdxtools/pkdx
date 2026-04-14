@@ -16,7 +16,8 @@
 ///   "hp":      Int, "atk":  Int, "def": Int,
 ///   "spa":     Int, "spd":  Int, "spe": Int,
 ///   "ability": String, "item": String, "tera": String,
-///   "moves":   [{"name":..., "type":..., "category":"physical"|"special", "power":Int}, ...]
+///   "moves":   [{"name":..., "type":..., "category":"物理"|"特殊"|"変化",
+///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?}, ...]
 /// }
 /// ```
 ///
@@ -46,17 +47,20 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         None => ""
       }
       let category = match m.get("category") {
-        Some(String(s)) =>
-          match s {
-            "physical" => @model.Physical
-            "special" => @model.Special
-            _ => @model.Physical
-          }
+        Some(String(s)) => @model.category_from_jp(s)
         _ => @model.Physical
       }
       let power = match m.get("power") {
         Some(Number(n, ..)) => n.to_int()
         _ => 0
+      }
+      let priority = match m.get("priority") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => 0
+      }
+      let stat_effects = match m.get("stat_effects") {
+        Some(Array(arr)) => parse_stat_effects_array(arr)
+        _ => []
       }
       {
         name,
@@ -66,10 +70,42 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         accuracy: 100,
         pp: 10,
         learn_method: "",
+        priority,
+        stat_effects,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
   }
+}
+
+///|
+/// Parse a JSON array of `[stat_index, delta]` pairs. Non-conforming entries
+/// are silently skipped (e.g. wrong arity, non-numeric members); a malformed
+/// JSON that parsed as an Array still yields an empty effect list rather than
+/// raising.
+fn parse_stat_effects_array(arr : Array[Json]) -> Array[(Int, Int)] {
+  let out : Array[(Int, Int)] = []
+  for item in arr {
+    match item {
+      Array(pair) =>
+        if pair.length() == 2 {
+          let a = match pair[0] {
+            Number(n, ..) => Some(n.to_int())
+            _ => None
+          }
+          let b = match pair[1] {
+            Number(n, ..) => Some(n.to_int())
+            _ => None
+          }
+          match (a, b) {
+            (Some(ai), Some(bi)) => out.push((ai, bi))
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  out
 }
 
 ///|
@@ -138,6 +174,8 @@ fn parse_combatant_json(
             accuracy: 100,
             pp: 10,
             learn_method: "",
+            priority: 0,
+            stat_effects: [],
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(
@@ -320,7 +358,6 @@ pub fn compute_select_with_team_model(
   opponent : Array[Combatant],
   format : BattleFormat,
   team_model : TeamPayoffModel,
-  meta_cache~ : MoveMetaCache = new_move_meta_cache(),
 ) -> SelectResult raise NashCliError {
   let k = match format {
     Single => 3
@@ -331,8 +368,8 @@ pub fn compute_select_with_team_model(
       "team and opponent must each have at least " + k.to_string() + " members",
     )
   }
-  let m = try team_payoff_matrix_with_team_model_and_meta(
-      team, opponent, format, team_model, meta_cache,
+  let m = try team_payoff_matrix_with_team_model(
+      team, opponent, format, team_model,
     ) catch {
     err => raise InnerError(err.to_string())
   }
@@ -419,80 +456,12 @@ fn format_label(f : BattleFormat) -> String {
 }
 
 ///|
-/// Collect the unique move names (Japanese) referenced anywhere under
-/// `team[*].moves[*].name` or `opponent[*].moves[*].name` in `input_json`.
-/// Used by `main.mbt` to issue a single `move_meta` batch query before
-/// handing the JSON to `run_select_with_meta`. Malformed JSON returns an
-/// empty array rather than raising — `run_select_with_meta` will raise
-/// the structured error when it parses the full payload.
-pub fn extract_move_names_from_select_input(
-  input_json : String,
-) -> Array[String] {
-  let out : Array[String] = []
-  let seen : @hashmap.HashMap[String, Bool] = @hashmap.HashMap::new()
-  let root = try @json.parse(input_json) catch {
-    _ => return out
-  }
-  let obj = match root {
-    Object(m) => m
-    _ => return out
-  }
-  let collect = fn(key : String) -> Unit {
-    match obj.get(key) {
-      Some(Array(team)) =>
-        for m in team {
-          match m {
-            Object(mo) =>
-              match mo.get("moves") {
-                Some(Array(moves)) =>
-                  for mv in moves {
-                    match mv {
-                      Object(mvm) =>
-                        match mvm.get("name") {
-                          Some(String(s)) =>
-                            match seen.get(s) {
-                              Some(_) => ()
-                              None => {
-                                seen[s] = true
-                                out.push(s)
-                              }
-                            }
-                          _ => ()
-                        }
-                      _ => ()
-                    }
-                  }
-                _ => ()
-              }
-            _ => ()
-          }
-        }
-      _ => ()
-    }
-  }
-  collect("team")
-  collect("opponent")
-  out
-}
-
-///|
 /// Run `pkdx select`. Returns a JSON string with the Nash-equilibrium
-/// distribution over k-selections. Uses an empty `MoveMetaCache` (curated
-/// fallback only) — the DB-backed entry point is `run_select_with_meta`,
-/// which `main.mbt` wires with data queried from `move_meta` at startup.
+/// distribution over k-selections. Move priority / stat-boost metadata rides
+/// on each move's JSON entry (`priority`, `stat_effects`) — skills should
+/// take the fields straight from `pkdx moves` output, which JOINs
+/// `move_meta` and emits them.
 pub fn run_select(input_json : String) -> String raise NashCliError {
-  run_select_with_meta(input_json, new_move_meta_cache())
-}
-
-///|
-/// Meta-cache-aware variant of `run_select`. `main.mbt` populates the cache
-/// from `db.query_move_meta` (once, on entry) so both the pairwise
-/// (MonteCarloSim) and switching-game evaluators see DB-sourced priority /
-/// stat-effects data instead of the hardcoded fallback.
-pub fn run_select_with_meta(
-  input_json : String,
-  meta_cache : MoveMetaCache,
-) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
     err => raise InvalidJson(err.to_string())
   }
@@ -525,9 +494,7 @@ pub fn run_select_with_meta(
         None => Pairwise(Best1v1)
       }
   }
-  let r = compute_select_with_team_model(
-    team, opp, format, team_model, meta_cache~,
-  )
+  let r = compute_select_with_team_model(team, opp, format, team_model)
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()

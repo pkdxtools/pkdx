@@ -4,6 +4,9 @@ import {
   "ushironoko/pkdx/src/damage" @damage,
   "moonbitlang/core/double" @double,
   "moonbitlang/core/json" @json,
+  "moonbitlang/core/random" @random,
+  "moonbitlang/core/strconv" @strconv,
+  "moonbitlang/core/hashmap" @hashmap,
 }
 
 import {

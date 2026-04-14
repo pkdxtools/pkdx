@@ -37,6 +37,27 @@ fn select_input_json(
 }
 
 ///|
+/// Variant allowing extra JSON fields (payoff_model / team_payoff_model).
+/// `extra` is inserted verbatim before the closing brace, and must start with
+/// a comma, e.g. `,"payoff_model":"best1v1"`.
+fn select_input_json_with_extra(
+  team_speeds : Array[Int],
+  opp_speeds : Array[Int],
+  format : String,
+  extra : String,
+) -> String {
+  "{\"team\":" +
+  build_team_json(team_speeds.length(), "T", team_speeds) +
+  ",\"opponent\":" +
+  build_team_json(opp_speeds.length(), "O", opp_speeds) +
+  ",\"format\":\"" +
+  format +
+  "\"" +
+  extra +
+  "}"
+}
+
+///|
 test "select_6v6_single_outputs_3pick_distribution" {
   let team_sp = [100, 95, 105, 90, 110, 85]
   let opp_sp = [100, 100, 100, 100, 100, 100]
@@ -192,4 +213,69 @@ test "select_markdown_report_written_to_box_teams" {
   assert_true(md.contains("# Selection Report"))
   assert_true(md.contains("- format: single"))
   assert_true(md.contains("| probability | members |"))
+}
+
+///|
+test "run_select_json_with_payoff_model_only_wraps_in_pairwise" {
+  // Legacy field only: must be wrapped in Pairwise transparently.
+  let team_sp = [100, 100, 100, 100, 100, 100]
+  let opp_sp = [100, 100, 100, 100, 100, 100]
+  let input = select_input_json_with_extra(
+    team_sp,
+    opp_sp,
+    "single",
+    ",\"payoff_model\":\"best1v1\"",
+  )
+  let out = run_select(input)
+  let j = @json.parse(out)
+  match j {
+    Object(m) =>
+      match m.get("row_strategy") {
+        Some(Array(arr)) => assert_true(arr.length() == 20)
+        _ => assert_true(false)
+      }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "run_select_json_with_both_models_gives_team_payoff_model_precedence" {
+  // Both present: team_payoff_model wins; payoff_model is ignored.
+  let team_sp = [100, 100, 100, 100, 100, 100]
+  let opp_sp = [100, 100, 100, 100, 100, 100]
+  let input = select_input_json_with_extra(
+    team_sp,
+    opp_sp,
+    "single",
+    ",\"payoff_model\":\"best1v1\",\"team_payoff_model\":\"pairwise:nash_responses\"",
+  )
+  let out = run_select(input)
+  let j = @json.parse(out)
+  match j {
+    Object(m) =>
+      match m.get("row_strategy") {
+        Some(Array(arr)) => assert_true(arr.length() == 20)
+        _ => assert_true(false)
+      }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "run_select_json_rejects_malformed_team_payoff_model" {
+  let team_sp = [100, 100, 100, 100, 100, 100]
+  let opp_sp = [100, 100, 100, 100, 100, 100]
+  let input = select_input_json_with_extra(
+    team_sp,
+    opp_sp,
+    "single",
+    ",\"team_payoff_model\":\"unknown:bad\"",
+  )
+  let errored = try {
+    let _ = run_select(input)
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
 }

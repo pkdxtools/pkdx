@@ -139,3 +139,55 @@ test "relative_performance_6v6_double_within_10x_of_20x20_baseline" {
     _ => assert_true(false)
   }
 }
+
+///|
+test "end_to_end_select_with_monte_carlo_model_returns_valid_distribution" {
+  // Full pipeline through MonteCarloSim. Trials are kept low for runtime,
+  // but enough to verify the matrix is well-formed and the Nash distribution
+  // is normalised.
+  let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
+  let opp = build_6_team("O", [100, 100, 100, 100, 100, 100])
+  let team_m = team_payoff_matrix_with_team_model(
+    team, opp, Single, Pairwise(MonteCarloSim(20, 7UL)),
+  )
+  assert_true(team_m.rows() == 20 && team_m.cols() == 20)
+  let lp = @nash.solve_zero_sum(team_m)
+  match lp {
+    Optimal(row_strategy~, value~, ..) => {
+      assert_true(value.is_nan() == false)
+      let arr = row_strategy.to_array()
+      assert_true(arr.length() == 20)
+      let mut total = 0.0
+      for x in arr {
+        total += x
+      }
+      assert_true((total - 1.0).abs() < 1.0e-6)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "end_to_end_select_with_switching_game_model_returns_valid_distribution" {
+  // Switching game with small turn_limit to keep runtime bounded.
+  let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
+  let opp = build_6_team("O", [100, 100, 100, 100, 100, 100])
+  let team_m = team_payoff_matrix_with_team_model(
+    team, opp, Single, SwitchingGame(2),
+  )
+  assert_true(team_m.rows() == 20 && team_m.cols() == 20)
+  let lp = @nash.solve_zero_sum(team_m)
+  match lp {
+    Optimal(row_strategy~, value~, ..) => {
+      assert_true(value.is_nan() == false)
+      let arr = row_strategy.to_array()
+      assert_true(arr.length() == 20)
+      let mut total = 0.0
+      for x in arr {
+        total += x
+      }
+      assert_true((total - 1.0).abs() < 1.0e-6)
+    }
+    _ => assert_true(false)
+  }
+}

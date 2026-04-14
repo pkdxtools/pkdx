@@ -14,6 +14,16 @@
 pub(all) enum PayoffModel {
   Best1v1
   NashResponses
+  MonteCarloSim(Int, UInt64)
+} derive(Show, Eq)
+
+///|
+/// Team-level payoff model. `Pairwise` wraps any pairwise `PayoffModel`
+/// (Phase 0-12 behaviour); `SwitchingGame(turn_limit)` evaluates each
+/// (selection, selection) cell as an extensive-form game with switching.
+pub(all) enum TeamPayoffModel {
+  Pairwise(PayoffModel)
+  SwitchingGame(Int)
 } derive(Show, Eq)
 
 ///|

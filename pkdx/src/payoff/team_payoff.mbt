@@ -126,6 +126,84 @@ fn inner_nash_value(m : @nash.FiniteMatrix) -> Double {
 }
 
 ///|
+/// Pick the combatants at `indices` from `team`, preserving order.
+fn pick_combatants(
+  team : Array[Combatant],
+  indices : Array[Int],
+) -> Array[Combatant] {
+  let out = Array::make(indices.length(), team[0])
+  for i in 0..<indices.length() {
+    out[i] = team[indices[i]]
+  }
+  out
+}
+
+///|
+/// Team-level payoff matrix using `SwitchingGame(turn_limit)`. Each cell is
+/// the Nash value of the extensive-form game between the two selected
+/// sub-teams.
+fn team_payoff_matrix_switching(
+  team_a : Array[Combatant],
+  team_b : Array[Combatant],
+  format : BattleFormat,
+  turn_limit : Int,
+) -> @nash.FiniteMatrix raise PayoffError {
+  let k = pick_count(format)
+  let na = team_a.length()
+  let nb = team_b.length()
+  if na < k || nb < k {
+    raise EmptyCombatants
+  }
+  for c in team_a {
+    if c.moves.length() == 0 {
+      raise EmptyMoves(c.pokemon.name_ja)
+    }
+  }
+  for c in team_b {
+    if c.moves.length() == 0 {
+      raise EmptyMoves(c.pokemon.name_ja)
+    }
+  }
+  let sel_a = combinations(na, k)
+  let sel_b = combinations(nb, k)
+  let size_a = sel_a.length()
+  let size_b = sel_b.length()
+  let data = Array::make(size_a, ([] : Array[Double]))
+  for i in 0..<size_a {
+    let row = Array::make(size_b, 0.0)
+    for j in 0..<size_b {
+      let picked_a = pick_combatants(team_a, sel_a[i])
+      let picked_b = pick_combatants(team_b, sel_b[j])
+      row[j] = switching_game_winrate(picked_a, picked_b, turn_limit)
+    }
+    data[i] = row
+  }
+  match @nash.FiniteMatrix::new(data) {
+    Ok(m) => m
+    Err(_) => raise EmptyCombatants
+  }
+}
+
+///|
+/// Build the selection-level team payoff matrix under the given
+/// `TeamPayoffModel`. `Pairwise(m)` delegates to the legacy
+/// `team_payoff_matrix` for backward compatibility;
+/// `SwitchingGame(turn_limit)` evaluates selection-vs-selection as an
+/// extensive-form game with switching.
+pub fn team_payoff_matrix_with_team_model(
+  team_a : Array[Combatant],
+  team_b : Array[Combatant],
+  format : BattleFormat,
+  team_model : TeamPayoffModel,
+) -> @nash.FiniteMatrix raise PayoffError {
+  match team_model {
+    Pairwise(model) => team_payoff_matrix(team_a, team_b, format, model)
+    SwitchingGame(turn_limit) =>
+      team_payoff_matrix_switching(team_a, team_b, format, turn_limit)
+  }
+}
+
+///|
 /// Build the selection-level team payoff matrix. Rows/cols enumerate
 /// k-combinations of `team_a` / `team_b` in lexicographic order; each cell is
 /// the Nash value of the inner k×k sub-matrix.

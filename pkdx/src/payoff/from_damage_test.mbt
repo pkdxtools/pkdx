@@ -24,11 +24,16 @@ test "payoff_model_enum_exhaustive" {
   // All variants must be constructible and distinguishable via match. If a new
   // variant is added without updating callers, this test's match will no longer
   // be exhaustive and the compiler will flag it.
-  let models : Array[PayoffModel] = [Best1v1, NashResponses]
+  let models : Array[PayoffModel] = [
+    Best1v1,
+    NashResponses,
+    MonteCarloSim(1, 0UL),
+  ]
   let labels = models.map(fn(m) {
     match m {
       Best1v1 => "best1v1"
       NashResponses => "nash_responses"
+      MonteCarloSim(_, _) => "monte_carlo"
     }
   })
   let mut joined = ""
@@ -38,7 +43,7 @@ test "payoff_model_enum_exhaustive" {
     }
     joined = joined + labels[i]
   }
-  inspect(joined, content="best1v1,nash_responses")
+  inspect(joined, content="best1v1,nash_responses,monte_carlo")
 }
 
 ///|

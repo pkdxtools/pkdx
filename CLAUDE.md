@@ -199,6 +199,17 @@ echo '{"matrix":[[0,1,-1],[-1,0,1],[1,-1,0]]}' | bin/pkdx nash graph --threshold
 # 選出最適化（team + opponent + format JSON を stdin。macOS/Linux のみ）
 cat team.json | bin/pkdx select
 
+# 選出最適化: pairwise PayoffModel
+# - "best1v1" (デフォルト): 速度＋平均ダメージで一手 KO 比較
+# - "nash_responses": move-vs-move 内部 Nash で技選択をモデル化
+# - "monte_carlo:<trials>:<seed>": seeded RNG でダメージ乱数込み
+echo '{"team":[...],"opponent":[...],"format":"single","payoff_model":"monte_carlo:1000:42"}' | bin/pkdx select
+
+# 選出最適化: team-level TeamPayoffModel (Phase 13 新軸)
+# - "pairwise:<model>": 既存 PayoffModel をラップ ("pairwise:best1v1" 等)
+# - "switching_game:<turn_limit>": 交代込み extensive-form ゲーム木 (turn_limit ≤ 3 推奨)
+echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"switching_game:2"}' | bin/pkdx select
+
 # メタ乖離分析（usage + matrix JSON を stdin）
 echo '{"usage":[0.4,0.3,0.3],"matrix":[[0,1,-1],[-1,0,1],[1,-1,0]]}' | bin/pkdx meta-divergence
 

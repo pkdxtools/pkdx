@@ -170,12 +170,18 @@ pub fn winrate(a : Combatant, b : Combatant, model : PayoffModel) -> Double {
   match model {
     Best1v1 => best1v1_winrate(a, b)
     NashResponses => nash_responses_winrate(a, b)
+    MonteCarloSim(trials, seed) => monte_carlo_winrate(a, b, trials, seed)
   }
 }
 
 ///|
 /// Build the zero-sum payoff matrix `A[i, j] = 2·winrate(i, j) − 1` from a
 /// list of combatants under the given `PayoffModel`.
+///
+/// For `MonteCarloSim` the matrix is built with **upper-triangle estimation
+/// and antisymmetric completion** (`A[j, i] = -A[i, j]`, `A[i, i] = 0`) to
+/// preserve zero-sum property under finite-sample noise. Deterministic models
+/// (`Best1v1`, `NashResponses`) keep the independent per-cell computation.
 pub fn from_combatants(
   combatants : Array[Combatant],
   model : PayoffModel,
@@ -191,12 +197,25 @@ pub fn from_combatants(
   }
   let data = Array::make(n, ([] : Array[Double]))
   for i in 0..<n {
-    let row = Array::make(n, 0.0)
-    for j in 0..<n {
-      let wr = winrate(combatants[i], combatants[j], model)
-      row[j] = 2.0 * wr - 1.0
-    }
-    data[i] = row
+    data[i] = Array::make(n, 0.0)
+  }
+  match model {
+    MonteCarloSim(_, _) =>
+      for i in 0..<n {
+        for j in (i + 1)..<n {
+          let wr = winrate(combatants[i], combatants[j], model)
+          let payoff = 2.0 * wr - 1.0
+          data[i][j] = payoff
+          data[j][i] = -payoff
+        }
+      }
+    _ =>
+      for i in 0..<n {
+        for j in 0..<n {
+          let wr = winrate(combatants[i], combatants[j], model)
+          data[i][j] = 2.0 * wr - 1.0
+        }
+      }
   }
   match @nash.FiniteMatrix::new(data) {
     Ok(m) => m

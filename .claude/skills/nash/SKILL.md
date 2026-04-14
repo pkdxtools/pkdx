@@ -129,7 +129,20 @@ JSON
 
 ### 入力の収集
 
-team (6 体), opponent (6 体), format (single/double), payoff_model (best1v1/nash_responses) を取得する。team は `box/teams/` のキャッシュまたはユーザー直接入力。
+team (6 体), opponent (6 体), format (single/double), payoff_model (pairwise) または team_payoff_model (team-level) を取得する。team は `box/teams/` のキャッシュまたはユーザー直接入力。
+
+#### モデル選択肢
+
+**pairwise (`payoff_model` フィールド)**:
+- `"best1v1"` (デフォルト) — 速くて分かりやすい、技選択は固定
+- `"nash_responses"` — 内部 move-vs-move Nash、技循環をモデル化
+- `"monte_carlo:<trials>:<seed>"` — seeded RNG でダメージ乱数込み (例: `"monte_carlo:1000:42"`)
+
+**team-level (`team_payoff_model` フィールド、Phase 13)**:
+- `"pairwise:<model_string>"` — 上記 pairwise のラッパー (`"pairwise:best1v1"` 等)
+- `"switching_game:<turn_limit>"` — 交代込み extensive-form ゲーム木 (`turn_limit ≤ 3` 推奨)
+
+両方指定された場合は `team_payoff_model` 優先。詳細は `references/payoff_semantics.md`。
 
 ### 実行
 

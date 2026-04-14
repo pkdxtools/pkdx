@@ -1,3 +1,4 @@
 [submodule "pokedex"]
 	path = pokedex
 	url = https://github.com/towakey/pokedex.git
+	ignore = dirty

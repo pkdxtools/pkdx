@@ -35,6 +35,13 @@ pub(all) struct SwitchingGameState {
   opp_hps : Array[Int]
   my_ranks : Array[Int]
   opp_ranks : Array[Int]
+  // 各サイドで mega をすでに 1 回消費したか。Mega は各サイド 1 回までの制約。
+  my_mega_used : Bool
+  opp_mega_used : Bool
+  // team 各スロットが mega 済みか。switch 後に戻ってきたスロットの mega 状態を
+  // 維持するために slot ごとに保存する。長さは team サイズ。
+  my_megaed : Array[Bool]
+  opp_megaed : Array[Bool]
   turn : Int
 } derive(Show, Eq, Hash)
 
@@ -44,6 +51,12 @@ pub(all) struct SwitchingGameState {
 pub(all) enum ActionKind {
   UseMove(Int)
   Switch(Int)
+  // `Mega(mi)`: mega evolve the current active and use move index `mi` this
+  // turn. Legal only when the active's `mega_form` is `Some(_)` and this
+  // side's `*_mega_used` flag is still false. Mega flips the side's flag and
+  // marks `*_megaed[active] = true` so the post-mega stats/type/ability persist
+  // across later switches.
+  Mega(Int)
 } derive(Show, Eq)
 
 ///|
@@ -65,6 +78,31 @@ pub fn new_stats() -> ValueStats {
 fn zero_ranks() -> Array[Int] {
   [0, 0, 0, 0, 0]
 }
+
+///|
+/// Is this side allowed to declare a `Mega` action right now?
+/// `mega_used = false` (side has not spent its one mega), the active is alive,
+/// and the active has a `mega_form` attached. The mega-stone item name is not
+/// part of the gate — the presence of `mega_form = Some(_)` is the single
+/// source of truth (mega-stone validation happens upstream in cache / CLI).
+fn can_mega(
+  active : Int,
+  hps : Array[Int],
+  team : Array[Combatant],
+  mega_used : Bool,
+) -> Bool {
+  if mega_used {
+    return false
+  }
+  if hps[active] <= 0 {
+    return false
+  }
+  match team[active].mega_form {
+    None => false
+    Some(_) => true
+  }
+}
+
 
 ///|
 /// Is at least one Pokemon on this side still alive?
@@ -133,6 +171,47 @@ pub fn terminal_value(
 }
 
 ///|
+/// Build a shallow combatant view with mega-form stats / type / ability applied
+/// when `is_mega` is true and the original has a `mega_form`. HP is intentionally
+/// preserved from the base Pokemon (mega does not change max or current HP).
+/// Items and move list stay untouched.
+fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
+  match (is_mega, c.mega_form) {
+    (true, Some(m)) => {
+      let base = c.pokemon
+      let effective_pokemon : @model.Pokemon = {
+        global_no: base.global_no,
+        name_ja: m.name_ja,
+        name_en: base.name_en,
+        type1: m.type1,
+        type2: m.type2,
+        hp: base.hp,
+        atk: m.atk,
+        def_: m.def_,
+        spa: m.spa,
+        spd: m.spd,
+        spe: m.spe,
+        bst: base.hp + m.atk + m.def_ + m.spa + m.spd + m.spe,
+        ability1: m.ability,
+        ability2: "",
+        dream_ability: "",
+        weight: base.weight,
+      }
+      {
+        pokemon: effective_pokemon,
+        moves: c.moves,
+        ability: m.ability,
+        item: c.item,
+        tera_type: c.tera_type,
+        stat_system: c.stat_system,
+        mega_form: c.mega_form,
+      }
+    }
+    _ => c
+  }
+}
+
+///|
 /// Compute the mean damage for the given `(attacker, defender, move, ranks)`
 /// tuple directly, without cache lookup. The numeric kernel underneath
 /// `mean_damage_cached` — call-sites should reach it via the cache wrapper
@@ -170,6 +249,12 @@ pub(all) struct DamageKey {
   mv_idx : Int
   atk_rank : Int
   def_rank : Int
+  // Mega form resolved flags. `atk_idx` / `my_attacker` identify the slot, and
+  // the slot → mega_form mapping is fixed for a single switching-game run, so
+  // 1 bit per side is enough to disambiguate base vs mega stats/type/ability
+  // in the cache (no collisions across different mega species).
+  atk_mega : Bool
+  def_mega : Bool
 } derive(Eq, Hash)
 
 ///|
@@ -207,10 +292,23 @@ pub fn mean_damage_cached(
   mv_idx : Int,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
+  atk_mega~ : Bool = false,
+  def_mega~ : Bool = false,
 ) -> Int {
-  let attacker = if my_attacker { my_team[atk_idx] } else { opp_team[atk_idx] }
-  let defender = if my_attacker { opp_team[def_idx] } else { my_team[def_idx] }
-  let mv = attacker.moves[mv_idx]
+  let raw_attacker = if my_attacker {
+    my_team[atk_idx]
+  } else {
+    opp_team[atk_idx]
+  }
+  let raw_defender = if my_attacker {
+    opp_team[def_idx]
+  } else {
+    my_team[def_idx]
+  }
+  // Move list is identical across mega / base — read the move from the base
+  // combatant so that the post-mega synthetic view (which reuses `moves`) is
+  // not required here.
+  let mv = raw_attacker.moves[mv_idx]
   if mv.power <= 0 {
     return 0
   }
@@ -231,6 +329,8 @@ pub fn mean_damage_cached(
     mv_idx,
     atk_rank,
     def_rank,
+    atk_mega,
+    def_mega,
   }
   match cache.data.get(key) {
     Some(v) => {
@@ -239,6 +339,8 @@ pub fn mean_damage_cached(
     }
     None => {
       cache.misses = cache.misses + 1
+      let attacker = effective_combatant(raw_attacker, atk_mega)
+      let defender = effective_combatant(raw_defender, def_mega)
       let v = compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
       cache.data[key] = v
       v
@@ -274,27 +376,45 @@ fn apply_stat_boost(ranks : Array[Int], mv : @model.Move) -> Unit {
 /// given moves. Returns `+1` if my active acts first, `-1` if opp acts first,
 /// `0` on full ties. Reads priority directly from `@model.Move.priority`
 /// (populated by `query_moves` via the `move_meta` DB JOIN).
+///
+/// When either side is currently running on mega-form stats (`me_mega` /
+/// `opp_mega`), the post-mega speed base is used for the tie-breaker. Priority
+/// is never affected by mega evolution, so it reads straight from the move.
 fn move_turn_sign(
   me : Combatant,
   me_ranks : Array[Int],
   mv_me : @model.Move,
+  me_mega : Bool,
   opp : Combatant,
   opp_ranks : Array[Int],
   mv_opp : @model.Move,
+  opp_mega : Bool,
 ) -> Int {
-  let eff_me = effective_speed(me.pokemon.spe, me_ranks[4])
-  let eff_opp = effective_speed(opp.pokemon.spe, opp_ranks[4])
-  turn_order_sign(me, mv_me.priority, eff_me, opp, mv_opp.priority, eff_opp)
+  let me_eff = effective_combatant(me, me_mega)
+  let opp_eff = effective_combatant(opp, opp_mega)
+  let eff_me = effective_speed(me_eff.pokemon.spe, me_ranks[4])
+  let eff_opp = effective_speed(opp_eff.pokemon.spe, opp_ranks[4])
+  turn_order_sign(
+    me_eff, mv_me.priority, eff_me, opp_eff, mv_opp.priority, eff_opp,
+  )
 }
 
 ///|
 /// Resolve a turn where both sides use a move, with proper damage recomputation
 /// after the first actor's stat boosts. `my_first` determines action order.
+///
+/// `my_mega_now` / `opp_mega_now` capture whether each side is **currently
+/// running on mega stats** this turn. This is the union of "was already megaed
+/// going into the turn" and "chose a Mega action this turn". Mega state is
+/// carried on the returned state via `my_megaed` / `opp_megaed`, with the
+/// side-level `*_mega_used` flag handled upstream in `transition_with_cache`.
 fn resolve_moves(
   state : SwitchingGameState,
   mi : Int,
   mj : Int,
   my_first : Bool,
+  my_mega_now : Bool,
+  opp_mega_now : Bool,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
@@ -303,19 +423,27 @@ fn resolve_moves(
   let opp_hps = state.opp_hps.copy()
   let my_ranks = state.my_ranks.copy()
   let opp_ranks = state.opp_ranks.copy()
+  let my_megaed = state.my_megaed.copy()
+  let opp_megaed = state.opp_megaed.copy()
+  if my_mega_now {
+    my_megaed[state.my_active] = true
+  }
+  if opp_mega_now {
+    opp_megaed[state.opp_active] = true
+  }
   let mv_me = my_team[state.my_active].moves[mi]
   let mv_opp = opp_team[state.opp_active].moves[mj]
   if my_first {
     let dmg_mo = mean_damage_cached(
       dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
-      mi, my_team, opp_team,
+      mi, my_team, opp_team, atk_mega=my_mega_now, def_mega=opp_mega_now,
     )
     opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg_mo)
     apply_stat_boost(my_ranks, mv_me)
     if opp_hps[state.opp_active] > 0 {
       let dmg_om = mean_damage_cached(
         dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
-        mj, my_team, opp_team,
+        mj, my_team, opp_team, atk_mega=opp_mega_now, def_mega=my_mega_now,
       )
       my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg_om)
       apply_stat_boost(opp_ranks, mv_opp)
@@ -323,14 +451,14 @@ fn resolve_moves(
   } else {
     let dmg_om = mean_damage_cached(
       dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
-      mj, my_team, opp_team,
+      mj, my_team, opp_team, atk_mega=opp_mega_now, def_mega=my_mega_now,
     )
     my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg_om)
     apply_stat_boost(opp_ranks, mv_opp)
     if my_hps[state.my_active] > 0 {
       let dmg_mo = mean_damage_cached(
         dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
-        mi, my_team, opp_team,
+        mi, my_team, opp_team, atk_mega=my_mega_now, def_mega=opp_mega_now,
       )
       opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg_mo)
       apply_stat_boost(my_ranks, mv_me)
@@ -343,6 +471,10 @@ fn resolve_moves(
     opp_hps,
     my_ranks,
     opp_ranks,
+    my_mega_used: state.my_mega_used || my_mega_now,
+    opp_mega_used: state.opp_mega_used || opp_mega_now,
+    my_megaed,
+    opp_megaed,
     turn: state.turn + 1,
   }
 }
@@ -366,17 +498,36 @@ pub fn transition_with_cache(
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
 ) -> Array[(Double, SwitchingGameState)] {
+  // Normalise `Mega(mi)` into `UseMove(mi)` plus a same-turn mega trigger.
+  // This keeps the existing per-pair arms minimal and funnels every damage
+  // call through the `resolve_moves` helper, which is already rank-aware.
+  let (my_core, my_mega_trigger) = normalize_action(my_action)
+  let (opp_core, opp_mega_trigger) = normalize_action(opp_action)
+  // "Currently running on mega stats" for this resolution = already megaed
+  // going into the turn OR triggered now.
+  let my_mega_now = state.my_megaed[state.my_active] || my_mega_trigger
+  let opp_mega_now = state.opp_megaed[state.opp_active] || opp_mega_trigger
   let my_hps_new = state.my_hps.copy()
   let opp_hps_new = state.opp_hps.copy()
-  let mut my_active_new = state.my_active
-  let mut opp_active_new = state.opp_active
   let my_ranks_new = state.my_ranks.copy()
   let opp_ranks_new = state.opp_ranks.copy()
-  match (my_action, opp_action) {
+  let my_megaed_new = state.my_megaed.copy()
+  let opp_megaed_new = state.opp_megaed.copy()
+  if my_mega_trigger {
+    my_megaed_new[state.my_active] = true
+  }
+  if opp_mega_trigger {
+    opp_megaed_new[state.opp_active] = true
+  }
+  let my_mega_used_new = state.my_mega_used || my_mega_trigger
+  let opp_mega_used_new = state.opp_mega_used || opp_mega_trigger
+  let mut my_active_new = state.my_active
+  let mut opp_active_new = state.opp_active
+  match (my_core, opp_core) {
     (Switch(i), Switch(j)) => {
       my_active_new = i
       opp_active_new = j
-      // Ranks reset on switch-in.
+      // Ranks reset on switch-in. Mega state is slot-scoped so it survives.
       for k in 0..<5 {
         my_ranks_new[k] = 0
         opp_ranks_new[k] = 0
@@ -387,7 +538,9 @@ pub fn transition_with_cache(
       for k in 0..<5 {
         my_ranks_new[k] = 0
       }
-      // Attack hits the freshly switched-in target (fresh ranks = 0).
+      // Opponent attacks the freshly switched-in target. The target's mega
+      // flag comes from its slot-level `my_megaed_new[i]` (rather than from
+      // the out-going active's mega state).
       let dmg = mean_damage_cached(
         dmg_cache,
         false,
@@ -398,13 +551,11 @@ pub fn transition_with_cache(
         mj,
         my_team,
         opp_team,
+        atk_mega=opp_mega_now,
+        def_mega=my_megaed_new[i],
       )
       my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
-      // Opp's own stat-boost (if status move) still resolves on user.
-      apply_stat_boost(
-        opp_ranks_new,
-        opp_team[state.opp_active].moves[mj],
-      )
+      apply_stat_boost(opp_ranks_new, opp_team[state.opp_active].moves[mj])
     }
     (UseMove(mi), Switch(j)) => {
       opp_active_new = j
@@ -421,6 +572,8 @@ pub fn transition_with_cache(
         mi,
         my_team,
         opp_team,
+        atk_mega=my_mega_now,
+        def_mega=opp_megaed_new[j],
       )
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
       apply_stat_boost(my_ranks_new, my_team[state.my_active].moves[mi])
@@ -431,23 +584,37 @@ pub fn transition_with_cache(
       let mv_me = me.moves[mi]
       let mv_opp = opp.moves[mj]
       let s = move_turn_sign(
-        me, my_ranks_new, mv_me, opp, opp_ranks_new, mv_opp,
+        me, my_ranks_new, mv_me, my_mega_now,
+        opp, opp_ranks_new, mv_opp, opp_mega_now,
       )
       if s == 0 {
         // Speed tie: return two outcomes so the caller averages successor
         // *values* (not states). resolve_moves recomputes the second hit's
         // damage after the first actor's stat boosts.
         return [
-          (0.5, resolve_moves(state, mi, mj, true, my_team, opp_team, dmg_cache)),
-          (0.5, resolve_moves(state, mi, mj, false, my_team, opp_team, dmg_cache)),
+          (0.5, resolve_moves(
+            state, mi, mj, true, my_mega_now, opp_mega_now,
+            my_team, opp_team, dmg_cache,
+          )),
+          (0.5, resolve_moves(
+            state, mi, mj, false, my_mega_now, opp_mega_now,
+            my_team, opp_team, dmg_cache,
+          )),
         ]
       } else {
         let my_first = s > 0
         return [
-          (1.0, resolve_moves(state, mi, mj, my_first, my_team, opp_team, dmg_cache)),
+          (1.0, resolve_moves(
+            state, mi, mj, my_first, my_mega_now, opp_mega_now,
+            my_team, opp_team, dmg_cache,
+          )),
         ]
       }
     }
+    // Switch-variants are the only non-UseMove pairs that reach this point;
+    // `Mega` is already normalised away, and a pair-of-Switch is handled above.
+    // Any remaining arm is unreachable — treat as a no-op turn advance.
+    (_, _) => ()
   }
   [(1.0, {
     my_active: my_active_new,
@@ -456,8 +623,24 @@ pub fn transition_with_cache(
     opp_hps: opp_hps_new,
     my_ranks: my_ranks_new,
     opp_ranks: opp_ranks_new,
+    my_mega_used: my_mega_used_new,
+    opp_mega_used: opp_mega_used_new,
+    my_megaed: my_megaed_new,
+    opp_megaed: opp_megaed_new,
     turn: state.turn + 1,
   })]
+}
+
+///|
+/// Normalise `Mega(mi)` into `(UseMove(mi), true)`; `UseMove(mi)` /
+/// `Switch(i)` pass through with `false`. Keeps the main transition dispatch
+/// minimal — same-turn mega is handled as "this side's attack runs on mega
+/// stats" with a side-effect flag to flip `*_mega_used` / `*_megaed`.
+fn normalize_action(a : ActionKind) -> (ActionKind, Bool) {
+  match a {
+    Mega(mi) => (UseMove(mi), true)
+    other => (other, false)
+  }
 }
 
 ///|
@@ -504,8 +687,12 @@ pub fn value(
     }
     None => stats.misses = stats.misses + 1
   }
-  let actions_me = alive_actions(state.my_active, state.my_hps, my_team)
-  let actions_opp = alive_actions(state.opp_active, state.opp_hps, opp_team)
+  let actions_me = alive_actions(
+    state.my_active, state.my_hps, my_team, state.my_mega_used,
+  )
+  let actions_opp = alive_actions(
+    state.opp_active, state.opp_hps, opp_team, state.opp_mega_used,
+  )
   if actions_me.length() == 0 {
     return -1.0
   }
@@ -587,6 +774,10 @@ pub fn switching_game_winrate_stats(
     opp_hps,
     my_ranks: zero_ranks(),
     opp_ranks: zero_ranks(),
+    my_mega_used: false,
+    opp_mega_used: false,
+    my_megaed: Array::make(my_team.length(), false),
+    opp_megaed: Array::make(opp_team.length(), false),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
@@ -601,15 +792,27 @@ pub fn switching_game_winrate_stats(
 /// If `active` is alive, all of its moves (power=0 included) are legal. If
 /// `active` is fainted (HP = 0), only `Switch(i)` actions to alive teammates
 /// are legal (forced-switch semantics).
+///
+/// When this side has not yet consumed its mega (`mega_used = false`) and the
+/// active carries a `mega_form`, one `Mega(mi)` action is appended per move,
+/// letting the caller decide whether to trade the mega now (in exchange for
+/// post-mega stats / type / ability on this turn's attack).
 pub fn alive_actions(
   active : Int,
   hps : Array[Int],
   team : Array[Combatant],
+  mega_used : Bool,
 ) -> Array[ActionKind] {
   let out : Array[ActionKind] = []
-  if hps[active] > 0 {
+  let active_alive = hps[active] > 0
+  if active_alive {
     for i in 0..<team[active].moves.length() {
       out.push(UseMove(i))
+    }
+  }
+  if active_alive && can_mega(active, hps, team, mega_used) {
+    for i in 0..<team[active].moves.length() {
+      out.push(Mega(i))
     }
   }
   for i in 0..<hps.length() {

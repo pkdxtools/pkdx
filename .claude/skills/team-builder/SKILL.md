@@ -139,6 +139,21 @@ AskUserQuestionでゲームバージョンを質問:
 
 ## Phase 1: 軸ポケモン決定
 
+### version=champions の場合: チーム入力方式分岐
+
+Phase 0 で `version=champions` を選択した場合、Phase 1 の冒頭で入力方式を質問する。それ以外の version では、直接「Phase 1 対話モード」に進む。
+
+**AskUserQuestion**（1問）:
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | チーム入力方式を選んでください | 入力方式 | 対話で 1 体ずつ構築(desc: 従来通り Phase 1-5), ゲームのスクショから一括取り込み(desc: 6 体分の能力+ステータスを OCR) | false |
+
+- `対話で 1 体ずつ構築` → 下記「Phase 1 対話モード」へ
+- `ゲームのスクショから一括取り込み` → [Phase 1-Team-Vision](#phase-1-team-vision-champions-チーム一括取り込み) へ
+
+### Phase 1 対話モード
+
 AskUserQuestionで軸ポケモンを聞く:
 ```
 軸とするポケモンを1匹教えてください。
@@ -170,6 +185,97 @@ ruby $REPO_ROOT/scripts/patch_mega.rb
 取得できなかった場合は「パッチ対象に含まれていないポケモンです」と案内する。
 
 結果からglobalNoを取得し、以降のフェーズで使用。
+
+---
+
+## Phase 1-Team-Vision: Champions チーム一括取り込み
+
+Champions のゲーム画面スクショ (6 体分 × 能力 + ステータス = 12 枚) から team cache を冪等に構築する。breed skill の [Phase 1-Vision](../breed/SKILL.md#phase-1-vision-champions-スクショ取り込み) を 6 回反復する位置付け。
+
+### 1. スクショパス入力 (1 体ずつループ)
+
+6 回ループで、各ポケモンの 2 枚のスクショパスを受け取る:
+
+**AskUserQuestion**（2問を一括、6 回反復）:
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | [N/6 体目] 「能力」画面スクショのパス | 能力 | Other (desc: 絶対パス) | false |
+| 2 | [N/6 体目] 「ステータス」画面スクショのパス | ステータス | Other (desc: 絶対パス) | false |
+
+各ポケモンごとに breed Phase 1-Vision の手順 2-6 (Vision 抽出 / DB 照合 / SP 逆算検証 / 性格確定 / 技詳細補完) を実行し、中間結果を都度表示する。途中で不備があればユーザーがその場で気付けるように。
+
+### 2. 6 体分まとめて表示 + 一括確認
+
+```
+=== Champions チーム抽出結果 (6/6 体) ===
+[1] マンムー (ようき / こだわりスカーフ / あついしぼう)
+    SP: H20 A32 B0 C0 D0 S14  技: じしん / つららおとし / つららばり / ばかぢから
+[2] アシレーヌ (れいせい / しんぴのしずく / げきりゅう)
+    SP: ...
+...
+[6] ヌメルゴン(ヒスイ) (ずぶとい / たべのこし / シェルアーマー)
+    SP: ...
+```
+
+メガ石 (「○○ナイト」) を検出した体があれば末尾に警告:
+```
+⚠ 次のポケモンはメガ石を所持しています: ハッサム, キュウコン
+   メガ進化の戦闘評価は task B 実装後に有効になります。
+```
+
+**AskUserQuestion**（1問）:
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | このチーム構成でよいですか? | 確認 | はい(desc: team cache 組み立てに進む), 修正する(desc: 特定のポケモンを再抽出), やり直す(desc: 1 体目から再入力) | false |
+
+- `修正する` → どのポケモン (1-6) を再抽出するか AskUserQuestion、該当体のみ breed Phase 1-Vision を再実行
+- `やり直す` → 手順 1 から全体リセット
+
+### 3. 取り込み後の動線を選択
+
+**AskUserQuestion**（1問）:
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | この後どうしますか? | 動線 | メタ分析・選出方針も対話で構築(desc: Phase 6 (仮想敵分析) に進む), 保存のみ(desc: Phase 8 に直行。メタ分析は空欄) | false |
+
+- `メタ分析・選出方針も対話で構築` → Phase 6 に進む。team cache の members[0..5] は埋まっているので Phase 2-5 (軸分析・補完・素早さ・耐久) は skip
+- `保存のみ` → team cache の `matchup_plans` / `strengths` / `weaknesses` を空配列のまま、Phase 8 に直行。出力 md の冒頭に「⚠ メタ分析セクションは未記入。`/team-builder` で再開可能」と注記を入れる
+
+### 4. team cache 組み立て + 冪等性判定
+
+1. cache スケルトン生成:
+
+```bash
+$PKDX init-cache team > "$CACHE_FILE"
+```
+
+2. 抽出 6 体を members に詰め、`version: "champions"`, `regulation: "M-A"`, `battle_format: "singles"`, `mechanics: "メガシンカ"` (該当時) を明記
+
+3. `pkdx import-check` で冪等性判定:
+
+```bash
+EXISTING_DIR="$REPO_ROOT/box/teams"
+if [ -d "$EXISTING_DIR" ]; then
+  EXISTING=$(for f in "$EXISTING_DIR"/*.meta.json; do
+    [ -f "$f" ] && jq --arg p "$f" '{path: $p, content: .}' "$f"
+  done | jq -s '.')
+else
+  EXISTING='[]'
+fi
+
+jq -n \
+  --slurpfile cache "$CACHE_FILE" \
+  --argjson existing "$EXISTING" \
+  '{kind: "team", cache: $cache[0], existing: $existing}' | \
+  $PKDX import-check
+```
+
+出力に応じて breed Phase 1-Vision 手順 8 と同じ分岐 (skip / diff / new)。
+
+4. ユーザー承認後、選んだ動線 (Phase 6 or Phase 8) に進む
 
 ---
 

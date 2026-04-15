@@ -129,6 +129,7 @@ fn build_cli() -> @admiral.CliApp {
       cmd_stat_calc(),
       cmd_stat_reverse(),
       cmd_init_cache(),
+      cmd_import_check(),
       cmd_hbd(),
       cmd_learners(),
       cmd_nash(),
@@ -343,6 +344,15 @@ fn cmd_write() -> @admiral.CommandDef {
         }),
       ),
     ],
+  )
+}
+
+///|
+fn cmd_import_check() -> @admiral.CommandDef {
+  @admiral.command(
+    name="import-check",
+    description="Check if a cache JSON would duplicate an existing record. Reads {kind, cache, existing[]} JSON from stdin; prints {status, matched_file, differing_fields?} JSON.",
+    run=Some(fn(_ctx) { run_import_check_cli() }),
   )
 }
 
@@ -924,12 +934,20 @@ fn run_write_teams(date : String, axis : String) -> Unit {
   }
   let doc = @writer.build_team_document(json, axis, date)
   let md = @markdown.serialize(doc)
-  let path = "box/teams/" + axis + "-build-" + date + ".md"
-  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(md))
+  let base = "box/teams/" + axis + "-build-" + date
+  let md_path = base + ".md"
+  let meta_path = base + ".meta.json"
+  let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
   if rc != 0 {
-    exit_error("Failed to write " + path)
+    exit_error("Failed to write " + md_path)
+    return
+  }
+  let meta = json.stringify()
+  let rc2 = pkdx_write_file(@db.to_c_bytes(meta_path), @db.to_c_bytes(meta))
+  if rc2 != 0 {
+    exit_error("Failed to write " + meta_path)
   } else {
-    println(path)
+    println(md_path)
   }
 }
 
@@ -963,12 +981,39 @@ fn run_write_pokemon(name : String, file : String) -> Unit {
   }
   let doc = @writer.build_pokemon_document(json, name)
   let md = @markdown.serialize(doc)
-  let path = "box/pokemons/" + name + "/" + file + ".md"
-  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(md))
+  let base = "box/pokemons/" + name + "/" + file
+  let md_path = base + ".md"
+  let meta_path = base + ".meta.json"
+  let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
   if rc != 0 {
-    exit_error("Failed to write " + path)
+    exit_error("Failed to write " + md_path)
+    return
+  }
+  let meta = json.stringify()
+  let rc2 = pkdx_write_file(@db.to_c_bytes(meta_path), @db.to_c_bytes(meta))
+  if rc2 != 0 {
+    exit_error("Failed to write " + meta_path)
   } else {
-    println(path)
+    println(md_path)
+  }
+}
+
+///|
+fn run_import_check_cli() -> Unit {
+  let raw = pkdx_read_stdin()
+  if raw.length() == 0 {
+    exit_error("No input from stdin")
+    return
+  }
+  let input = @json.parse(raw) catch {
+    e => {
+      exit_error("JSON parse error: " + e.to_string())
+      return
+    }
+  }
+  match @writer.run_import_check(input) {
+    Ok(j) => println(j.stringify())
+    Err(msg) => exit_error(msg)
   }
 }
 

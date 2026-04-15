@@ -337,6 +337,247 @@ test "validate_team_json: regulation null is valid (backward compat)" {
 }
 
 ///|
+test "validate_pokemon_json: champions sp total 66 boundary passes" {
+  let src =
+    #|{
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":32,"atk":32,"def":2,"spa":0,"spd":0,"spe":0},
+    #|    "actual_stats": {"hp":215,"atk":182,"def":117,"spa":90,"spd":105,"spe":169}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_pokemon_json(json), content="Ok(())")
+}
+
+///|
+test "validate_pokemon_json: champions sp total 67 boundary fails" {
+  let src =
+    #|{
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":32,"atk":32,"def":3,"spa":0,"spd":0,"spe":0},
+    #|    "actual_stats": {"hp":215,"atk":182,"def":118,"spa":90,"spd":105,"spe":169}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("Champions SP total") }),
+    content="true",
+  )
+}
+
+///|
+test "validate_pokemon_json: champions sp each stat 32 boundary passes" {
+  let src =
+    #|{
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":32,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
+    #|    "actual_stats": {"hp":215,"atk":150,"def":115,"spa":90,"spd":105,"spe":135}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_pokemon_json(json), content="Ok(())")
+}
+
+///|
+test "validate_pokemon_json: champions sp each stat 33 boundary fails" {
+  let src =
+    #|{
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":33,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
+    #|    "actual_stats": {"hp":216,"atk":150,"def":115,"spa":90,"spd":105,"spe":135}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("Champions SP") && e.contains("hp") }),
+    content="true",
+  )
+}
+
+///|
+test "validate_pokemon_json: champions sp negative value fails" {
+  let src =
+    #|{
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":-1,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
+    #|    "actual_stats": {"hp":182,"atk":150,"def":115,"spa":90,"spd":105,"spe":135}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("Champions SP") && e.contains("negative") }),
+    content="true",
+  )
+}
+
+///|
+test "validate_pokemon_json: sp rule not applied when version is sv" {
+  let src =
+    #|{
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":33,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
+    #|    "actual_stats": {"hp":160,"atk":150,"def":115,"spa":90,"spd":105,"spe":135}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_pokemon_json(json), content="Ok(())")
+}
+
+///|
+test "validate_pokemon_json: ev 510 rule not applied when version is champions" {
+  let src =
+    #|{
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "type1": "ドラゴン",
+    #|    "type2": "じめん",
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "nature_up": "すばやさ",
+    #|    "nature_down": "とくこう",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "evs": {"hp":60,"atk":60,"def":60,"spa":60,"spd":60,"spe":60},
+    #|    "actual_stats": {"hp":243,"atk":210,"def":175,"spa":150,"spd":165,"spe":195}
+    #|  },
+    #|  "damage_calcs": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) { e.contains("Champions SP total") }),
+    content="true",
+  )
+  inspect(
+    errors.iter().any(fn(e) { e.contains("evs total is") }),
+    content="false",
+  )
+}
+
+///|
 test "validate_team_json: empty string mechanics rejected by strict schema" {
   let src =
     #|{

@@ -178,11 +178,16 @@ bin/pkdx stat-reverse "ガブリアス" --stats "183,182,115,90,105,169"
 bin/pkdx init-cache team     > box/cache/team_cache_xxx.json
 bin/pkdx init-cache pokemon  > box/cache/breed_cache_xxx.json
 
-# チーム構築レポート保存（skillキャッシュJSON→box/teams/にmd出力）
+# チーム構築レポート保存（skillキャッシュJSON→box/teams/にmd出力、.meta.jsonを並行出力）
 cat box/cache/team_cache_ガブリアス_*.json | bin/pkdx write teams --date 2026-04-06 --axis "ガブリアス"
 
-# 育成データ保存（skillキャッシュJSON→box/pokemons/にmd出力）
+# 育成データ保存（skillキャッシュJSON→box/pokemons/にmd出力、.meta.jsonを並行出力）
 cat box/cache/breed_cache_ガブリアス_*.json | bin/pkdx write pokemon --name "ガブリアス" --file "スカーフ型"
+
+# 冪等性判定（Champions スクショ取り込み時に skill が呼ぶ。既存 .meta.json と比較して skip/diff/new を JSON 出力）
+# 入力: {"kind":"pokemon"|"team", "cache": <new cache JSON>, "existing": [{"path": "...", "content": <existing meta.json>}]}
+# 出力: {"status":"skip"|"diff"|"new", "matched_file": ..., "differing_fields": [...]?}
+echo '{"kind":"pokemon","cache":{...},"existing":[]}' | bin/pkdx import-check
 
 # 耐久指数最適化（デフォルト: Champions SP。予算66、各上限32）
 bin/pkdx hbd "ガブリアス" --nature ようき

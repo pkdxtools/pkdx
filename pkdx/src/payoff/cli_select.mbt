@@ -16,6 +16,9 @@
 ///   "hp":      Int, "atk":  Int, "def": Int,
 ///   "spa":     Int, "spd":  Int, "spe": Int,
 ///   "ability": String, "item": String, "tera": String,
+///   "mega_form": {"atk":Int, "def":Int, "spa":Int, "spd":Int, "spe":Int,
+///                 "type1":String, "type2":String, "ability":String,
+///                 "name_ja":String}?,  // optional; present if mega-capable
 ///   "moves":   [{"name":..., "type":..., "category":"物理"|"特殊"|"変化",
 ///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?}, ...]
 /// }
@@ -186,6 +189,10 @@ fn parse_combatant_json(
         }
         _ => raise MissingField(ctx + ".moves")
       }
+      let mega_form = match m.get("mega_form") {
+        Some(mj) => Some(parse_mega_form_json(mj, ctx + ".mega_form"))
+        None => None
+      }
       {
         pokemon: poke,
         moves,
@@ -193,7 +200,34 @@ fn parse_combatant_json(
         item: parse_str_field(m, "item"),
         tera_type: parse_str_field(m, "tera"),
         stat_system: @model.Standard,
+        mega_form,
       }
+    }
+    _ => raise InvalidJson(ctx + " must be an object")
+  }
+}
+
+///|
+/// Parse the optional `mega_form` object attached to a combatant JSON. Fields
+/// mirror `@model.MegaForm`: post-mega atk/def/spa/spd/spe + type1/type2 +
+/// ability. `hp` is intentionally not carried because mega evolution does not
+/// change HP (max or current).
+fn parse_mega_form_json(
+  j : Json,
+  ctx : String,
+) -> @model.MegaForm raise NashCliError {
+  match j {
+    Object(m) => {
+      let atk = parse_int_field(m, "atk", ctx)
+      let def_ = parse_int_field(m, "def", ctx)
+      let spa = parse_int_field(m, "spa", ctx)
+      let spd = parse_int_field(m, "spd", ctx)
+      let spe = parse_int_field(m, "spe", ctx)
+      let type1 = parse_str_field(m, "type1")
+      let type2 = parse_str_field(m, "type2")
+      let ability = parse_str_field(m, "ability")
+      let name_ja = parse_str_field(m, "name_ja")
+      { atk, def_, spa, spd, spe, type1, type2, ability, name_ja }
     }
     _ => raise InvalidJson(ctx + " must be an object")
   }
@@ -244,6 +278,7 @@ fn mk_empty_combatant() -> Combatant {
     item: "",
     tera_type: "",
     stat_system: @model.Standard,
+    mega_form: None,
   }
 }
 

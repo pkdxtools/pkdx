@@ -60,17 +60,22 @@ patches.each do |patch_dir|
   end
 
   puts "  Applying #{name}..."
+  # Bind patch name to a separate local so that migration.rb scripts that
+  # shadow `name` in their own `.each` loops (e.g. 006_move_meta iterating
+  # over move data) cannot corrupt the pkdx_migrations bookkeeping insert
+  # below. `patch_name` stays constant across the eval boundary.
+  patch_name = name
   begin
     db.transaction do
       # migration.rb を実行。db と patch_dir をバインディングとして渡す
       patch_context = binding
       eval(File.read(migration_rb), patch_context, migration_rb)
 
-      db.execute('INSERT INTO pkdx_migrations (name) VALUES (?)', [name])
+      db.execute('INSERT INTO pkdx_migrations (name) VALUES (?)', [patch_name])
     end
     applied += 1
   rescue StandardError => e
-    abort "  FAILED #{name}: #{e.message}\n#{e.backtrace.first(3).join("\n")}"
+    abort "  FAILED #{patch_name}: #{e.message}\n#{e.backtrace.first(3).join("\n")}"
   end
 end
 

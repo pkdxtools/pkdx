@@ -37,6 +37,9 @@ pub(all) struct Combatant {
   item : String
   tera_type : String
   stat_system : @model.StatSystem
+  // メガ進化後のステータス差分。`None` なら mega 不可。`Some(_)` なら
+  // `SwitchingGame` の `Mega` アクションで mega_form 値に切り替わる。
+  mega_form : @model.MegaForm?
 } derive(Show)
 
 ///|

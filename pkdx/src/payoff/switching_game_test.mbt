@@ -783,3 +783,260 @@ test "damage_cache_distinguishes_sides_for_symmetric_teams" {
   // B has ATK=80).
   assert_true(d_mine > d_opp)
 }
+
+///|
+/// Reference implementation: the pre-αβ `value` function with NO pruning of
+/// any kind (no pure-saddle detection, no β-cutoff). Every state fully fills
+/// its payoff matrix and solves the LP. Used by bit-exact regression tests to
+/// verify that `value` with default `(alpha=-1, beta=+1)` returns the same
+/// top-level number.
+///
+/// Must be kept in sync with `value` in switching_game.mbt except for the
+/// αβ / saddle short-circuits; any change to action enumeration, transition
+/// resolution, or caching must be mirrored here.
+fn value_no_prune(
+  state : SwitchingGameState,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  turn_limit : Int,
+  cache : @hashmap.HashMap[SwitchingGameState, Double],
+  stats : ValueStats,
+  dmg_cache : DamageCache,
+) -> Double {
+  match terminal_value(state, my_team, opp_team, turn_limit) {
+    Some(v) => return v
+    None => ()
+  }
+  match cache.get(state) {
+    Some(v) => {
+      stats.hits = stats.hits + 1
+      return v
+    }
+    None => stats.misses = stats.misses + 1
+  }
+  let actions_me = alive_actions(state.my_active, state.my_hps, my_team)
+  let actions_opp = alive_actions(state.opp_active, state.opp_hps, opp_team)
+  if actions_me.length() == 0 {
+    return -1.0
+  }
+  if actions_opp.length() == 0 {
+    return 1.0
+  }
+  let data = Array::make(actions_me.length(), ([] : Array[Double]))
+  for i in 0..<actions_me.length() {
+    data[i] = Array::make(actions_opp.length(), 0.0)
+  }
+  for i in 0..<actions_me.length() {
+    for j in 0..<actions_opp.length() {
+      let outcomes = transition_with_cache(
+        state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
+      )
+      let mut ev = 0.0
+      for outcome in outcomes {
+        let (prob, next) = outcome
+        ev += prob *
+          value_no_prune(
+            next, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
+          )
+      }
+      data[i][j] = ev
+    }
+  }
+  let m = match @nash.FiniteMatrix::new(data) {
+    Ok(x) => x
+    Err(_) => return 0.0
+  }
+  let lp = try @nash.solve_zero_sum(m) catch {
+    _ => return 0.0
+  }
+  let result = match lp {
+    Optimal(value~, ..) => value
+    _ => 0.0
+  }
+  cache.set(state, result)
+  result
+}
+
+///|
+/// Top-level entry point for the no-pruning reference implementation.
+fn switching_game_winrate_no_prune(
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  turn_limit : Int,
+) -> (Double, ValueStats) {
+  let my_hps = Array::make(my_team.length(), 0)
+  let opp_hps = Array::make(opp_team.length(), 0)
+  for i in 0..<my_team.length() {
+    my_hps[i] = my_team[i].pokemon.hp
+  }
+  for i in 0..<opp_team.length() {
+    opp_hps[i] = opp_team[i].pokemon.hp
+  }
+  let state : SwitchingGameState = {
+    my_active: 0,
+    opp_active: 0,
+    my_hps,
+    opp_hps,
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    turn: 0,
+  }
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
+  let stats = new_stats()
+  let dmg_cache = new_damage_cache()
+  let v = value_no_prune(
+    state, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
+  )
+  (v, stats)
+}
+
+///|
+test "alpha_beta_returns_same_value_as_no_pruning_minimal_1v1" {
+  // Smallest non-terminal case: 1v1 single-move teams. Saddle fast path should
+  // fire (every subgame is a 1×1 matrix, trivial saddle). αβ result must match
+  // the reference implementation to FP precision.
+  let a = mk_combatant(
+    mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 120),
+    [mk_move("slash", "ノーマル", @model.Physical, 80)],
+  )
+  let b = mk_combatant(
+    mk_pokemon("B", "ノーマル", "", 100, 120, 100, 100, 100, 100),
+    [mk_move("slash", "ノーマル", @model.Physical, 70)],
+  )
+  let v_prune = switching_game_winrate([a], [b], 2)
+  let (v_no_prune, _) = switching_game_winrate_no_prune([a], [b], 2)
+  assert_true((v_prune - v_no_prune).abs() < 1.0e-12)
+}
+
+///|
+test "alpha_beta_returns_same_value_as_no_pruning_with_switch" {
+  // 2v2 teams where switch actions matter (slow heavy hitter vs fast frail
+  // attacker). Exercises the switch branch of `transition_with_cache`; αβ
+  // cutoffs may or may not trigger depending on iteration order, but the
+  // top-level value must be exactly equal to the unpruned reference.
+  let a0 = mk_combatant(
+    mk_pokemon("A0", "ノーマル", "", 150, 200, 100, 100, 100, 80),
+    [mk_move("heavy", "ノーマル", @model.Physical, 100)],
+  )
+  let a1 = mk_combatant(
+    mk_pokemon("A1", "ノーマル", "", 100, 120, 100, 100, 100, 130),
+    [mk_move("swift", "ノーマル", @model.Physical, 60)],
+  )
+  let b0 = mk_combatant(
+    mk_pokemon("B0", "ノーマル", "", 120, 150, 100, 100, 100, 90),
+    [mk_move("mid", "ノーマル", @model.Physical, 80)],
+  )
+  let b1 = mk_combatant(
+    mk_pokemon("B1", "ノーマル", "", 130, 100, 100, 100, 100, 110),
+    [mk_move("swift", "ノーマル", @model.Physical, 65)],
+  )
+  let v_prune = switching_game_winrate([a0, a1], [b0, b1], 2)
+  let (v_no_prune, _) = switching_game_winrate_no_prune([a0, a1], [b0, b1], 2)
+  assert_true((v_prune - v_no_prune).abs() < 1.0e-12)
+}
+
+///|
+test "alpha_beta_returns_same_value_as_no_pruning_mirror_match" {
+  // Mirror match: expected value is exactly 0 by symmetry. Any divergence
+  // between αβ and reference here would signal a correctness bug in the
+  // pruning predicate.
+  let team = build_dummy_team(2, 120)
+  let v_prune = switching_game_winrate(team, team, 2)
+  let (v_no_prune, _) = switching_game_winrate_no_prune(team, team, 2)
+  assert_true((v_prune - v_no_prune).abs() < 1.0e-12)
+  assert_true(v_prune.abs() < 1.0e-9)
+}
+
+///|
+test "alpha_beta_reduces_or_matches_miss_count" {
+  // Dominant team case: strong team should clean up fast, producing many
+  // terminal states early. Node-level saddle detection + β-cutoff should make
+  // the αβ variant visit AT MOST as many unique states as the reference (and
+  // in practice strictly fewer for dominant scenarios).
+  let strong_team = [
+    mk_combatant(
+      mk_pokemon("S0", "ノーマル", "", 150, 250, 120, 100, 120, 200),
+      [mk_move("lethal", "ノーマル", @model.Physical, 250)],
+    ),
+    mk_combatant(
+      mk_pokemon("S1", "ノーマル", "", 150, 250, 120, 100, 120, 200),
+      [mk_move("lethal", "ノーマル", @model.Physical, 250)],
+    ),
+  ]
+  let weak_team = [
+    mk_combatant(
+      mk_pokemon("W0", "ノーマル", "", 50, 50, 50, 50, 50, 30),
+      [mk_move("weak", "ノーマル", @model.Physical, 10)],
+    ),
+    mk_combatant(
+      mk_pokemon("W1", "ノーマル", "", 50, 50, 50, 50, 50, 30),
+      [mk_move("weak", "ノーマル", @model.Physical, 10)],
+    ),
+  ]
+  let (_, stats_prune, _) = switching_game_winrate_stats(
+    strong_team, weak_team, 2,
+  )
+  let (_, stats_no_prune) = switching_game_winrate_no_prune(
+    strong_team, weak_team, 2,
+  )
+  // αβ must not visit more states than the reference (soundness of pruning).
+  assert_true(stats_prune.misses <= stats_no_prune.misses)
+}
+
+///|
+test "value_accepts_explicit_alpha_beta_and_matches_default" {
+  // Passing (alpha=-1, beta=+1) explicitly (the defaults) must produce the
+  // same result as omitting them. Locks in the default-arg contract so a
+  // future change to the defaults won't silently alter caller semantics.
+  let team = build_dummy_team(2, 100)
+  let state : SwitchingGameState = {
+    my_active: 0,
+    opp_active: 0,
+    my_hps: [100, 100],
+    opp_hps: [100, 100],
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    turn: 0,
+  }
+  let cache1 : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
+  let cache2 : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
+  let dmg1 = new_damage_cache()
+  let dmg2 = new_damage_cache()
+  let s1 = new_stats()
+  let s2 = new_stats()
+  let v1 = value(state, team, team, 2, cache1, s1, dmg1)
+  let v2 = value(
+    state, team, team, 2, cache2, s2, dmg2, alpha=-1.0, beta=1.0,
+  )
+  assert_true((v1 - v2).abs() < 1.0e-12)
+}
+
+///|
+test "switching_game_turn_limit_3_produces_finite_value_on_multi_pokemon_team" {
+  // Regression: before the solver saddle fast-path + value αβ-pruning,
+  // turn_limit=3 on real 6v6 input (Nosada vs カマカマキリ) failed after ~70s
+  // of simplex pivots with `InconsistentGame` on a degenerate LP. This test
+  // pins that the tl=3 path at least returns a finite in-range value on a
+  // modestly-sized team without raising. The in-repo payload is a small 2v2
+  // proxy; the full 6v6 smoke lives in /tmp/pkdx_smoke/repro_tl3.py.
+  let a0 = mk_combatant(
+    mk_pokemon("A0", "ノーマル", "", 150, 180, 110, 100, 110, 120),
+    [mk_move("strike", "ノーマル", @model.Physical, 90)],
+  )
+  let a1 = mk_combatant(
+    mk_pokemon("A1", "ほのお", "", 130, 140, 100, 120, 100, 140),
+    [mk_move("ember", "ほのお", @model.Special, 70)],
+  )
+  let b0 = mk_combatant(
+    mk_pokemon("B0", "みず", "", 140, 150, 110, 110, 110, 110),
+    [mk_move("surf", "みず", @model.Special, 90)],
+  )
+  let b1 = mk_combatant(
+    mk_pokemon("B1", "くさ", "", 120, 130, 100, 130, 100, 130),
+    [mk_move("leaf", "くさ", @model.Special, 80)],
+  )
+  let v = switching_game_winrate([a0, a1], [b0, b1], 3)
+  assert_true(v >= -1.0 && v <= 1.0)
+  assert_true(not(v.is_nan()))
+  assert_true(not(v.is_inf()))
+}

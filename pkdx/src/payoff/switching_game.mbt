@@ -662,11 +662,42 @@ pub fn transition(
 }
 
 ///|
+/// Tolerance for the node-level pure-saddle early-exit in `value`. When the
+/// fully-filled payoff matrix has `maxmin == minmax` within this tolerance, we
+/// skip the LP solve and return the saddle value directly. Matches the solver-
+/// level `SADDLE_TOL` in spirit; kept separate so the payoff layer can be
+/// tuned independently of the LP solver's internal tolerance.
+const VALUE_SADDLE_TOL : Double = 1.0e-10
+
+///|
+/// Tolerance for the β-cutoff in `value`: when the running pure-maximin lower
+/// bound strictly exceeds `beta`, the remaining rows can be skipped because
+/// the caller only cares about values ≤ β. The ε margin prevents premature
+/// cutoff from floating-point noise when the bound exactly equals β.
+const VALUE_PRUNE_EPS : Double = 1.0e-12
+
+///|
 /// Recursive Nash value of a `SwitchingGameState`. Solves a per-state zero-sum
 /// matrix whose cells are `value(next_state, ...)` for each action pair.
 /// Memoized by `cache` (state-value memo) and `dmg_cache` (damage-table memo);
 /// both caches' hit/miss counters are recorded on `stats` and `dmg_cache`
 /// respectively.
+///
+/// ## αβ-pruning semantics
+///
+/// `alpha` / `beta` bracket the range of values the caller cares about:
+/// `alpha ≤ v ≤ beta`. If the caller determines (via pure-strategy pre-probes
+/// from its own partially-filled matrix) that values outside `[alpha, beta]`
+/// are acceptable as bounded substitutes, `value` may short-circuit and return
+/// an upper bound ≥ β instead of the exact Nash value. The recursion in this
+/// implementation is **conservative**: it only prunes at the current node and
+/// always calls children with the full range `(-1.0, +1.0)`, so children
+/// return exact values and the top-level result is bit-exact against the
+/// unpruned reference implementation.
+///
+/// The `alpha` parameter is accepted for forward compatibility with a
+/// symmetric α-cutoff (which would require iterating columns before rows); it
+/// is currently unused.
 pub fn value(
   state : SwitchingGameState,
   my_team : Array[Combatant],
@@ -675,7 +706,10 @@ pub fn value(
   cache : @hashmap.HashMap[SwitchingGameState, Double],
   stats : ValueStats,
   dmg_cache : DamageCache,
+  alpha~ : Double = -1.0,
+  beta~ : Double = 1.0,
 ) -> Double {
+  let _ = alpha // Reserved for future symmetric α-cutoff; see doc comment.
   match terminal_value(state, my_team, opp_team, turn_limit) {
     Some(v) => return v
     None => ()
@@ -699,12 +733,20 @@ pub fn value(
   if actions_opp.length() == 0 {
     return 1.0
   }
-  let data = Array::make(actions_me.length(), ([] : Array[Double]))
-  for i in 0..<actions_me.length() {
-    data[i] = Array::make(actions_opp.length(), 0.0)
+  let rows = actions_me.length()
+  let cols = actions_opp.length()
+  let data = Array::make(rows, ([] : Array[Double]))
+  for i in 0..<rows {
+    data[i] = Array::make(cols, 0.0)
   }
-  for i in 0..<actions_me.length() {
-    for j in 0..<actions_opp.length() {
+  // Running pure-maximin lower bound on the Nash value. Nash(A) ≥ max_i row_min_i
+  // holds for every filled row, so once this lower bound is ≥ β we can
+  // return it: the caller only needs `≤ β` to be informative.
+  let mut lower = -2.0 // sentinel: any actual row_min ∈ [-1, +1] will dominate
+  let mut pruned_early = false
+  for i in 0..<rows {
+    let mut row_min = 2.0 // sentinel: any actual cell ∈ [-1, +1] will dominate
+    for j in 0..<cols {
       let outcomes = transition_with_cache(
         state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
       )
@@ -716,7 +758,44 @@ pub fn value(
         )
       }
       data[i][j] = ev
+      if ev < row_min {
+        row_min = ev
+      }
     }
+    if row_min > lower {
+      lower = row_min
+    }
+    // β-cutoff: Nash(A) ≥ lower ≥ β ⇒ caller's interest range exhausted.
+    if lower >= beta - VALUE_PRUNE_EPS {
+      pruned_early = true
+      break
+    }
+  }
+  if pruned_early {
+    // Do NOT cache: the returned value is a lower bound, not the exact Nash.
+    // A different caller with a wider β would miss the true value.
+    return lower
+  }
+  // All rows filled: check for a pure saddle (maxmin == minmax within tolerance)
+  // and skip the LP if so. This both speeds up trivially-resolved subgames and
+  // avoids funnelling highly degenerate matrices into the simplex path.
+  let mut upper = 2.0
+  for j in 0..<cols {
+    let mut col_max = -2.0
+    for i in 0..<rows {
+      let v = data[i][j]
+      if v > col_max {
+        col_max = v
+      }
+    }
+    if col_max < upper {
+      upper = col_max
+    }
+  }
+  if upper - lower <= VALUE_SADDLE_TOL {
+    let saddle = (upper + lower) / 2.0
+    cache.set(state, saddle)
+    return saddle
   }
   let m = match @nash.FiniteMatrix::new(data) {
     Ok(x) => x

@@ -185,7 +185,26 @@ value(state, ..., cache, stats):
 
 ### 計算量・推奨値
 
-実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。N=3 の実測では turn_limit=2〜5 まで無理なく完走する（各ノードの Nash LP は最大 6×6 で数μs、到達 state は memoization でカバー）。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて 5 程度まで設定してよい。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
+実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。6v6 実データ (Nosada vs カマカマキリ) での実測: turn_limit=1 は 1 秒未満、turn_limit=2 は 2 秒前後、turn_limit=3 は 40 秒前後で完走する (bit issue #38912f7b task C で pure-saddle fast path + node-level αβ-pruning 投入後)。turn_limit=4 以上は 5 分タイムアウトに収まらず、さらなる高速化は別タスクで検討。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて設定してよい (実用上限は現状 turn_limit=3)。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
+
+### LP 退化時の扱い (pure-saddle fast path)
+
+選出レベル 20×20 行列と `value` 再帰内部で解く per-state Nash の双方で、payoff matrix が **pure saddle** (`max_i min_j A[i,j] == min_j max_i A[i,j]` が `SADDLE_TOL = 1e-10` 内で成立) となる退化ケースを検出した時点で LP ソルバを skip し、純戦略と saddle value を直接返す。`@nash.solve_zero_sum` と `payoff.value` の双方に実装。
+
+**動機**: turn_limit=3 以上の実データで状態空間が HP 離散 × 限定的な行動空間で多数の near-identical cell を生み、二相シンプレックスが数値的に不安定な pivot を繰り返し `InconsistentGame("col strategy has negative component ...")` を返していた (Nosada vs カマカマキリ tl=3 で ~70 秒後に失敗)。pure-saddle 検出はこの class の入力を simplex に渡さず直接解決するため、bug 回避と速度向上を同時に達成する。
+
+**影響**: 既存の単体テスト (RPS, matching pennies, 2×2 mixed 等) は `maxmin < minmax` が strict に成立するため fast path を通らず、従来どおり shift-and-normalise LP 経由で解かれる。退化していない mixed Nash ケースへの影響なし。
+
+### αβ-pruning (node-level, conservative)
+
+`value` 関数が `alpha`, `beta` の labeled args (デフォルト `-1.0`, `+1.0`) を受け取り、以下の node-level 枝刈りを行う:
+
+1. Matrix を 1 行ずつ埋めながら `row_min[i] = min_j A[i,j]` を計算し、`lower = max over filled rows of row_min[i]` を更新 (pure-maximin 下限)。
+2. `lower >= beta - 1e-12` が成立したら残りの行をスキップして `lower` を返す (β-cutoff)。Nash(A) ≥ lower ≥ β より呼び出し側の関心範囲を超える。
+3. 全 cell 埋めた後に `upper - lower ≤ SADDLE_TOL` なら saddle と判定し LP skip。
+4. 子再帰は常に `(-1.0, +1.0)` で呼ぶため子の返り値は exact → top-level 値は non-pruning reference とビット一致する (bit-exact regression 保証)。
+
+実測で turn_limit=3 の dominant team 比較で visited state 数が 15 → 3 (80% 削減)。top-level value は変わらないが中間 LP 回避で wall-clock が短縮する。
 
 ### 技メタ (`priority` / `stat_effects`)
 
@@ -272,6 +291,7 @@ JSON 互換ルール:
 - 状態異常 / 天候 / フィールドのモデル化 (MonteCarloSim と SwitchingGame の双方)
 - 変化技の効果拡充 — 現状は `move.stat_effects` 経由の自己ランク補正のみ。`pkdx_patch/006_move_meta/data.json` に行を足すだけで追加可能。状態異常・交代・ひるみ系に拡張する場合は `move_meta` テーブルのスキーマ (`stat_effects_json` 以外の effect kind 列) 追加と `@model.Move` 側のフィールド追加を検討
 - MonteCarloSim の ε-greedy から局所 Nash LP への切替 (rollout の変化技評価を精緻化)
-- αβ pruning / iterative deepening — `SwitchingGameState` は不変・ハッシャブルで αβ 前提を満たすため、`value` に `alpha` / `beta` 引数を足してノード順序を勾配ヒューリスティックで並べれば実装可能 (状態表現の変更不要)
+- Aggressive αβ-pruning (child alpha/beta propagation) — 現状の node-level 保守的実装は子を常に `(-1, +1)` で呼ぶため bit-exact だが、速度は saddle skip に依存する。子に narrow な `(alpha, beta)` を渡して child が bound を返す aggressive 版は exact 値を保証しない代わりに深い木で大きな速度向上が見込める。実装時は monotonicity に基づく bound propagation の正当性を確認し、bit-exact regression を放棄する旨を明記する
+- Iterative deepening + transposition-table による action reordering — 深さ d の best response を深さ d+1 の探索時に先頭に置く heuristic。αβ の β-cutoff ヒット率を上げる。`SwitchingGameState` は不変・ハッシャブルなので実装の前提は満たしている
 
 新 pairwise variant は `from_damage.mbt` の `winrate` match に分岐を足し、`payoff_model_enum_exhaustive` test を更新する。team-level variant は `TeamPayoffModel` enum と `team_payoff_matrix_with_team_model` ディスパッチに分岐を足す。

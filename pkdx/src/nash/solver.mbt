@@ -34,6 +34,97 @@ fn min_entry(matrix : FiniteMatrix) -> Double {
 }
 
 ///|
+/// Tolerance for pure-saddle-point detection in `solve_zero_sum`. A game has a
+/// pure saddle iff `maxmin == minmax` (von Neumann); when the gap is below this
+/// tolerance we return the pure-strategy equilibrium directly instead of
+/// routing through the shift-and-normalise LP path. This is both a speedup
+/// (no simplex iterations on matrices that are trivially resolved) and a
+/// robustness fix: highly degenerate LPs (many near-identical rows/columns)
+/// can cause the two-phase tableau simplex to make numerically bad pivots and
+/// emit a negative strategy component, which `sanitize_strategy` then rejects
+/// as `InconsistentGame`. The pure-saddle fast path sidesteps the simplex
+/// entirely for that class of inputs.
+const SADDLE_TOL : Double = 1.0e-10
+
+///|
+/// Pure-strategy saddle point of a finite zero-sum matrix if one exists.
+///
+/// Returns `Some((i*, j*, v))` when `max_i min_j A[i,j] == min_j max_i A[i,j]`
+/// within `SADDLE_TOL`; `v` is that saddle value and `(i*, j*)` are the first
+/// row / column that attain it. Returns `None` when the gap is strictly
+/// positive (i.e. a truly mixed equilibrium is required).
+fn detect_pure_saddle(matrix : FiniteMatrix) -> (Int, Int, Double)? {
+  let rows = matrix.rows()
+  let cols = matrix.cols()
+  // Row-minima with argmin.
+  let mut best_row = 0
+  let mut best_row_min = matrix.at(0, 0)
+  // Initialize best_row_min to row 0's min.
+  for c in 0..<cols {
+    let v = matrix.at(0, c)
+    if v < best_row_min {
+      best_row_min = v
+    }
+  }
+  for r in 1..<rows {
+    let mut row_min = matrix.at(r, 0)
+    for c in 1..<cols {
+      let v = matrix.at(r, c)
+      if v < row_min {
+        row_min = v
+      }
+    }
+    if row_min > best_row_min {
+      best_row_min = row_min
+      best_row = r
+    }
+  }
+  // Col-maxima with argmax... actually argmin of col_max.
+  let mut best_col = 0
+  let mut best_col_max = matrix.at(0, 0)
+  for r in 0..<rows {
+    let v = matrix.at(r, 0)
+    if v > best_col_max {
+      best_col_max = v
+    }
+  }
+  for c in 1..<cols {
+    let mut col_max = matrix.at(0, c)
+    for r in 1..<rows {
+      let v = matrix.at(r, c)
+      if v > col_max {
+        col_max = v
+      }
+    }
+    if col_max < best_col_max {
+      best_col_max = col_max
+      best_col = c
+    }
+  }
+  let gap = best_col_max - best_row_min
+  if gap <= SADDLE_TOL {
+    // Saddle value: arithmetic mean avoids biasing toward either bound when
+    // the gap is ≤ 0 due to FP noise. The true value lies in [best_row_min,
+    // best_col_max].
+    let value = (best_row_min + best_col_max) / 2.0
+    return Some((best_row, best_col, value))
+  }
+  None
+}
+
+///|
+/// Build a pure `MixedStrategy` concentrated at index `idx` of length `n`.
+fn pure_strategy(n : Int, idx : Int) -> MixedStrategy raise SolverError {
+  let probs = Array::make(n, 0.0)
+  probs[idx] = 1.0
+  match MixedStrategy::new(probs) {
+    Ok(s) => s
+    Err(e) =>
+      raise InconsistentGame("pure strategy build failed: " + e.to_string())
+  }
+}
+
+///|
 /// Solve the zero-sum game for the row player's mixed strategy by LP.
 ///
 /// Input: positive-entry matrix A' (m × n).
@@ -100,6 +191,18 @@ fn solve_col_lp(
 pub fn solve_zero_sum(matrix : FiniteMatrix) -> LpResult raise SolverError {
   let rows = matrix.rows()
   let cols = matrix.cols()
+  // Fast path: if the matrix has a pure-strategy saddle, return it directly.
+  // This both speeds up obvious games and sidesteps simplex instability on
+  // highly degenerate LPs (see `SADDLE_TOL` doc comment for details).
+  match detect_pure_saddle(matrix) {
+    Some((i, j, v)) =>
+      return Optimal(
+        value=v,
+        row_strategy=pure_strategy(rows, i),
+        col_strategy=pure_strategy(cols, j),
+      )
+    None => ()
+  }
   let min_e = min_entry(matrix)
   // Shift so that all entries of A' are ≥ 1 (strictly positive value guaranteed).
   let shift = if min_e < 1.0 { 1.0 - min_e } else { 0.0 }

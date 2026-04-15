@@ -219,7 +219,12 @@ Champions のチーム画面スクショ 2 枚を、次のメッセージにま�
 
 ### 3. 各体ごとの DB 照合 / SP 逆算 / 性格確定 / 技補完
 
-抽出した 6 体について、breed skill の [Phase 1-Vision](../breed/SKILL.md#phase-1-vision-champions-スクショ取り込み) 手順 4-7 (DB 照合 / SP 逆算検証 / 性格確定 / 技詳細補完) を順次適用する。これらは個別 CLI 呼び出しが必要なため**ポケモンごと**に処理するが、ユーザー対話は発生させず一括で進める (性格が一意に決まらない個体だけ、後段の確認時にまとめて選ばせる)。
+抽出した 6 体について、ポケモンごとに以下を順次実行する。ユーザー対話は発生させず一括で進める (性格が一意に決まらない個体だけ、後段の確認時にまとめて選ばせる):
+
+1. **DB 照合**: `pkdx query "<name>" --version champions --format json` で種族値・タイプ・特性候補を取得。Champions 側で未登録なら `--version scarlet_violet` で fallback
+2. **SP 逆算検証**: `pkdx stat-reverse "<name>" --stats "<HP>,<A>,<B>,<C>,<D>,<S>" --version champions --format json` の出力 SP と vision 抽出 SP を比較。複数解は「いずれかと一致」で OK
+3. **性格確定**: ↑↓マーカーが読めていれば性格テーブルから直接特定。読めない場合は SP + 実数値の整合性で候補を絞る (`team-builder/references/champions_sp.md` 参照)。候補 1 つなら自動確定、複数候補は後段で AskUserQuestion
+4. **技詳細補完**: `pkdx moves "<name>" --version champions --format json` で抽出した 4 つの技名を DB 照合し `type/category/power/accuracy` を埋める
 
 ### 4. 6 体分まとめて表示 + 一括確認
 
@@ -289,7 +294,11 @@ jq -n \
   $PKDX import-check
 ```
 
-出力に応じて breed Phase 1-Vision 手順 8 と同じ分岐 (skip / diff / new)。
+出力に応じて分岐:
+
+- `{"status":"skip", "matched_file": "..."}` → 既に同一データあり。**AskUserQuestion**: `保存せず終了` / `別名で保存する` / `やり直す`
+- `{"status":"diff", "matched_file": "...", "differing_fields": [...]}` → 差分を表示し、**AskUserQuestion**: `新規ファイルとして保存` / `既存を上書き` / `保存せず終了`
+- `{"status":"new"}` → そのまま次のステップへ
 
 4. ユーザー承認後、選んだ動線 (Phase 6 or Phase 8) に進む
 
@@ -751,42 +760,6 @@ megaメカニクスが有効な場合:
 - メガ後の種族値・タイプ・特性を取得して比較
 - AskUserQuestionで確定
 
-### 7-6: Nash 均衡による選出分布の提示（任意）
-
-選出最適化をデータ駆動で裏取りしたい場合、`pkdx select` を呼び出して
-`PayoffModel=Best1v1` で選出単位の Nash 均衡分布を取得する。手作業の選出提案
-（7-3）と突き合わせ、乖離があれば再検討する。
-
-**入力**: 自軍 6 体 + 想定される仮想敵 6 体（Phase 6 で確定済）。
-
-**前提**: nash 系サブコマンドは macOS/Linux のみ対応（Windows では非対応）。
-
-```bash
-# 仮想敵リストも含めた team JSON を構築し stdin で渡す。
-cat <<'JSON' | $PKDX select
-{
-  "team": [
-    {"name":"<name>","type1":"<t1>","type2":"<t2>","hp":<h>,"atk":<a>,"def":<b>,
-     "spa":<c>,"spd":<d>,"spe":<s>,"ability":"<abil>","item":"<item>","tera":"<tera>",
-     "moves":[{"name":"<mv>","type":"<t>","category":"物理|特殊|変化","power":<p>,"priority":<int>,"stat_effects":[[<stat>,<delta>],...]}, ...]},
-    ... (6 体ぶん)
-  ],
-  "opponent": [ ... (仮想敵 6 体) ],
-  "format": "single"
-}
-JSON
-```
-
-出力の `row_strategy` は自軍選出 20 (single) または 15 (double) 通りの確率分布。
-確率 > 1% のセレクションを「推奨選出」として 7-3 の手選出と比較する。
-
-`value` と `exploitability` も併せて提示。`exploitability < 1e-6` なら解析解、
-それ以上なら LP が退化している可能性があるので結果を保守的に扱う。
-
-**注意**: 現バージョンは `ability`/`item`/`tera` を JSON で指定できるが、天候・
-ランク補正・フィールドは考慮されない。あくまで「技の生ダメージ + 素早さ」で
-の近似結果であることを明記して提示する。詳細は `.claude/skills/nash/SKILL.md`
-と `.claude/skills/nash/references/payoff_semantics.md` を参照。
 
 ---
 

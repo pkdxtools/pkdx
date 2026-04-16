@@ -36,7 +36,7 @@ test "team_payoff_matrix_screened_bit_exact_when_keep_top_one" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (screened, rows, cols) = team_payoff_matrix_screened(
-    team, opp, Single, 100, 42UL, 1.0, 1,
+    team, opp, Single, 10, 42UL, 1.0, refine_turn_limit=1, mc_turn_limit=1,
   )
   let oracle = team_payoff_matrix_with_team_model(
     team, opp, Single, SwitchingGame(1),
@@ -65,7 +65,7 @@ test "team_payoff_matrix_screened_retained_count_matches_ceil_of_quantile" {
   let opp = build_screen_team("B")
   // C(4, 3) = 4 selections on each side. keep_top = 0.5 → ceil(4 * 0.5) = 2.
   let (_, rows, cols) = team_payoff_matrix_screened(
-    team, opp, Single, 50, 11UL, 0.5, 1,
+    team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
   assert_eq(rows.length(), 2)
   assert_eq(cols.length(), 2)
@@ -76,7 +76,7 @@ test "team_payoff_matrix_screened_retained_indices_are_sorted_ascending" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (_, rows, cols) = team_payoff_matrix_screened(
-    team, opp, Single, 50, 11UL, 0.5, 1,
+    team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
   for i in 1..<rows.length() {
     assert_true(rows[i - 1] < rows[i])
@@ -91,10 +91,10 @@ test "team_payoff_matrix_screened_retained_count_is_monotonic_in_keep_top" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (_, rows_low, _) = team_payoff_matrix_screened(
-    team, opp, Single, 50, 11UL, 0.3, 1,
+    team, opp, Single, 10, 11UL, 0.3, refine_turn_limit=1, mc_turn_limit=1,
   )
   let (_, rows_high, _) = team_payoff_matrix_screened(
-    team, opp, Single, 50, 11UL, 0.8, 1,
+    team, opp, Single, 10, 11UL, 0.8, refine_turn_limit=1, mc_turn_limit=1,
   )
   assert_true(rows_low.length() < rows_high.length())
 }
@@ -106,10 +106,10 @@ test "team_payoff_matrix_screened_keeps_top_mean_rows" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (m_full, _, _) = team_payoff_matrix_screened(
-    team, opp, Single, 50, 11UL, 1.0, 1,
+    team, opp, Single, 10, 11UL, 1.0, refine_turn_limit=1, mc_turn_limit=1,
   )
   let (_, retained_rows, _) = team_payoff_matrix_screened(
-    team, opp, Single, 50, 11UL, 0.5, 1,
+    team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
   // Note: the short-circuit path for keep_top=1.0 runs the SwitchingGame
   // oracle, not the MC screening, so we can't compare row-means bit-exact.

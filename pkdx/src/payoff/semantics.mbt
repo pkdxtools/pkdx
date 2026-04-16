@@ -1,15 +1,27 @@
 ///|
+/// SwitchingGame DP の turn_limit。3 体選出なので最低 3 ターンは必要。
+/// 20 は「3 体落としきるラインが αβ で浅く検出され、長引くノードは
+/// HP ratio 中間評価に落ちる前に大抵決着している」経験値。
+pub const DP_TURN_LIMIT : Int = 20
+
+///|
+/// MC screening rollout の turn_limit。screening は足切り用なので
+/// 決着を待たず、5 ターン程度で HP ratio 差に収束させる。
+pub const MC_TURN_LIMIT : Int = 5
+
+///|
 /// Team-level payoff model for converting Pokemon team matchups into zero-sum
 /// selection matrices.
 ///
 /// - `SwitchingGame(turn_limit)` evaluates each (selection, selection) cell as
-///   an extensive-form game with switching (precise, deterministic).
-/// - `ScreenedSwitchingGame(mc_trials, mc_seed, keep_top_quantile,
-///   refine_turn_limit)` runs a team-level Monte Carlo screening pass over the
-///   full selection matrix, prunes rows/columns below `keep_top_quantile`
-///   (by mean screening value), then evaluates only the retained sub-matrix
-///   with `SwitchingGame(refine_turn_limit)`. `keep_top_quantile >= 1.0`
-///   short-circuits to the plain `SwitchingGame(refine_turn_limit)` path.
+///   an extensive-form game with switching (precise, deterministic). CLI 既定は
+///   `DP_TURN_LIMIT` (20)。テストでは小さい値を渡して高速に回す。
+/// - `ScreenedSwitchingGame(mc_trials, mc_seed, keep_top_quantile)` runs a
+///   team-level Monte Carlo screening pass (rollout turn limit
+///   `MC_TURN_LIMIT` = 5) over the full selection matrix, prunes rows/columns
+///   below `keep_top_quantile` (by mean screening value), then evaluates only
+///   the retained sub-matrix with SwitchingGame DP (`DP_TURN_LIMIT`).
+///   `keep_top_quantile >= 1.0` short-circuits to the plain SwitchingGame path.
 pub(all) enum TeamPayoffModel {
   SwitchingGame(Int)
   ScreenedSwitchingGame(Int, UInt64, Double, Int)

@@ -1,7 +1,7 @@
 ///|
 /// Cross-cutting E2E tests: build 6v6 combatants → team payoff matrix → Nash
 /// → selection distribution. After the removal of pairwise `PayoffModel`
-/// only `SwitchingGame` / `ScreenedSwitchingGame` exercise this path.
+/// only `SwitchingGame(1)` / `ScreenedSwitchingGame(1)` exercise this path.
 
 ///|
 /// Build a deterministic 6-member test team keyed by the given speeds.
@@ -35,7 +35,7 @@ test "end_to_end_select_with_switching_game_model_returns_valid_distribution" {
   let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
   let opp = build_6_team("O", [100, 100, 100, 100, 100, 100])
   let team_m = team_payoff_matrix_with_team_model(
-    team, opp, Single, SwitchingGame(2),
+    team, opp, Single, SwitchingGame(1),
   )
   assert_true(team_m.rows() == 20 && team_m.cols() == 20)
   let lp = @nash.solve_zero_sum(team_m)

@@ -209,13 +209,12 @@ echo '{"matrix":[[0,1,-1],[-1,0,1],[1,-1,0]]}' | bin/pkdx nash graph --threshold
 cat team.json | bin/pkdx select
 
 # 選出最適化: team_payoff_model (Single 限定、現時点では Double は未対応)
-# - "switching_game:<turn_limit>" (未指定時の既定は switching_game:2):
-#   交代込み extensive-form ゲーム木 (先制技 / ランク補正対応)
-# - "screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>":
-#   MC screening → 下位 quantile 枝刈り → 残存 sub-matrix のみ SwitchingGame で精密評価。
-#   switching_game が 30 秒以上かかる実戦データで推奨 (例: 1000:42:0.3:3)
-echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"switching_game:2"}' | bin/pkdx select
-echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"screened_switching_game:1000:42:0.3:3"}' | bin/pkdx select
+# - "switching_game" (既定): 交代込み extensive-form ゲーム木 (DP turn_limit=20 固定)
+# - "screened_switching_game:<trials>:<seed>:<keep_top>":
+#   MC screening (rollout turn_limit=5) → 下位 quantile 枝刈り → 残存 sub-matrix のみ SwitchingGame DP で精密評価。
+#   switching_game が 30 秒以上かかる実戦データで推奨 (例: 1000:42:0.3)
+echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"switching_game"}' | bin/pkdx select
+echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"screened_switching_game:1000:42:0.3"}' | bin/pkdx select
 
 # 旧 pairwise 系 (best1v1 / nash_responses / monte_carlo / pairwise:* / payoff_model フィールド) は
 # 2026-04 に全廃。指定すると InvalidJson で弾かれる。
@@ -261,7 +260,7 @@ Phase 0（初期化）→ Phase 8（レポート出力）の順に進行。各�
 
 ### nash
 
-零和 2 人ゲームのナッシュ均衡ソルバーおよび、その上層の選出最適化 (`pkdx select`)・メタ乖離分析 (`pkdx meta-divergence`) を提供する。Phase 1 で計算種別 (nash solve / select / meta-divergence / nash graph) を選択し、対応する CLI サブコマンドに JSON を stdin で渡す。macOS/Linux のみ対応（Windows は BLAS 依存のため非対応）。詳細は `.claude/skills/nash/SKILL.md`。
+零和 2 人ゲームのナッシュ均衡ソルバーおよび、その上層の選出最適化 (`pkdx select`)・メタ乖離分析 (`pkdx meta-divergence`) を提供する。Phase 1 で計算種別 (nash solve / select / meta-divergence / nash graph) を選択し、対応する CLI サブコマンドに JSON を stdin で渡す。select の入力は `box/teams/*.meta.json` の `members` を `team`/`opponent` に詰め替えて渡す (team-builder / Champions スクショ取り込みで生成)。`pkdx select` は team-builder member 形式 (`types[]` + `base_stats{}`) を直接受け付ける。macOS/Linux のみ対応（Windows は BLAS 依存のため非対応）。詳細は `.claude/skills/nash/SKILL.md`。
 
 ### self-update
 

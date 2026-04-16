@@ -232,7 +232,7 @@ pub fn team_rollout(
   own : Array[Combatant],
   opp : Array[Combatant],
   rng : @random.Rand,
-  turn_limit~ : Int = 200,
+  turn_limit~ : Int = MC_TURN_LIMIT,
   epsilon~ : Double = default_rollout_epsilon,
 ) -> Double {
   let own_hps = Array::make(own.length(), 0)
@@ -405,6 +405,7 @@ pub fn team_monte_carlo_value(
   opp : Array[Combatant],
   trials : Int,
   seed : UInt64,
+  turn_limit~ : Int = MC_TURN_LIMIT,
 ) -> Double {
   if trials <= 0 {
     return 0.0
@@ -412,7 +413,7 @@ pub fn team_monte_carlo_value(
   let rng = seeded_rng(seed)
   let mut total = 0.0
   for _ in 0..<trials {
-    total += team_rollout(own, opp, rng)
+    total += team_rollout(own, opp, rng, turn_limit~)
   }
   total / trials.to_double()
 }

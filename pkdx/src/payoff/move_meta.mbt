@@ -1,9 +1,4 @@
-///|
-/// Stat-rank helpers shared between SwitchingGame and MonteCarloSim. Move
-/// priority and stat-boost effects now travel inline on `@model.Move`
-/// (populated from the `move_meta` table by `query_moves` / `query_damage`),
-/// so the payoff layer no longer maintains a separate cache or curated
-/// fallback — it reads `move.priority` and `move.stat_effects` directly.
+// move.priority / move.stat_effects を使った先制判定・ランク補正ヘルパー
 ///
 /// Stat indices used throughout the module (matches the order inside
 /// `my_ranks` / `opp_ranks` in `SwitchingGameState`):

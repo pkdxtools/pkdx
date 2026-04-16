@@ -23,7 +23,7 @@ PKDX=$REPO_ROOT/bin/pkdx
 | value | 行プレイヤーから見たゲーム値 (期待利得) |
 | exploitability | 現在の戦略 σ に対する最良応答で得られる追加利得。零和で 0 なら σ は Nash 均衡 |
 | support | 確率 > 0 の純戦略 index 集合 |
-| TeamPayoffModel | 利得の作り方 (`switching_game:<turn_limit>` / `screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>`) |
+| TeamPayoffModel | 利得の作り方 (`switching_game` / `screened_switching_game:<trials>:<seed>:<keep_top>`)。turn_limit は定数 (MC=5, DP=20) |
 | BattleFormat | `single` = 3 体選出 (20x20) のみ対応 (`double` は現状未サポート) |
 
 詳細はまず `references/` を参照:
@@ -129,22 +129,40 @@ JSON
 
 ### 入力の収集
 
-team (6 体), opponent (6 体), format (single のみ対応), `team_payoff_model` を取得する。team は `box/teams/` のキャッシュまたはユーザー直接入力。
+team (6 体), opponent (6 体), format (single のみ対応), `team_payoff_model` を取得する。
+
+#### データソース
+
+1. **`box/teams/*.meta.json`** (推奨) — team-builder Phase 8 または Champions スクショ取り込みで生成される。`.meta.json` の `members` 配列がそのまま combatant として使える (`types[]` + `base_stats{}` 形式を `pkdx select` が直接受け付ける)。
+2. **ユーザー直接入力** — 上記がない場合、ポケモン名・ステータス・技を対話で収集する。
+
+#### `.meta.json` からの読み込み手順
+
+```bash
+# 1. 自チームの .meta.json を特定
+ls box/teams/*.meta.json
+
+# 2. members を team / opponent に詰め替えて select に渡す
+# skill は .meta.json の "members" を "team" キーに、
+# 相手の .meta.json の "members" を "opponent" キーに設定する。
+# battle_format は "singles" → "single" に変換。
+```
+
+**重要**: `.meta.json` の `members` にはステータスが種族値 (`base_stats`) の場合と実数値 (`hp`/`atk`/...) の場合がある。Champions スクショ取り込み経由なら実数値が揃っているが、skill 手順で作成した場合は種族値のみの可能性がある。足りないデータ (実数値、priority、stat_effects 等) がある場合はユーザーに補完を促す。
 
 #### モデル選択肢 (`team_payoff_model` フィールド)
 
-- `"switching_game:<turn_limit>"` (既定、未指定時は `switching_game:2`) — 交代込み extensive-form ゲーム木 (先制技 / ランク補正技に対応)
-- `"screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>"` — MC で選出行列を screening、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP。例: `"screened_switching_game:1000:42:0.3:3"`
+- `"switching_game"` (既定) — 交代込み extensive-form ゲーム木。DP turn_limit=20 固定 (先制技 / ランク補正技に対応)
+- `"screened_switching_game:<trials>:<seed>:<keep_top>"` — MC で選出行列を screening (rollout turn_limit=5)、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP (turn_limit=20)。例: `"screened_switching_game:1000:42:0.3"`
 
 pairwise 系 (`best1v1` / `nash_responses` / `monte_carlo:*`) および `payoff_model` フィールドは廃止済み。指定すると `InvalidJson`。
 
 **チューニングガイド (ScreenedSwitchingGame)**:
 - `trials`: 500-2000。MC 精度を上げるほど枝刈り精度向上。1000 が推奨
 - `keep_top`: 0.2-0.5。残す比率。小さくするほど高速だが誤 prune リスク。実戦データでは 0.3 前後
-- `turn_limit`: 2-4。`switching_game` 同様。残存セル数を絞っているため 3 以上でも実用的
 - `seed`: 任意 UInt64。再現性が必要なら固定値
 
-**重要な trade-off**: screening は MC 40000-80000 rollout のオーバヘッドを伴う (合成 6v6 で実測 15-16 秒)。`switching_game:N` が単独で 10 秒以内に完走する場合、screening を挟むと逆に遅くなる。先に `time bin/pkdx select` で素の `switching_game:N` を計測し、30 秒以上かかるとき初めて `screened_switching_game` を使う。Nash value は両モデル間で一致することを合成データで確認済み。
+**重要な trade-off**: screening は MC 40000-80000 rollout のオーバヘッドを伴う。`switching_game` が単独で 10 秒以内に完走する場合、screening を挟むと逆に遅くなる。先に `time bin/pkdx select` で素の `switching_game` を計測し、30 秒以上かかるとき初めて `screened_switching_game` を使う。Nash value は両モデル間で一致することを合成データで確認済み。
 
 詳細は `references/payoff_semantics.md`。
 
@@ -164,7 +182,7 @@ cat <<'JSON' | $PKDX select
   ],
   "opponent": [...],
   "format": "single",
-  "team_payoff_model": "switching_game:2"
+  "team_payoff_model": "switching_game"
 }
 JSON
 ```

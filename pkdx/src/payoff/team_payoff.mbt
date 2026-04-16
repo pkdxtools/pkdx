@@ -1,12 +1,4 @@
-///|
-/// Team payoff: given two 6-Pokemon teams and a battle format (single = 3-pick,
-/// double = 4-pick), enumerate all k-selections from each side in lexicographic
-/// order and compute a selection-level zero-sum payoff matrix.
-///
-/// After the removal of pairwise `PayoffModel` (Best1v1 / NashResponses /
-/// MonteCarloSim), only team-level models evaluate selection cells:
-/// `SwitchingGame` runs a per-state Nash recursion on the extensive-form
-/// game, and `ScreenedSwitchingGame` prepends a Monte Carlo screening pass.
+// k-selection 列挙 + team-level payoff matrix 構築
 
 ///|
 pub(all) enum BattleFormat {
@@ -69,10 +61,9 @@ fn pick_combatants(
 }
 
 ///|
-/// Team-level payoff matrix using `SwitchingGame(turn_limit)`. Each cell is
-/// the Nash value of the extensive-form game between the two selected
-/// sub-teams.
-fn team_payoff_matrix_switching(
+/// Team-level payoff matrix using SwitchingGame DP. Each cell is the Nash
+/// value of the extensive-form game between the two selected sub-teams.
+pub fn team_payoff_matrix_switching(
   team_a : Array[Combatant],
   team_b : Array[Combatant],
   format : BattleFormat,
@@ -118,8 +109,8 @@ fn team_payoff_matrix_switching(
 /// Build the selection-level team payoff matrix under the given
 /// `TeamPayoffModel`.
 ///
-/// - `SwitchingGame(turn_limit)` evaluates selection-vs-selection as an
-///   extensive-form game with switching.
+/// - `SwitchingGame` evaluates selection-vs-selection as an extensive-form
+///   game with switching (turn_limit = `DP_TURN_LIMIT`).
 /// - `ScreenedSwitchingGame(...)` cannot be dispatched here because its
 ///   retained row/column indices must flow back to the caller
 ///   (`compute_select_with_team_model`). Use

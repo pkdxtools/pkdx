@@ -56,7 +56,7 @@ test "team_builder_phase7_invokes_select_smoke" {
     #|  {"name":"P4","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":110,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
     #|  {"name":"P5","type1":"ノーマル","type2":"","hp":100,"atk":90,"def":80,"spa":80,"spd":80,"spe":85,"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]}
     #|]
-  let input = "{\"team\":" + team + ",\"opponent\":" + team + ",\"format\":\"single\"}"
+  let input = "{\"team\":" + team + ",\"opponent\":" + team + ",\"format\":\"single\",\"team_payoff_model\":\"switching_game:1\"}"
   let out = run_select(input)
   let j = @json.parse(out)
   match j {

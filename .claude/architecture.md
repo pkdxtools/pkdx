@@ -194,9 +194,9 @@ stateDiagram-v2
   SEL: Phase 2b pkdx select
   note right of SEL
     stdin:  team + opponent + format + team_payoff_model
-    team_payoff_model ∈ {switching_game:N,
-      screened_switching_game:T:S:Q:N}
-    (pairwise 系は 2026-04 に全廃)
+    team_payoff_model ∈ {switching_game,
+      screened_switching_game:T:S:Q}
+    turn_limit 定数: MC=5, DP=20
   end note
   SEL --> [*]
 
@@ -291,8 +291,8 @@ flowchart TD
   Parse --> Parsed{"team + opponent + format + model"}
 
   Parsed --> Disp{team_model}
-  Disp -->|SwitchingGame N| SG[switching_game_winrate]
-  Disp -->|ScreenedSwitchingGame T:S:Q:N| SCR[team_payoff_matrix_screened]
+  Disp -->|SwitchingGame| SG[switching_game_winrate]
+  Disp -->|ScreenedSwitchingGame T:S:Q| SCR[team_payoff_matrix_screened]
 
   SG --> TPS[team_payoff_matrix_switching]
 
@@ -321,7 +321,7 @@ stateDiagram-v2
   Check: terminal_value 判定
   Check --> Terminal_Mine: my 全滅 → -1.0
   Check --> Terminal_Opp: opp 全滅 → +1.0
-  Check --> Terminal_Limit: turn ≥ turn_limit → hp_ratio
+  Check --> Terminal_Limit: turn ≥ DP_TURN_LIMIT(20) → hp_ratio
   Check --> CacheLookup: それ以外
 
   CacheLookup --> Hit: cache hit (ValueStats.hits++)

@@ -133,6 +133,68 @@ fn parse_str_field(m : Map[String, Json], key : String) -> String {
 }
 
 ///|
+fn parse_int_field_or(
+  m : Map[String, Json],
+  key : String,
+  default : Int,
+) -> Int {
+  match m.get(key) {
+    Some(Number(n, ..)) => n.to_int()
+    _ => default
+  }
+}
+
+///|
+fn parse_types_field(m : Map[String, Json]) -> (String, String) {
+  match m.get("types") {
+    Some(Array(arr)) => {
+      let t1 = match arr.get(0) {
+        Some(String(s)) => s
+        _ => ""
+      }
+      let t2 = match arr.get(1) {
+        Some(String(s)) => s
+        _ => ""
+      }
+      (t1, t2)
+    }
+    _ => (parse_str_field(m, "type1"), parse_str_field(m, "type2"))
+  }
+}
+
+///|
+fn parse_stats_fields(
+  m : Map[String, Json],
+  ctx : String,
+) -> (Int, Int, Int, Int, Int, Int) raise NashCliError {
+  match m.get("base_stats") {
+    Some(Object(bs)) => (
+      parse_int_field_or(bs, "h", 0),
+      parse_int_field_or(bs, "a", 0),
+      parse_int_field_or(bs, "b", 0),
+      parse_int_field_or(bs, "c", 0),
+      parse_int_field_or(bs, "d", 0),
+      parse_int_field_or(bs, "s", 0),
+    )
+    _ =>
+      match m.get("hp") {
+        Some(_) => (
+          parse_int_field(m, "hp", ctx),
+          parse_int_field(m, "atk", ctx),
+          parse_int_field(m, "def", ctx),
+          parse_int_field(m, "spa", ctx),
+          parse_int_field(m, "spd", ctx),
+          parse_int_field(m, "spe", ctx),
+        )
+        None =>
+          raise MissingField(
+            ctx + ": either 'hp/atk/def/spa/spd/spe' or 'base_stats' required",
+          )
+      }
+  }
+}
+
+///|
 fn parse_combatant_json(
   j : Json,
   ctx : String,
@@ -143,18 +205,14 @@ fn parse_combatant_json(
         Some(String(s)) => s
         _ => raise MissingField(ctx + ".name")
       }
-      let hp = parse_int_field(m, "hp", ctx)
-      let atk = parse_int_field(m, "atk", ctx)
-      let def_ = parse_int_field(m, "def", ctx)
-      let spa = parse_int_field(m, "spa", ctx)
-      let spd = parse_int_field(m, "spd", ctx)
-      let spe = parse_int_field(m, "spe", ctx)
+      let (type1, type2) = parse_types_field(m)
+      let (hp, atk, def_, spa, spd, spe) = parse_stats_fields(m, ctx)
       let poke : @model.Pokemon = {
         global_no: "0000",
         name_ja: name,
         name_en: name,
-        type1: parse_str_field(m, "type1"),
-        type2: parse_str_field(m, "type2"),
+        type1,
+        type2,
         hp,
         atk,
         def_,
@@ -292,7 +350,14 @@ fn parse_format(s : String) -> BattleFormat raise NashCliError {
 }
 
 ///|
+/// Parse `team_payoff_model` string:
+/// - `"switching_game"` → `SwitchingGame` (turn_limit = `DP_TURN_LIMIT`)
+/// - `"screened_switching_game:<trials>:<seed>:<keep_top>"` → `ScreenedSwitchingGame`
+///   (MC turn_limit = `MC_TURN_LIMIT`, refine turn_limit = `DP_TURN_LIMIT`)
 fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
+  if s == "switching_game" {
+    return SwitchingGame(DP_TURN_LIMIT)
+  }
   match s.strip_prefix("switching_game:") {
     Some(rest) => {
       let turn_limit = try @strconv.parse_int(rest.to_string()) catch {
@@ -306,44 +371,41 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
           "switching_game turn_limit must be a positive integer",
         )
       }
-      SwitchingGame(turn_limit)
+      return SwitchingGame(turn_limit)
     }
+    None => ()
+  }
+  match s.strip_prefix("screened_switching_game:") {
+    Some(rest) => parse_screened_spec(rest.to_string())
     None =>
-      match s.strip_prefix("screened_switching_game:") {
-        Some(rest) => parse_screened_spec(rest.to_string())
-        None =>
-          raise InvalidJson(
-            "team_payoff_model must be 'switching_game:<turn_limit>' or 'screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>'",
-          )
-      }
+      raise InvalidJson(
+        "team_payoff_model must be 'switching_game' or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
+      )
   }
 }
 
 ///|
-/// Parse `"<trials>:<seed>:<keep_top>:<turn_limit>"` into a
-/// `ScreenedSwitchingGame` variant. Enforces `trials > 0`, `turn_limit > 0`,
-/// and `0 < keep_top <= 1`. `seed` is any UInt64 literal.
+/// Parse `"<trials>:<seed>:<keep_top>"` or `"<trials>:<seed>:<keep_top>:<turn_limit>"`
+/// into a `ScreenedSwitchingGame` variant. When `turn_limit` is omitted,
+/// `DP_TURN_LIMIT` is used. Enforces `trials > 0` and `0 < keep_top <= 1`.
 fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
   let (trials_str, after_trials) = match rest.split_once(":") {
     Some((a, b)) => (a.to_string(), b.to_string())
     None =>
       raise InvalidJson(
-        "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>'",
+        "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
-  let (seed_str, after_seed) = match after_trials.view().split_once(":") {
+  let (seed_str, keep_top_and_maybe_tl) = match after_trials.view().split_once(":") {
     Some((a, b)) => (a.to_string(), b.to_string())
     None =>
       raise InvalidJson(
-        "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>'",
+        "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
-  let (keep_top_str, turn_limit_str) = match after_seed.view().split_once(":") {
-    Some((a, b)) => (a.to_string(), b.to_string())
-    None =>
-      raise InvalidJson(
-        "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>'",
-      )
+  let (keep_top_str, opt_tl_str) = match keep_top_and_maybe_tl.view().split_once(":") {
+    Some((a, b)) => (a.to_string(), Some(b.to_string()))
+    None => (keep_top_and_maybe_tl, None)
   }
   let trials = try @strconv.parse_int(trials_str) catch {
     _ =>
@@ -366,18 +428,24 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
       "screened_switching_game keep_top_quantile must be in (0, 1]",
     )
   }
-  let turn_limit = try @strconv.parse_int(turn_limit_str) catch {
-    _ =>
-      raise InvalidJson(
-        "screened_switching_game refine_turn_limit must be a positive integer",
-      )
+  let refine_tl = match opt_tl_str {
+    Some(s) => {
+      let tl = try @strconv.parse_int(s) catch {
+        _ =>
+          raise InvalidJson(
+            "screened_switching_game turn_limit must be a positive integer",
+          )
+      }
+      if tl <= 0 {
+        raise InvalidJson(
+          "screened_switching_game turn_limit must be a positive integer",
+        )
+      }
+      tl
+    }
+    None => DP_TURN_LIMIT
   }
-  if turn_limit <= 0 {
-    raise InvalidJson(
-      "screened_switching_game refine_turn_limit must be a positive integer",
-    )
-  }
-  ScreenedSwitchingGame(trials, seed, keep_top, turn_limit)
+  ScreenedSwitchingGame(trials, seed, keep_top, refine_tl)
 }
 
 ///|
@@ -428,9 +496,10 @@ pub fn compute_select_with_team_model(
     )
   }
   let (matrix, retained_rows, retained_cols) = match team_model {
-    ScreenedSwitchingGame(trials, seed, keep_top, turn_limit) => {
+    ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) => {
       let (m, rows, cols) = try team_payoff_matrix_screened(
-          team, opponent, format, trials, seed, keep_top, turn_limit,
+          team, opponent, format, trials, seed, keep_top,
+          refine_turn_limit=refine_tl,
         ) catch {
         err => raise InnerError(err.to_string())
       }
@@ -592,7 +661,7 @@ pub fn run_select(input_json : String) -> String raise NashCliError {
   let team_model = match obj.get("team_payoff_model") {
     Some(String(s)) => parse_team_payoff_model(s)
     Some(_) => raise InvalidJson("team_payoff_model must be a string")
-    None => SwitchingGame(2)
+    None => SwitchingGame(DP_TURN_LIMIT)
   }
   match (format, team_model) {
     (Double, SwitchingGame(_)) =>

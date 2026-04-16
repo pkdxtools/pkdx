@@ -25,7 +25,8 @@ pub fn team_payoff_matrix_screened(
   mc_trials : Int,
   mc_seed : UInt64,
   keep_top_quantile : Double,
-  refine_turn_limit : Int,
+  refine_turn_limit~ : Int = DP_TURN_LIMIT,
+  mc_turn_limit~ : Int = MC_TURN_LIMIT,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -53,9 +54,7 @@ pub fn team_payoff_matrix_screened(
   // matrix builder. This guarantees bit-exact parity with the unscreened path
   // (required by the oracle test) and avoids duplicate MC + refine work.
   if keep_top_quantile >= 1.0 {
-    let m = team_payoff_matrix_switching(
-      team_a, team_b, format, refine_turn_limit,
-    )
+    let m = team_payoff_matrix_switching(team_a, team_b, format, refine_turn_limit)
     let rows = Array::make(size_a, 0)
     for i in 0..<size_a {
       rows[i] = i
@@ -78,6 +77,7 @@ pub fn team_payoff_matrix_screened(
       let picked_b = pick_combatants(team_b, sel_b[j])
       row[j] = team_monte_carlo_value(
         picked_a, picked_b, mc_trials, mc_seed ^ cell_idx,
+        turn_limit=mc_turn_limit,
       )
     }
     screen[i] = row

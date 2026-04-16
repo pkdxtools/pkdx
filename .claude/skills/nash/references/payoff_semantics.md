@@ -15,12 +15,12 @@
 
 ```moonbit
 TeamPayoffModel {
-  SwitchingGame(Int)                                  // turn_limit
-  ScreenedSwitchingGame(Int, UInt64, Double, Int)     // trials, seed, keep_top, refine_turn_limit
+  SwitchingGame                                       // DP turn_limit = DP_TURN_LIMIT (20)
+  ScreenedSwitchingGame(Int, UInt64, Double)          // trials, seed, keep_top (MC turn_limit = MC_TURN_LIMIT (5), DP = 20)
 }
 ```
 
-team-level の extensive-form ゲーム木として評価する。
+turn_limit は定数化: DP = 20 (3 体選出の最短決着 3 ターン以上を十分カバー)、MC screening rollout = 5 (足切り用の粗い評価)。team-level の extensive-form ゲーム木として評価する。
 
 ### 状態空間
 
@@ -32,7 +32,7 @@ SwitchingGameState {
   opp_hps : Array[Int]
   my_ranks : Array[Int]      // 長さ 5: [A, B, C, D, S]、active のランクのみ追跡
   opp_ranks : Array[Int]     // 長さ 5、交代でリセット
-  turn : Int                 // 0..turn_limit
+  turn : Int                 // 0..DP_TURN_LIMIT
 } derive(Show, Eq, Hash)
 ```
 
@@ -146,10 +146,10 @@ DamageKey { my_attacker : Bool, atk_idx, def_idx, mv_idx, atk_rank, def_rank : I
 
 JSON 入力の `team_payoff_model` フィールドで指定:
 
-- `"switching_game:<turn_limit>"` 例: `"switching_game:3"`
-- `"screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>"` 例: `"screened_switching_game:1000:42:0.3:3"`
+- `"switching_game"` (既定)
+- `"screened_switching_game:<trials>:<seed>:<keep_top>"` 例: `"screened_switching_game:1000:42:0.3"`
 
-指定がなければ既定で `SwitchingGame(2)` が用いられる。
+turn_limit はすべて定数: MC screening rollout = `MC_TURN_LIMIT` (5)、DP = `DP_TURN_LIMIT` (20)。
 
 ## ScreenedSwitchingGame (TeamPayoffModel)
 
@@ -157,11 +157,10 @@ JSON 入力の `team_payoff_model` フィールドで指定:
 
 ```moonbit
 TeamPayoffModel::ScreenedSwitchingGame(mc_trials: Int, mc_seed: UInt64,
-                                       keep_top_quantile: Double,
-                                       refine_turn_limit: Int)
+                                       keep_top_quantile: Double)
 ```
 
-Team-level の 2 段階パイプライン。既存 `SwitchingGame(3)` が 6v6 の C(6,3)² = 400 セル評価で 40 秒前後かかるため、team-level MC で「明らかに弱い選出」を事前に落としてから SwitchingGame DP を残存セルにだけ適用する。
+Team-level の 2 段階パイプライン。SwitchingGame DP (turn_limit=20) が 6v6 の C(6,3)² = 400 セル評価で重くなるケースで、team-level MC で「明らかに弱い選出」を事前に落としてから SwitchingGame DP を残存セルにだけ適用する。
 
 ### パイプライン
 
@@ -170,7 +169,7 @@ Team-level の 2 段階パイプライン。既存 `SwitchingGame(3)` が 6v6 �
    - `row_score[i] = mean_j A[i,j]` (row 視点で高いほど良い)
    - `col_score[j] = -mean_i A[i,j]` (column 視点で高いほど良い、符号反転)
    - `min/max` は MC 有限試行ノイズに弱いため不採用。`mean` は統計的にロバスト
-3. **Phase C — Refine**: 残存 sub-matrix `R[i', j'] = switching_game_winrate(...,  refine_turn_limit)` で精密評価
+3. **Phase C — Refine**: 残存 sub-matrix `R[i', j'] = switching_game_winrate(..., DP_TURN_LIMIT)` で精密評価
 
 ### Short-circuit
 
@@ -199,21 +198,22 @@ Team-level の 2 段階パイプライン。既存 `SwitchingGame(3)` が 6v6 �
 
 | モデル | 時間 | Nash value | selections 数 |
 |---|---|---|---|
-| `switching_game:3` | 0.8 秒 | 0.3333 | 20 |
-| `screened_switching_game:500:42:0.3:3` | 16.2 秒 | 0.3333 | 6 |
+| `switching_game` | 0.8 秒 (turn_limit=3 旧計測) | 0.3333 | 20 |
+| `screened_switching_game:500:42:0.3` | 16.2 秒 (turn_limit=3 旧計測) | 0.3333 | 6 |
 
-screening は **MC phase に 400 cells × N trials の rollout オーバヘッド**があり、素の `switching_game:N` が 10 秒以内に完走する場合は screening のほうが遅い。**使うべきは `switching_game:N` が 30 秒以上かかる場合のみ**。Nash value は両モデル間で一致 (合成データで確認済み、value agreement は強い sanity check)。
+注: 上記は旧 turn_limit=3 での計測値。現在は DP turn_limit=20 固定のため実データでの再計測が必要。
 
-- `switching_game:3+` が 6v6 実データでタイムアウトに近い (40 秒前後) ケースのみ推奨
-- turn_limit ≥ 4 を含む長期戦評価を screening 込みで行いたい場合の実用解
-- 先に `time bin/pkdx select` で素の `switching_game:N` を計測し、遅いことを確認してから使う
+screening は **MC phase に 400 cells × N trials の rollout オーバヘッド**があり、素の `switching_game` が 10 秒以内に完走する場合は screening のほうが遅い。**使うべきは `switching_game` が 30 秒以上かかる場合のみ**。Nash value は両モデル間で一致 (合成データで確認済み、value agreement は強い sanity check)。
+
+- `switching_game` (DP_TURN_LIMIT=20) が 6v6 実データでタイムアウトに近いケースのみ推奨
+- 先に `time bin/pkdx select` で素の `switching_game` を計測し、遅いことを確認してから使う
 
 ### CLI 文字列
 
-`"screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>"`
-例: `"screened_switching_game:1000:42:0.3:3"`
+`"screened_switching_game:<trials>:<seed>:<keep_top>"`
+例: `"screened_switching_game:1000:42:0.3"`
 
-**バリデーション**: `trials > 0`, `turn_limit > 0`, `0 < keep_top <= 1`。`keep_top=0.0` は parser で即 reject。`keep_top > 1.0` も InvalidJson (short-circuit 経路は `>= 1.0` のみで、`1.5` のような不正値は parser で弾く)。
+**バリデーション**: `trials > 0`, `0 < keep_top <= 1`。`keep_top=0.0` は parser で即 reject。`keep_top > 1.0` も InvalidJson (short-circuit 経路は `>= 1.0` のみで、`1.5` のような不正値は parser で弾く)。
 
 ### Double format 制約
 
@@ -235,18 +235,18 @@ screening は **MC phase に 400 cells × N trials の rollout オーバヘッ�
 | 交代 | **モデル化** | **モデル化** (screen は簡易 / refine は精密) |
 | 確率性 | 決定的 | 決定的 (screen の seed 固定) |
 | 連続値 | [-1, +1] 連続 | [-1, +1] 連続 |
-| 推奨場面 | 通常の選出最適 (turn_limit 1-3) | SG(3+) が 30 秒以上かかる大規模検証 |
+| 推奨場面 | 通常の選出最適 | SG が 30 秒以上かかる大規模検証 |
 
 ## CLI / JSON フィールド
 
 `pkdx select` は stdin の JSON で受ける:
 
 ```jsonc
-{ "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "switching_game:3" }
-{ "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "screened_switching_game:1000:42:0.3:3" }
+{ "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "switching_game" }
+{ "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "screened_switching_game:1000:42:0.3" }
 ```
 
-`team_payoff_model` が未指定の場合は既定で `switching_game:2`。`payoff_model` / `pairwise:*` / `best1v1` / `nash_responses` / `monte_carlo:*` は全て**廃止済み**で、渡すと `InvalidJson` となる。
+`team_payoff_model` が未指定の場合は既定で `SwitchingGame` (DP turn_limit=20)。`payoff_model` / `pairwise:*` / `best1v1` / `nash_responses` / `monte_carlo:*` は全て**廃止済み**で、渡すと `InvalidJson` となる。turn_limit は定数化されておりユーザーからの指定は不可。
 
 ## 将来拡張
 

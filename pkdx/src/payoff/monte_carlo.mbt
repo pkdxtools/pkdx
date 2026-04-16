@@ -1,9 +1,4 @@
-///|
-/// Shared Monte Carlo rollout helpers used by `team_monte_carlo.mbt` (and
-/// formerly by the removed pairwise `MonteCarloSim` model). Exposes a seeded
-/// ChaCha8 RNG and ε-greedy move selection; the single-Pokemon simulation
-/// loop has been removed along with its pairwise caller — `team_rollout`
-/// owns the per-turn state machine directly.
+// Seeded ChaCha8 RNG + ε-greedy move selection helpers
 
 ///|
 /// Default ε for ε-greedy rollout move selection. Rationale: 10% keeps the

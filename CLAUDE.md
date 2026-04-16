@@ -64,10 +64,14 @@ pkdx/                     # MoonBit CLI ツール (native binary)
     nash/                  # 零和 Nash ソルバー (numbt/BLAS) — Layer 1
       matrix_game.mbt, simplex.mbt, solver.mbt, fictitious.mbt, divergence.mbt
     payoff/                # pkdx ドメイン変換 + nash CLI ハンドラ — Layer 2 + 3
-      semantics.mbt         # PayoffModel enum (Best1v1 / NashResponses)
-      from_character.mbt    # monocycle (p, v) モデル
-      from_damage.mbt       # damage → zero-sum payoff
-      team_payoff.mbt       # 選出 (k-combination) Nash
+      semantics.mbt         # TeamPayoffModel enum (SwitchingGame / ScreenedSwitchingGame)
+      from_character.mbt    # monocycle (p, v) モデル (pkdx nash solve 用)
+      damage_utils.mbt      # damage 共通ヘルパー (avg_damage / build_input_with_ranks)
+      monte_carlo.mbt       # seeded RNG + ε-greedy helpers (team_monte_carlo から利用)
+      team_monte_carlo.mbt  # team-level 3v3 MC rollout
+      switching_game.mbt    # team-level extensive-form DP (+ αβ pruning)
+      screened_switching_game.mbt  # MC screening → SwitchingGame refine パイプライン
+      team_payoff.mbt       # 選出 (k-combination) ディスパッチ
       cli_nash.mbt, cli_select.mbt, cli_meta.mbt  # JSON/DOT ハンドラ
 
 bin/
@@ -97,7 +101,7 @@ box/                      # ユーザーデータ出力先（フォーク先でg
     references/
       theory.md              # 零和 LP / Simplex / Fictitious play / MWU
       exploitability.md      # exploitability / NashConv / KL / L1
-      payoff_semantics.md    # Best1v1 / NashResponses 仕様
+      payoff_semantics.md    # SwitchingGame / ScreenedSwitchingGame 仕様
   self-update/
     SKILL.md              # upstream追従スキル
 
@@ -204,16 +208,17 @@ echo '{"matrix":[[0,1,-1],[-1,0,1],[1,-1,0]]}' | bin/pkdx nash graph --threshold
 # 選出最適化（team + opponent + format JSON を stdin。macOS/Linux のみ）
 cat team.json | bin/pkdx select
 
-# 選出最適化: pairwise PayoffModel
-# - "best1v1" (デフォルト): 速度＋平均ダメージで一手 KO 比較
-# - "nash_responses": move-vs-move 内部 Nash で技選択をモデル化
-# - "monte_carlo:<trials>:<seed>": seeded RNG でダメージ乱数込み
-echo '{"team":[...],"opponent":[...],"format":"single","payoff_model":"monte_carlo:1000:42"}' | bin/pkdx select
-
-# 選出最適化: team-level TeamPayoffModel (Phase 13 新軸)
-# - "pairwise:<model>": 既存 PayoffModel をラップ ("pairwise:best1v1" 等)
-# - "switching_game:<turn_limit>": 交代込み extensive-form ゲーム木 (先制技 / ランク補正対応)
+# 選出最適化: team_payoff_model (Single 限定、現時点では Double は未対応)
+# - "switching_game:<turn_limit>" (未指定時の既定は switching_game:2):
+#   交代込み extensive-form ゲーム木 (先制技 / ランク補正対応)
+# - "screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>":
+#   MC screening → 下位 quantile 枝刈り → 残存 sub-matrix のみ SwitchingGame で精密評価。
+#   switching_game が 30 秒以上かかる実戦データで推奨 (例: 1000:42:0.3:3)
 echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"switching_game:2"}' | bin/pkdx select
+echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"screened_switching_game:1000:42:0.3:3"}' | bin/pkdx select
+
+# 旧 pairwise 系 (best1v1 / nash_responses / monte_carlo / pairwise:* / payoff_model フィールド) は
+# 2026-04 に全廃。指定すると InvalidJson で弾かれる。
 
 # メタ乖離分析（usage + matrix JSON を stdin）
 echo '{"usage":[0.4,0.3,0.3],"matrix":[[0,1,-1],[-1,0,1],[1,-1,0]]}' | bin/pkdx meta-divergence
@@ -238,7 +243,7 @@ bin/pkdx hbd "ガブリアス" --nature ようき --fixed-ev "_,0,_,0,_,252" --v
 - **`.claude/skills/team-builder/references/items_abilities.md`** — 道具・特性の考察用データ
 - **`.claude/skills/nash/references/theory.md`** — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠。`pkdx nash solve` の正当性、数値安定性 (shift-and-normalize)、退化ケースの扱いに関する質問はここを第一参照。
 - **`.claude/skills/nash/references/exploitability.md`** — exploitability / NashConv / KL / L1 の定義と使い分け。Nash 判定基準 (≤ 1e-6)、メタ乖離分析の解釈に関する質問はここ。
-- **`.claude/skills/nash/references/payoff_semantics.md`** — `PayoffModel` (Best1v1 / NashResponses) の仕様・計算量・選択基準。選出最適化のどのモデルを使うべきか、将来拡張 (Monte-Carlo 等) に関する質問はここ。
+- **`.claude/skills/nash/references/payoff_semantics.md`** — `TeamPayoffModel` (SwitchingGame / ScreenedSwitchingGame) の仕様・計算量・選択基準。選出最適化のどのモデルを使うべきか、廃止済みの pairwise 系に関する履歴もここ。
 
 ## Skill Flow
 

@@ -2,7 +2,6 @@ import {
   "ushironoko/pkdx/src/nash" @nash,
   "ushironoko/pkdx/src/model" @model,
   "ushironoko/pkdx/src/damage" @damage,
-  "moonbitlang/core/double" @double,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/random" @random,
   "moonbitlang/core/strconv" @strconv,

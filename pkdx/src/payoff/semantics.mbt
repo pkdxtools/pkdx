@@ -1,29 +1,18 @@
 ///|
-/// Payoff semantics for converting Pokemon matchups into zero-sum payoff
-/// matrices.
+/// Team-level payoff model for converting Pokemon team matchups into zero-sum
+/// selection matrices.
 ///
-/// - `Best1v1`: each combatant selects its best move (maximum expected damage),
-///   and winrate is decided by KO turn count with speed as tiebreaker. Fast
-///   and model-free; ignores switching, multi-turn effects, and mixed move
-///   choice.
-/// - `NashResponses`: for each (i, j) cell, build the inner move-vs-move game
-///   and return its Nash value as the payoff. Captures the commitment problem
-///   where attacker and defender simultaneously choose moves.
-
-///|
-pub(all) enum PayoffModel {
-  Best1v1
-  NashResponses
-  MonteCarloSim(Int, UInt64)
-} derive(Show, Eq)
-
-///|
-/// Team-level payoff model. `Pairwise` wraps any pairwise `PayoffModel`
-/// (Phase 0-12 behaviour); `SwitchingGame(turn_limit)` evaluates each
-/// (selection, selection) cell as an extensive-form game with switching.
+/// - `SwitchingGame(turn_limit)` evaluates each (selection, selection) cell as
+///   an extensive-form game with switching (precise, deterministic).
+/// - `ScreenedSwitchingGame(mc_trials, mc_seed, keep_top_quantile,
+///   refine_turn_limit)` runs a team-level Monte Carlo screening pass over the
+///   full selection matrix, prunes rows/columns below `keep_top_quantile`
+///   (by mean screening value), then evaluates only the retained sub-matrix
+///   with `SwitchingGame(refine_turn_limit)`. `keep_top_quantile >= 1.0`
+///   short-circuits to the plain `SwitchingGame(refine_turn_limit)` path.
 pub(all) enum TeamPayoffModel {
-  Pairwise(PayoffModel)
   SwitchingGame(Int)
+  ScreenedSwitchingGame(Int, UInt64, Double, Int)
 } derive(Show, Eq)
 
 ///|

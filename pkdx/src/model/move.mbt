@@ -1,6 +1,6 @@
 ///|
 /// A move (technique) usable by a Pokemon. Move metadata used by the payoff
-/// layer (SwitchingGame / MonteCarloSim) travels inline on this struct:
+/// layer (SwitchingGame / team_monte_carlo) travels inline on this struct:
 ///
 /// - `priority ∈ [-7, +5]` — in-game action-order bucket. `0` for regular
 ///   moves, positive for priority moves (しんそく=+2, バレットパンチ=+1,

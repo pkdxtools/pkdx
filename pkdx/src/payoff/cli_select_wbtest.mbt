@@ -1,58 +1,27 @@
 ///|
-/// Whitebox tests for `parse_model` — the MonteCarloSim string format is a
-/// first-party CLI contract, so it is tested directly rather than through the
-/// JSON round-trip.
+/// Whitebox tests for the `team_payoff_model` CLI string parser.
 
 ///|
-test "parse_model_recognizes_monte_carlo_string_with_trials_and_seed" {
-  let m = parse_model("monte_carlo:1000:42")
-  match m {
-    MonteCarloSim(trials, seed) => {
-      assert_eq(trials, 1000)
-      assert_eq(seed, 42UL)
-    }
-    _ => assert_true(false)
-  }
-}
-
-///|
-test "parse_model_rejects_malformed_monte_carlo_strings" {
-  let cases = [
-    "monte_carlo",
-    "monte_carlo:1000",
-    "monte_carlo:abc:42",
-    "monte_carlo:0:42",
-  ]
-  for s in cases {
-    let errored = try {
-      let _ = parse_model(s)
-      false
-    } catch {
-      _ => true
-    }
-    assert_true(errored)
-  }
-}
-
-///|
-test "parse_team_payoff_model_recognizes_pairwise_and_switching_game_strings" {
-  match parse_team_payoff_model("pairwise:best1v1") {
-    Pairwise(Best1v1) => ()
-    _ => assert_true(false)
-  }
-  match parse_team_payoff_model("pairwise:nash_responses") {
-    Pairwise(NashResponses) => ()
-    _ => assert_true(false)
-  }
-  match parse_team_payoff_model("pairwise:monte_carlo:100:42") {
-    Pairwise(MonteCarloSim(100, 42UL)) => ()
-    _ => assert_true(false)
-  }
+test "parse_team_payoff_model_recognizes_switching_game_string" {
   match parse_team_payoff_model("switching_game:3") {
     SwitchingGame(3) => ()
     _ => assert_true(false)
   }
-  // Malformed cases
+}
+
+///|
+test "parse_team_payoff_model_rejects_unknown_prefix" {
+  let errored = try {
+    let _ = parse_team_payoff_model("unknown:3")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "parse_team_payoff_model_rejects_switching_game_with_non_integer_turn_limit" {
   let errored = try {
     let _ = parse_team_payoff_model("switching_game:abc")
     false
@@ -60,11 +29,61 @@ test "parse_team_payoff_model_recognizes_pairwise_and_switching_game_strings" {
     _ => true
   }
   assert_true(errored)
-  let errored2 = try {
-    let _ = parse_team_payoff_model("unknown:3")
+}
+
+///|
+test "parse_team_payoff_model_recognizes_screened_switching_game_string" {
+  match parse_team_payoff_model("screened_switching_game:1000:42:0.3:3") {
+    ScreenedSwitchingGame(trials, seed, keep_top, turn_limit) => {
+      assert_eq(trials, 1000)
+      assert_eq(seed, 42UL)
+      assert_true((keep_top - 0.3).abs() < 1.0e-9)
+      assert_eq(turn_limit, 3)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse_team_payoff_model_rejects_screened_switching_game_with_keep_top_zero" {
+  let errored = try {
+    let _ = parse_team_payoff_model("screened_switching_game:1000:42:0.0:3")
     false
   } catch {
     _ => true
   }
-  assert_true(errored2)
+  assert_true(errored)
+}
+
+///|
+test "parse_team_payoff_model_rejects_screened_switching_game_with_trials_zero" {
+  let errored = try {
+    let _ = parse_team_payoff_model("screened_switching_game:0:42:0.3:3")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "parse_team_payoff_model_rejects_screened_switching_game_with_keep_top_above_one" {
+  let errored = try {
+    let _ = parse_team_payoff_model("screened_switching_game:1000:42:1.5:3")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "parse_team_payoff_model_rejects_screened_switching_game_with_turn_limit_zero" {
+  let errored = try {
+    let _ = parse_team_payoff_model("screened_switching_game:1000:42:0.3:0")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
 }

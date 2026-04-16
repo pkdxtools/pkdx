@@ -1,37 +1,4 @@
 ///|
-/// Helper: team of `n` combatants with distinct speeds, used to verify
-/// non-trivial cross-payoff matrices.
-fn build_team_with_speeds(
-  prefix : String,
-  speeds : Array[Int],
-) -> Array[Combatant] {
-  let out = Array::make(
-    speeds.length(),
-    mk_combatant(
-      mk_pokemon("", "ノーマル", "", 100, 100, 100, 100, 100, 100),
-      [mk_move("mv", "ノーマル", @model.Physical, 60)],
-    ),
-  )
-  for i in 0..<speeds.length() {
-    out[i] = mk_combatant(
-      mk_pokemon(
-        prefix + i.to_string(),
-        "ノーマル",
-        "",
-        100,
-        100,
-        100,
-        100,
-        100,
-        speeds[i],
-      ),
-      [mk_move("mv", "ノーマル", @model.Physical, 60)],
-    )
-  }
-  out
-}
-
-///|
 /// Helper: dummy team of `n` Pokemon, each with HP `hp`, one damage move,
 /// identical stats — used for terminal/action unit tests where stat details
 /// don't matter.
@@ -218,11 +185,14 @@ test "alive_actions_excludes_fainted_switch_targets" {
 
 ///|
 test "team_payoff_model_enum_exhaustive_match" {
-  let models : Array[TeamPayoffModel] = [Pairwise(Best1v1), SwitchingGame(2)]
+  let models : Array[TeamPayoffModel] = [
+    SwitchingGame(2),
+    ScreenedSwitchingGame(100, 7UL, 0.5, 2),
+  ]
   let labels = models.map(fn(m) {
     match m {
-      Pairwise(_) => "pairwise"
       SwitchingGame(_) => "switching_game"
+      ScreenedSwitchingGame(_, _, _, _) => "screened_switching_game"
     }
   })
   let mut joined = ""
@@ -232,24 +202,7 @@ test "team_payoff_model_enum_exhaustive_match" {
     }
     joined = joined + labels[i]
   }
-  inspect(joined, content="pairwise,switching_game")
-}
-
-///|
-test "team_payoff_matrix_with_pairwise_wraps_existing_team_payoff_matrix" {
-  let team = build_team_with_speeds("T", [100, 95, 105, 90, 110, 85])
-  let opp = build_team_with_speeds("O", [100, 100, 100, 100, 100, 100])
-  let m_legacy = team_payoff_matrix(team, opp, Single, Best1v1)
-  let m_wrapped = team_payoff_matrix_with_team_model(
-    team, opp, Single, Pairwise(Best1v1),
-  )
-  assert_eq(m_legacy.rows(), m_wrapped.rows())
-  assert_eq(m_legacy.cols(), m_wrapped.cols())
-  for i in 0..<m_legacy.rows() {
-    for j in 0..<m_legacy.cols() {
-      assert_eq(m_legacy.at(i, j), m_wrapped.at(i, j))
-    }
-  }
+  inspect(joined, content="switching_game,screened_switching_game")
 }
 
 ///|

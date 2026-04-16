@@ -23,13 +23,13 @@ PKDX=$REPO_ROOT/bin/pkdx
 | value | 行プレイヤーから見たゲーム値 (期待利得) |
 | exploitability | 現在の戦略 σ に対する最良応答で得られる追加利得。零和で 0 なら σ は Nash 均衡 |
 | support | 確率 > 0 の純戦略 index 集合 |
-| PayoffModel | 利得の作り方 (`best1v1` = 最大ダメージ技+素早さで勝率 / `nash_responses` = 技×技内部 Nash) |
-| BattleFormat | `single` = 3 体選出 (20x20) / `double` = 4 体選出 (15x15) |
+| TeamPayoffModel | 利得の作り方 (`switching_game:<turn_limit>` / `screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>`) |
+| BattleFormat | `single` = 3 体選出 (20x20) のみ対応 (`double` は現状未サポート) |
 
 詳細はまず `references/` を参照:
 - `references/theory.md` — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠
 - `references/exploitability.md` — exploitability / NashConv / KL / L1 の定義と使い分け
-- `references/payoff_semantics.md` — Best1v1 / NashResponses の仕様と選択基準
+- `references/payoff_semantics.md` — SwitchingGame / ScreenedSwitchingGame の仕様と選択基準
 
 ## Phase 0: 初期化
 
@@ -129,20 +129,24 @@ JSON
 
 ### 入力の収集
 
-team (6 体), opponent (6 体), format (single/double), payoff_model (pairwise) または team_payoff_model (team-level) を取得する。team は `box/teams/` のキャッシュまたはユーザー直接入力。
+team (6 体), opponent (6 体), format (single のみ対応), `team_payoff_model` を取得する。team は `box/teams/` のキャッシュまたはユーザー直接入力。
 
-#### モデル選択肢
+#### モデル選択肢 (`team_payoff_model` フィールド)
 
-**pairwise (`payoff_model` フィールド)**:
-- `"best1v1"` (デフォルト) — 速くて分かりやすい、技選択は固定
-- `"nash_responses"` — 内部 move-vs-move Nash、技循環をモデル化
-- `"monte_carlo:<trials>:<seed>"` — seeded RNG でダメージ乱数込み (例: `"monte_carlo:1000:42"`)
+- `"switching_game:<turn_limit>"` (既定、未指定時は `switching_game:2`) — 交代込み extensive-form ゲーム木 (先制技 / ランク補正技に対応)
+- `"screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>"` — MC で選出行列を screening、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP。例: `"screened_switching_game:1000:42:0.3:3"`
 
-**team-level (`team_payoff_model` フィールド、Phase 13)**:
-- `"pairwise:<model_string>"` — 上記 pairwise のラッパー (`"pairwise:best1v1"` 等)
-- `"switching_game:<turn_limit>"` — 交代込み extensive-form ゲーム木 (先制技 / ランク補正技に対応)
+pairwise 系 (`best1v1` / `nash_responses` / `monte_carlo:*`) および `payoff_model` フィールドは廃止済み。指定すると `InvalidJson`。
 
-両方指定された場合は `team_payoff_model` 優先。詳細は `references/payoff_semantics.md`。
+**チューニングガイド (ScreenedSwitchingGame)**:
+- `trials`: 500-2000。MC 精度を上げるほど枝刈り精度向上。1000 が推奨
+- `keep_top`: 0.2-0.5。残す比率。小さくするほど高速だが誤 prune リスク。実戦データでは 0.3 前後
+- `turn_limit`: 2-4。`switching_game` 同様。残存セル数を絞っているため 3 以上でも実用的
+- `seed`: 任意 UInt64。再現性が必要なら固定値
+
+**重要な trade-off**: screening は MC 40000-80000 rollout のオーバヘッドを伴う (合成 6v6 で実測 15-16 秒)。`switching_game:N` が単独で 10 秒以内に完走する場合、screening を挟むと逆に遅くなる。先に `time bin/pkdx select` で素の `switching_game:N` を計測し、30 秒以上かかるとき初めて `screened_switching_game` を使う。Nash value は両モデル間で一致することを合成データで確認済み。
+
+詳細は `references/payoff_semantics.md`。
 
 ### 実行
 
@@ -160,7 +164,7 @@ cat <<'JSON' | $PKDX select
   ],
   "opponent": [...],
   "format": "single",
-  "payoff_model": "best1v1"
+  "team_payoff_model": "switching_game:2"
 }
 JSON
 ```

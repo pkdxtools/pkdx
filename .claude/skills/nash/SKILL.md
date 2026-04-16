@@ -194,6 +194,7 @@ cat <<'JSON' | $PKDX select
   ],
   "opponent": [...],
   "format": "single",
+  "stat_system": "champions",
   "team_payoff_model": "switching_game"
 }
 JSON
@@ -311,6 +312,6 @@ JSON
 
 ## 計算条件の注意
 
-- **stat_system**: `pkdx select` は Standard (EV252/IV31) 既定。Champions SP を使いたい場合は damage 計算前にステータスを `--atk-stat` 等で override する必要がある (現バージョンでは未サポート)。
+- **stat_system**: `pkdx select` は Champions SP 既定 (`"stat_system": "champions"`)。トップレベル JSON の `"stat_system"` フィールドで `"champions"` (既定) / `"standard"` を切り替え可能。旧バージョン (SV 等) のデータを使う場合は `"stat_system": "standard"` を明示する。
 - **天候・フィールド・ランク**: 現バージョンは 0 固定。動的状態を含む選出最適化は将来対応。
 - **tera_type**: `combatant.tera` フィールドで指定可能。攻撃側 STAB のみに作用し、防御側タイプ書換は未実装。

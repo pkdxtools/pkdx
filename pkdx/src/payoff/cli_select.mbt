@@ -7,7 +7,8 @@
 ///   "team":     [<combatant>, ...],
 ///   "opponent": [<combatant>, ...],
 ///   "format":   "single" | "double",
-///   "payoff_model": "best1v1" | "nash_responses"  // default: best1v1
+///   "stat_system": "champions" | "standard",  // default: "champions"
+///   "team_payoff_model": "switching_game" | "screened_switching_game:..."
 /// }
 ///
 /// <combatant> = {
@@ -198,6 +199,7 @@ fn parse_stats_fields(
 fn parse_combatant_json(
   j : Json,
   ctx : String,
+  stat_system? : @model.StatSystem = @model.Champions,
 ) -> Combatant raise NashCliError {
   match j {
     Object(m) => {
@@ -257,7 +259,7 @@ fn parse_combatant_json(
         ability: parse_str_field(m, "ability"),
         item: parse_str_field(m, "item"),
         tera_type: parse_str_field(m, "tera"),
-        stat_system: @model.Standard,
+        stat_system,
         mega_form,
       }
     }
@@ -295,6 +297,7 @@ fn parse_mega_form_json(
 pub fn parse_team_array(
   j : Json,
   ctx : String,
+  stat_system? : @model.StatSystem = @model.Champions,
 ) -> Array[Combatant] raise NashCliError {
   match j {
     Array(arr) => {
@@ -302,6 +305,7 @@ pub fn parse_team_array(
       for i in 0..<arr.length() {
         out[i] = parse_combatant_json(
           arr[i], ctx + "[" + i.to_string() + "]",
+          stat_system=stat_system,
         )
       }
       out
@@ -335,7 +339,7 @@ fn mk_empty_combatant() -> Combatant {
     ability: "",
     item: "",
     tera_type: "",
-    stat_system: @model.Standard,
+    stat_system: @model.Champions,
     mega_form: None,
   }
 }
@@ -633,6 +637,19 @@ fn format_label(f : BattleFormat) -> String {
 }
 
 ///|
+/// Parse `stat_system` field: `"champions"` (default) or `"standard"`.
+fn parse_stat_system_field(s : String) -> @model.StatSystem raise NashCliError {
+  match s {
+    "champions" | "Champions" => @model.Champions
+    "standard" | "Standard" => @model.Standard
+    _ =>
+      raise InvalidJson(
+        "stat_system must be 'champions' or 'standard' (got '" + s + "')",
+      )
+  }
+}
+
+///|
 /// Run `pkdx select`. Returns a JSON string with the Nash-equilibrium
 /// distribution over k-selections. Move priority / stat-boost metadata rides
 /// on each move's JSON entry (`priority`, `stat_effects`) — skills should
@@ -646,12 +663,17 @@ pub fn run_select(input_json : String) -> String raise NashCliError {
     Object(m) => m
     _ => raise InvalidJson("top-level must be an object")
   }
+  let stat_system = match obj.get("stat_system") {
+    Some(String(s)) => parse_stat_system_field(s)
+    Some(_) => raise InvalidJson("stat_system must be a string")
+    None => @model.Champions
+  }
   let team = match obj.get("team") {
-    Some(j) => parse_team_array(j, "team")
+    Some(j) => parse_team_array(j, "team", stat_system=stat_system)
     None => raise MissingField("team")
   }
   let opp = match obj.get("opponent") {
-    Some(j) => parse_team_array(j, "opponent")
+    Some(j) => parse_team_array(j, "opponent", stat_system=stat_system)
     None => raise MissingField("opponent")
   }
   let format = match obj.get("format") {

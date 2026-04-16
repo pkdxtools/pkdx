@@ -208,6 +208,12 @@ echo '{"matrix":[[0,1,-1],[-1,0,1],[1,-1,0]]}' | bin/pkdx nash graph --threshold
 # 選出最適化（team + opponent + format JSON を stdin。macOS/Linux のみ）
 cat team.json | bin/pkdx select
 
+# 選出最適化: stat_system (既定: "champions")
+# - "champions": Champions SP ベースの実数値計算 (SP=32 default)
+# - "standard": 旧バージョン (SV等) の EV252/IV31 ベース
+echo '{"team":[...],"opponent":[...],"format":"single","stat_system":"champions"}' | bin/pkdx select
+echo '{"team":[...],"opponent":[...],"format":"single","stat_system":"standard"}' | bin/pkdx select
+
 # 選出最適化: team_payoff_model (Single 限定、現時点では Double は未対応)
 # - "switching_game" (既定): 交代込み extensive-form ゲーム木 (DP turn_limit=20 固定)
 # - "screened_switching_game:<trials>:<seed>:<keep_top>":

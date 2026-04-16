@@ -1460,3 +1460,63 @@ test "switching_game_turn_limit_3_produces_finite_value_on_multi_pokemon_team" {
   assert_true(not(v.is_nan()))
   assert_true(not(v.is_inf()))
 }
+
+///|
+test "state_space_2v2_turn_limit_20_bounded" {
+  // 2v2 with high HP and low-power moves: games last multiple turns,
+  // creating a non-trivial state tree. Verifies DP_TURN_LIMIT=20 completes
+  // and that the memoized state count stays bounded.
+  let a0 = mk_combatant(
+    mk_pokemon("A0", "ノーマル", "", 200, 100, 100, 100, 100, 120),
+    [mk_move("tackle", "ノーマル", @model.Physical, 30)],
+  )
+  let a1 = mk_combatant(
+    mk_pokemon("A1", "ノーマル", "", 200, 100, 100, 100, 100, 100),
+    [mk_move("tackle", "ノーマル", @model.Physical, 30)],
+  )
+  let b0 = mk_combatant(
+    mk_pokemon("B0", "ノーマル", "", 200, 100, 100, 100, 100, 110),
+    [mk_move("tackle", "ノーマル", @model.Physical, 30)],
+  )
+  let b1 = mk_combatant(
+    mk_pokemon("B1", "ノーマル", "", 200, 100, 100, 100, 100, 90),
+    [mk_move("tackle", "ノーマル", @model.Physical, 30)],
+  )
+  let (v, stats, dmg) = switching_game_winrate_stats(
+    [a0, a1], [b0, b1], @payoff.DP_TURN_LIMIT,
+  )
+  println("2v2 tl=20: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}, dmg_misses=\{dmg.misses}")
+  assert_true(v >= -1.0 && v <= 1.0)
+  assert_true(not(v.is_nan()))
+  assert_true(stats.cached_states > 0)
+  assert_true(stats.cached_states < 500000)
+  assert_true(dmg.misses < 200)
+}
+
+///|
+test "state_space_3v3_turn_limit_5_bounded" {
+  // 3v3 with diverse types and moderate HP. turn_limit=5 is used instead of 20
+  // to keep CI runtime reasonable; the 2v2 test above covers turn_limit=20.
+  let mk = fn(name : String, t1 : String, hp : Int, atk : Int, spe : Int) -> Combatant {
+    mk_combatant(
+      mk_pokemon(name, t1, "", hp, atk, 100, atk, 100, spe),
+      [mk_move("m", t1, @model.Physical, 30)],
+    )
+  }
+  let team_a = [
+    mk("A0", "ほのお", 150, 100, 120),
+    mk("A1", "みず", 150, 100, 100),
+    mk("A2", "くさ", 150, 100, 110),
+  ]
+  let team_b = [
+    mk("B0", "でんき", 150, 100, 115),
+    mk("B1", "じめん", 150, 100, 95),
+    mk("B2", "ノーマル", 150, 100, 105),
+  ]
+  let (v, stats, _) = switching_game_winrate_stats(team_a, team_b, 5)
+  println("3v3 tl=5: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}")
+  assert_true(v >= -1.0 && v <= 1.0)
+  assert_true(not(v.is_nan()))
+  assert_true(stats.cached_states > 0)
+  assert_true(stats.cached_states < 500000)
+}

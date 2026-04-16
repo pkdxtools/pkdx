@@ -90,7 +90,16 @@ value(state, ..., cache, stats):
 
 ### 計算量・推奨値
 
-実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。6v6 実データ (Nosada vs カマカマキリ) での実測: turn_limit=1 は 1 秒未満、turn_limit=2 は 2 秒前後、turn_limit=3 は 40 秒前後で完走する (bit issue #38912f7b task C で pure-saddle fast path + node-level αβ-pruning 投入後)。turn_limit=4 以上は 5 分タイムアウトに収まらず、さらなる高速化は別タスクで検討。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて設定してよい (実用上限は現状 turn_limit=3)。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
+実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。`ValueStats.cached_states` で memoize 済みの固有状態数を取得可能。
+
+**状態空間実測** (合成データ、各ポケモン 1 技):
+
+| 構成 | turn_limit | cached_states | hits/misses | 推定メモリ |
+|---|---|---|---|---|
+| 2v2 ノーマル統一 HP200 | 20 | 113,295 | 2.0:1 | ~23 MB |
+| 3v3 多型 HP150 | 5 | 2,664 | 0.66:1 | ~0.5 MB |
+
+メモリ推定: `cached_states × ~200 bytes/state` (SwitchingGameState struct + HashMap overhead + Double value)。2v2 turn_limit=20 で ~23 MB に収まり、6v6 の選出 1 セル (3v3) でメモリ爆発は発生しない。ただし 3v3 turn_limit=20 は状態数が指数的に増加するため、実データでの計測が必要 (bit issue #a9de372d task B)。6v6 実データ (Nosada vs カマカマキリ) での実測: turn_limit=1 は 1 秒未満、turn_limit=2 は 2 秒前後、turn_limit=3 は 40 秒前後で完走する (bit issue #38912f7b task C で pure-saddle fast path + node-level αβ-pruning 投入後)。turn_limit=4 以上は 5 分タイムアウトに収まらず、さらなる高速化は別タスクで検討。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて設定してよい (実用上限は現状 turn_limit=3)。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
 
 ### LP 退化時の扱い (pure-saddle fast path)
 
@@ -165,10 +174,11 @@ Team-level の 2 段階パイプライン。SwitchingGame DP (turn_limit=20) が
 ### パイプライン
 
 1. **Phase A — Screening**: `team_monte_carlo_value(selection_i, selection_j, mc_trials, mc_seed ^ cell_idx)` で全 400 セル (size_a × size_b) を埋める。cell_idx = `i * size_b + j` でセル独立な RNG 状態を派生
-2. **Phase B — Pruning**: mean-based row/col score で top-`ceil(n * keep_top_quantile)` 行/列だけ残す (昇順ソート)
-   - `row_score[i] = mean_j A[i,j]` (row 視点で高いほど良い)
-   - `col_score[j] = -mean_i A[i,j]` (column 視点で高いほど良い、符号反転)
-   - `min/max` は MC 有限試行ノイズに弱いため不採用。`mean` は統計的にロバスト
+2. **Phase B — Nash-weighted pruning**: screening 行列に Nash 均衡を解き、相手の Nash 戦略下での期待値で各行/列をスコアリング。top-`ceil(n * keep_top_quantile)` 行/列だけ残す (昇順ソート)
+   - `row_score[i] = Σ_j col_nash[j] × A[i,j]` (row 視点)
+   - `col_score[j] = -Σ_i row_nash[i] × A[i,j]` (column 視点、符号反転)
+   - Nash support の選出はすべてゲーム値で同率首位になるため、`ceil(n * q) ≥ |Nash support|` であれば support が枝刈りされることは数学的に保証される
+   - 旧方式 (mean-based) は「平均的に弱いが Nash support に入る specialist 選出」を落とすリスクがあったため廃止
 3. **Phase C — Refine**: 残存 sub-matrix `R[i', j'] = switching_game_winrate(..., DP_TURN_LIMIT)` で精密評価
 
 ### Short-circuit
@@ -192,21 +202,50 @@ Team-level の 2 段階パイプライン。SwitchingGame DP (turn_limit=20) が
 - Phase C: retained_rows × retained_cols × SwitchingGame 評価時間 ≈ (retained率)² × 40 秒
 - keep_top=0.3 なら 2-5 秒 + (0.3)² × 40 秒 ≈ 6 秒台の目安 (10 倍近い高速化)
 
+### パラメータチューニング指針
+
+C(6,3)² = 400 セルの screening 空間を前提とした推奨値:
+
+| パラメータ | 推奨範囲 | 既定推奨 | 根拠 |
+|---|---|---|---|
+| `trials` | 500–2000 | 1000 | MC 標準誤差 ∝ 1/√trials。√1000 ≈ 32 → 誤差 ≈ 3%。400 cells × 1000 trials = 400K rollout で Phase A 2–5 秒 |
+| `keep_top` | 0.25–0.5 | 0.3 | 20 selections × 0.3 = 6 retained → Phase C 6² = 36 cells (元の 9%)。Nash support size 通常 3–6 |
+| `seed` | 任意 UInt64 | 42 | 再現性が必要な場合に固定。同一 seed → 同一結果 |
+
+**入力サイズ別ガイド**:
+- C(4,3)=4: keep_top ≥ 0.5 推奨 (4 × 0.3 = 1.2 → ceil = 2 は最小限)
+- C(5,3)=10: keep_top=0.3–0.5 (3–5 retained)
+- C(6,3)=20: keep_top=0.25–0.3 (5–6 retained)
+
+**Phase B の Nash-weighted 安全性**: screening 行列に Nash を解き、opponent Nash 下の期待値でスコアリングする。Nash support は全てゲーム値で同率首位 → `ceil(n × q) ≥ |support|` なら support は枝刈りされない (数学的保証)。旧 mean-based は「平均的に弱いが最適応答にだけ刺さる specialist」を落とすリスクがあった。
+
 ### 使いどころ (実測ベースの指針)
 
-**合成 6v6 (単純な 1 技ずつのチーム) で実測**:
+**多様型 6v6 (各ポケモン 2 技、6タイプ分散) で実測** (macOS M-series):
 
-| モデル | 時間 | Nash value | selections 数 |
+| モデル | 時間 | Nash value | selections |
 |---|---|---|---|
-| `switching_game` | 0.8 秒 (turn_limit=3 旧計測) | 0.3333 | 20 |
-| `screened_switching_game:500:42:0.3` | 16.2 秒 (turn_limit=3 旧計測) | 0.3333 | 6 |
+| `switching_game:2` | 0.4 秒 | 0.030 | 20 |
+| `switching_game:3` | 5.0 秒 | 0.055 | 20 |
+| `switching_game:4` | 77 秒 | 0.066 | 20 |
+| `switching_game:5` | >2 分 (未完走) | — | — |
+| `switching_game` (tl=20) | >2 分 (未完走) | — | — |
+| `screened:500:42:0.3:3` | 29 秒 | 0.042 | 6 |
+| `screened:500:42:0.3:4` | 43 秒 | 0.054 | 6 |
 
-注: 上記は旧 turn_limit=3 での計測値。現在は DP turn_limit=20 固定のため実データでの再計測が必要。
+**ベンチマーク構成**: team=ガブリアス/サーフゴー/カイリュー/ウォッシュロトム/ハッサム/ランドロス vs opponent=ミミッキュ/ドラパルト/キノガッサ/ヒードラン/ウーラオス/カプ・レヒレ。各ポケモン 2 技 (先制技・積み技含む)。
 
-screening は **MC phase に 400 cells × N trials の rollout オーバヘッド**があり、素の `switching_game` が 10 秒以内に完走する場合は screening のほうが遅い。**使うべきは `switching_game` が 30 秒以上かかる場合のみ**。Nash value は両モデル間で一致 (合成データで確認済み、value agreement は強い sanity check)。
+**分析**:
+- tl=3→4 で 15 倍増 (5s→77s)。tl=5 以上は多技構成で実用外
+- screened は **tl=4 で break-even** (43s vs 77s = 44% 高速化)
+- tl=3 では screened が逆に遅い (MC overhead 支配的)
+- tl=20 は switching_game / screened 両方 infeasible (3v3×2技の action space が指数的に膨張)
 
-- `switching_game` (DP_TURN_LIMIT=20) が 6v6 実データでタイムアウトに近いケースのみ推奨
-- 先に `time bin/pkdx select` で素の `switching_game` を計測し、遅いことを確認してから使う
+screening は **MC phase に 400 cells × N trials の rollout オーバヘッド**があり、素の `switching_game` が 30 秒以内に完走する場合は screening のほうが遅い。**使うべきは switching_game が 30 秒以上かかる場合のみ**。
+
+- 先に `time bin/pkdx select` で素の `switching_game:<N>` を計測し、遅いことを確認してから使う
+- 技数 1 (action space 小) なら tl=20 でも実用的 (2v2: 113K states, 数秒)
+- 技数 2+ では tl=3–4 が実用上限
 
 ### CLI 文字列
 

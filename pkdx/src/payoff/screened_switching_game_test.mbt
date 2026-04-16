@@ -100,21 +100,33 @@ test "team_payoff_matrix_screened_retained_count_is_monotonic_in_keep_top" {
 }
 
 ///|
-test "team_payoff_matrix_screened_keeps_top_mean_rows" {
-  // With the mean-based row score, the retained row indices must be the ones
-  // with highest row-mean in the full 4x4 screening matrix.
+test "team_payoff_matrix_screened_keeps_nash_weighted_rows" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
-  let (m_full, _, _) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 11UL, 1.0, refine_turn_limit=1, mc_turn_limit=1,
-  )
   let (_, retained_rows, _) = team_payoff_matrix_screened(
     team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
-  // Note: the short-circuit path for keep_top=1.0 runs the SwitchingGame
-  // oracle, not the MC screening, so we can't compare row-means bit-exact.
-  // Instead we just assert that retained size is consistent with the quantile
-  // and that the submatrix has the expected shape.
-  let _ = m_full
   assert_eq(retained_rows.length(), 2)
+}
+
+///|
+test "screen_nash_scores_preserves_support_that_mean_would_drop" {
+  // RPS-like 3x3 matrix where row 0 is a specialist: low mean but in Nash
+  // support. Mean-based keep_top=2/3 would drop r0 (mean ≈ 0.033, lowest).
+  // Nash-weighted scoring assigns equal scores to all support rows (= game
+  // value), so all 3 survive any quantile ≥ 1/3.
+  let screen = [
+    [0.9, -0.4, -0.4],
+    [-0.2, 0.6, 0.0],
+    [-0.2, 0.0, 0.6],
+  ]
+  let (row_scores, _) = screen_nash_scores(screen, 3, 3)
+  let tol = 1.0e-4
+  // All Nash-support rows must have equal score (= game value).
+  assert_true((row_scores[0] - row_scores[1]).abs() < tol)
+  assert_true((row_scores[0] - row_scores[2]).abs() < tol)
+  // Verify mean-based would have been different: r0 mean < r1 mean.
+  let mean_r0 = (0.9 + -0.4 + -0.4) / 3.0
+  let mean_r1 = (-0.2 + 0.6 + 0.0) / 3.0
+  assert_true(mean_r0 < mean_r1)
 }

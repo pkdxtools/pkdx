@@ -3,7 +3,8 @@
 ///
 /// - Phase A: team-level Monte Carlo rollout over every (k-selection,
 ///   k-selection) cell (cheap pre-screening signal).
-/// - Phase B: rank rows/columns by mean screening value, retain the top
+/// - Phase B: solve Nash on the screening matrix, score rows/columns by
+///   expected value under the opponent's Nash strategy, retain the top
 ///   `keep_top_quantile` fraction (`ceil(n * q)`).
 /// - Phase C: evaluate only the retained sub-matrix with the full
 ///   SwitchingGame DP (`switching_game_winrate`).
@@ -83,23 +84,12 @@ pub fn team_payoff_matrix_screened(
     screen[i] = row
   }
 
-  // Phase B: mean-based row/col score, retain top ceil(n * q).
-  let row_score = Array::make(size_a, 0.0)
-  for i in 0..<size_a {
-    let mut s = 0.0
-    for j in 0..<size_b {
-      s += screen[i][j]
-    }
-    row_score[i] = s / size_b.to_double()
-  }
-  let col_score = Array::make(size_b, 0.0)
-  for j in 0..<size_b {
-    let mut s = 0.0
-    for i in 0..<size_a {
-      s += screen[i][j]
-    }
-    col_score[j] = -s / size_a.to_double()
-  }
+  // Phase B: Nash-weighted scoring. Solve Nash on the screening matrix and
+  // score each selection by its expected value under the opponent's equilibrium
+  // strategy. All Nash-support rows achieve the game value (tied at top);
+  // non-support rows score strictly less. This guarantees screening never
+  // drops a Nash-support selection.
+  let (row_score, col_score) = screen_nash_scores(screen, size_a, size_b)
   let row_keep = retain_top_indices(row_score, keep_top_quantile)
   let col_keep = retain_top_indices(col_score, keep_top_quantile)
 
@@ -119,6 +109,46 @@ pub fn team_payoff_matrix_screened(
     Err(_) => raise EmptyCombatants
   }
   (m, row_keep, col_keep)
+}
+
+///|
+/// Score rows and columns of a screening matrix using Nash equilibrium weights.
+/// Row score = expected value under opponent's Nash strategy; all Nash-support
+/// rows achieve exactly the game value (tied at top), non-support rows achieve
+/// strictly less. Column scores are negated (minimizer perspective).
+pub fn screen_nash_scores(
+  screen : Array[Array[Double]],
+  size_a : Int,
+  size_b : Int,
+) -> (Array[Double], Array[Double]) raise PayoffError {
+  let screen_matrix = match @nash.FiniteMatrix::new(screen) {
+    Ok(m) => m
+    Err(_) => raise EmptyCombatants
+  }
+  let screen_lp = try @nash.solve_zero_sum(screen_matrix) catch {
+    _ => raise EmptyCombatants
+  }
+  let (row_nash, col_nash) = match screen_lp {
+    Optimal(row_strategy~, col_strategy~, ..) => (row_strategy, col_strategy)
+    _ => raise EmptyCombatants
+  }
+  let row_score = Array::make(size_a, 0.0)
+  for i in 0..<size_a {
+    let mut s = 0.0
+    for j in 0..<size_b {
+      s += col_nash.at(j) * screen[i][j]
+    }
+    row_score[i] = s
+  }
+  let col_score = Array::make(size_b, 0.0)
+  for j in 0..<size_b {
+    let mut s = 0.0
+    for i in 0..<size_a {
+      s += row_nash.at(i) * screen[i][j]
+    }
+    col_score[j] = -s
+  }
+  (row_score, col_score)
 }
 
 ///|

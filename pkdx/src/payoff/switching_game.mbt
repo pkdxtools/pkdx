@@ -66,11 +66,12 @@ pub(all) enum ActionKind {
 pub(all) struct ValueStats {
   mut hits : Int
   mut misses : Int
+  mut cached_states : Int
 }
 
 ///|
 pub fn new_stats() -> ValueStats {
-  { hits: 0, misses: 0 }
+  { hits: 0, misses: 0, cached_states: 0 }
 }
 
 ///|
@@ -863,6 +864,7 @@ pub fn switching_game_winrate_stats(
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
   let v = value(state, my_team, opp_team, turn_limit, cache, stats, dmg_cache)
+  stats.cached_states = cache.length()
   (v, stats, dmg_cache)
 }
 

@@ -178,6 +178,27 @@ pairwise 系 (`best1v1` / `nash_responses` / `monte_carlo:*`) および `payoff_
 
 詳細は `references/payoff_semantics.md`。
 
+#### turn_limit の決定 (AskUserQuestion)
+
+`team_payoff_model` 文字列を構築する直前に、DP turn_limit を AskUserQuestion で必ず確認する。選択結果を `switching_game:<N>` / `screened_switching_game:<trials>:<seed>:<keep_top>:<N>` の `<N>` に埋め込む。
+
+| # | 質問 | header | オプション |
+|---|------|--------|-----------|
+| 1 | DP turn_limit をどうしますか？ | turn_limit | 既定 (5) — 標準探索, 高精度 (10) — より正確に探索 (時間増), 高速 (3) — 短時間で検証 |
+
+| ラベル | turn_limit | 用途 / 想定時間感 |
+|---|---|---|
+| 既定 | 5 | 通常の選出最適化。多技構成 6v6 でも実用時間内で完走 |
+| 高精度 | 10 | 長期戦・積み技全抜きを精密評価したいケース。時間は数倍〜10 倍以上に伸びる可能性 |
+| 高速 | 3 | パーティ調整中の短時間検証。短期決着の傾向を素早く確認 |
+
+ユーザーが「Other」で任意の正整数を入力した場合はそれを `<N>` に埋め込む。負値・0 は弾く。
+
+**model 別のエンコード**:
+
+- `switching_game` 選択時 → `"switching_game:<N>"`
+- `screened_switching_game` 選択時 → `"screened_switching_game:<trials>:<seed>:<keep_top>:<N>"` (4 番目のフィールドとして付与)
+
 ### 実行
 
 ```bash
@@ -195,7 +216,7 @@ cat <<'JSON' | $PKDX select
   "opponent": [...],
   "format": "single",
   "stat_system": "champions",
-  "team_payoff_model": "switching_game"
+  "team_payoff_model": "switching_game:5"
 }
 JSON
 ```

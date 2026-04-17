@@ -1462,12 +1462,12 @@ test "switching_game_turn_limit_3_produces_finite_value_on_multi_pokemon_team" {
 }
 
 ///|
-test "state_space_2v2_turn_limit_20_bounded" {
+test "state_space_2v2_default_turn_limit_bounded" {
   // 2v2 with high HP and low-power moves: games last multiple turns,
-  // creating a non-trivial state tree. Verifies turn_limit=20 completes
-  // and that the memoized state count stays bounded. 既定 DP_TURN_LIMIT を
-  // 引き下げても、ユーザーが `switching_game:20` で明示的に指定した場合の
-  // 上限 (~500K cached states) を保証する regression test。
+  // creating a non-trivial state tree. 既定 `DP_TURN_LIMIT` で完走し、
+  // memoized state 数が上限内に収まることを検証する。tl=20 を直書きすると
+  // CI で 1 時間級になるため、ここは定数参照のままにして、長期戦の上限値
+  // 検証は別タスクで個別に回す。
   let a0 = mk_combatant(
     mk_pokemon("A0", "ノーマル", "", 200, 100, 100, 100, 100, 120),
     [mk_move("tackle", "ノーマル", @model.Physical, 30)],
@@ -1485,9 +1485,9 @@ test "state_space_2v2_turn_limit_20_bounded" {
     [mk_move("tackle", "ノーマル", @model.Physical, 30)],
   )
   let (v, stats, dmg) = switching_game_winrate_stats(
-    [a0, a1], [b0, b1], 20,
+    [a0, a1], [b0, b1], @payoff.DP_TURN_LIMIT,
   )
-  println("2v2 tl=20: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}, dmg_misses=\{dmg.misses}")
+  println("2v2 tl=\{@payoff.DP_TURN_LIMIT}: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}, dmg_misses=\{dmg.misses}")
   assert_true(v >= -1.0 && v <= 1.0)
   assert_true(not(v.is_nan()))
   assert_true(stats.cached_states > 0)

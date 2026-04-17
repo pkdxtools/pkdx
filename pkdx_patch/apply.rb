@@ -67,9 +67,12 @@ patches.each do |patch_dir|
   patch_name = name
   begin
     db.transaction do
-      # migration.rb を実行。db と patch_dir をバインディングとして渡す
+      # migration.rb を実行。db と patch_dir をバインディングとして渡す。
+      # Ruby 2.6 では Encoding.default_external がロケール依存 (LANG=C → US-ASCII)
+      # で、Japanese を含む migration.rb を eval すると invalid multibyte char で
+      # 落ちる。明示的に UTF-8 で読んでロケール非依存にする。
       patch_context = binding
-      eval(File.read(migration_rb), patch_context, migration_rb)
+      eval(File.read(migration_rb, encoding: 'UTF-8'), patch_context, migration_rb)
 
       db.execute('INSERT INTO pkdx_migrations (name) VALUES (?)', [patch_name])
     end

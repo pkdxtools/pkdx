@@ -216,10 +216,12 @@ cat <<'JSON' | $PKDX select
   "opponent": [...],
   "format": "single",
   "stat_system": "champions",
-  "team_payoff_model": "switching_game:5"
+  "team_payoff_model": "switching_game:<N>"
 }
 JSON
 ```
+
+`<N>` は直前の AskUserQuestion で得た値を埋める (おまかせ=5 / じっくり読む=10 / サクッと=3、Other 入力時はその正整数)。`screened_switching_game` を選んだ場合は `"screened_switching_game:1000:42:0.3:<N>"` のように 4 番目のフィールドとして同じ値を付ける。
 
 出力:
 ```json

@@ -155,8 +155,6 @@ ls box/teams/*.meta.json
 - `"switching_game"` (既定) — 交代込み extensive-form ゲーム木。DP turn_limit=5 既定 (先制技 / ランク補正技に対応)。長期戦評価が必要なら `"switching_game:<N>"` で turn_limit を上書き可
 - `"screened_switching_game:<trials>:<seed>:<keep_top>"` — MC で選出行列を screening (rollout turn_limit=5)、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP (refine turn_limit=5 既定)。例: `"screened_switching_game:1000:42:0.3"`。refine turn_limit を上書きしたいときは `"screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>"`
 
-pairwise 系 (`best1v1` / `nash_responses` / `monte_carlo:*`) および `payoff_model` フィールドは廃止済み。指定すると `InvalidJson`。
-
 **チューニングガイド (ScreenedSwitchingGame)**:
 
 パラメータは 3 つ: `trials`, `seed`, `keep_top`。C(6,3)² = 400 セルの screening 空間を前提に設計。

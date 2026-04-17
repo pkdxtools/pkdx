@@ -218,9 +218,9 @@ echo '{"team":[...],"opponent":[...],"format":"single","stat_system":"champions"
 echo '{"team":[...],"opponent":[...],"format":"single","stat_system":"standard"}' | bin/pkdx select
 
 # 選出最適化: team_payoff_model (Single 限定、現時点では Double は未対応)
-# - "switching_game" (既定): 交代込み extensive-form ゲーム木 (DP turn_limit=20 固定)
+# - "switching_game" (既定): 交代込み extensive-form ゲーム木 (DP turn_limit=5 既定、`switching_game:<N>` で上書き可)
 # - "screened_switching_game:<trials>:<seed>:<keep_top>":
-#   MC screening (rollout turn_limit=5) → 下位 quantile 枝刈り → 残存 sub-matrix のみ SwitchingGame DP で精密評価。
+#   MC screening (rollout turn_limit=5) → 下位 quantile 枝刈り → 残存 sub-matrix のみ SwitchingGame DP (refine turn_limit=5 既定) で精密評価。
 #   switching_game が 30 秒以上かかる実戦データで推奨 (例: 1000:42:0.3)
 echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"switching_game"}' | bin/pkdx select
 echo '{"team":[...],"opponent":[...],"format":"single","team_payoff_model":"screened_switching_game:1000:42:0.3"}' | bin/pkdx select

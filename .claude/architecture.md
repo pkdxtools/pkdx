@@ -196,7 +196,7 @@ stateDiagram-v2
     stdin:  team + opponent + format + team_payoff_model
     team_payoff_model ∈ {switching_game,
       screened_switching_game:T:S:Q}
-    turn_limit 定数: MC=5, DP=20
+    turn_limit 既定: MC=5, DP=5 (switching_game:<N> で上書き可)
   end note
   SEL --> [*]
 
@@ -321,7 +321,7 @@ stateDiagram-v2
   Check: terminal_value 判定
   Check --> Terminal_Mine: my 全滅 → -1.0
   Check --> Terminal_Opp: opp 全滅 → +1.0
-  Check --> Terminal_Limit: turn ≥ DP_TURN_LIMIT(20) → hp_ratio
+  Check --> Terminal_Limit: turn ≥ DP_TURN_LIMIT(5) → hp_ratio
   Check --> CacheLookup: それ以外
 
   CacheLookup --> Hit: cache hit (ValueStats.hits++)

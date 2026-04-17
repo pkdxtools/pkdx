@@ -1,8 +1,10 @@
 ///|
 /// SwitchingGame DP の turn_limit。3 体選出なので最低 3 ターンは必要。
-/// 20 は「3 体落としきるラインが αβ で浅く検出され、長引くノードは
-/// HP ratio 中間評価に落ちる前に大抵決着している」経験値。
-pub const DP_TURN_LIMIT : Int = 20
+/// 5 は「素の `switching_game` で実用的に完走しつつ、3 体落としきる
+/// 短期決着パスを十分カバーする」既定値。多技構成では tl=4 以上で
+/// 急激に重くなるため、長期戦評価は `switching_game:<N>` で個別指定
+/// する運用とする。
+pub const DP_TURN_LIMIT : Int = 5
 
 ///|
 /// MC screening rollout の turn_limit。screening は足切り用なので
@@ -15,7 +17,7 @@ pub const MC_TURN_LIMIT : Int = 5
 ///
 /// - `SwitchingGame(turn_limit)` evaluates each (selection, selection) cell as
 ///   an extensive-form game with switching (precise, deterministic). CLI 既定は
-///   `DP_TURN_LIMIT` (20)。テストでは小さい値を渡して高速に回す。
+///   `DP_TURN_LIMIT` (5)。`switching_game:<N>` で個別に上書き可能。
 /// - `ScreenedSwitchingGame(mc_trials, mc_seed, keep_top_quantile)` runs a
 ///   team-level Monte Carlo screening pass (rollout turn limit
 ///   `MC_TURN_LIMIT` = 5) over the full selection matrix, prunes rows/columns

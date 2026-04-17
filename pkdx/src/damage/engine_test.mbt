@@ -389,6 +389,147 @@ test "calc_damage: rank order matters with ability (ちからもち + rank +1)" 
   ))
 }
 
+///|
+/// nature × rank × ability の 3変数が独立に適用される順序保護テスト。
+/// まじめ (Atk 中立) にすると default (+10%) より低くなることで nature 分岐を検知。
+/// rank+1 と ちからもち が両方掛かることで計算順序を保護。
+/// golden value で snapshot し、どの変数がズレても検知できるようにする。
+test "calc_damage: nature + rank + ability 3-way interaction (golden)" {
+  let atk = {
+    ..fixture_garchomp(),
+    ability1: "ちからもち",
+  }
+  match @model.nature_from_ja("まじめ") {
+    Some(serious) => {
+      let input = mk_damage_input(
+        atk,
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(serious),
+        atk_rank=1,
+        atk_ability="ちからもち",
+        stat_system=@model.Champions,
+      )
+      let result = calc_damage(input)
+      inspect(result.max_damage, content=(
+        #|315
+      ))
+    }
+    None => fail("nature not found")
+  }
+}
+
+///|
+/// Standard (scarlet_violet 等) モードでも nature が適用されることの確認。
+/// Champions 系テストと同じ枠組みが Standard 分岐でも通る。
+test "calc_damage: atk_nature applies in Standard mode" {
+  match (
+    @model.nature_from_ja("いじっぱり"),
+    @model.nature_from_ja("まじめ"),
+  ) {
+    (Some(adamant), Some(serious)) => {
+      let with_adamant = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(adamant),
+        stat_system=@model.Standard,
+      )
+      let with_serious = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(serious),
+        stat_system=@model.Standard,
+      )
+      let r1 = calc_damage(with_adamant)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage > r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
+}
+
+///|
+/// Standard モードで def_nature も効くこと。
+test "calc_damage: def_nature applies in Standard mode" {
+  match (
+    @model.nature_from_ja("ずぶとい"),
+    @model.nature_from_ja("まじめ"),
+  ) {
+    (Some(bold), Some(serious)) => {
+      let with_bold = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        def_nature=Some(bold),
+        stat_system=@model.Standard,
+      )
+      let with_serious = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        def_nature=Some(serious),
+        stat_system=@model.Standard,
+      )
+      let r1 = calc_damage(with_bold)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage < r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
+}
+
+///|
+/// critical + atk_stat_override + 負ランクの組み合わせ。
+/// 急所は攻撃側負ランクを無視する既存仕様。override 併用でもこの挙動を維持する。
+test "calc_damage: atk_stat_override + critical ignores negative rank" {
+  let with_neg = mk_damage_input(
+    fixture_garchomp(),
+    fixture_garchomp(),
+    fixture_earthquake(),
+    atk_stat_override=200,
+    atk_rank=-2,
+    critical=true,
+  )
+  let without_rank = mk_damage_input(
+    fixture_garchomp(),
+    fixture_garchomp(),
+    fixture_earthquake(),
+    atk_stat_override=200,
+    atk_rank=0,
+    critical=true,
+  )
+  let r1 = calc_damage(with_neg)
+  let r2 = calc_damage(without_rank)
+  inspect(r1.max_damage == r2.max_damage, content="true")
+}
+
+///|
+/// critical + atk_stat_override + 正ランクの組み合わせ。
+/// 急所でも正ランクはそのまま乗る (既存仕様を override 経路でも保護)。
+test "calc_damage: atk_stat_override + critical preserves positive rank" {
+  let with_pos = mk_damage_input(
+    fixture_garchomp(),
+    fixture_garchomp(),
+    fixture_earthquake(),
+    atk_stat_override=200,
+    atk_rank=2,
+    critical=true,
+  )
+  let without_rank = mk_damage_input(
+    fixture_garchomp(),
+    fixture_garchomp(),
+    fixture_earthquake(),
+    atk_stat_override=200,
+    atk_rank=0,
+    critical=true,
+  )
+  let r1 = calc_damage(with_pos)
+  let r2 = calc_damage(without_rank)
+  inspect(r1.max_damage > r2.max_damage, content="true")
+}
+
 // --- そうだいしょう ---
 
 ///|

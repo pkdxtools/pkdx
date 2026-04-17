@@ -323,6 +323,35 @@ pub fn calc_stat_champions(
 }
 
 ///|
+/// 防御側デフォルト (Lv50, IV31, EV0, 性格補正なし)。
+/// Showdown など主要ダメ計と同じ「相手は最低投資」前提。
+pub fn calc_def_stat(base : Int, is_hp? : Bool = false, custom? : Int = 0) -> Int {
+  if custom > 0 {
+    return custom
+  }
+  if is_hp {
+    return calc_hp_full(base, 31, 0)
+  }
+  calc_other_full(base, 31, 0, 1, 1)
+}
+
+///|
+/// Champions 防御側デフォルト (SP=0, 性格補正なし)。
+pub fn calc_def_stat_champions(
+  base : Int,
+  is_hp? : Bool = false,
+  custom? : Int = 0,
+) -> Int {
+  if custom > 0 {
+    return custom
+  }
+  if is_hp {
+    return calc_hp_champions(base, 0)
+  }
+  calc_other_champions(base, 0, 1, 1)
+}
+
+///|
 /// Calculate all 6 stats via the given StatModel.
 /// `points` is the 6-length EV (Standard) or SP (Champions) array.
 pub fn calc_all_stats_with_model(

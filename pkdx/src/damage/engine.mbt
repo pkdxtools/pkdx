@@ -62,15 +62,20 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   } else {
     calc_stat(atk_base, custom=input.atk_stat_override)
   }
+  // 防御側デフォルトは「無投資・性格補正なし」。
+  // 攻撃側は最大投資前提のままだが、防御側を最大投資扱いにすると一般的な
+  // ダメ計ツール (Showdown, PokeVision 等) と結果が乖離するため。
   let def_hp = if input.stat_system == @model.Champions {
-    calc_stat_champions(def_base_hp, is_hp=true, custom=input.def_hp_override)
+    calc_def_stat_champions(
+      def_base_hp, is_hp=true, custom=input.def_hp_override,
+    )
   } else {
-    calc_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
+    calc_def_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
   }
   let mut def_stat = if input.stat_system == @model.Champions {
-    calc_stat_champions(def_base, custom=input.def_stat_override)
+    calc_def_stat_champions(def_base, custom=input.def_stat_override)
   } else {
-    calc_stat(def_base, custom=input.def_stat_override)
+    calc_def_stat(def_base, custom=input.def_stat_override)
   }
 
   // 2a-2. Rank (stat stage) modifiers

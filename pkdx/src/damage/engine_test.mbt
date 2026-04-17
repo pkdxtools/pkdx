@@ -20,7 +20,9 @@ test "calc_damage: baseline (no rank)" {
     fixture_earthquake(),
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="84")
+  inspect(result.max_damage, content=(
+    #|117
+  ))
 }
 
 ///|
@@ -32,7 +34,9 @@ test "calc_damage: atk_rank +2 doubles damage" {
     atk_rank=2,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="166")
+  inspect(result.max_damage, content=(
+    #|232
+  ))
 }
 
 ///|
@@ -44,7 +48,9 @@ test "calc_damage: def_rank +2 halves damage" {
     def_rank=2,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="43")
+  inspect(result.max_damage, content=(
+    #|60
+  ))
 }
 
 ///|
@@ -166,7 +172,9 @@ test "calc_damage: rank order matters with ability (ちからもち + rank +1)" 
     atk_ability="ちからもち",
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="247")
+  inspect(result.max_damage, content=(
+    #|346
+  ))
 }
 
 // --- そうだいしょう ---
@@ -181,7 +189,9 @@ test "calc_damage: そうだいしょう no boost (fainted_count=0)" {
     fainted_count=0,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="84")
+  inspect(result.max_damage, content=(
+    #|117
+  ))
 }
 
 ///|
@@ -195,7 +205,9 @@ test "calc_damage: そうだいしょう fainted_count=1 (x1.1)" {
   )
   let result = calc_damage(input)
   // round5(84, 4506) = (84*4506+2047)/4096 = 92
-  inspect(result.max_damage, content="92")
+  inspect(result.max_damage, content=(
+    #|129
+  ))
 }
 
 ///|
@@ -209,7 +221,9 @@ test "calc_damage: そうだいしょう fainted_count=2 (x1.2)" {
   )
   let result = calc_damage(input)
   // round5(84, 4915) = (84*4915+2047)/4096 = 101
-  inspect(result.max_damage, content="101")
+  inspect(result.max_damage, content=(
+    #|140
+  ))
 }
 
 ///|
@@ -222,7 +236,9 @@ test "calc_damage: そうだいしょう fainted_count=3 (x1.3)" {
     fainted_count=3,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="109")
+  inspect(result.max_damage, content=(
+    #|152
+  ))
 }
 
 ///|
@@ -235,7 +251,9 @@ test "calc_damage: そうだいしょう fainted_count=4 (x1.4)" {
     fainted_count=4,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="118")
+  inspect(result.max_damage, content=(
+    #|164
+  ))
 }
 
 ///|
@@ -249,7 +267,9 @@ test "calc_damage: そうだいしょう fainted_count=5 (x1.5)" {
   )
   let result = calc_damage(input)
   // round5(84, 6144) = (84*6144+2047)/4096 = 126
-  inspect(result.max_damage, content="126")
+  inspect(result.max_damage, content=(
+    #|175
+  ))
 }
 
 ///|
@@ -310,7 +330,9 @@ test "calc_damage: おはかまいり base (fainted_count=0, power=50)" {
     fainted_count=0,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="29")
+  inspect(result.max_damage, content=(
+    #|40
+  ))
 }
 
 ///|
@@ -322,7 +344,9 @@ test "calc_damage: おはかまいり fainted_count=1 (power=100)" {
     fainted_count=1,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="56")
+  inspect(result.max_damage, content=(
+    #|78
+  ))
 }
 
 ///|
@@ -334,7 +358,9 @@ test "calc_damage: おはかまいり fainted_count=2 (power=150)" {
     fainted_count=2,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="83")
+  inspect(result.max_damage, content=(
+    #|116
+  ))
 }
 
 ///|
@@ -346,7 +372,9 @@ test "calc_damage: おはかまいり fainted_count=5 (power=300)" {
     fainted_count=5,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="165")
+  inspect(result.max_damage, content=(
+    #|231
+  ))
 }
 
 ///|
@@ -381,7 +409,9 @@ test "calc_damage: spread move in double applies 0.75x" {
   )
   let result = calc_damage(input)
   // baseline max_damage=84, round5(base, 3072) で 0.75倍
-  inspect(result.max_damage, content="63")
+  inspect(result.max_damage, content=(
+    #|87
+  ))
 }
 
 ///|
@@ -412,7 +442,9 @@ test "calc_damage: spread move in single has no penalty" {
     is_double=false,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content="84")
+  inspect(result.max_damage, content=(
+    #|117
+  ))
 }
 
 ///|
@@ -483,7 +515,9 @@ test "calc_damage: champions mode dispatches correctly" {
   )
   let r_champ = calc_damage(input_champ)
   let r_standard = calc_damage(input_standard)
-  inspect(r_champ.max_damage, content="84")
+  inspect(r_champ.max_damage, content=(
+    #|117
+  ))
   inspect(r_champ.max_damage == r_standard.max_damage, content="true")
 }
 
@@ -505,4 +539,30 @@ test "calc_damage: champions with rank modifier" {
   let r = calc_damage(input)
   let r_no = calc_damage(no_rank)
   inspect(r.max_damage > r_no.max_damage, content="true")
+}
+
+///|
+/// 防御側デフォルトが「無投資・性格補正なし」であることを保証する回帰テスト。
+/// メガギャラドス (155 Atk) +1 ランク → メガリザードンY (78 Def) たきのぼり / 晴れ。
+/// PokeVision など主要ダメ計と同じ 156–186 (102–121.5%) を出すこと。
+test "calc_damage: Champions defender defaults to 0 SP / neutral nature" {
+  let mega_gyarados = mk_pokemon_typed(
+    "メガギャラドス", "みず", "あく", 95, 155, 109, 70, 130, 81,
+  )
+  let mega_charizard_y = mk_pokemon_typed(
+    "メガリザードンY", "ほのお", "ひこう", 78, 104, 78, 159, 115, 100,
+  )
+  let waterfall = mk_move("たきのぼり", "みず", @model.Physical, 80)
+  let input = mk_damage_input(
+    mega_gyarados,
+    mega_charizard_y,
+    waterfall,
+    weather=@model.Weather::Sun,
+    atk_rank=1,
+    stat_system=@model.Champions,
+  )
+  let r = calc_damage(input)
+  inspect(r.min_damage, content="156")
+  inspect(r.max_damage, content="186")
+  inspect(r.defender_hp, content="153")
 }

@@ -57,10 +57,43 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let def_base_hp = dfn.hp
   let def_base = if is_physical { dfn.def_ } else { dfn.spd }
 
-  let mut atk_stat = if input.stat_system == @model.Champions {
-    calc_stat_champions(atk_base, custom=input.atk_stat_override)
+  // Nature が参照する stat index を決定する。
+  // 攻撃側: body press は Def、それ以外は move カテゴリに従って Atk / SpA。
+  // 防御側: move カテゴリに従って Def / SpD。
+  let atk_stat_index : @model.StatIndex = if is_body_press {
+    Def
+  } else if is_physical {
+    Atk
   } else {
-    calc_stat(atk_base, custom=input.atk_stat_override)
+    SpA
+  }
+  let def_stat_index : @model.StatIndex = if is_physical { Def } else { SpD }
+
+  // Nature 補正 numerator/denominator:
+  //   attacker default (None) = +10% (legacy 攻撃stat特化相当)
+  //   defender default (None) = 無補正
+  let (atk_num, atk_den) = match input.atk_nature {
+    Some(n) => @model.nature_mult_int(n, atk_stat_index)
+    None => (11, 10)
+  }
+  let (def_num, def_den) = match input.def_nature {
+    Some(n) => @model.nature_mult_int(n, def_stat_index)
+    None => (1, 1)
+  }
+  let mut atk_stat = if input.stat_system == @model.Champions {
+    calc_stat_champions(
+      atk_base,
+      nature_num=atk_num,
+      nature_den=atk_den,
+      custom=input.atk_stat_override,
+    )
+  } else {
+    calc_stat(
+      atk_base,
+      nature_num=atk_num,
+      nature_den=atk_den,
+      custom=input.atk_stat_override,
+    )
   }
   // 防御側デフォルトは「無投資・性格補正なし」。
   // 攻撃側は最大投資前提のままだが、防御側を最大投資扱いにすると一般的な
@@ -73,28 +106,35 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     calc_def_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
   }
   let mut def_stat = if input.stat_system == @model.Champions {
-    calc_def_stat_champions(def_base, custom=input.def_stat_override)
+    calc_def_stat_champions(
+      def_base,
+      nature_num=def_num,
+      nature_den=def_den,
+      custom=input.def_stat_override,
+    )
   } else {
-    calc_def_stat(def_base, custom=input.def_stat_override)
+    calc_def_stat(
+      def_base,
+      nature_num=def_num,
+      nature_den=def_den,
+      custom=input.def_stat_override,
+    )
   }
 
   // 2a-2. Rank (stat stage) modifiers
-  if input.atk_stat_override <= 0 {
-    let atk_stage = if input.critical && input.atk_rank < 0 {
-      0
-    } else {
-      input.atk_rank
-    }
-    atk_stat = apply_rank(atk_stat, atk_stage)
+  // override は「rank 前の実数値」として扱う。rank は常に掛ける。
+  let atk_stage = if input.critical && input.atk_rank < 0 {
+    0
+  } else {
+    input.atk_rank
   }
-  if input.def_stat_override <= 0 {
-    let def_stage = if input.critical && input.def_rank > 0 {
-      0
-    } else {
-      input.def_rank
-    }
-    def_stat = apply_rank(def_stat, def_stage)
+  atk_stat = apply_rank(atk_stat, atk_stage)
+  let def_stage = if input.critical && input.def_rank > 0 {
+    0
+  } else {
+    input.def_rank
   }
+  def_stat = apply_rank(def_stat, def_stage)
 
   // 2b. Ability stat modifiers
   if is_body_press {

@@ -154,6 +154,7 @@ stateDiagram-v2
   B7: Phase 7 完成サマリー & calc 連携
   note right of B7
     --atk-stat / --def-stat / --def-hp で calc に連携
+    (実数値は rank 前の値として扱われ、rank/特性/天候は別途掛かる)
   end note
 
   B7 --> B8

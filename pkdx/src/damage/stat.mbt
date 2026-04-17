@@ -287,11 +287,13 @@ pub fn StatModel::point_for_other(
 // ──────────────────────────────────────────────
 
 ///|
-/// Lv50 stat shortcut (IV31, EV252, optional nature boost).
+/// Lv50 stat shortcut (IV31, EV252).
+/// `nature_num` / `nature_den` で性格補正を指定 (default +10% = 11/10)。
 pub fn calc_stat(
   base : Int,
   is_hp? : Bool = false,
-  nature_boost? : Bool = true,
+  nature_num? : Int = 11,
+  nature_den? : Int = 10,
   custom? : Int = 0,
 ) -> Int {
   if custom > 0 {
@@ -300,16 +302,17 @@ pub fn calc_stat(
   if is_hp {
     return calc_hp_full(base, 31, 252)
   }
-  let (num, den) = if nature_boost { (11, 10) } else { (1, 1) }
-  calc_other_full(base, 31, 252, num, den)
+  calc_other_full(base, 31, 252, nature_num, nature_den)
 }
 
 ///|
 /// Champions stat shortcut (SP=32 default).
+/// `nature_num` / `nature_den` で性格補正を指定 (default +10% = 11/10)。
 pub fn calc_stat_champions(
   base : Int,
   is_hp? : Bool = false,
-  nature_boost? : Bool = true,
+  nature_num? : Int = 11,
+  nature_den? : Int = 10,
   custom? : Int = 0,
 ) -> Int {
   if custom > 0 {
@@ -318,28 +321,37 @@ pub fn calc_stat_champions(
   if is_hp {
     return calc_hp_champions(base, 32)
   }
-  let (num, den) = if nature_boost { (11, 10) } else { (1, 1) }
-  calc_other_champions(base, 32, num, den)
+  calc_other_champions(base, 32, nature_num, nature_den)
 }
 
 ///|
-/// 防御側デフォルト (Lv50, IV31, EV0, 性格補正なし)。
+/// 防御側デフォルト (Lv50, IV31, EV0)。
 /// Showdown など主要ダメ計と同じ「相手は最低投資」前提。
-pub fn calc_def_stat(base : Int, is_hp? : Bool = false, custom? : Int = 0) -> Int {
+/// `nature_num` / `nature_den` で性格補正を指定 (default 無補正 = 1/1)。
+pub fn calc_def_stat(
+  base : Int,
+  is_hp? : Bool = false,
+  nature_num? : Int = 1,
+  nature_den? : Int = 1,
+  custom? : Int = 0,
+) -> Int {
   if custom > 0 {
     return custom
   }
   if is_hp {
     return calc_hp_full(base, 31, 0)
   }
-  calc_other_full(base, 31, 0, 1, 1)
+  calc_other_full(base, 31, 0, nature_num, nature_den)
 }
 
 ///|
-/// Champions 防御側デフォルト (SP=0, 性格補正なし)。
+/// Champions 防御側デフォルト (SP=0)。
+/// `nature_num` / `nature_den` で性格補正を指定 (default 無補正 = 1/1)。
 pub fn calc_def_stat_champions(
   base : Int,
   is_hp? : Bool = false,
+  nature_num? : Int = 1,
+  nature_den? : Int = 1,
   custom? : Int = 0,
 ) -> Int {
   if custom > 0 {
@@ -348,7 +360,7 @@ pub fn calc_def_stat_champions(
   if is_hp {
     return calc_hp_champions(base, 0)
   }
-  calc_other_champions(base, 0, 1, 1)
+  calc_other_champions(base, 0, nature_num, nature_den)
 }
 
 ///|

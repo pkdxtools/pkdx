@@ -138,7 +138,10 @@ test "calc_damage: crit preserves def negative rank" {
 }
 
 ///|
-test "calc_damage: override ignores rank" {
+/// Regression: --atk-stat override 指定時に atk_rank が silent に無視されていた
+/// (engine.mbt の `if input.atk_stat_override <= 0` ガードが原因)。
+/// 新仕様では override は「rank 前の実数値」として扱い、rank は常に適用される。
+test "calc_damage: atk_stat_override + rank applies rank on top" {
   let with_rank = mk_damage_input(
     fixture_garchomp(),
     fixture_garchomp(),
@@ -155,7 +158,216 @@ test "calc_damage: override ignores rank" {
   )
   let r1 = calc_damage(with_rank)
   let r2 = calc_damage(without_rank)
-  inspect(r1.max_damage == r2.max_damage, content="true")
+  inspect(r1.max_damage > r2.max_damage, content="true")
+}
+
+///|
+/// Regression: def_stat_override + def_rank も同様に rank が掛かる。
+test "calc_damage: def_stat_override + rank applies rank on top" {
+  let with_rank = mk_damage_input(
+    fixture_garchomp(),
+    fixture_garchomp(),
+    fixture_earthquake(),
+    def_stat_override=150,
+    def_rank=2,
+  )
+  let without_rank = mk_damage_input(
+    fixture_garchomp(),
+    fixture_garchomp(),
+    fixture_earthquake(),
+    def_stat_override=150,
+    def_rank=0,
+  )
+  let r1 = calc_damage(with_rank)
+  let r2 = calc_damage(without_rank)
+  // def_rank+2 は damage を約半分にする
+  inspect(r1.max_damage < r2.max_damage, content="true")
+}
+
+///|
+/// Regression: 実ケース再現 — メガギャラ (A=207 想定) + ドドゲザン + たきのぼり + rank+1。
+/// 過去の挙動: rank が無視され max 81 程度。期待: rank 適用で max > 100。
+test "calc_damage: mega-gyarados waterfall vs kingambit rank+1 regression" {
+  let mega_gyarados = mk_pokemon_typed(
+    "メガギャラドス", "みず", "あく", 95, 155, 109, 70, 130, 81,
+  )
+  let kingambit = mk_pokemon_typed(
+    "ドドゲザン", "あく", "はがね", 100, 135, 120, 60, 85, 50,
+  )
+  let waterfall = mk_move("たきのぼり", "みず", @model.Physical, 80)
+  let input = mk_damage_input(
+    mega_gyarados,
+    kingambit,
+    waterfall,
+    atk_stat_override=207,
+    def_stat_override=140,
+    def_hp_override=207,
+    atk_rank=1,
+  )
+  let result = calc_damage(input)
+  // rank+1 で atk 207->310、STAB 1.5x、等倍、rand 100/100 で max≈121
+  inspect(result.max_damage > 100, content="true")
+}
+
+// --- Nature (--atk-nature / --def-nature) ---
+
+///|
+/// 物理技で Atk+ 性格 (いじっぱり) は Atk 中立 (まじめ) より damage が高い。
+/// 旧挙動は nature 無視で両者が +10% default になり等しくなる。
+test "calc_damage: atk_nature adamant > serious on physical" {
+  match (
+    @model.nature_from_ja("いじっぱり"),
+    @model.nature_from_ja("まじめ"),
+  ) {
+    (Some(adamant), Some(serious)) => {
+      let with_adamant = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(adamant),
+        stat_system=@model.Champions,
+      )
+      let with_serious = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(serious),
+        stat_system=@model.Champions,
+      )
+      let r1 = calc_damage(with_adamant)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage > r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
+}
+
+///|
+/// 特殊技で SpA+ 性格 (ひかえめ) は中立より damage が高い。
+test "calc_damage: atk_nature modest > serious on special" {
+  let surf = mk_move("なみのり", "みず", @model.Special, 90)
+  let vaporeon = mk_pokemon_typed(
+    "シャワーズ", "みず", "", 130, 65, 60, 110, 95, 65,
+  )
+  match (
+    @model.nature_from_ja("ひかえめ"),
+    @model.nature_from_ja("まじめ"),
+  ) {
+    (Some(modest), Some(serious)) => {
+      let with_modest = mk_damage_input(
+        vaporeon,
+        fixture_garchomp(),
+        surf,
+        atk_nature=Some(modest),
+        stat_system=@model.Champions,
+      )
+      let with_serious = mk_damage_input(
+        vaporeon,
+        fixture_garchomp(),
+        surf,
+        atk_nature=Some(serious),
+        stat_system=@model.Champions,
+      )
+      let r1 = calc_damage(with_modest)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage > r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
+}
+
+///|
+/// ようき (Spe+/SpA-, Atk 中立) を物理技に適用しても Atk 無補正。
+/// まじめ (全中立) と同等の damage になる。
+test "calc_damage: atk_nature jolly equals serious on physical (both neutral for Atk)" {
+  match (@model.nature_from_ja("ようき"), @model.nature_from_ja("まじめ")) {
+    (Some(jolly), Some(serious)) => {
+      let with_jolly = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(jolly),
+        stat_system=@model.Champions,
+      )
+      let with_serious = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        atk_nature=Some(serious),
+        stat_system=@model.Champions,
+      )
+      let r1 = calc_damage(with_jolly)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage == r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
+}
+
+///|
+/// ボディプレスは攻撃側の Def を攻撃値として使う物理技。
+/// ずぶとい (Def+/Atk-) は body press の攻撃値を押し上げるので damage が上がる。
+test "calc_damage: atk_nature bold boosts body press (Def+ applies)" {
+  let body_press = mk_move("ボディプレス", "かくとう", @model.Physical, 80)
+  // 防御型ポケモン (A低, B高) を用意して body press の効果を確認
+  let skeledirge = mk_pokemon_typed(
+    "ラウドボーン", "ほのお", "ゴースト", 104, 75, 100, 110, 75, 66,
+  )
+  match (
+    @model.nature_from_ja("ずぶとい"),
+    @model.nature_from_ja("まじめ"),
+  ) {
+    (Some(bold), Some(serious)) => {
+      let with_bold = mk_damage_input(
+        skeledirge,
+        fixture_garchomp(),
+        body_press,
+        atk_nature=Some(bold),
+        stat_system=@model.Champions,
+      )
+      let with_serious = mk_damage_input(
+        skeledirge,
+        fixture_garchomp(),
+        body_press,
+        atk_nature=Some(serious),
+        stat_system=@model.Champions,
+      )
+      let r1 = calc_damage(with_bold)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage > r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
+}
+
+///|
+/// def_nature で Def+ 性格 (ずぶとい) を物理技の防御側に当てると damage が減る。
+test "calc_damage: def_nature bold reduces physical damage" {
+  match (
+    @model.nature_from_ja("ずぶとい"),
+    @model.nature_from_ja("まじめ"),
+  ) {
+    (Some(bold), Some(serious)) => {
+      let with_bold = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        def_nature=Some(bold),
+        stat_system=@model.Champions,
+      )
+      let with_serious = mk_damage_input(
+        fixture_garchomp(),
+        fixture_garchomp(),
+        fixture_earthquake(),
+        def_nature=Some(serious),
+        stat_system=@model.Champions,
+      )
+      let r1 = calc_damage(with_bold)
+      let r2 = calc_damage(with_serious)
+      inspect(r1.max_damage < r2.max_damage, content="true")
+    }
+    _ => fail("nature not found")
+  }
 }
 
 ///|

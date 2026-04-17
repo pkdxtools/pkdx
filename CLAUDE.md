@@ -165,6 +165,18 @@ bin/pkdx damage "ガブリアス" "サーフゴー" "じしん" \
 # ランク補正付きダメージ計算（つるぎのまい+2の状態）
 bin/pkdx damage "ガブリアス" "ガブリアス" "じしん" --atk-rank 2 --format json
 
+# 性格を指定してダメージ計算（--atk-nature / --def-nature、日本語名）
+# 未指定時は攻撃側=攻撃stat特化相当(+10%)、防御側=無補正
+bin/pkdx damage "ガブリアス" "ガブリアス" "じしん" \
+  --atk-nature いじっぱり --def-nature ずぶとい --format json
+
+# カスタム実数値でダメージ計算（用途: ボディプレス / イカサマ / 特殊配分の再現）
+# --atk-stat / --def-stat は「rank 前の実数値」として解釈され、rank/特性/天候は常に適用される
+bin/pkdx damage "ラウドボーン" "ガブリアス" "ボディプレス" \
+  --atk-stat 180 --format json  # 180 = 攻撃側ラウドボーンの Def 実数値
+bin/pkdx damage "ブラッキー" "ガブリアス" "イカサマ" \
+  --atk-stat 200 --format json  # 200 = 相手ガブリアスの Atk 実数値
+
 # タイプ相性（複合タイプはカンマ区切り）
 bin/pkdx type-chart "ほのお" "くさ"
 bin/pkdx type-chart "じめん" "ひこう,はがね"

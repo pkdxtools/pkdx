@@ -51,6 +51,8 @@ fn build_input_with_ranks(
     field: @model.Field::None,
     tera_type: atk.tera_type,
     critical: false,
+    atk_nature: None,
+    def_nature: None,
     atk_stat_override: 0,
     def_stat_override: 0,
     def_hp_override: 0,

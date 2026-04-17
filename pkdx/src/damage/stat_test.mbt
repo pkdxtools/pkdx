@@ -66,7 +66,7 @@ test "calc_stat refactor: Atk matches calc_other_full with nature boost" {
 
 ///|
 test "calc_stat refactor: no nature boost" {
-  let old_result = calc_stat(130, nature_boost=false)
+  let old_result = calc_stat(130, nature_num=1, nature_den=1)
   let new_result = calc_other_full(130, 31, 252, 1, 1)
   inspect(old_result == new_result, content="true")
 }

@@ -43,7 +43,7 @@ if [ -f "$BINARY" ]; then
 fi
 
 # Download from GitHub Releases
-REPO="ushironoko/pkdx"
+REPO="pkdxtools/pkdx"
 mkdir -p "$CACHE_DIR"
 
 if command -v gh &>/dev/null; then

@@ -1,6 +1,6 @@
 import {
-  "ushironoko/pkdx/src/model",
-  "ushironoko/pkdx/src/types",
+  "pkdxtools/pkdx/src/model",
+  "pkdxtools/pkdx/src/types",
 }
 
 options(

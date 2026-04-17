@@ -41,7 +41,7 @@ flowchart LR
   TB -.cache.-> Cache[box/cache/*.json]
   Breed -.cache.-> Cache
 
-  SU --> Upstream[(upstream: ushironoko/pkdx)]
+  SU --> Upstream[(upstream: pkdxtools/pkdx)]
   Upstream --> SU
 ```
 

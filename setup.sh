@@ -2,7 +2,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-REPO="ushironoko/pkdx"
+REPO="pkdxtools/pkdx"
+LEGACY_REPO="ushironoko/pkdx"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pkdx"
 
 # --- OS/Arch detection ---
@@ -30,17 +31,28 @@ fi
 echo "=== pkdx setup ==="
 echo ""
 
-# --- Step 0: Remote configuration (fork detection) ---
-UPSTREAM_REPO="ushironoko/pkdx"
+# --- Step 0: Remote configuration (fork detection + legacy URL migration) ---
+UPSTREAM_REPO="pkdxtools/pkdx"
 ORIGIN_URL="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
 
-if echo "$ORIGIN_URL" | grep -q "$UPSTREAM_REPO"; then
+echo "[0/4] Remote configuration..."
+
+# Migrate legacy upstream URL (ushironoko/pkdx -> pkdxtools/pkdx) in place.
+# Redirects keep fetch working, but we want the authoritative name stored.
+if git -C "$REPO_ROOT" remote get-url upstream &>/dev/null; then
+  CURRENT_UPSTREAM_URL="$(git -C "$REPO_ROOT" remote get-url upstream)"
+  if echo "$CURRENT_UPSTREAM_URL" | grep -q "$LEGACY_REPO"; then
+    NEW_UPSTREAM_URL="$(echo "$CURRENT_UPSTREAM_URL" | sed "s|$LEGACY_REPO|$UPSTREAM_REPO|")"
+    git -C "$REPO_ROOT" remote set-url upstream "$NEW_UPSTREAM_URL"
+    echo "  Migrated upstream URL: $LEGACY_REPO -> $UPSTREAM_REPO"
+  fi
+fi
+
+if echo "$ORIGIN_URL" | grep -qE "($UPSTREAM_REPO|$LEGACY_REPO)"; then
   # origin is the upstream repo itself (clone setup)
-  echo "[0/4] Remote configuration..."
   echo "  Clone setup detected. No additional remote needed."
 else
   # origin is a fork
-  echo "[0/4] Remote configuration..."
   if git -C "$REPO_ROOT" remote get-url upstream &>/dev/null; then
     echo "  upstream remote already configured."
   else

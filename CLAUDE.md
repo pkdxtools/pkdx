@@ -31,7 +31,7 @@ setup.sh実行前ではすべてのツールが利用不可。
 
 #### A. GitHubアカウントがある場合（推奨）
 
-1. GitHub で `ushironoko/pkdx` をフォーク
+1. GitHub で `pkdxtools/pkdx` をフォーク
 2. `git clone https://github.com/<user>/pkdx.git && cd pkdx && ./setup.sh`
 3. upstream remote は `setup.sh` が自動設定（手動不要）
 4. 出力は `box/` 配下に保存。`self-update` スキルでupstreamに追従
@@ -40,7 +40,7 @@ setup.sh実行前ではすべてのツールが利用不可。
 
 #### B. GitHubアカウントがない場合
 
-1. `git clone https://github.com/ushironoko/pkdx.git && cd pkdx && ./setup.sh`
+1. `git clone https://github.com/pkdxtools/pkdx.git && cd pkdx && ./setup.sh`
 2. 全機能が利用可能。データは手元のPCにのみ保存される
 3. あとからGitHubアカウントを作成してフォークに移行可能
 

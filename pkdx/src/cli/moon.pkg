@@ -1,7 +1,7 @@
 import {
-  "ushironoko/pkdx/src/damage",
-  "ushironoko/pkdx/src/db",
-  "ushironoko/pkdx/src/model",
+  "pkdxtools/pkdx/src/damage",
+  "pkdxtools/pkdx/src/db",
+  "pkdxtools/pkdx/src/model",
 }
 
 options(

@@ -23,7 +23,7 @@ Claude Code / Codex と対話しながらチームを組んだり、ポケモン
 
 GitHubアカウントがあれば、作成した構築・育成データをクラウドにバックアップでき、複数のPCで共有したり、過去のデータに戻すことができます。
 
-1. GitHubの [ushironoko/pkdx](https://github.com/ushironoko/pkdx) ページ右上の「Fork」ボタンを押す
+1. GitHubの [pkdxtools/pkdx](https://github.com/pkdxtools/pkdx) ページ右上の「Fork」ボタンを押す
 2. クローンしたリポジトリのURLをClaude Code / Codexに渡して「これ使いたい」
 3. 以降は `/self-update` スキルで最新版に追従できる
 

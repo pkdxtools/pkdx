@@ -19,22 +19,8 @@ pub fn row_exploitability(
   row : MixedStrategy,
   col : MixedStrategy,
 ) -> Double {
-  let rows = matrix.rows()
-  let cols = matrix.cols()
-  let mut best = 0.0
-  let mut init = false
-  for i in 0..<rows {
-    let mut s = 0.0
-    for j in 0..<cols {
-      s += matrix.at(i, j) * col.at(j)
-    }
-    if not(init) || s > best {
-      best = s
-      init = true
-    }
-  }
-  let current = expected_payoff(row, matrix, col)
-  best - current
+  let (_, best) = best_response(matrix, Row, fn(j) { col.at(j) })
+  best - expected_payoff(row, matrix, col)
 }
 
 ///|
@@ -47,22 +33,8 @@ pub fn col_exploitability(
   row : MixedStrategy,
   col : MixedStrategy,
 ) -> Double {
-  let rows = matrix.rows()
-  let cols = matrix.cols()
-  let mut best = 0.0
-  let mut init = false
-  for j in 0..<cols {
-    let mut s = 0.0
-    for i in 0..<rows {
-      s += matrix.at(i, j) * row.at(i)
-    }
-    if not(init) || s < best {
-      best = s
-      init = true
-    }
-  }
-  let current = expected_payoff(row, matrix, col)
-  current - best
+  let (_, best) = best_response(matrix, Col, fn(i) { row.at(i) })
+  expected_payoff(row, matrix, col) - best
 }
 
 ///|

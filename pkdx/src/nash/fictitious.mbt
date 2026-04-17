@@ -13,36 +13,14 @@
 
 ///|
 fn argmax_row_response(matrix : FiniteMatrix, q : Array[Double]) -> Int {
-  let mut best = 0
-  let mut best_val = 0.0
-  for i in 0..<matrix.rows() {
-    let mut s = 0.0
-    for j in 0..<matrix.cols() {
-      s += matrix.at(i, j) * q[j]
-    }
-    if i == 0 || s > best_val {
-      best = i
-      best_val = s
-    }
-  }
-  best
+  let (idx, _) = best_response(matrix, Row, fn(j) { q[j] })
+  idx
 }
 
 ///|
 fn argmin_col_response(matrix : FiniteMatrix, p : Array[Double]) -> Int {
-  let mut best = 0
-  let mut best_val = 0.0
-  for j in 0..<matrix.cols() {
-    let mut s = 0.0
-    for i in 0..<matrix.rows() {
-      s += matrix.at(i, j) * p[i]
-    }
-    if j == 0 || s < best_val {
-      best = j
-      best_val = s
-    }
-  }
-  best
+  let (idx, _) = best_response(matrix, Col, fn(i) { p[i] })
+  idx
 }
 
 ///|

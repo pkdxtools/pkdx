@@ -166,6 +166,61 @@ pub fn expected_payoff(
 }
 
 ///|
+/// Player selector for best-response computations.
+pub(all) enum PlayerAxis {
+  Row
+  Col
+} derive(Show, Eq)
+
+///|
+/// Best response of one player to the other's strategy.
+///
+/// For `Row`: returns `(argmax_i Σ_j A[i,j]·opponent(j), max value)`.
+/// For `Col`: returns `(argmin_j Σ_i A[i,j]·opponent(i), min value)`.
+///
+/// `opponent(k)` is the probability the opponent plays its k-th action;
+/// passing a closure lets callers supply either `MixedStrategy::at` or a raw
+/// `Array[Double]` lookup without converting between them.
+pub fn best_response(
+  matrix : FiniteMatrix,
+  axis : PlayerAxis,
+  opponent : (Int) -> Double,
+) -> (Int, Double) {
+  match axis {
+    Row => {
+      let mut best = 0
+      let mut best_val = 0.0
+      for i in 0..<matrix.rows() {
+        let mut s = 0.0
+        for j in 0..<matrix.cols() {
+          s += matrix.at(i, j) * opponent(j)
+        }
+        if i == 0 || s > best_val {
+          best = i
+          best_val = s
+        }
+      }
+      (best, best_val)
+    }
+    Col => {
+      let mut best = 0
+      let mut best_val = 0.0
+      for j in 0..<matrix.cols() {
+        let mut s = 0.0
+        for i in 0..<matrix.rows() {
+          s += matrix.at(i, j) * opponent(i)
+        }
+        if j == 0 || s < best_val {
+          best = j
+          best_val = s
+        }
+      }
+      (best, best_val)
+    }
+  }
+}
+
+///|
 /// Linear program outcome for a two-player zero-sum game.
 pub(all) enum LpResult {
   Optimal(

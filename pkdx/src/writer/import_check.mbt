@@ -166,22 +166,27 @@ fn diff_team_tuple(a : TeamTuple, b : TeamTuple) -> Array[String] {
 }
 
 ///|
-/// Pokemon cache を既存 meta.json 群と比較
-pub fn check_pokemon_import(
+/// Generic import check: exact match wins → best partial match → New.
+/// `same_entity` gates whether a partial match is reported as a Diff
+/// (pokemon requires species match; team has no such gate).
+fn[T] check_import_generic(
   cache : Json,
   existing : Array[(String, Json)],
+  extract : (Json) -> T,
+  diff : (T, T) -> Array[String],
+  same_entity : (T, T) -> Bool,
 ) -> ImportCheckResult {
-  let target = extract_pokemon_tuple(cache)
+  let target = extract(cache)
   let mut best_match : ImportCheckResult = New
   let mut best_diff_count = 9999
   for item in existing {
     let (path, content) = item
-    let candidate = extract_pokemon_tuple(content)
-    let d = diff_pokemon_tuple(target, candidate)
+    let candidate = extract(content)
+    let d = diff(target, candidate)
     if d.length() == 0 {
       return Skip(path)
     }
-    if d.length() < best_diff_count && target.species == candidate.species {
+    if d.length() < best_diff_count && same_entity(target, candidate) {
       best_diff_count = d.length()
       best_match = Diff(path, d)
     }
@@ -190,26 +195,32 @@ pub fn check_pokemon_import(
 }
 
 ///|
+/// Pokemon cache を既存 meta.json 群と比較
+pub fn check_pokemon_import(
+  cache : Json,
+  existing : Array[(String, Json)],
+) -> ImportCheckResult {
+  check_import_generic(
+    cache,
+    existing,
+    extract_pokemon_tuple,
+    diff_pokemon_tuple,
+    fn(a, b) { a.species == b.species },
+  )
+}
+
+///|
 pub fn check_team_import(
   cache : Json,
   existing : Array[(String, Json)],
 ) -> ImportCheckResult {
-  let target = extract_team_tuple(cache)
-  let mut best_match : ImportCheckResult = New
-  let mut best_diff_count = 9999
-  for item in existing {
-    let (path, content) = item
-    let candidate = extract_team_tuple(content)
-    let d = diff_team_tuple(target, candidate)
-    if d.length() == 0 {
-      return Skip(path)
-    }
-    if d.length() < best_diff_count {
-      best_diff_count = d.length()
-      best_match = Diff(path, d)
-    }
-  }
-  best_match
+  check_import_generic(
+    cache,
+    existing,
+    extract_team_tuple,
+    diff_team_tuple,
+    fn(_, _) { true },
+  )
 }
 
 ///|

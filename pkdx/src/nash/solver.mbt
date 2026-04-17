@@ -300,34 +300,7 @@ pub fn exploitability(
   row : MixedStrategy,
   col : MixedStrategy,
 ) -> Double {
-  let rows = matrix.rows()
-  let cols = matrix.cols()
-  // Best response of col player to p: minimize (Aᵀp)[j] = Σ_i A[i,j] p_i over j.
-  // Value to row player if col plays best response = min_j Σ_i A[i,j] p_i.
-  let mut best_col_value = 0.0
-  let mut init_col = false
-  for j in 0..<cols {
-    let mut s = 0.0
-    for i in 0..<rows {
-      s += matrix.at(i, j) * row.at(i)
-    }
-    if not(init_col) || s < best_col_value {
-      best_col_value = s
-      init_col = true
-    }
-  }
-  // Best response of row player to q: maximize (Aq)[i] over i.
-  let mut best_row_value = 0.0
-  let mut init_row = false
-  for i in 0..<rows {
-    let mut s = 0.0
-    for j in 0..<cols {
-      s += matrix.at(i, j) * col.at(j)
-    }
-    if not(init_row) || s > best_row_value {
-      best_row_value = s
-      init_row = true
-    }
-  }
+  let (_, best_row_value) = best_response(matrix, Row, fn(j) { col.at(j) })
+  let (_, best_col_value) = best_response(matrix, Col, fn(i) { row.at(i) })
   best_row_value - best_col_value
 }

@@ -19,49 +19,47 @@ fn strict_string(
 }
 
 ///|
+/// Build a 6-stat numeric object schema using the given key list.
+/// `keys` must be exactly 6 entries (HP, Atk, Def, SpA, SpD, Spe order).
+fn stats_schema(
+  b : @jsonschema.Builder,
+  keys : Array[String],
+) -> @jsonschema.JsonSchema {
+  let props : Map[String, @jsonschema.JsonSchema] = {}
+  for i = 0; i < keys.length(); i = i + 1 {
+    props[keys[i]] = b.number()
+  }
+  b.object(properties=props, required_all=true)
+}
+
+///|
 fn stats_schema_short(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
-  b.object(
-    properties={
-      "h": b.number(),
-      "a": b.number(),
-      "b": b.number(),
-      "c": b.number(),
-      "d": b.number(),
-      "s": b.number(),
-    },
-    required_all=true,
-  )
+  stats_schema(b, ["h", "a", "b", "c", "d", "s"])
 }
 
 ///|
 fn stats_schema_long(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
-  b.object(
-    properties={
-      "hp": b.number(),
-      "atk": b.number(),
-      "def": b.number(),
-      "spa": b.number(),
-      "spd": b.number(),
-      "spe": b.number(),
-    },
-    required_all=true,
-  )
+  stats_schema(b, ["hp", "atk", "def", "spa", "spd", "spe"])
 }
 
 ///|
+/// Move schema. When `with_accuracy` is set, adds the `accuracy` property
+/// (required shape for breed / pokemon-build caches).
 fn move_schema(
   b : @jsonschema.Builder,
   strict~ : Bool = true,
+  with_accuracy~ : Bool = false,
 ) -> @jsonschema.JsonSchema {
-  b.object(
-    properties={
-      "name": strict_string(b, strict~),
-      "type": b.string(),
-      "category": b.string(),
-      "power": b.number(),
-    },
-    required=["name", "type", "category"],
-  )
+  let props : Map[String, @jsonschema.JsonSchema] = {
+    "name": strict_string(b, strict~),
+    "type": b.string(),
+    "category": b.string(),
+    "power": b.number(),
+  }
+  if with_accuracy {
+    props["accuracy"] = b.number()
+  }
+  b.object(properties=props, required=["name", "type", "category"])
 }
 
 ///|
@@ -69,16 +67,7 @@ fn pokemon_move_schema(
   b : @jsonschema.Builder,
   strict~ : Bool = true,
 ) -> @jsonschema.JsonSchema {
-  b.object(
-    properties={
-      "name": strict_string(b, strict~),
-      "type": b.string(),
-      "category": b.string(),
-      "power": b.number(),
-      "accuracy": b.number(),
-    },
-    required=["name", "type", "category"],
-  )
+  move_schema(b, strict~, with_accuracy=true)
 }
 
 ///|

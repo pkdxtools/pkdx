@@ -606,26 +606,12 @@ fn build_select_result(
 
 ///|
 fn fmt_int_2d(xs : Array[Array[Int]]) -> String {
-  let mut s = "["
-  for i in 0..<xs.length() {
-    if i > 0 {
-      s = s + ","
-    }
-    s = s + fmt_int_array(xs[i])
-  }
-  s + "]"
+  fmt_json_array(xs, fmt_int_array)
 }
 
 ///|
 fn fmt_string_2d(xs : Array[Array[String]]) -> String {
-  let mut s = "["
-  for i in 0..<xs.length() {
-    if i > 0 {
-      s = s + ","
-    }
-    s = s + fmt_string_array(xs[i])
-  }
-  s + "]"
+  fmt_json_array(xs, fmt_string_array)
 }
 
 ///|

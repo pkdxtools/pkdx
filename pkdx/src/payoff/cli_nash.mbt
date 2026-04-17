@@ -214,32 +214,29 @@ fn parse_nash_input(
 }
 
 ///|
-/// Format an `Array[Double]` as a JSON array string with 10-digit precision.
-fn fmt_double_array(xs : Array[Double]) -> String {
-  let parts = Array::make(xs.length(), "")
-  for i in 0..<xs.length() {
-    parts[i] = xs[i].to_string()
-  }
+/// Serialize `xs` as a JSON array, delegating per-element formatting
+/// (including any escaping) to `fmt_one`. Shared by int / double / string /
+/// 2-D variants across the payoff CLI.
+fn[T] fmt_json_array(xs : Array[T], fmt_one : (T) -> String) -> String {
   let mut s = "["
-  for i in 0..<parts.length() {
+  for i in 0..<xs.length() {
     if i > 0 {
       s = s + ","
     }
-    s = s + parts[i]
+    s = s + fmt_one(xs[i])
   }
   s + "]"
 }
 
 ///|
+/// Format an `Array[Double]` as a JSON array string.
+fn fmt_double_array(xs : Array[Double]) -> String {
+  fmt_json_array(xs, fn(x) { x.to_string() })
+}
+
+///|
 fn fmt_int_array(xs : Array[Int]) -> String {
-  let mut s = "["
-  for i in 0..<xs.length() {
-    if i > 0 {
-      s = s + ","
-    }
-    s = s + xs[i].to_string()
-  }
-  s + "]"
+  fmt_json_array(xs, fn(x) { x.to_string() })
 }
 
 ///|
@@ -314,14 +311,7 @@ fn dot_escape(s : String) -> String {
 
 ///|
 fn fmt_string_array(xs : Array[String]) -> String {
-  let mut s = "["
-  for i in 0..<xs.length() {
-    if i > 0 {
-      s = s + ","
-    }
-    s = s + "\"" + json_escape(xs[i]) + "\""
-  }
-  s + "]"
+  fmt_json_array(xs, fn(x) { "\"" + json_escape(x) + "\"" })
 }
 
 ///|

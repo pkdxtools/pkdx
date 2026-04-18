@@ -86,6 +86,145 @@ test "build_team_document: doubles matchup plans" {
 }
 
 ///|
+test "build_team_document: members table uses メモ header" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let md = @markdown.serialize(doc)
+  assert_true(md.contains("| メモ |"))
+  assert_false(md.contains("| 役割 |"))
+}
+
+///|
+test "build_team_document: memo with pipe is escaped" {
+  // 自由入力メモに `|` が含まれる場合でも、テーブル行が壊れてはならない。
+  // markdown ライブラリが `|` → `\|` にエスケープするため、raw な `|` は混入しない想定。
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "HBD振り|物理受け|襷想定",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let md = @markdown.serialize(doc)
+  // memo セル全体 (`| HBD振り\|物理受け\|襷想定 |`) が 1 行として残っていること。
+  assert_true(md.contains("HBD振り\\|物理受け\\|襷想定"))
+  // メンバー行が崩れて列数が増えていないこと。
+  // `\|` (escaped) はセル区切りではないため除外し、生の `|` のみを数える
+  // (ヘッダ 7 列に対応する生パイプは必ず 8 個)。
+  let member_line_unescaped_pipes = {
+    let lines = md.split("\n")
+    let mut count = 0
+    for line in lines {
+      let line_str = line.to_string()
+      if line_str.contains("ガブリアス") && line_str.contains("HBD振り") {
+        let chars = line_str.to_array()
+        for i, c in chars {
+          if c == '|' && (i == 0 || chars[i - 1] != '\\') {
+            count = count + 1
+          }
+        }
+      }
+    }
+    count
+  }
+  inspect(member_line_unescaped_pipes, content="8")
+}
+
+///|
+test "build_team_document: memo with newlines collapsed to single row" {
+  // 改行を含むメモを渡しても、テーブル行は必ず 1 行で完結する必要がある
+  // (cat -E 的に言えば row 内に改行が混ざると次行の区切りと衝突する)。
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "物理アタッカー\n襷ステロ型\tS最速",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let md = @markdown.serialize(doc)
+  // 3 フィールドがすべてスペース区切りで同一行に存在すること
+  assert_true(md.contains("物理アタッカー 襷ステロ型 S最速"))
+  // ガブリアスを含むメンバー行は必ず 1 本だけ
+  let member_row_count = {
+    let lines = md.split("\n")
+    let mut count = 0
+    for line in lines {
+      let line_str = line.to_string()
+      if line_str.contains("| 1 | ガブリアス |") {
+        count = count + 1
+      }
+    }
+    count
+  }
+  inspect(member_row_count, content="1")
+}
+
+///|
 test "build_team_document: coverage and defense matrix" {
   let src =
     #|{

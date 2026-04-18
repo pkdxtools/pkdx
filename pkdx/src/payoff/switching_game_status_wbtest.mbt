@@ -602,3 +602,184 @@ test "maybe_apply_status_fanout: thunder-wave 90% fans to 2 outcomes" {
   let total = out[0].0 + out[1].0
   assert_true((total - 1.0).abs() < 1.0e-9)
 }
+
+///|
+/// Build a stat-customised pokemon for the same-turn regression tests.
+fn mk_stat_pokemon(
+  name : String,
+  hp : Int,
+  atk : Int,
+  spe : Int,
+) -> @model.Pokemon {
+  {
+    global_no: "0000",
+    name_ja: name,
+    name_en: name,
+    type1: "ノーマル",
+    type2: "",
+    hp,
+    atk,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe,
+    bst: hp + atk + 400 + spe,
+    ability1: "",
+    ability2: "",
+    dream_ability: "",
+    weight: 50.0,
+  }
+}
+
+///|
+fn mk_move_move(
+  name : String,
+  category : @model.MoveCategory,
+  power : Int,
+  accuracy : Int,
+  status_effect : (@model.StatusKind, Int)?,
+) -> @model.Move {
+  {
+    name,
+    type_: "ノーマル",
+    category,
+    power,
+    accuracy,
+    pp: 10,
+    learn_method: "",
+    priority: 0,
+    stat_effects: [],
+    status_effect,
+  }
+}
+
+///|
+fn mk_combatant_with_moves(
+  pokemon : @model.Pokemon,
+  moves : Array[@model.Move],
+) -> Combatant {
+  {
+    pokemon,
+    moves,
+    ability: "",
+    item: "",
+    tera_type: "",
+    stat_system: @model.Standard,
+    mega_form: None,
+  }
+}
+
+///|
+fn mk_same_turn_state(
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  my_hp : Int,
+  opp_hp : Int,
+) -> SwitchingGameState {
+  let _ = my_team
+  let _ = opp_team
+  {
+    my_active: 0,
+    opp_active: 0,
+    my_hps: [my_hp],
+    opp_hps: [opp_hp],
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    my_mega_used: false,
+    opp_mega_used: false,
+    my_megaed: [false],
+    opp_megaed: [false],
+    my_status: zero_status(1),
+    opp_status: zero_status(1),
+    turn: 0,
+  }
+}
+
+///|
+/// Regression: status inflicted by the faster attacker must take effect
+/// before the slower attacker's move resolves. A faster Will-O-Wisp needs to
+/// halve the slower target's physical damage on the same turn — previously
+/// the burn flag was snapshotted from the pre-turn state and the second leg
+/// dealt full physical damage.
+test "resolve_moves: faster Will-O-Wisp halves slower target's physical damage same turn" {
+  let burner = mk_stat_pokemon("burner", 200, 100, 120)
+  let hitter = mk_stat_pokemon("hitter", 200, 150, 60)
+  let wowisp = mk_move_move(
+    "おにび", @model.Status, 0, 100, Some((@model.BurnKind, 100)),
+  )
+  let heavy = mk_move_move("じしん", @model.Physical, 100, 100, None)
+  let my_team = [mk_combatant_with_moves(burner, [wowisp])]
+  let opp_team = [mk_combatant_with_moves(hitter, [heavy])]
+  let normal = compute_mean_damage(opp_team[0], my_team[0], heavy, 0, 0)
+  let halved = compute_mean_damage(
+    opp_team[0], my_team[0], heavy, 0, 0, atk_burn=true,
+  )
+  // Sanity: the burn halving must be a distinguishable effect.
+  assert_true(normal > halved)
+  let state = mk_same_turn_state(my_team, opp_team, 200, 200)
+  let outs = transition_with_cache(
+    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  // Deterministic: wowisp accuracy 100, burn chance 100, no speed tie.
+  assert_eq(outs.length(), 1)
+  let (_p, ns) = outs[0]
+  assert_eq(ns.opp_status[0], @model.Burn)
+  // Damage dealt to my active must be the burn-halved value, NOT the full one.
+  assert_eq(200 - ns.my_hps[0], halved)
+  assert_true(200 - ns.my_hps[0] != normal)
+}
+
+///|
+/// Regression: a faster sleep-inducing move must stop the slower target from
+/// executing its own move on the turn the sleep lands. Previously the sleep
+/// was applied only after both attacks resolved, so a fast Spore user still
+/// took a same-turn hit from the target it had just put to sleep.
+test "resolve_moves: faster Spore locks slower target out of the same turn" {
+  let sleeper = mk_stat_pokemon("sleeper", 200, 100, 120)
+  let hitter = mk_stat_pokemon("hitter", 200, 150, 60)
+  let spore = mk_move_move(
+    "キノコのほうし", @model.Status, 0, 100, Some((@model.SleepKind, 100)),
+  )
+  let heavy = mk_move_move("じしん", @model.Physical, 100, 100, None)
+  let my_team = [mk_combatant_with_moves(sleeper, [spore])]
+  let opp_team = [mk_combatant_with_moves(hitter, [heavy])]
+  let state = mk_same_turn_state(my_team, opp_team, 200, 200)
+  let outs = transition_with_cache(
+    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  assert_eq(outs.length(), 1)
+  let (_p, ns) = outs[0]
+  // Target must now be asleep with the initial Sleep(2) counter.
+  assert_eq(ns.opp_status[0], @model.Sleep(2))
+  // Target did not act this turn: faster Spore user is still at full HP.
+  assert_eq(ns.my_hps[0], 200)
+  // Spore does no damage; the target's HP is untouched too.
+  assert_eq(ns.opp_hps[0], 200)
+}
+
+///|
+/// Paralyze is a speed debuff whose fully-paralyzed roll is a pre-turn
+/// attempt check — a mid-turn application does not skip the current action.
+/// Guard against regressing the rule by accidentally blocking fresh-paralyze
+/// targets the same way Sleep does.
+test "resolve_moves: faster Thunder Wave still lets slower target attack this turn" {
+  let twaver = mk_stat_pokemon("twaver", 200, 100, 120)
+  let hitter = mk_stat_pokemon("hitter", 200, 150, 60)
+  let twave = mk_move_move(
+    "でんじは", @model.Status, 0, 100, Some((@model.ParalyzeKind, 100)),
+  )
+  let heavy = mk_move_move("じしん", @model.Physical, 100, 100, None)
+  let my_team = [mk_combatant_with_moves(twaver, [twave])]
+  let opp_team = [mk_combatant_with_moves(hitter, [heavy])]
+  let normal = compute_mean_damage(opp_team[0], my_team[0], heavy, 0, 0)
+  let state = mk_same_turn_state(my_team, opp_team, 200, 200)
+  let outs = transition_with_cache(
+    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  assert_eq(outs.length(), 1)
+  let (_p, ns) = outs[0]
+  assert_eq(ns.opp_status[0], @model.Paralyze)
+  // Fresh paralysis does not block the current turn's action; the hitter's
+  // physical damage lands at its full (non-burn) value.
+  assert_eq(200 - ns.my_hps[0], normal)
+}

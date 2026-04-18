@@ -493,13 +493,17 @@ pub fn team_rollout(
           } else {
             rng.boolean()
           }
-          let own_burn = is_burned(own_status[own_active])
-          let opp_burn = is_burned(opp_status[opp_active])
+          // Pre-first-leg statuses. Captured so the second leg can detect a
+          // mid-turn sleep (Spore/Hypnosis) that locks the target out and read
+          // the post-first-leg burn (Will-O-Wisp halving physical damage).
+          let own_pre_status = own_status[own_active]
+          let opp_pre_status = opp_status[opp_active]
           if own_first {
+            let mut opp_blocked_mid_turn = false
             if own_attempt_acts {
               opp_hps[opp_active] = team_perform_attack(
                 own[own_active], opp[opp_active], opp_hps[opp_active], mv_own,
-                rng, own_ranks, opp_ranks, atk_burn=own_burn,
+                rng, own_ranks, opp_ranks, atk_burn=is_burned(own_pre_status),
               )
               mc_try_apply_status(
                 rng, mv_own, opp, opp_hps, opp_status, opp_active,
@@ -507,11 +511,22 @@ pub fn team_rollout(
               if all_ko(opp_hps) {
                 return 1.0
               }
+              if action_blocked_by_fresh_status(
+                opp_pre_status,
+                opp_status[opp_active],
+              ) {
+                opp_blocked_mid_turn = true
+              }
             }
-            if opp_hps[opp_active] > 0 && opp_attempt_acts {
+            if opp_hps[opp_active] > 0 &&
+              opp_attempt_acts &&
+              not(opp_blocked_mid_turn) {
+              // Read burn *after* first leg's status fan-out so a fresh burn
+              // from own's move halves opp's physical damage this turn.
+              let opp_burn_now = is_burned(opp_status[opp_active])
               own_hps[own_active] = team_perform_attack(
                 opp[opp_active], own[own_active], own_hps[own_active], mv_opp,
-                rng, opp_ranks, own_ranks, atk_burn=opp_burn,
+                rng, opp_ranks, own_ranks, atk_burn=opp_burn_now,
               )
               mc_try_apply_status(
                 rng, mv_opp, own, own_hps, own_status, own_active,
@@ -521,10 +536,11 @@ pub fn team_rollout(
               }
             }
           } else {
+            let mut own_blocked_mid_turn = false
             if opp_attempt_acts {
               own_hps[own_active] = team_perform_attack(
                 opp[opp_active], own[own_active], own_hps[own_active], mv_opp,
-                rng, opp_ranks, own_ranks, atk_burn=opp_burn,
+                rng, opp_ranks, own_ranks, atk_burn=is_burned(opp_pre_status),
               )
               mc_try_apply_status(
                 rng, mv_opp, own, own_hps, own_status, own_active,
@@ -532,11 +548,20 @@ pub fn team_rollout(
               if all_ko(own_hps) {
                 return -1.0
               }
+              if action_blocked_by_fresh_status(
+                own_pre_status,
+                own_status[own_active],
+              ) {
+                own_blocked_mid_turn = true
+              }
             }
-            if own_hps[own_active] > 0 && own_attempt_acts {
+            if own_hps[own_active] > 0 &&
+              own_attempt_acts &&
+              not(own_blocked_mid_turn) {
+              let own_burn_now = is_burned(own_status[own_active])
               opp_hps[opp_active] = team_perform_attack(
                 own[own_active], opp[opp_active], opp_hps[opp_active], mv_own,
-                rng, own_ranks, opp_ranks, atk_burn=own_burn,
+                rng, own_ranks, opp_ranks, atk_burn=own_burn_now,
               )
               mc_try_apply_status(
                 rng, mv_own, opp, opp_hps, opp_status, opp_active,

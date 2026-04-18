@@ -111,6 +111,33 @@ test "team_rollout_single_trial_matches_monte_carlo_value_for_trivial_case" {
 }
 
 ///|
+/// Regression: the MC rollout must honour same-turn sleep from a faster
+/// status move. Previously `mc_try_apply_status` ran after the target's
+/// attempt phase was already resolved, so the faster Spore user still took
+/// a tackle on turn 1 before the sleep counter took effect. The fix
+/// short-circuits the slower side's attack when its status changes mid-turn
+/// from None to Sleep.
+test "team_rollout: faster Spore prevents slower target from attacking on the turn it lands" {
+  let own_p = mk_pokemon("sleeper", "ノーマル", "", 200, 100, 100, 100, 100, 120)
+  let opp_p = mk_pokemon("hitter", "ノーマル", "", 200, 100, 100, 100, 100, 60)
+  let spore = mk_move(
+    "キノコのほうし", "くさ", @model.Status, 0,
+    status_effect=Some((@model.SleepKind, 100)),
+  )
+  let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let own = [mk_combatant(own_p, [spore])]
+  let opp = [mk_combatant(opp_p, [tackle])]
+  let rng = seeded_rng(42UL)
+  let v = team_rollout(own, opp, rng, turn_limit=3, epsilon=0.0)
+  // With the fix, opp never gets to attack: turn 1 is blocked mid-turn by the
+  // freshly-inflicted Sleep, and turns 2–3 are skipped by the pre-turn sleep
+  // counter decrement. Both sides end at full HP, giving a clean 0.0 draw.
+  // Without the fix, opp's turn-1 tackle resolves before the sleep fan-out
+  // runs, so own takes damage and the rollout value is strictly negative.
+  assert_eq(v, 0.0)
+}
+
+///|
 test "team_rollout_handles_hp_ratio_draw_at_turn_limit_one" {
   // 両者ともに turn_limit=1 で KO しない構成。終了時は HP 比の差分で value を返す。
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)

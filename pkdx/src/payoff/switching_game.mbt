@@ -770,8 +770,139 @@ fn move_turn_sign(
 }
 
 ///|
+/// Does a status condition that was freshly inflicted on the second actor this
+/// turn prevent them from executing their move? Canonical rule: a Pokemon put
+/// to sleep mid-turn cannot act on the turn the sleep lands. Fresh burn,
+/// poison, and paralysis do not skip the current action (burn only re-shapes
+/// damage; paralysis speed halving is moot since action order is already
+/// decided, and the fully-paralyzed roll is a pre-turn attempt that was
+/// already resolved).
+fn action_blocked_by_fresh_status(
+  pre : @model.StatusCondition,
+  now : @model.StatusCondition,
+) -> Bool {
+  match (pre, now) {
+    (@model.None, @model.Sleep(_)) => true
+    _ => false
+  }
+}
+
+///|
+/// Snapshot of the mutable per-turn buffers handed off between the first and
+/// second attacker. All arrays are defensively copied on entry; callers treat
+/// `advance_turn` as the only way to freeze this snapshot into a `SwitchingGameState`.
+priv struct TurnWorkspace {
+  my_active : Int
+  opp_active : Int
+  my_hps : Array[Int]
+  opp_hps : Array[Int]
+  my_ranks : Array[Int]
+  opp_ranks : Array[Int]
+  my_megaed : Array[Bool]
+  opp_megaed : Array[Bool]
+  my_mega_used : Bool
+  opp_mega_used : Bool
+  my_status : Array[@model.StatusCondition]
+  opp_status : Array[@model.StatusCondition]
+  turn : Int
+}
+
+///|
+fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
+  {
+    my_active: state.my_active,
+    opp_active: state.opp_active,
+    my_hps: state.my_hps.copy(),
+    opp_hps: state.opp_hps.copy(),
+    my_ranks: state.my_ranks.copy(),
+    opp_ranks: state.opp_ranks.copy(),
+    my_megaed: state.my_megaed.copy(),
+    opp_megaed: state.opp_megaed.copy(),
+    my_mega_used: state.my_mega_used,
+    opp_mega_used: state.opp_mega_used,
+    my_status: state.my_status.copy(),
+    opp_status: state.opp_status.copy(),
+    turn: state.turn,
+  }
+}
+
+///|
+fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
+  {
+    my_active: ws.my_active,
+    opp_active: ws.opp_active,
+    my_hps: ws.my_hps.copy(),
+    opp_hps: ws.opp_hps.copy(),
+    my_ranks: ws.my_ranks.copy(),
+    opp_ranks: ws.opp_ranks.copy(),
+    my_mega_used: ws.my_mega_used,
+    opp_mega_used: ws.opp_mega_used,
+    my_megaed: ws.my_megaed.copy(),
+    opp_megaed: ws.opp_megaed.copy(),
+    my_status: ws.my_status.copy(),
+    opp_status: ws.opp_status.copy(),
+    turn: if bump_turn { ws.turn + 1 } else { ws.turn },
+  }
+}
+
+///|
+/// Resolve one attacker's move leg: apply damage, update ranks, fan out the
+/// attacker's status effect onto the target. Mutates the caller's workspace
+/// for damage / rank changes but produces the status branches as new states
+/// (turn unchanged — caller advances the turn when finalising).
+fn resolve_attacker_leg(
+  ws : TurnWorkspace,
+  attacker_is_me : Bool,
+  attacker_move : @model.Move,
+  attacker_mv_idx : Int,
+  attacker_mega_now : Bool,
+  defender_mega_now : Bool,
+  attacker_burn : Bool,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+) -> Array[(Double, SwitchingGameState)] {
+  let attacker_active = if attacker_is_me { ws.my_active } else { ws.opp_active }
+  let defender_active = if attacker_is_me { ws.opp_active } else { ws.my_active }
+  let attacker_ranks = if attacker_is_me { ws.my_ranks } else { ws.opp_ranks }
+  let defender_ranks = if attacker_is_me { ws.opp_ranks } else { ws.my_ranks }
+  let defender_hps = if attacker_is_me { ws.opp_hps } else { ws.my_hps }
+  let dmg = mean_damage_cached(
+    dmg_cache,
+    attacker_is_me,
+    attacker_active,
+    attacker_ranks,
+    defender_active,
+    defender_ranks,
+    attacker_mv_idx,
+    my_team,
+    opp_team,
+    atk_mega=attacker_mega_now,
+    def_mega=defender_mega_now,
+    atk_burn=attacker_burn,
+  )
+  defender_hps[defender_active] = clamp_zero(defender_hps[defender_active] - dmg)
+  apply_stat_boost(attacker_ranks, attacker_move)
+  let post_damage_state = ws_to_state(ws, bump_turn=false)
+  maybe_apply_status_fanout(
+    post_damage_state,
+    not(attacker_is_me),
+    target_active(post_damage_state, not(attacker_is_me)),
+    if attacker_is_me { opp_team } else { my_team },
+    attacker_move,
+  )
+}
+
+///|
 /// Resolve a turn where both sides use a move, with proper damage recomputation
 /// after the first actor's stat boosts. `my_first` determines action order.
+///
+/// Status effects inflicted by the faster attacker are applied **before** the
+/// slower attacker's move resolves, so same-turn effects are honoured:
+/// - A faster Will-O-Wisp halves the slower target's physical attack on the
+///   same turn (the second-leg damage calc reads the post-fanout burn flag).
+/// - A faster Spore / Hypnosis prevents the slower target from acting on the
+///   turn the sleep lands.
 ///
 /// `my_mega_now` / `opp_mega_now` capture whether each side is **currently
 /// running on mega stats** this turn. This is the union of "was already megaed
@@ -789,112 +920,151 @@ fn resolve_moves(
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
 ) -> Array[(Double, SwitchingGameState)] {
-  let my_hps = state.my_hps.copy()
-  let opp_hps = state.opp_hps.copy()
-  let my_ranks = state.my_ranks.copy()
-  let opp_ranks = state.opp_ranks.copy()
-  let my_megaed = state.my_megaed.copy()
-  let opp_megaed = state.opp_megaed.copy()
+  let ws = ws_from_state(state)
   if my_mega_now {
-    my_megaed[state.my_active] = true
+    ws.my_megaed[state.my_active] = true
   }
   if opp_mega_now {
-    opp_megaed[state.opp_active] = true
+    ws.opp_megaed[state.opp_active] = true
+  }
+  let ws : TurnWorkspace = {
+    ..ws,
+    my_mega_used: ws.my_mega_used || my_mega_now,
+    opp_mega_used: ws.opp_mega_used || opp_mega_now,
   }
   let mv_me = my_team[state.my_active].moves[mi]
   let mv_opp = opp_team[state.opp_active].moves[mj]
-  let my_burn = is_burned(state.my_status[state.my_active])
-  let opp_burn = is_burned(state.opp_status[state.opp_active])
-  // Track which moves actually landed (attacker was alive when hitting). Both
-  // moves always land in the my_first == true path's first leg; the second
-  // leg only lands if the first target survived. Same mirrored for opp_first.
-  let mut me_landed = false
-  let mut opp_landed = false
-  if my_first {
-    let dmg_mo = mean_damage_cached(
-      dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
-      mi, my_team, opp_team, atk_mega=my_mega_now, def_mega=opp_mega_now,
-      atk_burn=my_burn,
+  let pre_my_burn = is_burned(state.my_status[state.my_active])
+  let pre_opp_burn = is_burned(state.opp_status[state.opp_active])
+  let (
+    first_is_me,
+    first_move,
+    first_mv_idx,
+    first_pre_burn,
+    first_mega_now,
+    first_def_mega_now,
+    second_is_me,
+    second_move,
+    second_mv_idx,
+    second_mega_now,
+    second_def_mega_now,
+  ) = if my_first {
+    (
+      true,
+      mv_me,
+      mi,
+      pre_my_burn,
+      my_mega_now,
+      opp_mega_now,
+      false,
+      mv_opp,
+      mj,
+      opp_mega_now,
+      my_mega_now,
     )
-    opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg_mo)
-    apply_stat_boost(my_ranks, mv_me)
-    me_landed = true
-    if opp_hps[state.opp_active] > 0 {
-      let dmg_om = mean_damage_cached(
-        dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
-        mj, my_team, opp_team, atk_mega=opp_mega_now, def_mega=my_mega_now,
-        atk_burn=opp_burn,
-      )
-      my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg_om)
-      apply_stat_boost(opp_ranks, mv_opp)
-      opp_landed = true
-    }
   } else {
-    let dmg_om = mean_damage_cached(
-      dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
-      mj, my_team, opp_team, atk_mega=opp_mega_now, def_mega=my_mega_now,
-      atk_burn=opp_burn,
+    (
+      false,
+      mv_opp,
+      mj,
+      pre_opp_burn,
+      opp_mega_now,
+      my_mega_now,
+      true,
+      mv_me,
+      mi,
+      my_mega_now,
+      opp_mega_now,
     )
-    my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg_om)
-    apply_stat_boost(opp_ranks, mv_opp)
-    opp_landed = true
-    if my_hps[state.my_active] > 0 {
-      let dmg_mo = mean_damage_cached(
-        dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
-        mi, my_team, opp_team, atk_mega=my_mega_now, def_mega=opp_mega_now,
-        atk_burn=my_burn,
-      )
-      opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg_mo)
-      apply_stat_boost(my_ranks, mv_me)
-      me_landed = true
+  }
+  let second_pre_status = if second_is_me {
+    state.my_status[state.my_active]
+  } else {
+    state.opp_status[state.opp_active]
+  }
+  // Step 1: first attacker acts. Damage + stat boost applied, then the
+  // attacker's status move (if any) fans out onto the second actor.
+  let after_first = resolve_attacker_leg(
+    ws,
+    first_is_me,
+    first_move,
+    first_mv_idx,
+    first_mega_now,
+    first_def_mega_now,
+    first_pre_burn,
+    my_team,
+    opp_team,
+    dmg_cache,
+  )
+  // Step 2: for each branch, resolve the second attacker with the potentially
+  // updated status (fresh burn halves their physical damage; fresh sleep
+  // locks them out entirely).
+  let final_outs : Array[(Double, SwitchingGameState)] = []
+  for b in after_first {
+    let (p1, s1) = b
+    let second_attacker_active = if second_is_me {
+      s1.my_active
+    } else {
+      s1.opp_active
+    }
+    let second_attacker_hps = if second_is_me { s1.my_hps } else { s1.opp_hps }
+    let second_now_status = if second_is_me {
+      s1.my_status[second_attacker_active]
+    } else {
+      s1.opp_status[second_attacker_active]
+    }
+    // Second actor KO'd by first attacker's hit: no second leg, just advance.
+    if second_attacker_hps[second_attacker_active] <= 0 {
+      final_outs.push((p1, bump_turn_only(s1)))
+      continue
+    }
+    // Second actor newly slept / frozen mid-turn: skip their move.
+    if action_blocked_by_fresh_status(second_pre_status, second_now_status) {
+      final_outs.push((p1, bump_turn_only(s1)))
+      continue
+    }
+    let second_burn = is_burned(second_now_status)
+    let ws2 = ws_from_state(s1)
+    let after_second = resolve_attacker_leg(
+      ws2,
+      second_is_me,
+      second_move,
+      second_mv_idx,
+      second_mega_now,
+      second_def_mega_now,
+      second_burn,
+      my_team,
+      opp_team,
+      dmg_cache,
+    )
+    for x in after_second {
+      let (p2, s2) = x
+      final_outs.push((p1 * p2, bump_turn_only(s2)))
     }
   }
-  let base_state : SwitchingGameState = {
+  final_outs
+}
+
+///|
+/// Return a fresh copy of `state` with `turn` incremented by 1. Used at the
+/// tail of `resolve_moves` once both attacker legs are fully resolved so the
+/// intermediate snapshots don't prematurely advance the turn counter.
+fn bump_turn_only(state : SwitchingGameState) -> SwitchingGameState {
+  {
     my_active: state.my_active,
     opp_active: state.opp_active,
-    my_hps,
-    opp_hps,
-    my_ranks,
-    opp_ranks,
-    my_mega_used: state.my_mega_used || my_mega_now,
-    opp_mega_used: state.opp_mega_used || opp_mega_now,
-    my_megaed,
-    opp_megaed,
+    my_hps: state.my_hps.copy(),
+    opp_hps: state.opp_hps.copy(),
+    my_ranks: state.my_ranks.copy(),
+    opp_ranks: state.opp_ranks.copy(),
+    my_mega_used: state.my_mega_used,
+    opp_mega_used: state.opp_mega_used,
+    my_megaed: state.my_megaed.copy(),
+    opp_megaed: state.opp_megaed.copy(),
     my_status: state.my_status.copy(),
     opp_status: state.opp_status.copy(),
     turn: state.turn + 1,
   }
-  // Fan out status applications in action order: first attacker's move tries
-  // to apply, then second attacker's move against the resulting branches.
-  let (first_is_me, first_move, second_is_me, second_move, first_landed, second_landed) = if my_first {
-    (true, mv_me, false, mv_opp, me_landed, opp_landed)
-  } else {
-    (false, mv_opp, true, mv_me, opp_landed, me_landed)
-  }
-  let first_outs = if first_landed {
-    maybe_apply_status_fanout(
-      base_state, not(first_is_me), target_active(base_state, not(first_is_me)),
-      if first_is_me { opp_team } else { my_team }, first_move,
-    )
-  } else {
-    [(1.0, base_state)]
-  }
-  if not(second_landed) {
-    return first_outs
-  }
-  let final_outs : Array[(Double, SwitchingGameState)] = []
-  for s in first_outs {
-    let (p1, s1) = s
-    let fanned = maybe_apply_status_fanout(
-      s1, not(second_is_me), target_active(s1, not(second_is_me)),
-      if second_is_me { opp_team } else { my_team }, second_move,
-    )
-    for x in fanned {
-      let (p2, s2) = x
-      final_outs.push((p1 * p2, s2))
-    }
-  }
-  final_outs
 }
 
 ///|

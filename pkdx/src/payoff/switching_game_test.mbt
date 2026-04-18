@@ -34,6 +34,8 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
     opp_mega_used: false,
     my_megaed: [false, false, false],
     opp_megaed: [false, false, false],
+    my_status: [@model.None, @model.None, @model.None],
+    opp_status: [@model.None, @model.None, @model.None],
     turn: 0,
   }
   let same : SwitchingGameState = {
@@ -47,6 +49,8 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
     opp_mega_used: false,
     my_megaed: [false, false, false],
     opp_megaed: [false, false, false],
+    my_status: [@model.None, @model.None, @model.None],
+    opp_status: [@model.None, @model.None, @model.None],
     turn: 0,
   }
   let diff_active = { ..base, my_active: 1 }
@@ -84,6 +88,8 @@ test "terminal_value_all_my_fainted_returns_minus_one" {
     opp_mega_used: false,
     my_megaed: [false, false, false],
     opp_megaed: [false, false, false],
+    my_status: [@model.None, @model.None, @model.None],
+    opp_status: [@model.None, @model.None, @model.None],
     turn: 0,
   }
   match terminal_value(state, team_a, team_b, 5) {
@@ -107,6 +113,8 @@ test "terminal_value_all_opp_fainted_returns_plus_one" {
     opp_mega_used: false,
     my_megaed: [false, false, false],
     opp_megaed: [false, false, false],
+    my_status: [@model.None, @model.None, @model.None],
+    opp_status: [@model.None, @model.None, @model.None],
     turn: 0,
   }
   match terminal_value(state, team_a, team_b, 5) {
@@ -132,6 +140,8 @@ test "terminal_value_turn_limit_reached_returns_hp_ratio_in_signed_range" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
     turn: 3,
   }
   match terminal_value(state, team_a, team_b, 3) {
@@ -155,6 +165,8 @@ test "terminal_value_both_alive_before_limit_returns_none" {
     opp_mega_used: false,
     my_megaed: [false, false, false],
     opp_megaed: [false, false, false],
+    my_status: [@model.None, @model.None, @model.None],
+    opp_status: [@model.None, @model.None, @model.None],
     turn: 0,
   }
   match terminal_value(state, team_a, team_b, 5) {
@@ -221,6 +233,8 @@ test "value_returns_terminal_value_for_terminal_state" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
     turn: 5,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
@@ -261,6 +275,8 @@ test "value_caches_result_via_value_stats" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
@@ -343,6 +359,8 @@ test "transition_attack_vs_attack_resolves_sequentially_by_speed" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   let next = transition(state, UseMove(0), UseMove(0), [fast], [slow])
@@ -381,6 +399,8 @@ test "transition_attack_vs_switch_damages_newly_switched_target" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false, false],
+    my_status: [@model.None],
+    opp_status: [@model.None, @model.None],
     turn: 0,
   }
   let next = transition(state, UseMove(0), Switch(1), my_team, opp_team)
@@ -424,6 +444,8 @@ test "transition_switch_vs_switch_updates_actives_only_without_damage" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
     turn: 0,
   }
   let next = transition(state, Switch(1), Switch(1), my_team, opp_team)
@@ -488,6 +510,8 @@ test "state_ranks_distinguish_otherwise_identical_states" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   let boosted = { ..base, my_ranks: [2, 0, 0, 0, 0] }
@@ -528,6 +552,8 @@ test "transition_priority_move_outpaces_faster_opponent" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   let next = transition(
@@ -559,6 +585,8 @@ test "transition_sword_dance_raises_attacker_rank_by_two" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   let next = transition(state, UseMove(0), UseMove(0), [me], [opp])
@@ -586,6 +614,8 @@ test "transition_rank_clamps_to_plus_two_after_two_sword_dances" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   state = transition(state, UseMove(0), UseMove(0), [me], [opp])
@@ -628,6 +658,8 @@ test "transition_switch_resets_active_ranks_to_zero" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
     turn: 0,
   }
   let next = transition(state, Switch(1), Switch(1), my_team, opp_team)
@@ -661,6 +693,8 @@ test "transition_rank_affects_damage_sword_dance_increases_output" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   let boosted : SwitchingGameState = { ..neutral, my_ranks: [2, 0, 0, 0, 0] }
@@ -840,6 +874,8 @@ fn mk_mega_state_1v1(
     opp_mega_used,
     my_megaed: [my_megaed],
     opp_megaed: [opp_megaed],
+    my_status: [@model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
 }
@@ -1045,6 +1081,8 @@ test "transition_mega_vs_switch_damages_newly_switched_target" {
     opp_mega_used: false,
     my_megaed: [false],
     opp_megaed: [false, false],
+    my_status: [@model.None],
+    opp_status: [@model.None, @model.None],
     turn: 0,
   }
   let next = transition(state, Mega(0), Switch(1), [me], opp_team)
@@ -1106,6 +1144,8 @@ test "mega_persists_after_switch_out_and_back_in" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None],
     turn: 0,
   }
   // Turn 1: mega slot 0.
@@ -1312,6 +1352,8 @@ fn switching_game_winrate_no_prune(
     opp_mega_used: false,
     my_megaed,
     opp_megaed,
+    my_status: zero_status(my_team.length()),
+    opp_status: zero_status(opp_team.length()),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
@@ -1416,6 +1458,8 @@ test "value_accepts_explicit_alpha_beta_and_matches_default" {
     opp_mega_used: false,
     my_megaed: [false, false],
     opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
     turn: 0,
   }
   let cache1 : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()

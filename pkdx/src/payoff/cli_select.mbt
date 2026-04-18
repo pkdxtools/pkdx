@@ -66,19 +66,51 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(Array(arr)) => parse_stat_effects_array(arr)
         _ => []
       }
+      let accuracy = match m.get("accuracy") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => 100
+      }
+      let status_effect = match m.get("status_effect") {
+        Some(Object(se)) => parse_status_effect_object(se)
+        _ => None
+      }
       {
         name,
         type_,
         category,
         power,
-        accuracy: 100,
+        accuracy,
         pp: 10,
         learn_method: "",
         priority,
         stat_effects,
+        status_effect,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
+  }
+}
+
+///|
+/// Parse `{"kind": "まひ" | "やけど" | ...,"chance": 100}` into a
+/// `(StatusKind, Int)` tuple. Missing or unknown kind yields `None`; a
+/// missing `chance` defaults to 100.
+fn parse_status_effect_object(
+  m : Map[String, Json],
+) -> (@model.StatusKind, Int)? {
+  let kind = match m.get("kind") {
+    Some(String(s)) => @model.status_kind_from_jp(s)
+    _ => None
+  }
+  match kind {
+    None => None
+    Some(k) => {
+      let chance = match m.get("chance") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => 100
+      }
+      Some((k, chance))
+    }
   }
 }
 
@@ -239,6 +271,7 @@ fn parse_combatant_json(
             learn_method: "",
             priority: 0,
             stat_effects: [],
+            status_effect: None,
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(

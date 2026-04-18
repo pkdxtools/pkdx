@@ -13,12 +13,12 @@ pub const MC_TURN_LIMIT : Int = 5
 
 ///|
 /// `pkdx select` の auto-screening 閾値。`SwitchingGame(N)` のまま DP が
-/// 走ると 20×20 のマトリクス全セルで 5 ターン以上の先読みが必要になり、
-/// 単独 `switching_game` の実測で 30 秒以上要することがあるため、
-/// この turn_limit 以上で自動的に `ScreenedSwitchingGame` にフォールバック
-/// する。`screened_switching_game:...` を明示指定したときはこの閾値を
-/// 無視してユーザー指定をそのまま使う。
-pub const AUTO_SCREEN_TURN_LIMIT : Int = 5
+/// 走ると 20×20 のマトリクス全セルで 4 ターン以上の先読みが必要になり、
+/// 状態異常実装以降は確率ファンアウト (まひ 12.5% / 命中率 / 状態付与 chance)
+/// により DP 分岐数が倍増するため、この turn_limit 以上で自動的に
+/// `ScreenedSwitchingGame` にフォールバックする。`screened_switching_game:...`
+/// を明示指定したときはこの閾値を無視してユーザー指定をそのまま使う。
+pub const AUTO_SCREEN_TURN_LIMIT : Int = 4
 
 ///|
 /// Auto-upgrade 時の既定 MC trials。`.claude/skills/nash/SKILL.md` の

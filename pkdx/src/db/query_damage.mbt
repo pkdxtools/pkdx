@@ -9,7 +9,9 @@ pub fn query_move(
   let sql =
     #|SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,
     #|       COALESCE(mm.priority, 0) AS priority,
-    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
+    #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
     #|FROM local_waza_language wl
     #|JOIN local_waza w ON wl.waza = w.waza AND w.version = ?
     #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
@@ -29,6 +31,11 @@ pub fn query_move(
   } else {
     []
   }
+  let status_effect = if r.length() > 9 {
+    parse_status_effect(r[8], r[9])
+  } else {
+    None
+  }
   Ok(@model.Move::{
     name: r[0],
     type_: r[1],
@@ -39,5 +46,6 @@ pub fn query_move(
     learn_method: "",
     priority,
     stat_effects,
+    status_effect,
   })
 }

@@ -38,7 +38,9 @@ fn query_moves_champions(
     #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
     #|       w.power, w.accuracy, w.pp, cl.state AS learn_method,
     #|       COALESCE(mm.priority, 0) AS priority,
-    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
+    #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
     #|FROM champions_learnset cl
     #|JOIN local_waza w ON cl.waza = w.waza AND w.version = 'Champions'
     #|JOIN local_waza_language wl ON cl.waza = wl.waza
@@ -68,7 +70,9 @@ fn query_moves_legacy(
     #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
     #|       w.power, w.accuracy, w.pp, pw.conditions AS learn_method,
     #|       COALESCE(mm.priority, 0) AS priority,
-    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
+    #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
     #|FROM local_pokedex_waza pw
     #|JOIN local_waza w ON pw.waza = w.waza AND w.version = ?
     #|JOIN local_waza_language wl ON pw.waza = wl.waza
@@ -79,7 +83,9 @@ fn query_moves_legacy(
     #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
     #|       w.power, w.accuracy, w.pp, 'TM' AS learn_method,
     #|       COALESCE(mm.priority, 0) AS priority,
-    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
+    #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
     #|FROM local_pokedex_waza_machine pm
     #|JOIN local_waza_machine wm ON pm.machine_no = wm.waza AND wm.version = ?
     #|JOIN local_waza w ON wm.machine_no = w.waza AND w.version = ?
@@ -114,6 +120,11 @@ fn collect_moves_rows(
     } else {
       []
     }
+    let status_effect = if r.length() > 10 {
+      parse_status_effect(r[9], r[10])
+    } else {
+      None
+    }
     moves.push(@model.Move::{
       name: r[0],
       type_: r[1],
@@ -124,6 +135,7 @@ fn collect_moves_rows(
       learn_method: r[6],
       priority,
       stat_effects,
+      status_effect,
     })
   }
   Ok(moves)
@@ -165,5 +177,34 @@ fn json_number_to_int(j : Json) -> Int? {
   match j {
     Number(n, ..) => Some(n.to_int())
     _ => None
+  }
+}
+
+///|
+/// Build a `status_effect` tuple from the `ailment_ja` / `ailment_chance`
+/// columns of `move_meta`. Empty string or unrecognised Japanese ailment
+/// names yield `None`; chances < 0 or > 100 are clamped to 100 (matches the
+/// MVP scope where dedicated status moves have deterministic-looking chance
+/// fields in the seed data, not secondary-effect percentages).
+fn parse_status_effect(
+  ailment_ja : String,
+  chance_str : String,
+) -> (@model.StatusKind, Int)? {
+  if ailment_ja == "" {
+    return None
+  }
+  match @model.status_kind_from_jp(ailment_ja) {
+    None => None
+    Some(kind) => {
+      let raw = parse_int(chance_str)
+      let chance = if raw <= 0 {
+        100
+      } else if raw > 100 {
+        100
+      } else {
+        raw
+      }
+      Some((kind, chance))
+    }
   }
 }

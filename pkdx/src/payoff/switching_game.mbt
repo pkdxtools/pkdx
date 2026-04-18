@@ -42,8 +42,354 @@ pub(all) struct SwitchingGameState {
   // 維持するために slot ごとに保存する。長さは team サイズ。
   my_megaed : Array[Bool]
   opp_megaed : Array[Bool]
+  // Slot-scoped status condition for each team member. Length = team size.
+  // Persists across switches (conditions don't heal on switch-out); counter
+  // semantics per StatusCondition variant docs (BadPoison resets on switch,
+  // Sleep persists).
+  my_status : Array[@model.StatusCondition]
+  opp_status : Array[@model.StatusCondition]
   turn : Int
 } derive(Show, Eq, Hash)
+
+///|
+/// Fresh `None`-filled status array sized for a team. Used at game entry
+/// and in test construction.
+pub fn zero_status(team_size : Int) -> Array[@model.StatusCondition] {
+  Array::make(team_size, @model.None)
+}
+
+///|
+/// Per-side outcome of an action attempt (Task 5). Paralyze / sleep / move
+/// accuracy can cause the side's declared action to fail or the sleep counter
+/// to tick without an act. The `post_status` field carries the active slot's
+/// status after this attempt resolves (pre-EOT-tick), so the caller can
+/// thread it into the resulting next-state.
+pub(all) struct SideAttempt {
+  prob : Double
+  acts : Bool
+  action : ActionKind
+  post_status : @model.StatusCondition
+} derive(Show)
+
+///|
+/// Paralyze: 12.5% chance of full-turn failure (gen7+ freeze/paralysis rate).
+pub const PARALYZE_SKIP_RATE : Double = 0.125
+
+///|
+/// Enumerate the attempt outcomes for a side given its current status, the
+/// declared action, and the move's accuracy (ignored for Switch; 100 for the
+/// selected move if `UseMove`/`Mega`). Outcomes with probability 0 are
+/// filtered out so downstream fan-out doesn't enumerate dead branches.
+///
+/// The Switch action is always deterministic — status / accuracy don't gate
+/// switching. Only `UseMove` / `Mega` can skip.
+pub fn per_side_attempt(
+  status : @model.StatusCondition,
+  action : ActionKind,
+  accuracy : Int,
+) -> Array[SideAttempt] {
+  let acts_only : Array[SideAttempt] = [
+    { prob: 1.0, acts: true, action, post_status: status },
+  ]
+  match action {
+    Switch(_) => acts_only
+    UseMove(_) | Mega(_) => {
+      let acc_hit = accuracy.to_double() / 100.0
+      let acc_miss = 1.0 - acc_hit
+      let outs : Array[SideAttempt] = []
+      match status {
+        @model.Sleep(n) =>
+          if n > 0 {
+            outs.push({
+              prob: 1.0,
+              acts: false,
+              action,
+              post_status: @model.Sleep(n - 1),
+            })
+          } else {
+            // Sleep(0): this turn is the wake-up; act normally afterward.
+            if acc_hit > 0.0 {
+              outs.push({
+                prob: acc_hit,
+                acts: true,
+                action,
+                post_status: @model.None,
+              })
+            }
+            if acc_miss > 0.0 {
+              outs.push({
+                prob: acc_miss,
+                acts: false,
+                action,
+                post_status: @model.None,
+              })
+            }
+          }
+        @model.Paralyze => {
+          outs.push({
+            prob: PARALYZE_SKIP_RATE,
+            acts: false,
+            action,
+            post_status: @model.Paralyze,
+          })
+          let non_para = 1.0 - PARALYZE_SKIP_RATE
+          if acc_hit > 0.0 {
+            outs.push({
+              prob: non_para * acc_hit,
+              acts: true,
+              action,
+              post_status: @model.Paralyze,
+            })
+          }
+          if acc_miss > 0.0 {
+            outs.push({
+              prob: non_para * acc_miss,
+              acts: false,
+              action,
+              post_status: @model.Paralyze,
+            })
+          }
+        }
+        _ => {
+          if acc_hit > 0.0 {
+            outs.push({ prob: acc_hit, acts: true, action, post_status: status })
+          }
+          if acc_miss > 0.0 {
+            outs.push({
+              prob: acc_miss,
+              acts: false,
+              action,
+              post_status: status,
+            })
+          }
+        }
+      }
+      outs
+    }
+  }
+}
+
+///|
+/// Badpoison counter denominator cap. Toxic deals `min(counter+1, TOXIC_MAX)/16`
+/// of max HP per EOT tick. The gen-accurate cap is 15/16 (counter saturates
+/// at 15); mirrored here so the state space stays bounded.
+pub const TOXIC_MAX_TICKS : Int = 15
+
+///|
+/// Produce probabilistic next-state outcomes for a status-effect fan-out.
+/// Given `state_after_dmg` (already updated for damage and stat boosts) plus
+/// the attacking `move` and the target slot, returns either a single 1.0
+/// outcome (no status applied — move has no effect, target is fainted /
+/// already statused / type immune, or chance is 0) or two outcomes
+/// `[(1-p, no_status), (p, with_status)]`.
+///
+/// `target_is_me = true` means the status would land on `state.my_status`
+/// (i.e., the opponent used the move). `target_slot` is the slot receiving
+/// the status, which is usually the active but may be a switched-in slot.
+pub fn maybe_apply_status_fanout(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  target_team : Array[Combatant],
+  mv : @model.Move,
+) -> Array[(Double, SwitchingGameState)] {
+  let eff = match mv.status_effect {
+    None => return [(1.0, state)]
+    Some(x) => x
+  }
+  let (kind, chance) = eff
+  if chance <= 0 {
+    return [(1.0, state)]
+  }
+  let target_hps = if target_is_me { state.my_hps } else { state.opp_hps }
+  if target_hps[target_slot] <= 0 {
+    return [(1.0, state)]
+  }
+  let target_status = if target_is_me { state.my_status } else { state.opp_status }
+  let cur = target_status[target_slot]
+  if cur != @model.None {
+    return [(1.0, state)]
+  }
+  let combatant = target_team[target_slot]
+  if @model.immune_to_status(
+    kind, combatant.pokemon.type1, combatant.pokemon.type2,
+  ) {
+    return [(1.0, state)]
+  }
+  let p = chance.to_double() / 100.0
+  if p >= 1.0 {
+    return [(1.0, with_status_set(state, target_is_me, target_slot, kind))]
+  }
+  [
+    (1.0 - p, state),
+    (p, with_status_set(state, target_is_me, target_slot, kind)),
+  ]
+}
+
+///|
+/// Copy `state` and set `target_slot`'s status on the chosen side to the
+/// freshly-inflicted `StatusCondition` for `kind` (via `inflict_status`).
+fn with_status_set(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  kind : @model.StatusKind,
+) -> SwitchingGameState {
+  let new_cond = @model.inflict_status(kind)
+  let my_status = if target_is_me {
+    override_active_status(state.my_status, target_slot, new_cond)
+  } else {
+    state.my_status.copy()
+  }
+  let opp_status = if target_is_me {
+    state.opp_status.copy()
+  } else {
+    override_active_status(state.opp_status, target_slot, new_cond)
+  }
+  {
+    my_active: state.my_active,
+    opp_active: state.opp_active,
+    my_hps: state.my_hps.copy(),
+    opp_hps: state.opp_hps.copy(),
+    my_ranks: state.my_ranks.copy(),
+    opp_ranks: state.opp_ranks.copy(),
+    my_mega_used: state.my_mega_used,
+    opp_mega_used: state.opp_mega_used,
+    my_megaed: state.my_megaed.copy(),
+    opp_megaed: state.opp_megaed.copy(),
+    my_status,
+    opp_status,
+    turn: state.turn,
+  }
+}
+
+///|
+/// Apply one end-of-turn slip / counter update for the given active slot.
+/// Returns `(new_hp, new_status)`. HP never falls below 0 from slip damage.
+/// - Burn / Poison: subtract max_hp / 16 or max_hp / 8 respectively.
+/// - BadPoison(n): subtract max_hp * min(n+1, TOXIC_MAX_TICKS) / 16 and
+///   advance to BadPoison(min(n+1, TOXIC_MAX_TICKS)).
+/// - Sleep / Paralyze / None: no-op.
+pub fn eot_slip_active(
+  current_hp : Int,
+  max_hp : Int,
+  status : @model.StatusCondition,
+) -> (Int, @model.StatusCondition) {
+  if current_hp <= 0 {
+    return (current_hp, status)
+  }
+  match status {
+    @model.Burn => {
+      let dmg = max_hp / 16
+      (clamp_zero(current_hp - dmg), status)
+    }
+    @model.Poison => {
+      let dmg = max_hp / 8
+      (clamp_zero(current_hp - dmg), status)
+    }
+    @model.BadPoison(n) => {
+      let ticks = if n + 1 > TOXIC_MAX_TICKS { TOXIC_MAX_TICKS } else { n + 1 }
+      let dmg = max_hp * ticks / 16
+      (clamp_zero(current_hp - dmg), @model.BadPoison(ticks))
+    }
+    @model.Drowsy(n) => {
+      // n>0: まだ猶予あり、カウンタを 1 減らす。n==0: ここでねむり発動。
+      if n > 0 {
+        (current_hp, @model.Drowsy(n - 1))
+      } else {
+        (current_hp, @model.Sleep(2))
+      }
+    }
+    _ => (current_hp, status)
+  }
+}
+
+///|
+/// Apply end-of-turn slip damage and counter updates to both actives of
+/// `state` in place on fresh copies; returns the updated state. Only the
+/// active slot receives EOT — bench Pokemon don't tick. Called at the end of
+/// every turn resolution in `attempt_turn_with_cache`.
+pub fn apply_eot(
+  state : SwitchingGameState,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+) -> SwitchingGameState {
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  let my_status = state.my_status.copy()
+  let opp_status = state.opp_status.copy()
+  let my_max = effective_hp(my_team[state.my_active])
+  let opp_max = effective_hp(opp_team[state.opp_active])
+  let (my_hp_new, my_st_new) = eot_slip_active(
+    my_hps[state.my_active], my_max, my_status[state.my_active],
+  )
+  my_hps[state.my_active] = my_hp_new
+  my_status[state.my_active] = my_st_new
+  let (opp_hp_new, opp_st_new) = eot_slip_active(
+    opp_hps[state.opp_active], opp_max, opp_status[state.opp_active],
+  )
+  opp_hps[state.opp_active] = opp_hp_new
+  opp_status[state.opp_active] = opp_st_new
+  {
+    my_active: state.my_active,
+    opp_active: state.opp_active,
+    my_hps,
+    opp_hps,
+    my_ranks: state.my_ranks.copy(),
+    opp_ranks: state.opp_ranks.copy(),
+    my_mega_used: state.my_mega_used,
+    opp_mega_used: state.opp_mega_used,
+    my_megaed: state.my_megaed.copy(),
+    opp_megaed: state.opp_megaed.copy(),
+    my_status,
+    opp_status,
+    turn: state.turn,
+  }
+}
+
+///|
+/// Update a switched-out slot's status per mainline switch-out rules:
+/// - `BadPoison(n)`: keep the status but reset the counter to 0 (next tick
+///   is 1/16 again).
+/// - `Drowsy(_)`: clear entirely — あくびの予告は控えに下がると消える。
+/// - Other conditions: carry over unchanged (burns / paralysis / sleep all
+///   persist across switches in canonical rules).
+pub fn reset_toxic_counter_on_switch(
+  status : @model.StatusCondition,
+) -> @model.StatusCondition {
+  match status {
+    @model.BadPoison(_) => @model.BadPoison(0)
+    @model.Drowsy(_) => @model.None
+    other => other
+  }
+}
+
+///|
+pub fn is_paralyzed(s : @model.StatusCondition) -> Bool {
+  match s {
+    @model.Paralyze => true
+    _ => false
+  }
+}
+
+///|
+pub fn is_burned(s : @model.StatusCondition) -> Bool {
+  match s {
+    @model.Burn => true
+    _ => false
+  }
+}
+
+///|
+/// Return the number of remaining unable-to-act turns if `s` is a `Sleep`
+/// condition. `Some(n)` means the sufferer will skip this turn (n ≥ 1) or
+/// wake up (n == 0). `None` means not asleep.
+pub fn sleep_turns(s : @model.StatusCondition) -> Int? {
+  match s {
+    @model.Sleep(n) => Some(n)
+    _ => None
+  }
+}
 
 ///|
 /// A single-turn action: use a move from the active Pokemon's moveset, or
@@ -223,6 +569,7 @@ fn compute_mean_damage(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
+  atk_burn~ : Bool = false,
 ) -> Int {
   let r = @damage.calc_damage(
     build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
@@ -234,7 +581,16 @@ fn compute_mean_damage(
   for i in 0..<16 {
     s += r.damages[i]
   }
-  s / 16
+  let mean = s / 16
+  // やけど + 物理技: 攻撃半減 (gen3+ ルール)。特殊 / 変化は影響なし。
+  if atk_burn {
+    match mv.category {
+      @model.Physical => mean / 2
+      _ => mean
+    }
+  } else {
+    mean
+  }
 }
 
 ///|
@@ -256,6 +612,10 @@ pub(all) struct DamageKey {
   // in the cache (no collisions across different mega species).
   atk_mega : Bool
   def_mega : Bool
+  // Whether the attacker is burned. Only physical moves are affected (halved),
+  // but including the flag for all categories keeps the cache key uniform; the
+  // reducer silently no-ops for special / status moves.
+  atk_burn : Bool
 } derive(Eq, Hash)
 
 ///|
@@ -295,6 +655,7 @@ pub fn mean_damage_cached(
   opp_team : Array[Combatant],
   atk_mega~ : Bool = false,
   def_mega~ : Bool = false,
+  atk_burn~ : Bool = false,
 ) -> Int {
   let raw_attacker = if my_attacker {
     my_team[atk_idx]
@@ -332,6 +693,7 @@ pub fn mean_damage_cached(
     def_rank,
     atk_mega,
     def_mega,
+    atk_burn,
   }
   match cache.data.get(key) {
     Some(v) => {
@@ -342,7 +704,9 @@ pub fn mean_damage_cached(
       cache.misses = cache.misses + 1
       let attacker = effective_combatant(raw_attacker, atk_mega)
       let defender = effective_combatant(raw_defender, def_mega)
-      let v = compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
+      let v = compute_mean_damage(
+        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+      )
       cache.data[key] = v
       v
     }
@@ -386,15 +750,20 @@ fn move_turn_sign(
   me_ranks : Array[Int],
   mv_me : @model.Move,
   me_mega : Bool,
+  me_para : Bool,
   opp : Combatant,
   opp_ranks : Array[Int],
   mv_opp : @model.Move,
   opp_mega : Bool,
+  opp_para : Bool,
 ) -> Int {
   let me_eff = effective_combatant(me, me_mega)
   let opp_eff = effective_combatant(opp, opp_mega)
-  let eff_me = effective_speed(me_eff.pokemon.spe, me_ranks[4])
-  let eff_opp = effective_speed(opp_eff.pokemon.spe, opp_ranks[4])
+  let base_me = effective_speed(me_eff.pokemon.spe, me_ranks[4])
+  let base_opp = effective_speed(opp_eff.pokemon.spe, opp_ranks[4])
+  // まひは最終素早さを 1/2 (gen7+ ルール)。ランク補正と重複して反映。
+  let eff_me = if me_para { base_me / 2 } else { base_me }
+  let eff_opp = if opp_para { base_opp / 2 } else { base_opp }
   turn_order_sign(
     me_eff, mv_me.priority, eff_me, opp_eff, mv_opp.priority, eff_opp,
   )
@@ -419,7 +788,7 @@ fn resolve_moves(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
-) -> SwitchingGameState {
+) -> Array[(Double, SwitchingGameState)] {
   let my_hps = state.my_hps.copy()
   let opp_hps = state.opp_hps.copy()
   let my_ranks = state.my_ranks.copy()
@@ -434,38 +803,53 @@ fn resolve_moves(
   }
   let mv_me = my_team[state.my_active].moves[mi]
   let mv_opp = opp_team[state.opp_active].moves[mj]
+  let my_burn = is_burned(state.my_status[state.my_active])
+  let opp_burn = is_burned(state.opp_status[state.opp_active])
+  // Track which moves actually landed (attacker was alive when hitting). Both
+  // moves always land in the my_first == true path's first leg; the second
+  // leg only lands if the first target survived. Same mirrored for opp_first.
+  let mut me_landed = false
+  let mut opp_landed = false
   if my_first {
     let dmg_mo = mean_damage_cached(
       dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
       mi, my_team, opp_team, atk_mega=my_mega_now, def_mega=opp_mega_now,
+      atk_burn=my_burn,
     )
     opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg_mo)
     apply_stat_boost(my_ranks, mv_me)
+    me_landed = true
     if opp_hps[state.opp_active] > 0 {
       let dmg_om = mean_damage_cached(
         dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
         mj, my_team, opp_team, atk_mega=opp_mega_now, def_mega=my_mega_now,
+        atk_burn=opp_burn,
       )
       my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg_om)
       apply_stat_boost(opp_ranks, mv_opp)
+      opp_landed = true
     }
   } else {
     let dmg_om = mean_damage_cached(
       dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
       mj, my_team, opp_team, atk_mega=opp_mega_now, def_mega=my_mega_now,
+      atk_burn=opp_burn,
     )
     my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg_om)
     apply_stat_boost(opp_ranks, mv_opp)
+    opp_landed = true
     if my_hps[state.my_active] > 0 {
       let dmg_mo = mean_damage_cached(
         dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
         mi, my_team, opp_team, atk_mega=my_mega_now, def_mega=opp_mega_now,
+        atk_burn=my_burn,
       )
       opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg_mo)
       apply_stat_boost(my_ranks, mv_me)
+      me_landed = true
     }
   }
-  {
+  let base_state : SwitchingGameState = {
     my_active: state.my_active,
     opp_active: state.opp_active,
     my_hps,
@@ -476,8 +860,47 @@ fn resolve_moves(
     opp_mega_used: state.opp_mega_used || opp_mega_now,
     my_megaed,
     opp_megaed,
+    my_status: state.my_status.copy(),
+    opp_status: state.opp_status.copy(),
     turn: state.turn + 1,
   }
+  // Fan out status applications in action order: first attacker's move tries
+  // to apply, then second attacker's move against the resulting branches.
+  let (first_is_me, first_move, second_is_me, second_move, first_landed, second_landed) = if my_first {
+    (true, mv_me, false, mv_opp, me_landed, opp_landed)
+  } else {
+    (false, mv_opp, true, mv_me, opp_landed, me_landed)
+  }
+  let first_outs = if first_landed {
+    maybe_apply_status_fanout(
+      base_state, not(first_is_me), target_active(base_state, not(first_is_me)),
+      if first_is_me { opp_team } else { my_team }, first_move,
+    )
+  } else {
+    [(1.0, base_state)]
+  }
+  if not(second_landed) {
+    return first_outs
+  }
+  let final_outs : Array[(Double, SwitchingGameState)] = []
+  for s in first_outs {
+    let (p1, s1) = s
+    let fanned = maybe_apply_status_fanout(
+      s1, not(second_is_me), target_active(s1, not(second_is_me)),
+      if second_is_me { opp_team } else { my_team }, second_move,
+    )
+    for x in fanned {
+      let (p2, s2) = x
+      final_outs.push((p1 * p2, s2))
+    }
+  }
+  final_outs
+}
+
+///|
+/// Convenience: pick the active slot on the side indicated by `is_me`.
+pub fn target_active(state : SwitchingGameState, is_me : Bool) -> Int {
+  if is_me { state.my_active } else { state.opp_active }
 }
 
 ///|
@@ -514,6 +937,8 @@ pub fn transition_with_cache(
   let opp_ranks_new = state.opp_ranks.copy()
   let my_megaed_new = state.my_megaed.copy()
   let opp_megaed_new = state.opp_megaed.copy()
+  let my_status_new = state.my_status.copy()
+  let opp_status_new = state.opp_status.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
   }
@@ -524,6 +949,10 @@ pub fn transition_with_cache(
   let opp_mega_used_new = state.opp_mega_used || opp_mega_trigger
   let mut my_active_new = state.my_active
   let mut opp_active_new = state.opp_active
+  // Track a single attack event for status fan-out after the state is built.
+  // Set to `Some((attacker_is_me, target_slot, used_move))` in the two
+  // Switch+UseMove arms; None for pure-Switch / pure-UseMove handled below.
+  let mut attack_event : (Bool, Int, @model.Move)? = None
   match (my_core, opp_core) {
     (Switch(i), Switch(j)) => {
       my_active_new = i
@@ -533,12 +962,21 @@ pub fn transition_with_cache(
         my_ranks_new[k] = 0
         opp_ranks_new[k] = 0
       }
+      my_status_new[state.my_active] = reset_toxic_counter_on_switch(
+        my_status_new[state.my_active],
+      )
+      opp_status_new[state.opp_active] = reset_toxic_counter_on_switch(
+        opp_status_new[state.opp_active],
+      )
     }
     (Switch(i), UseMove(mj)) => {
       my_active_new = i
       for k in 0..<5 {
         my_ranks_new[k] = 0
       }
+      my_status_new[state.my_active] = reset_toxic_counter_on_switch(
+        my_status_new[state.my_active],
+      )
       // Opponent attacks the freshly switched-in target. The target's mega
       // flag comes from its slot-level `my_megaed_new[i]` (rather than from
       // the out-going active's mega state).
@@ -554,15 +992,20 @@ pub fn transition_with_cache(
         opp_team,
         atk_mega=opp_mega_now,
         def_mega=my_megaed_new[i],
+        atk_burn=is_burned(state.opp_status[state.opp_active]),
       )
       my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
       apply_stat_boost(opp_ranks_new, opp_team[state.opp_active].moves[mj])
+      attack_event = Some((false, i, opp_team[state.opp_active].moves[mj]))
     }
     (UseMove(mi), Switch(j)) => {
       opp_active_new = j
       for k in 0..<5 {
         opp_ranks_new[k] = 0
       }
+      opp_status_new[state.opp_active] = reset_toxic_counter_on_switch(
+        opp_status_new[state.opp_active],
+      )
       let dmg = mean_damage_cached(
         dmg_cache,
         true,
@@ -575,41 +1018,47 @@ pub fn transition_with_cache(
         opp_team,
         atk_mega=my_mega_now,
         def_mega=opp_megaed_new[j],
+        atk_burn=is_burned(state.my_status[state.my_active]),
       )
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
       apply_stat_boost(my_ranks_new, my_team[state.my_active].moves[mi])
+      attack_event = Some((true, j, my_team[state.my_active].moves[mi]))
     }
     (UseMove(mi), UseMove(mj)) => {
       let me = my_team[state.my_active]
       let opp = opp_team[state.opp_active]
       let mv_me = me.moves[mi]
       let mv_opp = opp.moves[mj]
+      let my_para = is_paralyzed(state.my_status[state.my_active])
+      let opp_para = is_paralyzed(state.opp_status[state.opp_active])
       let s = move_turn_sign(
-        me, my_ranks_new, mv_me, my_mega_now,
-        opp, opp_ranks_new, mv_opp, opp_mega_now,
+        me, my_ranks_new, mv_me, my_mega_now, my_para,
+        opp, opp_ranks_new, mv_opp, opp_mega_now, opp_para,
       )
       if s == 0 {
         // Speed tie: return two outcomes so the caller averages successor
         // *values* (not states). resolve_moves recomputes the second hit's
         // damage after the first actor's stat boosts.
-        return [
-          (0.5, resolve_moves(
-            state, mi, mj, true, my_mega_now, opp_mega_now,
-            my_team, opp_team, dmg_cache,
-          )),
-          (0.5, resolve_moves(
-            state, mi, mj, false, my_mega_now, opp_mega_now,
-            my_team, opp_team, dmg_cache,
-          )),
-        ]
+        let outs : Array[(Double, SwitchingGameState)] = []
+        for half in resolve_moves(
+          state, mi, mj, true, my_mega_now, opp_mega_now,
+          my_team, opp_team, dmg_cache,
+        ) {
+          outs.push((0.5 * half.0, half.1))
+        }
+        for half in resolve_moves(
+          state, mi, mj, false, my_mega_now, opp_mega_now,
+          my_team, opp_team, dmg_cache,
+        ) {
+          outs.push((0.5 * half.0, half.1))
+        }
+        return outs
       } else {
         let my_first = s > 0
-        return [
-          (1.0, resolve_moves(
-            state, mi, mj, my_first, my_mega_now, opp_mega_now,
-            my_team, opp_team, dmg_cache,
-          )),
-        ]
+        return resolve_moves(
+          state, mi, mj, my_first, my_mega_now, opp_mega_now,
+          my_team, opp_team, dmg_cache,
+        )
       }
     }
     // Switch-variants are the only non-UseMove pairs that reach this point;
@@ -617,7 +1066,7 @@ pub fn transition_with_cache(
     // Any remaining arm is unreachable — treat as a no-op turn advance.
     (_, _) => ()
   }
-  [(1.0, {
+  let base_state : SwitchingGameState = {
     my_active: my_active_new,
     opp_active: opp_active_new,
     my_hps: my_hps_new,
@@ -628,8 +1077,21 @@ pub fn transition_with_cache(
     opp_mega_used: opp_mega_used_new,
     my_megaed: my_megaed_new,
     opp_megaed: opp_megaed_new,
+    my_status: my_status_new,
+    opp_status: opp_status_new,
     turn: state.turn + 1,
-  })]
+  }
+  match attack_event {
+    None => [(1.0, base_state)]
+    Some((attacker_is_me, target_slot, used_move)) =>
+      maybe_apply_status_fanout(
+        base_state,
+        not(attacker_is_me),
+        target_slot,
+        if attacker_is_me { opp_team } else { my_team },
+        used_move,
+      )
+  }
 }
 
 ///|
@@ -660,6 +1122,261 @@ pub fn transition(
     state, my_action, opp_action, my_team, opp_team, new_damage_cache(),
   )
   outcomes[0].1
+}
+
+///|
+/// Look up an action's accuracy. Switch has no accuracy (returns 100).
+/// `UseMove` / `Mega` read the move's accuracy from the active combatant.
+fn action_accuracy(
+  action : ActionKind,
+  active : Int,
+  team : Array[Combatant],
+) -> Int {
+  match action {
+    Switch(_) => 100
+    UseMove(mi) | Mega(mi) => team[active].moves[mi].accuracy
+  }
+}
+
+///|
+/// Apply a pre-turn status override to an active slot — used by
+/// `attempt_turn_with_cache` to thread sleep-wake / sleep-tick / paralysis
+/// through to the next state. Returns a fresh status array copy.
+fn override_active_status(
+  base : Array[@model.StatusCondition],
+  active : Int,
+  new_status : @model.StatusCondition,
+) -> Array[@model.StatusCondition] {
+  let out = base.copy()
+  out[active] = new_status
+  out
+}
+
+///|
+/// Construct a no-op next state where neither side acted this turn (e.g. both
+/// paralyzed-skip / sleep-skip / miss). Advances the turn counter, keeps HPs
+/// / ranks / mega state intact, and only overrides the two active slots'
+/// statuses to reflect any sleep-counter ticks or wake-ups.
+fn pass_turn_state(
+  state : SwitchingGameState,
+  my_post_status : @model.StatusCondition,
+  opp_post_status : @model.StatusCondition,
+) -> SwitchingGameState {
+  let my_status = override_active_status(
+    state.my_status, state.my_active, my_post_status,
+  )
+  let opp_status = override_active_status(
+    state.opp_status, state.opp_active, opp_post_status,
+  )
+  {
+    my_active: state.my_active,
+    opp_active: state.opp_active,
+    my_hps: state.my_hps.copy(),
+    opp_hps: state.opp_hps.copy(),
+    my_ranks: state.my_ranks.copy(),
+    opp_ranks: state.opp_ranks.copy(),
+    my_mega_used: state.my_mega_used,
+    opp_mega_used: state.opp_mega_used,
+    my_megaed: state.my_megaed.copy(),
+    opp_megaed: state.opp_megaed.copy(),
+    my_status,
+    opp_status,
+    turn: state.turn + 1,
+  }
+}
+
+///|
+/// Entry point that composes `per_side_attempt` status-driven fan-out with
+/// `transition_with_cache`. Returns a list of `(prob, next_state)` pairs
+/// summing to 1.0 (modulo floating-point drift).
+///
+/// For outcomes where both sides act, the existing `transition_with_cache`
+/// drives resolution (with pre-turn status overrides applied so burn / para
+/// damage-calc helpers see the post-attempt status). For outcomes where one
+/// or both sides skip, `pass_turn_state` / partial-execution arms build the
+/// next state directly.
+pub fn attempt_turn_with_cache(
+  state : SwitchingGameState,
+  my_action : ActionKind,
+  opp_action : ActionKind,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+) -> Array[(Double, SwitchingGameState)] {
+  let my_acc = action_accuracy(my_action, state.my_active, my_team)
+  let opp_acc = action_accuracy(opp_action, state.opp_active, opp_team)
+  let my_attempts = per_side_attempt(
+    state.my_status[state.my_active], my_action, my_acc,
+  )
+  let opp_attempts = per_side_attempt(
+    state.opp_status[state.opp_active], opp_action, opp_acc,
+  )
+  let results : Array[(Double, SwitchingGameState)] = []
+  for ma in my_attempts {
+    for oa in opp_attempts {
+      let joint = ma.prob * oa.prob
+      if joint <= 0.0 {
+        continue
+      }
+      // Apply the attempt-phase status overrides to the active slots so
+      // downstream damage / action-order logic reads the post-attempt status.
+      let pre_state : SwitchingGameState = {
+        my_active: state.my_active,
+        opp_active: state.opp_active,
+        my_hps: state.my_hps,
+        opp_hps: state.opp_hps,
+        my_ranks: state.my_ranks,
+        opp_ranks: state.opp_ranks,
+        my_mega_used: state.my_mega_used,
+        opp_mega_used: state.opp_mega_used,
+        my_megaed: state.my_megaed,
+        opp_megaed: state.opp_megaed,
+        my_status: override_active_status(
+          state.my_status, state.my_active, ma.post_status,
+        ),
+        opp_status: override_active_status(
+          state.opp_status, state.opp_active, oa.post_status,
+        ),
+        turn: state.turn,
+      }
+      let branch_outs : Array[(Double, SwitchingGameState)] = match (
+        ma.acts, oa.acts,
+      ) {
+        (true, true) =>
+          transition_with_cache(
+            pre_state, ma.action, oa.action, my_team, opp_team, dmg_cache,
+          )
+        (true, false) =>
+          partial_act_outcomes(
+            pre_state, ma.action, true, my_team, opp_team, dmg_cache,
+          )
+        (false, true) =>
+          partial_act_outcomes(
+            pre_state, oa.action, false, my_team, opp_team, dmg_cache,
+          )
+        (false, false) =>
+          [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
+      }
+      for s in branch_outs {
+        let (p, ns_pre_eot) = s
+        let ns = apply_eot(ns_pre_eot, my_team, opp_team)
+        results.push((joint * p, ns))
+      }
+    }
+  }
+  results
+}
+
+///|
+/// Resolve a turn where only one side acts (the other skipped due to para /
+/// sleep / miss). `me_is_actor = true` means `action` belongs to `my_team`
+/// and `opp_team`'s active is idle; false mirrors. Returns probabilistic
+/// outcomes (usually a single 1.0 pair).
+fn partial_act_outcomes(
+  state : SwitchingGameState,
+  action : ActionKind,
+  me_is_actor : Bool,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+) -> Array[(Double, SwitchingGameState)] {
+  let (core, mega_trigger) = normalize_action(action)
+  let my_status_copy = state.my_status.copy()
+  let opp_status_copy = state.opp_status.copy()
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  let my_ranks = state.my_ranks.copy()
+  let opp_ranks = state.opp_ranks.copy()
+  let my_megaed = state.my_megaed.copy()
+  let opp_megaed = state.opp_megaed.copy()
+  let mut my_active = state.my_active
+  let mut opp_active = state.opp_active
+  let mut my_mega_used = state.my_mega_used
+  let mut opp_mega_used = state.opp_mega_used
+  let mut attack_event : (Bool, Int, @model.Move)? = None
+  match (me_is_actor, core) {
+    (true, Switch(i)) => {
+      my_active = i
+      for k in 0..<5 {
+        my_ranks[k] = 0
+      }
+      my_status_copy[state.my_active] = reset_toxic_counter_on_switch(
+        my_status_copy[state.my_active],
+      )
+    }
+    (false, Switch(j)) => {
+      opp_active = j
+      for k in 0..<5 {
+        opp_ranks[k] = 0
+      }
+      opp_status_copy[state.opp_active] = reset_toxic_counter_on_switch(
+        opp_status_copy[state.opp_active],
+      )
+    }
+    (true, UseMove(mi)) => {
+      if mega_trigger {
+        my_megaed[state.my_active] = true
+        my_mega_used = true
+      }
+      let mega_now = my_megaed[state.my_active] || mega_trigger
+      let burn = is_burned(state.my_status[state.my_active])
+      let dmg = mean_damage_cached(
+        dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
+        mi, my_team, opp_team, atk_mega=mega_now, def_mega=opp_megaed[state.opp_active],
+        atk_burn=burn,
+      )
+      opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg)
+      apply_stat_boost(my_ranks, my_team[state.my_active].moves[mi])
+      attack_event = Some(
+        (true, state.opp_active, my_team[state.my_active].moves[mi]),
+      )
+    }
+    (false, UseMove(mj)) => {
+      if mega_trigger {
+        opp_megaed[state.opp_active] = true
+        opp_mega_used = true
+      }
+      let mega_now = opp_megaed[state.opp_active] || mega_trigger
+      let burn = is_burned(state.opp_status[state.opp_active])
+      let dmg = mean_damage_cached(
+        dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
+        mj, my_team, opp_team, atk_mega=mega_now, def_mega=my_megaed[state.my_active],
+        atk_burn=burn,
+      )
+      my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg)
+      apply_stat_boost(opp_ranks, opp_team[state.opp_active].moves[mj])
+      attack_event = Some(
+        (false, state.my_active, opp_team[state.opp_active].moves[mj]),
+      )
+    }
+    (_, _) => ()
+  }
+  let base_state : SwitchingGameState = {
+    my_active,
+    opp_active,
+    my_hps,
+    opp_hps,
+    my_ranks,
+    opp_ranks,
+    my_mega_used,
+    opp_mega_used,
+    my_megaed,
+    opp_megaed,
+    my_status: my_status_copy,
+    opp_status: opp_status_copy,
+    turn: state.turn + 1,
+  }
+  match attack_event {
+    None => [(1.0, base_state)]
+    Some((attacker_is_me, target_slot, used_move)) =>
+      maybe_apply_status_fanout(
+        base_state,
+        not(attacker_is_me),
+        target_slot,
+        if attacker_is_me { opp_team } else { my_team },
+        used_move,
+      )
+  }
 }
 
 ///|
@@ -748,7 +1465,7 @@ pub fn value(
   for i in 0..<rows {
     let mut row_min = 2.0 // sentinel: any actual cell ∈ [-1, +1] will dominate
     for j in 0..<cols {
-      let outcomes = transition_with_cache(
+      let outcomes = attempt_turn_with_cache(
         state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
       )
       let mut ev = 0.0
@@ -858,6 +1575,8 @@ pub fn switching_game_winrate_stats(
     opp_mega_used: false,
     my_megaed: Array::make(my_team.length(), false),
     opp_megaed: Array::make(opp_team.length(), false),
+    my_status: zero_status(my_team.length()),
+    opp_status: zero_status(opp_team.length()),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()

@@ -1,0 +1,13 @@
+[
+  { "name": "おにび", "ailment_ja": "やけど", "ailment_chance": 85 },
+  { "name": "でんじは", "ailment_ja": "まひ", "ailment_chance": 90 },
+  { "name": "へびにらみ", "ailment_ja": "まひ", "ailment_chance": 100 },
+  { "name": "どくどく", "ailment_ja": "もうどく", "ailment_chance": 90 },
+  { "name": "どくのこな", "ailment_ja": "どく", "ailment_chance": 75 },
+  { "name": "どくガス", "ailment_ja": "どく", "ailment_chance": 90 },
+  { "name": "キノコのほうし", "ailment_ja": "ねむり", "ailment_chance": 100 },
+  { "name": "ねむりごな", "ailment_ja": "ねむり", "ailment_chance": 75 },
+  { "name": "さいみんじゅつ", "ailment_ja": "ねむり", "ailment_chance": 60 },
+  { "name": "うたう", "ailment_ja": "ねむり", "ailment_chance": 55 },
+  { "name": "あくび", "ailment_ja": "あくび", "ailment_chance": 100 }
+]

@@ -40,17 +40,20 @@ fn mk_move(
   power : Int,
   priority~ : Int = 0,
   stat_effects~ : Array[(Int, Int)] = [],
+  status_effect~ : (@model.StatusKind, Int)? = None,
+  accuracy~ : Int = 100,
 ) -> @model.Move {
   {
     name,
     type_,
     category,
     power,
-    accuracy: 100,
+    accuracy,
     pp: 10,
     learn_method: "",
     priority,
     stat_effects,
+    status_effect,
   }
 }
 

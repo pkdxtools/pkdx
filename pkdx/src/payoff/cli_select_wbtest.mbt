@@ -80,10 +80,6 @@ test "auto_upgrade_keeps_switching_game_below_threshold" {
     SwitchingGame(3) => ()
     _ => assert_true(false)
   }
-  match auto_upgrade_team_model(SwitchingGame(4)) {
-    SwitchingGame(4) => ()
-    _ => assert_true(false)
-  }
 }
 
 ///|

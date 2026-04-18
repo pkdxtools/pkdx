@@ -161,7 +161,7 @@ fn build_members_table(members : Array[Json]) -> @markdown.Block {
     cell("種族値 (H/A/B/C/D/S)"),
     cell("特性"),
     cell("持ち物"),
-    cell("役割"),
+    cell("メモ"),
   ]
   let rows : Array[Array[@markdown.TableCell]] = []
   for i, m in members {

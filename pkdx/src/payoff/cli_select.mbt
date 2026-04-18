@@ -355,9 +355,15 @@ fn parse_format(s : String) -> BattleFormat raise NashCliError {
 
 ///|
 /// Parse `team_payoff_model` string:
-/// - `"switching_game"` → `SwitchingGame` (turn_limit = `DP_TURN_LIMIT`)
-/// - `"screened_switching_game:<trials>:<seed>:<keep_top>"` → `ScreenedSwitchingGame`
-///   (MC turn_limit = `MC_TURN_LIMIT`, refine turn_limit = `DP_TURN_LIMIT`)
+/// - `"switching_game"` → `SwitchingGame(DP_TURN_LIMIT)`。公開 API の既定
+///   として exact DP を保証するため auto-upgrade は適用しない。
+/// - `"switching_game:<N>"` → `SwitchingGame(N)` を `auto_upgrade_team_model`
+///   に通し、`N >= AUTO_SCREEN_TURN_LIMIT` のとき `ScreenedSwitchingGame` に
+///   昇格する。ユーザーが明示的に turn_limit を宣言したケースだけが
+///   auto-upgrade のスコープ。
+/// - `"screened_switching_game:<trials>:<seed>:<keep_top>"` →
+///   `ScreenedSwitchingGame` (MC turn_limit = `MC_TURN_LIMIT`, refine
+///   turn_limit = `DP_TURN_LIMIT`)
 fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
   if s == "switching_game" {
     return SwitchingGame(DP_TURN_LIMIT)
@@ -375,7 +381,7 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
           "switching_game turn_limit must be a positive integer",
         )
       }
-      return SwitchingGame(turn_limit)
+      return auto_upgrade_team_model(SwitchingGame(turn_limit))
     }
     None => ()
   }
@@ -454,8 +460,11 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
 
 ///|
 /// `SwitchingGame(N)` で N が閾値以上なら `ScreenedSwitchingGame` に自動昇格する。
-/// ユーザーが `screened_switching_game:...` を明示したケースは match されず
-/// そのまま通る。閾値・既定 MC パラメータは `semantics.mbt` の定数に集約。
+/// `parse_team_payoff_model` が `"switching_game:<N>"` を受けたときだけ呼ばれる。
+/// 既定 (フィールド未指定 / bare `"switching_game"`) や
+/// `screened_switching_game:...` を明示したケースはこの関数を通らないため、
+/// 公開 API の既定挙動 (exact DP) は従来通り維持される。閾値・既定 MC
+/// パラメータは `semantics.mbt` の定数に集約。
 fn auto_upgrade_team_model(m : TeamPayoffModel) -> TeamPayoffModel {
   match m {
     SwitchingGame(n) if n >= AUTO_SCREEN_TURN_LIMIT =>
@@ -680,12 +689,13 @@ pub fn run_select(input_json : String) -> String raise NashCliError {
     Some(String(s)) => parse_format(s)
     _ => Single
   }
-  let raw_team_model = match obj.get("team_payoff_model") {
+  let team_model = match obj.get("team_payoff_model") {
     Some(String(s)) => parse_team_payoff_model(s)
     Some(_) => raise InvalidJson("team_payoff_model must be a string")
+    // 公開 API の既定。auto-upgrade は `"switching_game:<N>"` の明示指定
+    // に限定し、フィールド省略時は exact DP のまま据え置く。
     None => SwitchingGame(DP_TURN_LIMIT)
   }
-  let team_model = auto_upgrade_team_model(raw_team_model)
   match (format, team_model) {
     (Double, SwitchingGame(_)) =>
       raise InvalidJson(

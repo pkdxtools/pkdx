@@ -313,6 +313,76 @@ test "run_select_with_screened_switching_game_returns_retained_shape" {
 }
 
 ///|
+/// Auto-upgrade must NOT kick in when `team_payoff_model` is omitted. The
+/// public default remains exact `SwitchingGame(DP_TURN_LIMIT)` DP, so all
+/// `C(4, 3) = 4` selections survive (no screening-based pruning). If the
+/// default were silently promoted to `ScreenedSwitchingGame` with
+/// `keep_top = AUTO_SCREEN_KEEP_TOP (0.3)`, only `ceil(4 * 0.3) = 2` would
+/// be retained, which would regress back to the behavior this test locks
+/// against.
+test "run_select_omitted_team_payoff_model_preserves_exact_switching_game" {
+  let input = "{\"team\":" +
+    build_team_json(4, "T", [100, 100, 100, 100]) +
+    ",\"opponent\":" +
+    build_team_json(4, "O", [100, 100, 100, 100]) +
+    ",\"format\":\"single\"}"
+  let out = run_select(input)
+  let root = match @json.parse(out) {
+    Object(m) => m
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let selections = match root.get("selections") {
+    Some(Array(arr)) => arr
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let opp_selections = match root.get("opp_selections") {
+    Some(Array(arr)) => arr
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  assert_eq(selections.length(), 4)
+  assert_eq(opp_selections.length(), 4)
+}
+
+///|
+/// Bare `"switching_game"` (without `":<N>"`) is part of the pre-existing
+/// public contract: it means "default, exact DP". It must not be
+/// auto-upgraded even though internally it maps to
+/// `SwitchingGame(DP_TURN_LIMIT)` and `DP_TURN_LIMIT == AUTO_SCREEN_TURN_LIMIT`.
+test "run_select_bare_switching_game_preserves_exact_switching_game" {
+  let input = select_input_json_with_extra(
+    [100, 100, 100, 100],
+    [100, 100, 100, 100],
+    "single",
+    ",\"team_payoff_model\":\"switching_game\"",
+  )
+  let out = run_select(input)
+  let root = match @json.parse(out) {
+    Object(m) => m
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let selections = match root.get("selections") {
+    Some(Array(arr)) => arr
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  assert_eq(selections.length(), 4)
+}
+
+///|
 test "run_select_rejects_screened_switching_game_with_double_format" {
   let input = select_input_json_with_extra(
     [100, 100, 100, 100, 100],

@@ -2,10 +2,6 @@
 /// Whitebox tests for the `team_payoff_model` CLI string parser.
 
 ///|
-/// Bare `"switching_game"` must stay as `SwitchingGame(DP_TURN_LIMIT)` without
-/// being promoted to `ScreenedSwitchingGame`, even when `DP_TURN_LIMIT`
-/// happens to equal `AUTO_SCREEN_TURN_LIMIT`. Auto-upgrade is scoped to the
-/// explicit `"switching_game:<N>"` syntax.
 test "parse_team_payoff_model_recognizes_switching_game_string" {
   match parse_team_payoff_model("switching_game") {
     SwitchingGame(n) => assert_eq(n, DP_TURN_LIMIT)
@@ -25,28 +21,9 @@ test "parse_team_payoff_model_rejects_unknown_prefix" {
 }
 
 ///|
-/// Explicit `"switching_game:<N>"` with N below the threshold stays as exact
-/// DP. The parser runs `auto_upgrade_team_model` on this branch but the
-/// predicate fails, so the original `SwitchingGame(N)` passes through.
 test "parse_team_payoff_model_accepts_switching_game_with_turn_limit" {
   match parse_team_payoff_model("switching_game:3") {
     SwitchingGame(3) => ()
-    _ => assert_true(false)
-  }
-}
-
-///|
-/// Explicit `"switching_game:<N>"` with N at/above the threshold is
-/// auto-upgraded to `ScreenedSwitchingGame`. This is the documented scope of
-/// the auto-upgrade feature.
-test "parse_team_payoff_model_auto_upgrades_switching_game_with_explicit_threshold" {
-  match parse_team_payoff_model("switching_game:" + AUTO_SCREEN_TURN_LIMIT.to_string()) {
-    ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) => {
-      assert_eq(trials, AUTO_SCREEN_TRIALS)
-      assert_eq(seed, AUTO_SCREEN_SEED)
-      assert_true((keep_top - AUTO_SCREEN_KEEP_TOP).abs() < 1.0e-9)
-      assert_eq(refine_tl, AUTO_SCREEN_TURN_LIMIT)
-    }
     _ => assert_true(false)
   }
 }

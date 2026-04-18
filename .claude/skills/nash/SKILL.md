@@ -155,9 +155,7 @@ ls box/teams/*.meta.json
 - `"switching_game"` (既定) — 交代込み extensive-form ゲーム木。DP turn_limit=5 既定 (先制技 / ランク補正技に対応)。長期戦評価が必要なら `"switching_game:<N>"` で turn_limit を上書き可
 - `"screened_switching_game:<trials>:<seed>:<keep_top>"` — MC で選出行列を screening (rollout turn_limit=5)、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP (refine turn_limit=5 既定)。例: `"screened_switching_game:1000:42:0.3"`。パラメータを細かくチューニングしたいときだけ明示指定する
 
-**CLI 側の自動フォールバック**: `switching_game:<N>` で turn_limit を明示し `N >= 5` のとき、`pkdx select` は内部で `ScreenedSwitchingGame(trials=1000, seed=42, keep_top=0.3, refine_turn_limit=N)` に自動昇格する。skill 側で screening をどう使うか判断する必要はなく、常に `switching_game:<N>` で turn_limit だけ指定すればよい。明示的に `screened_switching_game:...` を書いた場合はそのまま使われる。
-
-なお **`team_payoff_model` 未指定** および **bare `"switching_game"`** (コロン以降なし) は公開 API の既定として exact SwitchingGame DP (turn_limit=5) のまま実行され、auto-upgrade は走らない。screening を効かせたい場合は必ず `switching_game:<N>` で turn_limit を明示すること。
+**CLI 側の自動フォールバック**: `switching_game:<N>` で `N >= 5` のとき、`pkdx select` は内部で `ScreenedSwitchingGame(trials=1000, seed=42, keep_top=0.3, refine_turn_limit=N)` に自動昇格する。skill 側で screening をどう使うか判断する必要はなく、常に `switching_game:<N>` で turn_limit だけ指定すればよい。明示的に `screened_switching_game:...` を書いた場合はそのまま使われる。
 
 詳細は `references/payoff_semantics.md`。
 

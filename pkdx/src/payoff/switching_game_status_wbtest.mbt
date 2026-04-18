@@ -730,6 +730,39 @@ test "resolve_moves: faster Will-O-Wisp halves slower target's physical damage s
 }
 
 ///|
+/// Mirror case: if the burn user is SLOWER, the fast physical attacker gets
+/// to hit at full (non-halved) damage on the turn the burn lands, and the
+/// burn halving only matters from the next turn onward. Guards against a
+/// regression where the fix over-applied the halving to every first-leg burn
+/// regardless of action order.
+test "resolve_moves: slower Will-O-Wisp does NOT halve the faster attacker's damage this turn" {
+  let burner = mk_stat_pokemon("burner", 200, 100, 60)
+  let hitter = mk_stat_pokemon("hitter", 200, 150, 120)
+  let wowisp = mk_move_move(
+    "おにび", @model.Status, 0, 100, Some((@model.BurnKind, 100)),
+  )
+  let heavy = mk_move_move("じしん", @model.Physical, 100, 100, None)
+  let my_team = [mk_combatant_with_moves(burner, [wowisp])]
+  let opp_team = [mk_combatant_with_moves(hitter, [heavy])]
+  let normal = compute_mean_damage(opp_team[0], my_team[0], heavy, 0, 0)
+  let halved = compute_mean_damage(
+    opp_team[0], my_team[0], heavy, 0, 0, atk_burn=true,
+  )
+  assert_true(normal > halved)
+  let state = mk_same_turn_state(my_team, opp_team, 200, 200)
+  let outs = transition_with_cache(
+    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  assert_eq(outs.length(), 1)
+  let (_p, ns) = outs[0]
+  // Burn still lands (wowisp executes after the hitter's move).
+  assert_eq(ns.opp_status[0], @model.Burn)
+  // But the hitter already attacked at full damage this turn — not halved.
+  assert_eq(200 - ns.my_hps[0], normal)
+  assert_true(200 - ns.my_hps[0] != halved)
+}
+
+///|
 /// Regression: a faster sleep-inducing move must stop the slower target from
 /// executing its own move on the turn the sleep lands. Previously the sleep
 /// was applied only after both attacks resolved, so a fast Spore user still

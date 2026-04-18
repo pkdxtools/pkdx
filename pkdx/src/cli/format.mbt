@@ -134,15 +134,25 @@ fn moves_to_json(moves : Array[@model.Move]) -> String {
 }
 
 ///|
-/// Format stat_effects as JSON `[[stat, delta], ...]`.
-fn stat_effects_to_json(effs : Array[(Int, Int)]) -> String {
+/// Format `stat_effects` as a JSON array of 3-element tuples
+/// `[[stat, delta, target], ...]`. `target` is `0` = self, `1` = opp.
+/// Phase 3 contract used by `pkdx select` (which also accepts the legacy
+/// 2-element form for tests / older pipelines).
+fn stat_effects_to_json(effs : Array[@model.StatEffect]) -> String {
   let mut s = "["
   for i = 0; i < effs.length(); i = i + 1 {
     if i > 0 {
       s = s + ","
     }
-    let (a, b) = effs[i]
-    s = s + "[" + a.to_string() + "," + b.to_string() + "]"
+    let e = effs[i]
+    s = s +
+      "[" +
+      e.stat.to_string() +
+      "," +
+      e.delta.to_string() +
+      "," +
+      e.target.to_string() +
+      "]"
   }
   s + "]"
 }

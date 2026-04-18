@@ -48,6 +48,14 @@ pub(all) struct SwitchingGameState {
   // Sleep persists).
   my_status : Array[@model.StatusCondition]
   opp_status : Array[@model.StatusCondition]
+  // Volatile "must recharge this turn" flag per team slot. Separate from
+  // StatusCondition so major conditions (burn / paralysis / sleep) can
+  // coexist with a recharge turn. Set by recharge moves (Hyper Beam etc.)
+  // on the turn after the hit lands; consumed when the slot's next `UseMove`
+  // is attempted and cleared to `false` at the end of the same turn.
+  // Reset on switch (fresh entrant never starts recharging).
+  my_must_recharge : Array[Bool]
+  opp_must_recharge : Array[Bool]
   turn : Int
 } derive(Show, Eq, Hash)
 
@@ -83,11 +91,25 @@ pub const PARALYZE_SKIP_RATE : Double = 0.125
 ///
 /// The Switch action is always deterministic — status / accuracy don't gate
 /// switching. Only `UseMove` / `Mega` can skip.
+///
+/// `must_recharge` short-circuits `UseMove` / `Mega` to a guaranteed
+/// no-op skip (paralysis/sleep overrides do not stack on top; recharge wins
+/// outright when set). Switch is never blocked by recharge in this MVP.
 pub fn per_side_attempt(
   status : @model.StatusCondition,
+  must_recharge : Bool,
   action : ActionKind,
   accuracy : Int,
 ) -> Array[SideAttempt] {
+  // Recharge forces a skip for move actions. Switch still goes through so
+  // the caller can clear the flag via the regular switch path.
+  if must_recharge {
+    match action {
+      UseMove(_) | Mega(_) =>
+        return [{ prob: 1.0, acts: false, action, post_status: status }]
+      Switch(_) => ()
+    }
+  }
   let acts_only : Array[SideAttempt] = [
     { prob: 1.0, acts: true, action, post_status: status },
   ]
@@ -259,6 +281,8 @@ fn with_status_set(
     opp_megaed: state.opp_megaed.copy(),
     my_status,
     opp_status,
+    my_must_recharge: state.my_must_recharge.copy(),
+    opp_must_recharge: state.opp_must_recharge.copy(),
     turn: state.turn,
   }
 }
@@ -343,6 +367,8 @@ pub fn apply_eot(
     opp_megaed: state.opp_megaed.copy(),
     my_status,
     opp_status,
+    my_must_recharge: state.my_must_recharge.copy(),
+    opp_must_recharge: state.opp_must_recharge.copy(),
     turn: state.turn,
   }
 }
@@ -723,16 +749,91 @@ fn clamp_zero(x : Int) -> Int {
 }
 
 ///|
-/// Apply the stat-boost effects carried on `mv.stat_effects` to `ranks`
-/// in-place. Each delta is added and clamped to `[-2, +2]` via `clamp_rank`.
-/// Metadata is populated upstream in `query_moves` (DB) or in the JSON
-/// payload consumed by `parse_move_json`.
-fn apply_stat_boost(ranks : Array[Int], mv : @model.Move) -> Unit {
+/// Apply `mv.stat_effects` in-place, routing each entry to either the
+/// attacker's or the defender's rank array by its `target` field.
+///
+/// - `target = 0` → self (attacker). Always applied.
+/// - `target = 1` → opp (defender). Skipped when `opp_alive` is `false`
+///   (a hit that fainted the target doesn't land a rank drop).
+/// Other target values are ignored for forward-compat.
+///
+/// Delta is added and clamped to `[-2, +2]` via `clamp_rank`.
+fn apply_stat_effects(
+  self_ranks : Array[Int],
+  opp_ranks : Array[Int],
+  opp_alive : Bool,
+  mv : @model.Move,
+) -> Unit {
   for eff in mv.stat_effects {
-    let (idx, delta) = eff
-    if idx >= 0 && idx < ranks.length() {
-      ranks[idx] = clamp_rank(ranks[idx] + delta)
+    let ranks = if eff.target == 0 {
+      self_ranks
+    } else if eff.target == 1 && opp_alive {
+      opp_ranks
+    } else {
+      continue
     }
+    if eff.stat >= 0 && eff.stat < ranks.length() {
+      ranks[eff.stat] = clamp_rank(ranks[eff.stat] + eff.delta)
+    }
+  }
+}
+
+///|
+/// Apply recoil HP loss to the attacker based on damage dealt. No-op when
+/// `mv.recoil_num == 0` or `dmg <= 0`. Enforces a minimum of 1 HP loss for
+/// any recoil move that actually landed (matches mainline behaviour on tiny
+/// damage values), and clamps attacker HP at 0.
+fn apply_recoil(
+  attacker_hps : Array[Int],
+  attacker_active : Int,
+  mv : @model.Move,
+  dmg : Int,
+) -> Unit {
+  if mv.recoil_num <= 0 || dmg <= 0 {
+    return
+  }
+  let raw = dmg * mv.recoil_num / mv.recoil_den
+  let recoil = if raw < 1 { 1 } else { raw }
+  attacker_hps[attacker_active] = clamp_zero(
+    attacker_hps[attacker_active] - recoil,
+  )
+}
+
+///|
+/// Post-hit side effects in a single fixed-order pass. Must be invoked at the
+/// end of every attacker leg that actually used a `UseMove` (not a pure
+/// Switch). Damage is assumed already applied to `defender_hps` and `dmg`
+/// is the confirmed amount inflicted this hit.
+///
+/// Order (deliberate — changing it alters observable behaviour):
+///   1. opp-target `stat_effects` (Phase 3 implements; Phase 2 is self-only
+///      via `apply_stat_boost` so this step has no effect in Phase 2)
+///   2. self-target `stat_effects`
+///   3. recoil (attacker HP loss)
+///   4. self_ko (attacker HP forced to 0, regardless of `dmg`)
+///   5. recharge (set only if attacker is still alive after 3 & 4 — a
+///      faint-from-recoil Pokémon cannot later attempt a recharge turn)
+///
+/// `attacker_must_recharge` is mutated in place.
+fn resolve_post_hit_effects(
+  attacker_hps : Array[Int],
+  attacker_active : Int,
+  attacker_ranks : Array[Int],
+  defender_hps : Array[Int],
+  defender_active : Int,
+  defender_ranks : Array[Int],
+  attacker_must_recharge : Array[Bool],
+  mv : @model.Move,
+  dmg : Int,
+) -> Unit {
+  let opp_alive = defender_hps[defender_active] > 0
+  apply_stat_effects(attacker_ranks, defender_ranks, opp_alive, mv)
+  apply_recoil(attacker_hps, attacker_active, mv, dmg)
+  if mv.self_ko {
+    attacker_hps[attacker_active] = 0
+  }
+  if mv.recharge && attacker_hps[attacker_active] > 0 {
+    attacker_must_recharge[attacker_active] = true
   }
 }
 
@@ -804,6 +905,8 @@ priv struct TurnWorkspace {
   opp_mega_used : Bool
   my_status : Array[@model.StatusCondition]
   opp_status : Array[@model.StatusCondition]
+  my_must_recharge : Array[Bool]
+  opp_must_recharge : Array[Bool]
   turn : Int
 }
 
@@ -822,6 +925,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_mega_used: state.opp_mega_used,
     my_status: state.my_status.copy(),
     opp_status: state.opp_status.copy(),
+    my_must_recharge: state.my_must_recharge.copy(),
+    opp_must_recharge: state.opp_must_recharge.copy(),
     turn: state.turn,
   }
 }
@@ -841,6 +946,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_megaed: ws.opp_megaed.copy(),
     my_status: ws.my_status.copy(),
     opp_status: ws.opp_status.copy(),
+    my_must_recharge: ws.my_must_recharge.copy(),
+    opp_must_recharge: ws.opp_must_recharge.copy(),
     turn: if bump_turn { ws.turn + 1 } else { ws.turn },
   }
 }
@@ -882,7 +989,17 @@ fn resolve_attacker_leg(
     atk_burn=attacker_burn,
   )
   defender_hps[defender_active] = clamp_zero(defender_hps[defender_active] - dmg)
-  apply_stat_boost(attacker_ranks, attacker_move)
+  let attacker_hps = if attacker_is_me { ws.my_hps } else { ws.opp_hps }
+  let attacker_must_recharge = if attacker_is_me {
+    ws.my_must_recharge
+  } else {
+    ws.opp_must_recharge
+  }
+  resolve_post_hit_effects(
+    attacker_hps, attacker_active, attacker_ranks,
+    defender_hps, defender_active, defender_ranks,
+    attacker_must_recharge, attacker_move, dmg,
+  )
   let post_damage_state = ws_to_state(ws, bump_turn=false)
   maybe_apply_status_fanout(
     post_damage_state,
@@ -1063,6 +1180,8 @@ fn bump_turn_only(state : SwitchingGameState) -> SwitchingGameState {
     opp_megaed: state.opp_megaed.copy(),
     my_status: state.my_status.copy(),
     opp_status: state.opp_status.copy(),
+    my_must_recharge: state.my_must_recharge.copy(),
+    opp_must_recharge: state.opp_must_recharge.copy(),
     turn: state.turn + 1,
   }
 }
@@ -1109,6 +1228,8 @@ pub fn transition_with_cache(
   let opp_megaed_new = state.opp_megaed.copy()
   let my_status_new = state.my_status.copy()
   let opp_status_new = state.opp_status.copy()
+  let my_must_recharge_new = state.my_must_recharge.copy()
+  let opp_must_recharge_new = state.opp_must_recharge.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
   }
@@ -1165,7 +1286,11 @@ pub fn transition_with_cache(
         atk_burn=is_burned(state.opp_status[state.opp_active]),
       )
       my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
-      apply_stat_boost(opp_ranks_new, opp_team[state.opp_active].moves[mj])
+      resolve_post_hit_effects(
+        opp_hps_new, state.opp_active, opp_ranks_new,
+        my_hps_new, i, my_ranks_new,
+        opp_must_recharge_new, opp_team[state.opp_active].moves[mj], dmg,
+      )
       attack_event = Some((false, i, opp_team[state.opp_active].moves[mj]))
     }
     (UseMove(mi), Switch(j)) => {
@@ -1191,7 +1316,11 @@ pub fn transition_with_cache(
         atk_burn=is_burned(state.my_status[state.my_active]),
       )
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
-      apply_stat_boost(my_ranks_new, my_team[state.my_active].moves[mi])
+      resolve_post_hit_effects(
+        my_hps_new, state.my_active, my_ranks_new,
+        opp_hps_new, j, opp_ranks_new,
+        my_must_recharge_new, my_team[state.my_active].moves[mi], dmg,
+      )
       attack_event = Some((true, j, my_team[state.my_active].moves[mi]))
     }
     (UseMove(mi), UseMove(mj)) => {
@@ -1249,6 +1378,8 @@ pub fn transition_with_cache(
     opp_megaed: opp_megaed_new,
     my_status: my_status_new,
     opp_status: opp_status_new,
+    my_must_recharge: my_must_recharge_new,
+    opp_must_recharge: opp_must_recharge_new,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -1351,6 +1482,8 @@ fn pass_turn_state(
     opp_megaed: state.opp_megaed.copy(),
     my_status,
     opp_status,
+    my_must_recharge: state.my_must_recharge.copy(),
+    opp_must_recharge: state.opp_must_recharge.copy(),
     turn: state.turn + 1,
   }
 }
@@ -1376,10 +1509,16 @@ pub fn attempt_turn_with_cache(
   let my_acc = action_accuracy(my_action, state.my_active, my_team)
   let opp_acc = action_accuracy(opp_action, state.opp_active, opp_team)
   let my_attempts = per_side_attempt(
-    state.my_status[state.my_active], my_action, my_acc,
+    state.my_status[state.my_active],
+    state.my_must_recharge[state.my_active],
+    my_action,
+    my_acc,
   )
   let opp_attempts = per_side_attempt(
-    state.opp_status[state.opp_active], opp_action, opp_acc,
+    state.opp_status[state.opp_active],
+    state.opp_must_recharge[state.opp_active],
+    opp_action,
+    opp_acc,
   )
   let results : Array[(Double, SwitchingGameState)] = []
   for ma in my_attempts {
@@ -1407,6 +1546,8 @@ pub fn attempt_turn_with_cache(
         opp_status: override_active_status(
           state.opp_status, state.opp_active, oa.post_status,
         ),
+        my_must_recharge: state.my_must_recharge,
+        opp_must_recharge: state.opp_must_recharge,
         turn: state.turn,
       }
       let branch_outs : Array[(Double, SwitchingGameState)] = match (
@@ -1429,7 +1570,20 @@ pub fn attempt_turn_with_cache(
       }
       for s in branch_outs {
         let (p, ns_pre_eot) = s
-        let ns = apply_eot(ns_pre_eot, my_team, opp_team)
+        // Consume must_recharge **only for slots that had the flag set at
+        // turn start** (they just paid their one-turn penalty). Slots that
+        // gained the flag *this turn* via a recharge move (Hyper Beam etc.)
+        // must keep it set so the penalty actually applies next turn.
+        // Must run before apply_eot so caching / downstream logic never sees
+        // a stale flag.
+        let ns_recharge_cleared = clear_consumed_recharge(
+          ns_pre_eot,
+          state.my_active,
+          state.my_must_recharge[state.my_active],
+          state.opp_active,
+          state.opp_must_recharge[state.opp_active],
+        )
+        let ns = apply_eot(ns_recharge_cleared, my_team, opp_team)
         results.push((joint * p, ns))
       }
     }
@@ -1459,6 +1613,8 @@ fn partial_act_outcomes(
   let opp_ranks = state.opp_ranks.copy()
   let my_megaed = state.my_megaed.copy()
   let opp_megaed = state.opp_megaed.copy()
+  let my_must_recharge = state.my_must_recharge.copy()
+  let opp_must_recharge = state.opp_must_recharge.copy()
   let mut my_active = state.my_active
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
@@ -1496,7 +1652,11 @@ fn partial_act_outcomes(
         atk_burn=burn,
       )
       opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg)
-      apply_stat_boost(my_ranks, my_team[state.my_active].moves[mi])
+      resolve_post_hit_effects(
+        my_hps, state.my_active, my_ranks,
+        opp_hps, state.opp_active, opp_ranks,
+        my_must_recharge, my_team[state.my_active].moves[mi], dmg,
+      )
       attack_event = Some(
         (true, state.opp_active, my_team[state.my_active].moves[mi]),
       )
@@ -1514,7 +1674,11 @@ fn partial_act_outcomes(
         atk_burn=burn,
       )
       my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg)
-      apply_stat_boost(opp_ranks, opp_team[state.opp_active].moves[mj])
+      resolve_post_hit_effects(
+        opp_hps, state.opp_active, opp_ranks,
+        my_hps, state.my_active, my_ranks,
+        opp_must_recharge, opp_team[state.opp_active].moves[mj], dmg,
+      )
       attack_event = Some(
         (false, state.my_active, opp_team[state.opp_active].moves[mj]),
       )
@@ -1534,6 +1698,8 @@ fn partial_act_outcomes(
     opp_megaed,
     my_status: my_status_copy,
     opp_status: opp_status_copy,
+    my_must_recharge,
+    opp_must_recharge,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -1547,6 +1713,35 @@ fn partial_act_outcomes(
         used_move,
       )
   }
+}
+
+///|
+/// Consume the `must_recharge` flag for active slots that started the turn
+/// with the flag set — their mandatory skip is now paid. Slots that gained
+/// the flag *during* this turn (recharge-move hit landing) must keep it so
+/// the penalty fires next turn. Called once per branch outcome in
+/// `attempt_turn_with_cache`; returns a copy with the two flags cleared iff
+/// the corresponding `*_start_was_recharging` flag was `true`.
+fn clear_consumed_recharge(
+  state : SwitchingGameState,
+  my_start_active : Int,
+  my_start_was_recharging : Bool,
+  opp_start_active : Int,
+  opp_start_was_recharging : Bool,
+) -> SwitchingGameState {
+  let my_mr = state.my_must_recharge.copy()
+  let opp_mr = state.opp_must_recharge.copy()
+  if my_start_was_recharging &&
+    my_start_active >= 0 &&
+    my_start_active < my_mr.length() {
+    my_mr[my_start_active] = false
+  }
+  if opp_start_was_recharging &&
+    opp_start_active >= 0 &&
+    opp_start_active < opp_mr.length() {
+    opp_mr[opp_start_active] = false
+  }
+  { ..state, my_must_recharge: my_mr, opp_must_recharge: opp_mr }
 }
 
 ///|
@@ -1747,6 +1942,8 @@ pub fn switching_game_winrate_stats(
     opp_megaed: Array::make(opp_team.length(), false),
     my_status: zero_status(my_team.length()),
     opp_status: zero_status(opp_team.length()),
+    my_must_recharge: Array::make(my_team.length(), false),
+    opp_must_recharge: Array::make(opp_team.length(), false),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()

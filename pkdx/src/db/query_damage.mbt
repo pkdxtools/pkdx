@@ -47,5 +47,9 @@ pub fn query_move(
     priority,
     stat_effects,
     status_effect,
+    recoil_num: 0,
+    recoil_den: 1,
+    self_ko: false,
+    recharge: false,
   })
 }

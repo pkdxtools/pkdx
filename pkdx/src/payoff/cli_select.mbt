@@ -74,6 +74,26 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(Object(se)) => parse_status_effect_object(se)
         _ => None
       }
+      let recoil_num = match m.get("recoil_num") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => 0
+      }
+      let recoil_den = match m.get("recoil_den") {
+        Some(Number(n, ..)) => {
+          let v = n.to_int()
+          // Guard against zero denominator upstream; treat as no-recoil.
+          if v <= 0 { 1 } else { v }
+        }
+        _ => 1
+      }
+      let self_ko = match m.get("self_ko") {
+        Some(True) => true
+        _ => false
+      }
+      let recharge = match m.get("recharge") {
+        Some(True) => true
+        _ => false
+      }
       {
         name,
         type_,
@@ -85,6 +105,10 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         priority,
         stat_effects,
         status_effect,
+        recoil_num,
+        recoil_den,
+        self_ko,
+        recharge,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
@@ -115,29 +139,46 @@ fn parse_status_effect_object(
 }
 
 ///|
-/// Parse a JSON array of `[stat_index, delta]` pairs. Non-conforming entries
-/// are silently skipped (e.g. wrong arity, non-numeric members); a malformed
-/// JSON that parsed as an Array still yields an empty effect list rather than
-/// raising.
-fn parse_stat_effects_array(arr : Array[Json]) -> Array[(Int, Int)] {
-  let out : Array[(Int, Int)] = []
+/// Parse a JSON array of stat-effect entries. Accepts two shapes so existing
+/// `pkdx moves` output keeps working while the new 3-element form flows
+/// through:
+///
+/// - 2-element `[stat, delta]` — legacy; `target` defaults to `0` (self)
+/// - 3-element `[stat, delta, target]` — `target` 0=self, 1=opp
+///
+/// Non-conforming entries (wrong arity, non-numeric members) are silently
+/// skipped; a malformed JSON that still parsed as an Array yields an empty
+/// effect list rather than raising.
+fn parse_stat_effects_array(arr : Array[Json]) -> Array[@model.StatEffect] {
+  let out : Array[@model.StatEffect] = []
   for item in arr {
     match item {
-      Array(pair) =>
-        if pair.length() == 2 {
-          let a = match pair[0] {
+      Array(triple) => {
+        let len = triple.length()
+        if len == 2 || len == 3 {
+          let a = match triple[0] {
             Number(n, ..) => Some(n.to_int())
             _ => None
           }
-          let b = match pair[1] {
+          let b = match triple[1] {
             Number(n, ..) => Some(n.to_int())
             _ => None
+          }
+          let t = if len == 3 {
+            match triple[2] {
+              Number(n, ..) => n.to_int()
+              _ => 0
+            }
+          } else {
+            0
           }
           match (a, b) {
-            (Some(ai), Some(bi)) => out.push((ai, bi))
+            (Some(ai), Some(bi)) =>
+              out.push(@model.StatEffect::{ stat: ai, delta: bi, target: t })
             _ => ()
           }
         }
+      }
       _ => ()
     }
   }
@@ -272,6 +313,10 @@ fn parse_combatant_json(
             priority: 0,
             stat_effects: [],
             status_effect: None,
+            recoil_num: 0,
+            recoil_den: 1,
+            self_ko: false,
+            recharge: false,
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(

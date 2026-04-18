@@ -2,6 +2,44 @@
 /// Tests for status-aware damage and speed helpers introduced in Task 4.
 
 ///|
+/// Whitebox-local `mk_move` helper. The payoff-package blackbox helper in
+/// `test_helpers_test.mbt` is not visible to `_wbtest.mbt` files (different
+/// test target), so this file keeps its own builder. Keeping the single
+/// `@model.Move` literal here means future field additions touch exactly one
+/// place for this file.
+fn mk_move(
+  name : String,
+  type_ : String,
+  category : @model.MoveCategory,
+  power : Int,
+  priority~ : Int = 0,
+  stat_effects~ : Array[@model.StatEffect] = [],
+  status_effect~ : (@model.StatusKind, Int)? = None,
+  accuracy~ : Int = 100,
+  recoil_num~ : Int = 0,
+  recoil_den~ : Int = 1,
+  self_ko~ : Bool = false,
+  recharge~ : Bool = false,
+) -> @model.Move {
+  {
+    name,
+    type_,
+    category,
+    power,
+    accuracy,
+    pp: 10,
+    learn_method: "",
+    priority,
+    stat_effects,
+    status_effect,
+    recoil_num,
+    recoil_den,
+    self_ko,
+    recharge,
+  }
+}
+
+///|
 test "compute_mean_damage: burned attacker halves physical damage" {
   let attacker_pokemon : @model.Pokemon = {
     global_no: "0006",
@@ -57,18 +95,7 @@ test "compute_mean_damage: burned attacker halves physical damage" {
     stat_system: @model.Standard,
     mega_form: None,
   }
-  let physical_move : @model.Move = {
-    name: "じしん",
-    type_: "じめん",
-    category: @model.Physical,
-    power: 100,
-    accuracy: 100,
-    pp: 10,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: None,
-  }
+  let physical_move = mk_move("じしん", "じめん", @model.Physical, 100)
   let normal = compute_mean_damage(atk, dfn, physical_move, 0, 0)
   let burned = compute_mean_damage(atk, dfn, physical_move, 0, 0, atk_burn=true)
   assert_true(normal > 0)
@@ -131,18 +158,7 @@ test "compute_mean_damage: burned special attacker unchanged" {
     stat_system: @model.Standard,
     mega_form: None,
   }
-  let special_move : @model.Move = {
-    name: "かえんほうしゃ",
-    type_: "ほのお",
-    category: @model.Special,
-    power: 90,
-    accuracy: 100,
-    pp: 15,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: None,
-  }
+  let special_move = mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)
   let normal = compute_mean_damage(atk, dfn, special_move, 0, 0)
   let burned = compute_mean_damage(atk, dfn, special_move, 0, 0, atk_burn=true)
   assert_eq(normal, burned)
@@ -181,18 +197,18 @@ fn sum_probs(attempts : Array[SideAttempt]) -> Double {
 
 ///|
 test "per_side_attempt: Switch is always 1.0 regardless of status" {
-  let out = per_side_attempt(@model.Paralyze, Switch(1), 100)
+  let out = per_side_attempt(@model.Paralyze, false, Switch(1), 100)
   assert_eq(out.length(), 1)
   assert_eq(out[0].prob, 1.0)
   assert_true(out[0].acts)
-  let out2 = per_side_attempt(@model.Sleep(2), Switch(1), 100)
+  let out2 = per_side_attempt(@model.Sleep(2), false, Switch(1), 100)
   assert_eq(out2.length(), 1)
   assert_true(out2[0].acts)
 }
 
 ///|
 test "per_side_attempt: None + UseMove + acc=100 -> single act 1.0" {
-  let out = per_side_attempt(@model.None, UseMove(0), 100)
+  let out = per_side_attempt(@model.None, false, UseMove(0), 100)
   assert_eq(out.length(), 1)
   assert_eq(out[0].prob, 1.0)
   assert_true(out[0].acts)
@@ -200,7 +216,7 @@ test "per_side_attempt: None + UseMove + acc=100 -> single act 1.0" {
 
 ///|
 test "per_side_attempt: None + UseMove + acc=85 -> hit 0.85 / miss 0.15" {
-  let out = per_side_attempt(@model.None, UseMove(0), 85)
+  let out = per_side_attempt(@model.None, false, UseMove(0), 85)
   assert_eq(out.length(), 2)
   let total = sum_probs(out)
   assert_true((total - 1.0).abs() < 1.0e-9)
@@ -208,7 +224,7 @@ test "per_side_attempt: None + UseMove + acc=85 -> hit 0.85 / miss 0.15" {
 
 ///|
 test "per_side_attempt: Paralyze + UseMove + acc=100 -> 0.125 skip / 0.875 act" {
-  let out = per_side_attempt(@model.Paralyze, UseMove(0), 100)
+  let out = per_side_attempt(@model.Paralyze, false, UseMove(0), 100)
   assert_eq(out.length(), 2)
   let total = sum_probs(out)
   assert_true((total - 1.0).abs() < 1.0e-9)
@@ -216,11 +232,11 @@ test "per_side_attempt: Paralyze + UseMove + acc=100 -> 0.125 skip / 0.875 act" 
 
 ///|
 test "per_side_attempt: Sleep(n>0) always skips and decrements counter" {
-  let out = per_side_attempt(@model.Sleep(2), UseMove(0), 100)
+  let out = per_side_attempt(@model.Sleep(2), false, UseMove(0), 100)
   assert_eq(out.length(), 1)
   assert_false(out[0].acts)
   assert_eq(out[0].post_status, @model.Sleep(1))
-  let out2 = per_side_attempt(@model.Sleep(1), UseMove(0), 100)
+  let out2 = per_side_attempt(@model.Sleep(1), false, UseMove(0), 100)
   assert_eq(out2.length(), 1)
   assert_false(out2[0].acts)
   assert_eq(out2[0].post_status, @model.Sleep(0))
@@ -228,7 +244,7 @@ test "per_side_attempt: Sleep(n>0) always skips and decrements counter" {
 
 ///|
 test "per_side_attempt: Sleep(0) wakes up and acts (status -> None)" {
-  let out = per_side_attempt(@model.Sleep(0), UseMove(0), 100)
+  let out = per_side_attempt(@model.Sleep(0), false, UseMove(0), 100)
   assert_eq(out.length(), 1)
   assert_true(out[0].acts)
   assert_eq(out[0].post_status, @model.None)
@@ -236,7 +252,7 @@ test "per_side_attempt: Sleep(0) wakes up and acts (status -> None)" {
 
 ///|
 test "per_side_attempt: Paralyze + UseMove + acc=85 -> 3 branches sum to 1" {
-  let out = per_side_attempt(@model.Paralyze, UseMove(0), 85)
+  let out = per_side_attempt(@model.Paralyze, false, UseMove(0), 85)
   assert_eq(out.length(), 3)
   let total = sum_probs(out)
   assert_true((total - 1.0).abs() < 1.0e-9)
@@ -388,6 +404,8 @@ fn mk_test_state(
     opp_megaed: Array::make(team_size, false),
     my_status: my_st,
     opp_status: opp_st,
+    my_must_recharge: Array::make(team_size, false),
+    opp_must_recharge: Array::make(team_size, false),
     turn: 0,
   }
 }
@@ -396,18 +414,7 @@ fn mk_test_state(
 test "maybe_apply_status_fanout: move with no status_effect returns single outcome" {
   let state = mk_test_state(1, 100, 100, @model.None, @model.None)
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ノーマル"))]
-  let mv : @model.Move = {
-    name: "たいあたり",
-    type_: "ノーマル",
-    category: @model.Physical,
-    power: 40,
-    accuracy: 100,
-    pp: 35,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: None,
-  }
+  let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   assert_eq(out.length(), 1)
   assert_eq(out[0].0, 1.0)
@@ -417,18 +424,10 @@ test "maybe_apply_status_fanout: move with no status_effect returns single outco
 test "maybe_apply_status_fanout: Will-o-wisp (85% burn) fans out" {
   let state = mk_test_state(1, 100, 100, @model.None, @model.None)
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "みず"))]
-  let mv : @model.Move = {
-    name: "おにび",
-    type_: "ほのお",
-    category: @model.Status,
-    power: 0,
-    accuracy: 85,
-    pp: 15,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: Some((@model.BurnKind, 100)),
-  }
+  let mv = mk_move(
+    "おにび", "ほのお", @model.Status, 0,
+    accuracy=85, status_effect=Some((@model.BurnKind, 100)),
+  )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   // chance = 100 → deterministic apply
   assert_eq(out.length(), 1)
@@ -439,18 +438,10 @@ test "maybe_apply_status_fanout: Will-o-wisp (85% burn) fans out" {
 test "maybe_apply_status_fanout: fire-type immune to burn" {
   let state = mk_test_state(1, 100, 100, @model.None, @model.None)
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ほのお"))]
-  let mv : @model.Move = {
-    name: "おにび",
-    type_: "ほのお",
-    category: @model.Status,
-    power: 0,
-    accuracy: 85,
-    pp: 15,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: Some((@model.BurnKind, 100)),
-  }
+  let mv = mk_move(
+    "おにび", "ほのお", @model.Status, 0,
+    accuracy=85, status_effect=Some((@model.BurnKind, 100)),
+  )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   assert_eq(out.length(), 1)
   assert_eq(out[0].1.opp_status[0], @model.None)
@@ -460,18 +451,10 @@ test "maybe_apply_status_fanout: fire-type immune to burn" {
 test "maybe_apply_status_fanout: already statused target is not re-infected" {
   let state = mk_test_state(1, 100, 100, @model.None, @model.Paralyze)
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ノーマル"))]
-  let mv : @model.Move = {
-    name: "おにび",
-    type_: "ほのお",
-    category: @model.Status,
-    power: 0,
-    accuracy: 85,
-    pp: 15,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: Some((@model.BurnKind, 100)),
-  }
+  let mv = mk_move(
+    "おにび", "ほのお", @model.Status, 0,
+    accuracy=85, status_effect=Some((@model.BurnKind, 100)),
+  )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   assert_eq(out.length(), 1)
   assert_eq(out[0].1.opp_status[0], @model.Paralyze)
@@ -489,18 +472,10 @@ fn run_no_overwrite_case(
   // Target is Normal-type so there's no incidental type immunity confounding
   // the overwrite-guard we actually want to test.
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ノーマル"))]
-  let mv : @model.Move = {
-    name: "test",
-    type_: "ノーマル",
-    category: @model.Status,
-    power: 0,
-    accuracy: 100,
-    pp: 10,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: Some((incoming, 100)),
-  }
+  let mv = mk_move(
+    "test", "ノーマル", @model.Status, 0,
+    status_effect=Some((incoming, 100)),
+  )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   out[0].1.opp_status[0]
 }
@@ -564,18 +539,10 @@ test "already-statused guard blocks overwrite for every existing variant" {
 test "maybe_apply_status_fanout: fainted target yields no status" {
   let state = mk_test_state(1, 100, 0, @model.None, @model.None)
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ノーマル"))]
-  let mv : @model.Move = {
-    name: "おにび",
-    type_: "ほのお",
-    category: @model.Status,
-    power: 0,
-    accuracy: 85,
-    pp: 15,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: Some((@model.BurnKind, 100)),
-  }
+  let mv = mk_move(
+    "おにび", "ほのお", @model.Status, 0,
+    accuracy=85, status_effect=Some((@model.BurnKind, 100)),
+  )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   assert_eq(out.length(), 1)
   assert_eq(out[0].1.opp_status[0], @model.None)
@@ -585,18 +552,10 @@ test "maybe_apply_status_fanout: fainted target yields no status" {
 test "maybe_apply_status_fanout: thunder-wave 90% fans to 2 outcomes" {
   let state = mk_test_state(1, 100, 100, @model.None, @model.None)
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ノーマル"))]
-  let mv : @model.Move = {
-    name: "でんじは",
-    type_: "でんき",
-    category: @model.Status,
-    power: 0,
-    accuracy: 90,
-    pp: 20,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect: Some((@model.ParalyzeKind, 90)),
-  }
+  let mv = mk_move(
+    "でんじは", "でんき", @model.Status, 0,
+    accuracy=90, status_effect=Some((@model.ParalyzeKind, 90)),
+  )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   assert_eq(out.length(), 2)
   let total = out[0].0 + out[1].0
@@ -632,6 +591,9 @@ fn mk_stat_pokemon(
 }
 
 ///|
+/// Forwards to `mk_move`. Local signature kept (all positional) because the
+/// same-turn regression tests build every move with `type_ = "ノーマル"`, so
+/// pinning it in this helper keeps call sites terse.
 fn mk_move_move(
   name : String,
   category : @model.MoveCategory,
@@ -639,18 +601,7 @@ fn mk_move_move(
   accuracy : Int,
   status_effect : (@model.StatusKind, Int)?,
 ) -> @model.Move {
-  {
-    name,
-    type_: "ノーマル",
-    category,
-    power,
-    accuracy,
-    pp: 10,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect,
-  }
+  mk_move(name, "ノーマル", category, power, accuracy=accuracy, status_effect=status_effect)
 }
 
 ///|
@@ -691,6 +642,8 @@ fn mk_same_turn_state(
     opp_megaed: [false],
     my_status: zero_status(1),
     opp_status: zero_status(1),
+    my_must_recharge: [false],
+    opp_must_recharge: [false],
     turn: 0,
   }
 }
@@ -815,4 +768,161 @@ test "resolve_moves: faster Thunder Wave still lets slower target attack this tu
   // Fresh paralysis does not block the current turn's action; the hitter's
   // physical damage lands at its full (non-burn) value.
   assert_eq(200 - ns.my_hps[0], normal)
+}
+
+///|
+/// Phase 2 unit tests for `apply_recoil`. Mutates an attacker_hps array in
+/// place so we can assert exact HP delta per call.
+test "apply_recoil: 1/2 ratio subtracts half of damage dealt" {
+  let hps = [200]
+  apply_recoil(
+    hps, 0, mk_move("head_smash", "いわ", @model.Physical, 150, recoil_num=1, recoil_den=2),
+    100,
+  )
+  // 100 * 1 / 2 = 50 (above the 1-HP minimum, so used as-is).
+  assert_eq(hps[0], 150)
+}
+
+///|
+test "apply_recoil: guaranteed minimum 1 HP when raw recoil rounds to 0" {
+  let hps = [200]
+  // 3 * 1 / 4 = 0, clamped up to 1.
+  apply_recoil(
+    hps, 0, mk_move("wild_charge", "でんき", @model.Physical, 90, recoil_num=1, recoil_den=4),
+    3,
+  )
+  assert_eq(hps[0], 199)
+}
+
+///|
+test "apply_recoil: no loss when damage is zero (type-immune hit)" {
+  let hps = [200]
+  apply_recoil(
+    hps, 0, mk_move("morohanozutsuki", "いわ", @model.Physical, 150, recoil_num=1, recoil_den=2),
+    0,
+  )
+  assert_eq(hps[0], 200)
+}
+
+///|
+test "apply_recoil: no-op for non-recoil move regardless of damage" {
+  let hps = [200]
+  apply_recoil(hps, 0, mk_move("tackle", "ノーマル", @model.Physical, 40), 100)
+  assert_eq(hps[0], 200)
+}
+
+///|
+test "apply_recoil: HP clamps at 0 on overkill recoil" {
+  let hps = [10]
+  apply_recoil(
+    hps, 0, mk_move("big_recoil", "いわ", @model.Physical, 150, recoil_num=1, recoil_den=1),
+    9999,
+  )
+  assert_eq(hps[0], 0)
+}
+
+///|
+test "resolve_post_hit_effects: self_ko zeroes attacker HP even on 0-damage hit" {
+  // じばく (ノーマル, self_ko=true) against a Ghost target: dmg=0, self_ko still
+  // applies — canonical behaviour worth pinning so future refactors don't
+  // gate self_ko behind `dmg > 0`.
+  let atk_hps = [100]
+  let atk_ranks = [0, 0, 0, 0, 0]
+  let def_hps = [200]
+  let def_ranks = [0, 0, 0, 0, 0]
+  let atk_mr = [false]
+  let mv = mk_move("jibaku", "ノーマル", @model.Physical, 250, self_ko=true)
+  resolve_post_hit_effects(
+    atk_hps, 0, atk_ranks, def_hps, 0, def_ranks, atk_mr, mv, 0,
+  )
+  assert_eq(atk_hps[0], 0)
+}
+
+///|
+///|
+/// Phase 3 unit: `apply_stat_effects` routes each entry by `target` and
+/// gates opponent-target drops when the defender is already fainted.
+test "apply_stat_effects: target=0 routes to self_ranks, target=1 to opp_ranks" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [0, 0, 0, 0, 0]
+  // Mixed: self +2 Atk (self_boost) and opp -2 Atk (Amaeru-shaped).
+  let mv = mk_move(
+    "mix", "ノーマル", @model.Status, 0,
+    stat_effects=[
+      @model.StatEffect::{ stat: 0, delta: 2, target: 0 },
+      @model.StatEffect::{ stat: 0, delta: -2, target: 1 },
+    ],
+  )
+  apply_stat_effects(self_ranks, opp_ranks, true, mv)
+  assert_eq(self_ranks[0], 2)
+  assert_eq(opp_ranks[0], -2)
+}
+
+///|
+test "apply_stat_effects: opp-target entries skipped when opp_alive=false" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [0, 0, 0, 0, 0]
+  let mv = mk_move(
+    "amaeru", "フェアリー", @model.Status, 0,
+    stat_effects=[@model.StatEffect::{ stat: 0, delta: -2, target: 1 }],
+  )
+  apply_stat_effects(self_ranks, opp_ranks, false, mv)
+  assert_eq(opp_ranks[0], 0)
+}
+
+///|
+test "apply_stat_effects: multi-stat opp-target (Namidame) drops both Atk and SpA" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [0, 0, 0, 0, 0]
+  let mv = mk_move(
+    "namidame", "ノーマル", @model.Status, 0,
+    stat_effects=[
+      @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+      @model.StatEffect::{ stat: 2, delta: -1, target: 1 },
+    ],
+  )
+  apply_stat_effects(self_ranks, opp_ranks, true, mv)
+  assert_eq(opp_ranks[0], -1)
+  assert_eq(opp_ranks[2], -1)
+  // self unchanged.
+  for i in 0..<5 {
+    assert_eq(self_ranks[i], 0)
+  }
+}
+
+///|
+test "apply_stat_effects: self-only setup move (つるぎのまい) leaves opp untouched" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [0, 0, 0, 0, 0]
+  let mv = mk_move(
+    "sworddance", "ノーマル", @model.Status, 0,
+    stat_effects=[@model.StatEffect::{ stat: 0, delta: 2, target: 0 }],
+  )
+  apply_stat_effects(self_ranks, opp_ranks, true, mv)
+  assert_eq(self_ranks[0], 2)
+  assert_eq(opp_ranks[0], 0)
+}
+
+///|
+test "resolve_post_hit_effects: recharge sets flag only when attacker survives" {
+  let def_hps = [200]
+  let def_ranks = [0, 0, 0, 0, 0]
+  let mv = mk_move("hyper_beam", "ノーマル", @model.Special, 150, recharge=true)
+  // Surviving attacker: recharge flag should be set.
+  let hps_alive = [100]
+  let ranks_alive = [0, 0, 0, 0, 0]
+  let mr_alive = [false]
+  resolve_post_hit_effects(
+    hps_alive, 0, ranks_alive, def_hps, 0, def_ranks, mr_alive, mv, 40,
+  )
+  assert_eq(mr_alive[0], true)
+  // Dead attacker (e.g. previously knocked to 0 by recoil) should not be
+  // flagged for a recharge turn they can't take.
+  let hps_dead = [0]
+  let ranks_dead = [0, 0, 0, 0, 0]
+  let mr_dead = [false]
+  resolve_post_hit_effects(
+    hps_dead, 0, ranks_dead, def_hps, 0, def_ranks, mr_dead, mv, 40,
+  )
+  assert_eq(mr_dead[0], false)
 }

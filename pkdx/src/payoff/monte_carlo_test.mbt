@@ -84,7 +84,7 @@ test "rollout_pick_move_epsilon_one_samples_uniformly_across_all_moves" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[@model.StatEffect::{ stat: 0, delta: 2, target: 0 }]),
       mk_move("weak", "ノーマル", @model.Physical, 40),
       mk_move("strong", "ノーマル", @model.Physical, 120),
     ],
@@ -111,7 +111,7 @@ test "rollout_pick_move_epsilon_zero_always_picks_greedy_damaging_move" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 150, 100, 100, 100, 100),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[@model.StatEffect::{ stat: 0, delta: 2, target: 0 }]),
       mk_move("weak", "ノーマル", @model.Physical, 40),
       mk_move("strong", "ノーマル", @model.Physical, 120),
     ],
@@ -134,8 +134,8 @@ test "rollout_pick_move_status_only_moveset_still_returns_some" {
   let atk = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [
-      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 2)]),
-      mk_move("りゅうのまい", "ノーマル", @model.Status, 0, stat_effects=[(0, 1), (4, 1)]),
+      mk_move("つるぎのまい", "ノーマル", @model.Status, 0, stat_effects=[@model.StatEffect::{ stat: 0, delta: 2, target: 0 }]),
+      mk_move("りゅうのまい", "ノーマル", @model.Status, 0, stat_effects=[@model.StatEffect::{ stat: 0, delta: 1, target: 0 }, @model.StatEffect::{ stat: 4, delta: 1, target: 0 }]),
     ],
   )
   let dfn = mk_combatant(

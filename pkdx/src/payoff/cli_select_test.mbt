@@ -257,10 +257,64 @@ test "parse_move_json_reads_priority_and_stat_effects" {
   assert_eq(parsed[0].moves[0].priority, 1)
   assert_eq(parsed[1].moves[0].priority, 0)
   assert_eq(parsed[1].moves[0].stat_effects.length(), 1)
-  assert_eq(parsed[1].moves[0].stat_effects[0], (0, 2))
+  let eff = parsed[1].moves[0].stat_effects[0]
+  assert_eq(eff.stat, 0)
+  assert_eq(eff.delta, 2)
+  // Legacy 2-element form parses as self-target (0).
+  assert_eq(eff.target, 0)
   // Missing optional fields default to 0 / []
   assert_eq(parsed[2].moves[0].priority, 0)
   assert_eq(parsed[2].moves[0].stat_effects.length(), 0)
+}
+
+///|
+/// Phase 3 contract: 3-element `stat_effects` entries parse with the declared
+/// target flag (0=self, 1=opp), and post-hit scalar fields (recoil_num/den,
+/// self_ko, recharge) round-trip with their declared values.
+test "parse_move_json_3elem_stat_effects_and_posthit_fields" {
+  let raw =
+    #|{
+    #|  "team": [
+    #|    {"name":"A","type1":"フェアリー","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":200,
+    #|     "moves":[{"name":"あまえる","type":"フェアリー","category":"変化","power":0,"priority":0,"stat_effects":[[0,-2,1]]}]},
+    #|    {"name":"B","type1":"いわ","type2":"","hp":200,"atk":150,"def":100,"spa":100,"spd":100,"spe":120,
+    #|     "moves":[{"name":"もろはのずつき","type":"いわ","category":"物理","power":150,"recoil_num":1,"recoil_den":2}]},
+    #|    {"name":"C","type1":"ノーマル","type2":"","hp":100,"atk":150,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"じばく","type":"ノーマル","category":"物理","power":250,"self_ko":true}]},
+    #|    {"name":"D","type1":"ノーマル","type2":"","hp":200,"atk":100,"def":100,"spa":200,"spd":100,"spe":120,
+    #|     "moves":[{"name":"はかいこうせん","type":"ノーマル","category":"特殊","power":150,"recharge":true}]}
+    #|  ]
+    #|}
+  let parsed = match @json.parse(raw) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => parse_team_array(t, "team")
+        _ => {
+          assert_true(false)
+          return
+        }
+      }
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  // Amaeru: opp-target -2 Atk
+  let amaeru_eff = parsed[0].moves[0].stat_effects[0]
+  assert_eq(amaeru_eff.stat, 0)
+  assert_eq(amaeru_eff.delta, -2)
+  assert_eq(amaeru_eff.target, 1)
+  // Head Smash: 1/2 recoil
+  assert_eq(parsed[1].moves[0].recoil_num, 1)
+  assert_eq(parsed[1].moves[0].recoil_den, 2)
+  assert_eq(parsed[1].moves[0].self_ko, false)
+  assert_eq(parsed[1].moves[0].recharge, false)
+  // Self-destruct
+  assert_eq(parsed[2].moves[0].self_ko, true)
+  assert_eq(parsed[2].moves[0].recoil_num, 0)
+  // Hyper Beam
+  assert_eq(parsed[3].moves[0].recharge, true)
+  assert_eq(parsed[3].moves[0].self_ko, false)
 }
 
 ///|

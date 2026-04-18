@@ -53,6 +53,9 @@ fn mk_int_combatant(
 }
 
 ///|
+/// Delegates to `mk_move` so the `@model.Move` struct literal stays in one
+/// place. Keeps the existing (name, type_, category, power, accuracy~,
+/// status_effect~) signature for backwards-compat with call sites.
 fn mk_int_move(
   name : String,
   type_ : String,
@@ -61,18 +64,7 @@ fn mk_int_move(
   accuracy~ : Int = 100,
   status_effect~ : (@model.StatusKind, Int)? = None,
 ) -> @model.Move {
-  {
-    name,
-    type_,
-    category,
-    power,
-    accuracy,
-    pp: 10,
-    learn_method: "",
-    priority: 0,
-    stat_effects: [],
-    status_effect,
-  }
+  mk_move(name, type_, category, power, accuracy=accuracy, status_effect=status_effect)
 }
 
 ///|

@@ -40,7 +40,11 @@ fn query_moves_champions(
     #|       COALESCE(mm.priority, 0) AS priority,
     #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
     #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
-    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance,
+    #|       COALESCE(mm.recoil_num, 0) AS recoil_num,
+    #|       COALESCE(mm.recoil_den, 1) AS recoil_den,
+    #|       COALESCE(mm.self_ko, 0) AS self_ko,
+    #|       COALESCE(mm.recharge, 0) AS recharge
     #|FROM champions_learnset cl
     #|JOIN local_waza w ON cl.waza = w.waza AND w.version = 'Champions'
     #|JOIN local_waza_language wl ON cl.waza = wl.waza
@@ -72,7 +76,11 @@ fn query_moves_legacy(
     #|       COALESCE(mm.priority, 0) AS priority,
     #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
     #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
-    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance,
+    #|       COALESCE(mm.recoil_num, 0) AS recoil_num,
+    #|       COALESCE(mm.recoil_den, 1) AS recoil_den,
+    #|       COALESCE(mm.self_ko, 0) AS self_ko,
+    #|       COALESCE(mm.recharge, 0) AS recharge
     #|FROM local_pokedex_waza pw
     #|JOIN local_waza w ON pw.waza = w.waza AND w.version = ?
     #|JOIN local_waza_language wl ON pw.waza = wl.waza
@@ -85,7 +93,11 @@ fn query_moves_legacy(
     #|       COALESCE(mm.priority, 0) AS priority,
     #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
     #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
-    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance,
+    #|       COALESCE(mm.recoil_num, 0) AS recoil_num,
+    #|       COALESCE(mm.recoil_den, 1) AS recoil_den,
+    #|       COALESCE(mm.self_ko, 0) AS self_ko,
+    #|       COALESCE(mm.recharge, 0) AS recharge
     #|FROM local_pokedex_waza_machine pm
     #|JOIN local_waza_machine wm ON pm.machine_no = wm.waza AND wm.version = ?
     #|JOIN local_waza w ON wm.machine_no = w.waza AND w.version = ?
@@ -125,6 +137,14 @@ fn collect_moves_rows(
     } else {
       None
     }
+    // Phase 4 columns: r[11]=recoil_num, r[12]=recoil_den, r[13]=self_ko,
+    // r[14]=recharge. COALESCE defaults guarantee numeric/int values even on
+    // rows lacking move_meta entries, so `parse_int` never sees NULL.
+    let recoil_num = if r.length() > 11 { parse_int(r[11]) } else { 0 }
+    let recoil_den_raw = if r.length() > 12 { parse_int(r[12]) } else { 1 }
+    let recoil_den = if recoil_den_raw <= 0 { 1 } else { recoil_den_raw }
+    let self_ko = if r.length() > 13 { parse_int(r[13]) != 0 } else { false }
+    let recharge = if r.length() > 14 { parse_int(r[14]) != 0 } else { false }
     moves.push(@model.Move::{
       name: r[0],
       type_: r[1],
@@ -136,18 +156,26 @@ fn collect_moves_rows(
       priority,
       stat_effects,
       status_effect,
+      recoil_num,
+      recoil_den,
+      self_ko,
+      recharge,
     })
   }
   Ok(moves)
 }
 
 ///|
-/// Parse a JSON-encoded array of `[stat, delta]` pairs (e.g. `"[[0,2]]"`)
-/// into an `Array[(Int, Int)]`. Returns `[]` on any parse error or
-/// non-conforming shape so a single malformed DB row cannot break a whole
-/// moveset query.
-fn parse_stat_effects_json(raw : String) -> Array[(Int, Int)] {
-  let out : Array[(Int, Int)] = []
+/// Parse a JSON-encoded array of stat-effect entries into
+/// `Array[StatEffect]`. Accepts two shapes to preserve backwards compat:
+///
+/// - Legacy 2-element: `[stat, delta]` — `target` defaults to `0` (self)
+/// - New 3-element: `[stat, delta, target]` — `target` 0=self, 1=opp
+///
+/// Returns `[]` on any parse error or non-conforming shape so a single
+/// malformed DB row cannot break a whole moveset query.
+fn parse_stat_effects_json(raw : String) -> Array[@model.StatEffect] {
+  let out : Array[@model.StatEffect] = []
   let json = try @json.parse(raw) catch {
     _ => return out
   }
@@ -155,15 +183,26 @@ fn parse_stat_effects_json(raw : String) -> Array[(Int, Int)] {
     Array(arr) =>
       for item in arr {
         match item {
-          Array(pair) =>
-            if pair.length() == 2 {
-              let a = json_number_to_int(pair[0])
-              let b = json_number_to_int(pair[1])
+          Array(triple) => {
+            let len = triple.length()
+            if len == 2 || len == 3 {
+              let a = json_number_to_int(triple[0])
+              let b = json_number_to_int(triple[1])
+              let t = if len == 3 {
+                match json_number_to_int(triple[2]) {
+                  Some(x) => x
+                  None => 0
+                }
+              } else {
+                0
+              }
               match (a, b) {
-                (Some(ai), Some(bi)) => out.push((ai, bi))
+                (Some(ai), Some(bi)) =>
+                  out.push(@model.StatEffect::{ stat: ai, delta: bi, target: t })
                 _ => ()
               }
             }
+          }
           _ => ()
         }
       }

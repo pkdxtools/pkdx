@@ -92,23 +92,20 @@ pub const PARALYZE_SKIP_RATE : Double = 0.125
 /// The Switch action is always deterministic — status / accuracy don't gate
 /// switching. Only `UseMove` / `Mega` can skip.
 ///
-/// `must_recharge` short-circuits `UseMove` / `Mega` to a guaranteed
-/// no-op skip (paralysis/sleep overrides do not stack on top; recharge wins
-/// outright when set). Switch is never blocked by recharge in this MVP.
+/// `must_recharge` short-circuits every action to a guaranteed no-op skip
+/// (paralysis/sleep overrides do not stack on top; recharge wins outright
+/// when set). The entire turn is forfeit, matching the mainline Hyper Beam
+/// / Giga Impact behaviour; `alive_actions` already filters the enumeration
+/// down to a single placeholder so Switch/Mega should never reach here
+/// during recharge, but this branch stays as a defensive no-op.
 pub fn per_side_attempt(
   status : @model.StatusCondition,
   must_recharge : Bool,
   action : ActionKind,
   accuracy : Int,
 ) -> Array[SideAttempt] {
-  // Recharge forces a skip for move actions. Switch still goes through so
-  // the caller can clear the flag via the regular switch path.
   if must_recharge {
-    match action {
-      UseMove(_) | Mega(_) =>
-        return [{ prob: 1.0, acts: false, action, post_status: status }]
-      Switch(_) => ()
-    }
+    return [{ prob: 1.0, acts: false, action, post_status: status }]
   }
   let acts_only : Array[SideAttempt] = [
     { prob: 1.0, acts: true, action, post_status: status },
@@ -1805,10 +1802,18 @@ pub fn value(
     None => stats.misses = stats.misses + 1
   }
   let actions_me = alive_actions(
-    state.my_active, state.my_hps, my_team, state.my_mega_used,
+    state.my_active,
+    state.my_hps,
+    my_team,
+    state.my_mega_used,
+    must_recharge=state.my_must_recharge[state.my_active],
   )
   let actions_opp = alive_actions(
-    state.opp_active, state.opp_hps, opp_team, state.opp_mega_used,
+    state.opp_active,
+    state.opp_hps,
+    opp_team,
+    state.opp_mega_used,
+    must_recharge=state.opp_must_recharge[state.opp_active],
   )
   if actions_me.length() == 0 {
     return -1.0
@@ -1964,14 +1969,25 @@ pub fn switching_game_winrate_stats(
 /// active carries a `mega_form`, one `Mega(mi)` action is appended per move,
 /// letting the caller decide whether to trade the mega now (in exchange for
 /// post-mega stats / type / ability on this turn's attack).
+///
+/// When `must_recharge` is true the entire turn is forfeit on this side —
+/// matches the mainline behaviour for Hyper Beam / Giga Impact / Blast Burn /
+/// Hydro Cannon / Frenzy Plant, where the next turn is fully skipped (no
+/// move, no mega, no switch). A single `UseMove(0)` placeholder is returned
+/// so the game tree still has exactly one branch; `per_side_attempt` will
+/// short-circuit it to `acts=false`.
 pub fn alive_actions(
   active : Int,
   hps : Array[Int],
   team : Array[Combatant],
   mega_used : Bool,
+  must_recharge~ : Bool = false,
 ) -> Array[ActionKind] {
-  let out : Array[ActionKind] = []
   let active_alive = hps[active] > 0
+  if must_recharge && active_alive {
+    return [UseMove(0)]
+  }
+  let out : Array[ActionKind] = []
   if active_alive {
     for i in 0..<team[active].moves.length() {
       out.push(UseMove(i))

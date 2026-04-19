@@ -926,3 +926,39 @@ test "resolve_post_hit_effects: recharge sets flag only when attacker survives" 
   )
   assert_eq(mr_dead[0], false)
 }
+
+///|
+test "alive_actions: must_recharge forces a single placeholder action (no switch)" {
+  // Two alive teammates would normally yield Switch(1) as a legal action.
+  // During recharge the whole turn is forfeit — switching is not allowed —
+  // so the enumeration collapses to a single UseMove(0) placeholder that
+  // `per_side_attempt` will short-circuit to `acts=false`.
+  let poke = mk_test_pokemon("A", "ノーマル")
+  let mv = mk_move("tackle", "ノーマル", @model.Physical, 40)
+  let team = [
+    { ..mk_test_combatant(poke), moves: [mv] },
+    { ..mk_test_combatant(mk_test_pokemon("B", "みず")), moves: [mv] },
+  ]
+  let hps = [100, 100]
+  let actions = alive_actions(0, hps, team, true, must_recharge=true)
+  assert_eq(actions.length(), 1)
+  match actions[0] {
+    UseMove(i) => assert_eq(i, 0)
+    _ => abort("expected UseMove(0) placeholder")
+  }
+}
+
+///|
+test "alive_actions: recharge=false retains full enumeration (baseline)" {
+  // Sanity check that the default-false param leaves existing behaviour
+  // unchanged: 1 move + 1 switch = 2 actions for a 2-slot alive team.
+  let poke = mk_test_pokemon("A", "ノーマル")
+  let mv = mk_move("tackle", "ノーマル", @model.Physical, 40)
+  let team = [
+    { ..mk_test_combatant(poke), moves: [mv] },
+    { ..mk_test_combatant(mk_test_pokemon("B", "みず")), moves: [mv] },
+  ]
+  let hps = [100, 100]
+  let actions = alive_actions(0, hps, team, true)
+  assert_eq(actions.length(), 2)
+}

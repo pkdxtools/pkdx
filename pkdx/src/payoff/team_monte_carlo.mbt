@@ -65,6 +65,10 @@ priv enum TeamAction {
 /// Pick a TeamAction for the given side under a stay-vs-best-switch greedy
 /// policy with ε-greedy exploration. When `active` is KO-d, returns the
 /// best forced switch (or `None` if the entire side has fainted).
+///
+/// When `must_recharge` is true the whole turn is forfeit (mainline Hyper
+/// Beam / Giga Impact behaviour); we emit a `TmUseMove(0)` placeholder that
+/// the caller will short-circuit to `acts=false`.
 fn greedy_team_action(
   active : Int,
   my_team : Array[Combatant],
@@ -75,7 +79,11 @@ fn greedy_team_action(
   opp_ranks : Array[Int],
   rng : @random.Rand,
   epsilon : Double,
+  must_recharge~ : Bool = false,
 ) -> TeamAction? {
+  if must_recharge && my_hps[active] > 0 {
+    return Some(TmUseMove(0))
+  }
   let alive_slots : Array[Int] = []
   for i in 0..<my_hps.length() {
     if my_hps[i] > 0 {
@@ -418,19 +426,37 @@ pub fn team_rollout(
     opp.length(), @model.None,
   )
   // Per-slot recharge flag. Set by a recharge move (Hyper Beam etc.) landing;
-  // consumed next turn by forcing a skipped UseMove. Cleared on switch-out.
+  // consumed next turn by forcing a skipped UseMove. Switching is blocked
+  // during recharge (matches mainline), so the flag only clears at end-of-
+  // turn after the forced skip.
   let own_must_recharge : Array[Bool] = Array::make(own.length(), false)
   let opp_must_recharge : Array[Bool] = Array::make(opp.length(), false)
   let mut own_active = 0
   let mut opp_active = 0
   for _ in 0..<turn_limit {
     let a_own = greedy_team_action(
-      own_active, own, own_hps, own_ranks, opp_active, opp, opp_ranks, rng,
+      own_active,
+      own,
+      own_hps,
+      own_ranks,
+      opp_active,
+      opp,
+      opp_ranks,
+      rng,
       epsilon,
+      must_recharge=own_must_recharge[own_active],
     )
     let a_opp = greedy_team_action(
-      opp_active, opp, opp_hps, opp_ranks, own_active, own, own_ranks, rng,
+      opp_active,
+      opp,
+      opp_hps,
+      opp_ranks,
+      own_active,
+      own,
+      own_ranks,
+      rng,
       epsilon,
+      must_recharge=opp_must_recharge[opp_active],
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -486,14 +512,14 @@ pub fn team_rollout(
           }
           _ => ()
         }
-        // Step 2: apply switches. Reset toxic counter and clear the old
-        // active's recharge flag on the switched-out slot.
+        // Step 2: apply switches. Reset toxic counter on the switched-out
+        // slot. (Switches are never chosen while must_recharge is set, so
+        // there is no recharge flag to clear here.)
         match ao {
           TmSwitch(i) => {
             own_status[own_active] = reset_toxic_counter_on_switch(
               own_status[own_active],
             )
-            own_must_recharge[own_active] = false
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -504,7 +530,6 @@ pub fn team_rollout(
             opp_status[opp_active] = reset_toxic_counter_on_switch(
               opp_status[opp_active],
             )
-            opp_must_recharge[opp_active] = false
             opp_active = i
             reset_ranks(opp_ranks)
           }

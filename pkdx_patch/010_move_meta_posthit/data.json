@@ -25,6 +25,7 @@
   { "name": "とっしん", "priority": 0, "stat_effects": [], "recoil_num": 1, "recoil_den": 4 },
   { "name": "すてみタックル", "priority": 0, "stat_effects": [], "recoil_num": 1, "recoil_den": 4 },
   { "name": "アフロブレイク", "priority": 0, "stat_effects": [], "recoil_num": 1, "recoil_den": 3 },
+  { "name": "はめつのひかり", "priority": 0, "stat_effects": [], "recoil_num": 1, "recoil_den": 2 },
 
   { "name": "じばく", "priority": 0, "stat_effects": [], "self_ko": true },
   { "name": "だいばくはつ", "priority": 0, "stat_effects": [], "self_ko": true },

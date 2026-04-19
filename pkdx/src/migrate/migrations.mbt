@@ -14,5 +14,6 @@ pub fn migrations() -> Array[Migration] {
     { name: "008_move_meta_ailment", run: run_008 },
     { name: "009_yawn_ailment_name", run: run_009 },
     { name: "010_move_meta_posthit", run: run_010 },
+    { name: "011_hametsu_recoil", run: run_011 },
   ]
 }

@@ -86,6 +86,7 @@ test "compute_mean_damage: burned attacker halves physical damage" {
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
   let dfn : Combatant = {
@@ -97,6 +98,7 @@ test "compute_mean_damage: burned attacker halves physical damage" {
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
   let physical_move = mk_move("じしん", "じめん", @model.Physical, 100)
@@ -153,6 +155,7 @@ test "compute_mean_damage: burned special attacker unchanged" {
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
   let dfn : Combatant = {
@@ -164,6 +167,7 @@ test "compute_mean_damage: burned special attacker unchanged" {
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
   let special_move = mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)
@@ -383,6 +387,7 @@ fn mk_test_combatant(pokemon : @model.Pokemon) -> Combatant {
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
 }
@@ -628,6 +633,7 @@ fn mk_combatant_with_moves(
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
 }

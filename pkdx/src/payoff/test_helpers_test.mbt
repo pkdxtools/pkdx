@@ -74,6 +74,7 @@ fn mk_combatant(
   tera_type~ : String = "",
   mega_form~ : @model.MegaForm? = None,
   nature~ : @model.Nature? = None,
+  stat_points~ : Array[Int]? = None,
   actual_stats~ : Array[Int]? = None,
 ) -> Combatant {
   {
@@ -85,6 +86,7 @@ fn mk_combatant(
     stat_system: @model.Standard,
     mega_form,
     nature,
+    stat_points,
     actual_stats,
   }
 }

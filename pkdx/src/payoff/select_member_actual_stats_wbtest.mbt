@@ -502,3 +502,286 @@ test "run_select: accepts team-builder member with actual_stats" {
   // には assert せず、parse が通ることだけを確認する smoke test。
   // damage 差分の検証は別 test (compute_mean_damage: ...) に寄せた。
 }
+
+///|
+/// 不正な `nature` 文字列は `None` に丸めずエラーにする。
+/// `None` は damage engine の "攻撃側 +10% 補正" 既定へフォールバックするため、
+/// 典型的な typo (末尾空白 / 全角・半角ズレ) を黙って受け入れると攻撃が
+/// 盛られた payoff が返ってしまう。
+test "parse_combatant_json: malformed nature raises InvalidJson" {
+  let src =
+    #|{
+    #|  "name": "マンムー",
+    #|  "types": ["こおり","じめん"],
+    #|  "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "ようき ",
+    #|  "moves": [
+    #|    {"name":"じしん","type":"じめん","category":"物理","power":100}
+    #|  ]
+    #|}
+  let err = try? parse_single_combatant(src)
+  assert_true(err is Err(InvalidJson(_)))
+}
+
+///|
+/// 型違いの `nature` (数値など) もエラーにする。
+test "parse_combatant_json: non-string nature raises InvalidJson" {
+  let src =
+    #|{
+    #|  "name": "マンムー",
+    #|  "types": ["こおり","じめん"],
+    #|  "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": 42,
+    #|  "moves": [
+    #|    {"name":"じしん","type":"じめん","category":"物理","power":100}
+    #|  ]
+    #|}
+  let err = try? parse_single_combatant(src)
+  assert_true(err is Err(InvalidJson(_)))
+}
+
+///|
+/// 明示的な `nature: null` / 空文字 / キー欠損は従来どおり `None` として
+/// 許容する (engine のフォールバックに委ねる)。
+test "parse_combatant_json: null/empty nature is accepted as None" {
+  let with_null =
+    #|{
+    #|  "name": "マンムー",
+    #|  "types": ["こおり","じめん"],
+    #|  "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": null,
+    #|  "moves": [
+    #|    {"name":"じしん","type":"じめん","category":"物理","power":100}
+    #|  ]
+    #|}
+  let with_empty =
+    #|{
+    #|  "name": "マンムー",
+    #|  "types": ["こおり","じめん"],
+    #|  "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "",
+    #|  "moves": [
+    #|    {"name":"じしん","type":"じめん","category":"物理","power":100}
+    #|  ]
+    #|}
+  let c1 = parse_single_combatant(with_null)
+  let c2 = parse_single_combatant(with_empty)
+  match c1.nature {
+    None => ()
+    Some(_) => fail("null nature must be None")
+  }
+  match c2.nature {
+    None => ()
+    Some(_) => fail("empty nature must be None")
+  }
+}
+
+///|
+/// `stat_points` が `{h,a,b,c,d,s}` 形式で読まれて Combatant に載ることを確認する。
+test "parse_combatant_json: stat_points is lifted into Combatant" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "おくびょう",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":32,"d":2,"s":32},
+    #|  "actual_stats": {"h":153,"a":95,"b":98,"c":182,"d":107,"s":167},
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let c = parse_single_combatant(src)
+  match c.stat_points {
+    Some(sp) => {
+      assert_eq(sp.length(), 6)
+      assert_eq(sp[0], 0)
+      assert_eq(sp[3], 32) // C
+      assert_eq(sp[5], 32) // S
+    }
+    None => fail("stat_points must be parsed")
+  }
+}
+
+///|
+/// メガ進化後の実数値は pre-mega `actual_stats` をそのまま使えないため、
+/// `stat_points` + `nature` + post-mega base から再計算されることを確認する。
+///
+/// 入力: リザードン (base SpA 109 / Spe 100) + ようき / C=32 S=32。
+///   pre-mega actual は C=179, S=167 相当。
+/// メガ進化で SpA 159 / Spe 100 に上がる (メガリザY 相当)。
+/// 正しい実装なら post-mega actual C は 159 ベースで再計算される。
+/// ようき性格は C 下降なので `(159 + 32 + 20) * 9/10 = 189`。
+/// 以前の (actual_stats を落とす) 実装では engine 既定 (SP 32 + ひかえめ相当)
+/// へフォールバックしてしまい、この差を埋められない。
+test "effective_combatant: mega recomputes actual_stats from stat_points/nature" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "ようき",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":32,"d":2,"s":32},
+    #|  "actual_stats": {"h":153,"a":95,"b":98,"c":179,"d":107,"s":167},
+    #|  "mega_form": {
+    #|    "atk":104, "def":78, "spa":159, "spd":115, "spe":100,
+    #|    "type1":"ほのお", "type2":"ドラゴン", "ability":"ひでり",
+    #|    "name_ja":"メガリザードンY"
+    #|  },
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let pre = parse_single_combatant(src)
+  let post = effective_combatant(pre, true)
+  // mega_form / nature / stat_points はすべて伝搬する。
+  match post.nature {
+    Some(n) => assert_eq(n.name_ja, "ようき")
+    None => fail("post-mega nature must be preserved")
+  }
+  match post.stat_points {
+    Some(sp) => assert_eq(sp[3], 32)
+    None => fail("post-mega stat_points must be preserved")
+  }
+  match post.actual_stats {
+    Some(arr) => {
+      assert_eq(arr.length(), 6)
+      // HP は mega で不変。pre-mega actual_stats[0] (= 153) を引き継ぐ。
+      assert_eq(arr[0], 153)
+      // SpA: post-mega base 159 + SP 32 + Champions オフセット 20 に
+      // ようき (SpA 下降 9/10) を掛けて 189。
+      assert_eq(arr[3], 189)
+      // Spe: post-mega base 100 + SP 32 + 20 にようき (Spe 上昇 11/10) = 167。
+      assert_eq(arr[5], 167)
+    }
+    None =>
+      fail(
+        "post-mega actual_stats must be recomputed when stat_points and nature are available",
+      )
+  }
+}
+
+///|
+/// `stat_points` / `nature` が片方でも欠けているときは post-mega 実数値を
+/// 再計算できないので `None` にフォールバックする (= engine 既定投資へ)。
+/// 再計算パスが silent に誤った値を返すより、engine 既定に戻すほうが
+/// 「データが欠けている」ことが payoff 上で分かりやすい。
+test "effective_combatant: mega without stat_points drops actual_stats" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "ひかえめ",
+    #|  "actual_stats": {"h":153,"a":72,"b":98,"c":205,"d":107,"s":149},
+    #|  "mega_form": {
+    #|    "atk":104, "def":78, "spa":159, "spd":115, "spe":100,
+    #|    "type1":"ほのお", "type2":"ドラゴン", "ability":"ひでり",
+    #|    "name_ja":"メガリザードンY"
+    #|  },
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let pre = parse_single_combatant(src)
+  let post = effective_combatant(pre, true)
+  match post.actual_stats {
+    None => ()
+    Some(_) =>
+      fail("actual_stats must be dropped when stat_points are not available")
+  }
+  // nature は引き続き伝搬 (engine は nature + 既定投資で再計算できる)。
+  match post.nature {
+    Some(n) => assert_eq(n.name_ja, "ひかえめ")
+    None => fail("post-mega nature must still be preserved")
+  }
+}
+
+///|
+/// メガ進化経由でも pre-mega の `stat_points` 由来 SpA が damage に効くことを
+/// end-to-end で確認する: `compute_mean_damage` を post-mega Combatant に対して
+/// 直接呼び、SP 32 投資 vs SP 0 投資で damage が増えることを見る。
+/// これが壊れていると、select で mega 進化を含むセルだけ engine 既定投資に
+/// 戻ってしまうため、実構築と乖離した評価になる。
+test "compute_mean_damage via effective_combatant: mega uses stat_points-derived SpA" {
+  let invested_src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "ひかえめ",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":32,"d":2,"s":32},
+    #|  "actual_stats": {"h":153,"a":72,"b":98,"c":205,"d":107,"s":149},
+    #|  "mega_form": {
+    #|    "atk":104, "def":78, "spa":159, "spd":115, "spe":100,
+    #|    "type1":"ほのお", "type2":"ドラゴン", "ability":"",
+    #|    "name_ja":"メガリザードンY"
+    #|  },
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let uninvested_src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "ひかえめ",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":0,"d":0,"s":0},
+    #|  "actual_stats": {"h":153,"a":72,"b":98,"c":173,"d":93,"s":117},
+    #|  "mega_form": {
+    #|    "atk":104, "def":78, "spa":159, "spd":115, "spe":100,
+    #|    "type1":"ほのお", "type2":"ドラゴン", "ability":"",
+    #|    "name_ja":"メガリザードンY"
+    #|  },
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let dfn_src =
+    #|{
+    #|  "name": "ヌメルゴン",
+    #|  "types": ["ドラゴン"],
+    #|  "base_stats": {"h":90,"a":100,"b":70,"c":110,"d":150,"s":80},
+    #|  "ability": "","item": "","tera": "",
+    #|  "actual_stats": {"h":180,"a":120,"b":100,"c":150,"d":177,"s":90},
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let invested = effective_combatant(parse_single_combatant(invested_src), true)
+  let uninvested = effective_combatant(
+    parse_single_combatant(uninvested_src), true,
+  )
+  let dfn = parse_single_combatant(dfn_src)
+  let mv : @model.Move = {
+    name: "かえんほうしゃ",
+    type_: "ほのお",
+    category: @model.Special,
+    power: 90,
+    accuracy: 100,
+    pp: 10,
+    learn_method: "",
+    priority: 0,
+    stat_effects: [],
+    status_effect: None,
+    recoil_num: 0,
+    recoil_den: 1,
+    self_ko: false,
+    recharge: false,
+  }
+  let d_invested = compute_mean_damage(invested, dfn, mv, 0, 0)
+  let d_uninvested = compute_mean_damage(uninvested, dfn, mv, 0, 0)
+  assert_true(d_invested > 0)
+  assert_true(d_uninvested > 0)
+  assert_true(d_invested > d_uninvested)
+}

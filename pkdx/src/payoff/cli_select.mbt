@@ -331,7 +331,8 @@ fn parse_combatant_json(
         Some(mj) => Some(parse_mega_form_json(mj, ctx + ".mega_form"))
         None => None
       }
-      let nature = parse_nature_field(m)
+      let nature = parse_nature_field(m, ctx)
+      let stat_points = parse_stat_points_field(m)
       let actual_stats = parse_actual_stats_field(m)
       {
         pokemon: poke,
@@ -342,6 +343,7 @@ fn parse_combatant_json(
         stat_system,
         mega_form,
         nature,
+        stat_points,
         actual_stats,
       }
     }
@@ -350,11 +352,62 @@ fn parse_combatant_json(
 }
 
 ///|
-/// `nature` (日本語名) を `@model.Nature` へ解決する。存在しない名前は
-/// `None` として扱い、damage engine のデフォルト (+10% 補正) にフォールバック。
-fn parse_nature_field(m : Map[String, Json]) -> @model.Nature? {
+/// `nature` (日本語名) を `@model.Nature` へ解決する。
+///
+/// 振る舞い:
+///   - キー欠損 / 明示 `null` / 空文字 → `None` (engine 既定にフォールバック)。
+///   - 既知の性格名 → `Some(nature)`。
+///   - 未知の文字列 / 文字列以外 → `InvalidJson` を raise。
+///
+/// 未知文字列を `None` に丸めてしまうと、damage engine の "攻撃側 None = +10% 補正"
+/// 既定により、typo (例: `"ようき "` の末尾空白) の入力が黙って攻撃を底上げする。
+/// select の数値は payoff 行列に直接効くので、検出可能な入力エラーは
+/// 失敗させてユーザに気付かせる方針。
+fn parse_nature_field(
+  m : Map[String, Json],
+  ctx : String,
+) -> @model.Nature? raise NashCliError {
   match m.get("nature") {
-    Some(String(s)) => @model.nature_from_ja(s)
+    None => None
+    Some(Null) => None
+    Some(String(s)) => {
+      if s.length() == 0 {
+        return None
+      }
+      match @model.nature_from_ja(s) {
+        Some(n) => Some(n)
+        None =>
+          raise InvalidJson(
+            ctx +
+            ".nature: unknown nature name " +
+            s +
+            " (expected a Japanese nature name like 'ようき' / 'ひかえめ')",
+          )
+      }
+    }
+    Some(_) => raise InvalidJson(ctx + ".nature must be a string")
+  }
+}
+
+///|
+/// `stat_points`: `{h,a,b,c,d,s}` 形式の 6 要素 SP (Champions) / EV (Standard)。
+/// post-mega 実数値の再計算に使う「振り」そのもので、`actual_stats` と違い
+/// engine override には直接渡らない。スキーマ的には `actual_stats` と同じ
+/// short key 形式のみ受け付ける。欠損・部分欠損は `None` (= 再計算不可、
+/// post-mega は engine 既定投資にフォールバック)。
+fn parse_stat_points_field(m : Map[String, Json]) -> Array[Int]? {
+  match m.get("stat_points") {
+    Some(Object(st)) => {
+      let keys = ["h", "a", "b", "c", "d", "s"]
+      let out : Array[Int] = Array::make(6, 0)
+      for i in 0..<6 {
+        match st.get(keys[i]) {
+          Some(Number(n, ..)) => out[i] = n.to_int()
+          _ => return None
+        }
+      }
+      Some(out)
+    }
     _ => None
   }
 }
@@ -457,6 +510,7 @@ fn mk_empty_combatant() -> Combatant {
     stat_system: @model.Champions,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
 }

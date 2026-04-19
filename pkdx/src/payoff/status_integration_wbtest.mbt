@@ -50,6 +50,7 @@ fn mk_int_combatant(
     stat_system: @model.Standard,
     mega_form: None,
     nature: None,
+    stat_points: None,
     actual_stats: None,
   }
 }

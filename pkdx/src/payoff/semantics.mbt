@@ -64,6 +64,11 @@ pub(all) enum TeamPayoffModel {
 /// ため、select は base_stats + 既定投資ではなく、ユーザーの実構築そのままの
 /// 打点を評価できる。両方 `None` のときは従来どおり engine デフォルト
 /// (攻撃側 max SP+性格 / 防御側 無投資) にフォールバックする。
+///
+/// `stat_points` は 6 要素 (H/A/B/C/D/Spe) の SP (Champions) / EV (Standard)。
+/// pre-mega の base_stats から `actual_stats` を再現できる「振り」そのもの。
+/// メガ進化で base が変わると pre-mega `actual_stats` がそのまま使えなくなる
+/// ため、`effective_combatant` がここから post-mega 実数値を再計算する。
 pub(all) struct Combatant {
   pokemon : @model.Pokemon
   moves : Array[@model.Move]
@@ -75,6 +80,7 @@ pub(all) struct Combatant {
   // `SwitchingGame` の `Mega` アクションで mega_form 値に切り替わる。
   mega_form : @model.MegaForm?
   nature : @model.Nature?
+  stat_points : Array[Int]?
   actual_stats : Array[Int]?
 } derive(Show)
 

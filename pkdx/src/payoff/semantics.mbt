@@ -69,6 +69,12 @@ pub(all) enum TeamPayoffModel {
 /// pre-mega の base_stats から `actual_stats` を再現できる「振り」そのもの。
 /// メガ進化で base が変わると pre-mega `actual_stats` がそのまま使えなくなる
 /// ため、`effective_combatant` がここから post-mega 実数値を再計算する。
+///
+/// `ivs` は Standard format 専用の 6 要素 IV 配列 (Champions は IV 廃止のため
+/// 無視)。post-mega 実数値の再計算時に必要で、欠損時は 31 揃い (= 完璧個体)
+/// を仮定する。ユーザーが敢えて 0 Atk 特殊アタッカーや 0 Spe トリルなど
+/// 非 31 IV で組んだとき、ここを通さないと post-mega の stat が勝手に 31 IV
+/// 基準にずれる。
 pub(all) struct Combatant {
   pokemon : @model.Pokemon
   moves : Array[@model.Move]
@@ -82,6 +88,7 @@ pub(all) struct Combatant {
   nature : @model.Nature?
   stat_points : Array[Int]?
   actual_stats : Array[Int]?
+  ivs : Array[Int]?
 } derive(Show)
 
 ///|

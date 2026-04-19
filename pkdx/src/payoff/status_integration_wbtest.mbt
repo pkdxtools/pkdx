@@ -52,6 +52,7 @@ fn mk_int_combatant(
     nature: None,
     stat_points: None,
     actual_stats: None,
+    ivs: None,
   }
 }
 

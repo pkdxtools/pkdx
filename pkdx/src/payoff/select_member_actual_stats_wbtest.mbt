@@ -785,3 +785,153 @@ test "compute_mean_damage via effective_combatant: mega uses stat_points-derived
   assert_true(d_uninvested > 0)
   assert_true(d_invested > d_uninvested)
 }
+
+///|
+/// Standard (EV/IV) format で Combatant の `ivs` フィールドが
+/// `parse_combatant_json` → Combatant に流れ込むことを確認する。
+test "parse_combatant_json: ivs field is lifted into Combatant" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "おくびょう",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":252,"d":4,"s":252},
+    #|  "actual_stats": {"h":153,"a":80,"b":98,"c":161,"d":106,"s":167},
+    #|  "ivs": {"h":31,"a":0,"b":31,"c":31,"d":31,"s":31},
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let j = @json.parse(src)
+  let c = parse_combatant_json(j, "test", stat_system=@model.Standard)
+  match c.ivs {
+    Some(arr) => {
+      assert_eq(arr.length(), 6)
+      assert_eq(arr[0], 31)
+      assert_eq(arr[1], 0) // 0 Atk IV (混乱自傷ケア想定)
+      assert_eq(arr[5], 31)
+    }
+    None => fail("ivs must be parsed")
+  }
+}
+
+///|
+/// `ivs` キー欠損は `None` にフォールバックする (= 再計算時 31 揃いを仮定)。
+test "parse_combatant_json: missing ivs keeps Combatant None" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "おくびょう",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":252,"d":4,"s":252},
+    #|  "actual_stats": {"h":153,"a":80,"b":98,"c":161,"d":106,"s":167},
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let j = @json.parse(src)
+  let c = parse_combatant_json(j, "test", stat_system=@model.Standard)
+  match c.ivs {
+    None => ()
+    Some(_) => fail("missing ivs should be None")
+  }
+}
+
+///|
+/// Standard フォーマットでメガ進化後の実数値を再計算するとき、
+/// `Combatant.ivs` がユーザ指定の IV を尊重することを確認する。
+/// これが 31 ハードコードに戻ると、0 Atk (混乱自傷ケアの特殊アタッカー) や
+/// 0 Spe (トリル下行動) の意図的な非 31 IV 構築が post-mega で壊れる。
+///
+/// 入力: リザードン (pre-mega base Atk 84 / SpA 109) + おくびょう
+///        (SpA ±0, Atk 0.9, Spe 1.1) + EV {H:0,A:0,B:0,C:252,D:4,S:252}
+///        + IVs {H:31,A:0,B:31,C:31,D:31,S:31}
+/// メガ Y: base Atk 104, Def 78, SpA 159, SpD 115, Spe 100。
+///
+/// IV 0 の Atk で再計算されれば post-mega Atk =
+///   floor((104*2 + 0 + 0)*50/100 + 5) = 109, ×9/10 = 98。
+/// IV 31 をハードコードしていれば 124 → ×9/10 = 111 になる。
+/// → `arr[1] == 98` を assert することで回帰を検出する。
+test "effective_combatant: mega honors non-31 Standard IVs in post-mega recompute" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "おくびょう",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":252,"d":4,"s":252},
+    #|  "actual_stats": {"h":153,"a":80,"b":98,"c":161,"d":106,"s":167},
+    #|  "ivs": {"h":31,"a":0,"b":31,"c":31,"d":31,"s":31},
+    #|  "mega_form": {
+    #|    "atk":104, "def":78, "spa":159, "spd":115, "spe":100,
+    #|    "type1":"ほのお", "type2":"ドラゴン", "ability":"ひでり",
+    #|    "name_ja":"メガリザードンY"
+    #|  },
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let j = @json.parse(src)
+  let pre = parse_combatant_json(j, "test", stat_system=@model.Standard)
+  let post = effective_combatant(pre, true)
+  match post.actual_stats {
+    Some(arr) => {
+      assert_eq(arr.length(), 6)
+      // HP は mega で不変。pre-mega actual_stats[0] (=153) を引き継ぐ。
+      assert_eq(arr[0], 153)
+      // Atk: IV 0 が尊重されれば 98。IV 31 ハードコードだと 111 になる (= 回帰)。
+      assert_eq(arr[1], 98)
+      // SpA: IV 31 / EV 252 / neutral nature / post-mega base 159
+      // = floor((159*2+31+63)*50/100+5) = 211。
+      assert_eq(arr[3], 211)
+      // Spe: IV 31 / EV 252 / +10% / post-mega base 100 変化なしなので 167。
+      assert_eq(arr[5], 167)
+    }
+    None => fail("post-mega actual_stats must be recomputed")
+  }
+  match post.ivs {
+    Some(arr) => {
+      assert_eq(arr[1], 0)
+    }
+    None => fail("ivs must be preserved through effective_combatant")
+  }
+}
+
+///|
+/// IV を明示していないときは 31 揃いを仮定する既存挙動を確認する。
+/// (後方互換: cache に `ivs` を書いていない古い構築でも動く)
+test "effective_combatant: mega defaults IVs to 31 when ivs is missing (Standard)" {
+  let src =
+    #|{
+    #|  "name": "リザードン",
+    #|  "types": ["ほのお","ひこう"],
+    #|  "base_stats": {"h":78,"a":84,"b":78,"c":109,"d":85,"s":100},
+    #|  "ability": "","item": "","tera": "",
+    #|  "nature": "おくびょう",
+    #|  "stat_points": {"h":0,"a":0,"b":0,"c":252,"d":4,"s":252},
+    #|  "actual_stats": {"h":153,"a":111,"b":98,"c":161,"d":106,"s":167},
+    #|  "mega_form": {
+    #|    "atk":104, "def":78, "spa":159, "spd":115, "spe":100,
+    #|    "type1":"ほのお", "type2":"ドラゴン", "ability":"ひでり",
+    #|    "name_ja":"メガリザードンY"
+    #|  },
+    #|  "moves": [
+    #|    {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
+    #|  ]
+    #|}
+  let j = @json.parse(src)
+  let pre = parse_combatant_json(j, "test", stat_system=@model.Standard)
+  let post = effective_combatant(pre, true)
+  match post.actual_stats {
+    Some(arr) => {
+      // IV 31 デフォルト + 0.9 nature の post-mega Atk = 111。
+      assert_eq(arr[1], 111)
+    }
+    None => fail("post-mega actual_stats must be recomputed")
+  }
+}

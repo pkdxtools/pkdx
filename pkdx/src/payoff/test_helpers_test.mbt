@@ -76,6 +76,7 @@ fn mk_combatant(
   nature~ : @model.Nature? = None,
   stat_points~ : Array[Int]? = None,
   actual_stats~ : Array[Int]? = None,
+  ivs~ : Array[Int]? = None,
 ) -> Combatant {
   {
     pokemon,
@@ -88,5 +89,6 @@ fn mk_combatant(
     nature,
     stat_points,
     actual_stats,
+    ivs,
   }
 }

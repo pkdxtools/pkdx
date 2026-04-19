@@ -590,6 +590,7 @@ fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
         nature: c.nature,
         stat_points: c.stat_points,
         actual_stats: post_mega_actual_stats,
+        ivs: c.ivs,
       }
     }
     _ => c
@@ -606,6 +607,13 @@ fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
 /// `actual_stats` when available (preserves user spread even if `stat_points`
 /// HP differs from the "implied" recomputation). Other stats are always
 /// recomputed from the post-mega base to stay in sync with the post-mega form.
+///
+/// Standard format: `pre.ivs` が与えられていればユーザ指定の IV 配列を
+/// そのまま流し込み、欠損時のみ 31 揃い (完璧個体) を仮定する。0 Atk
+/// 特殊アタッカーや 0 Spe トリル等で IV を敢えて下げた構築は、ここで IV を
+/// 引き継がないと post-mega の A / Spe が「勝手に 31 基準」へ流されて
+/// しまうため、pre-mega `actual_stats` で守った user spread が壊れる。
+/// Champions format は IV 廃止なので `ivs` フィールドは読み飛ばす。
 fn recompute_actual_stats_for_mega(
   post_mega : @model.Pokemon,
   pre : Combatant,
@@ -618,7 +626,11 @@ fn recompute_actual_stats_for_mega(
     Some(n) => n
     None => return None
   }
-  let ivs : FixedArray[Int] = [31, 31, 31, 31, 31, 31]
+  let ivs : FixedArray[Int] = match pre.ivs {
+    Some(arr) if arr.length() == 6 =>
+      [arr[0], arr[1], arr[2], arr[3], arr[4], arr[5]]
+    _ => [31, 31, 31, 31, 31, 31]
+  }
   let model : @damage.StatModel = match pre.stat_system {
     @model.Champions => @damage.Champions
     @model.Standard => @damage.Standard(ivs~)

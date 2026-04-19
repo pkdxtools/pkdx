@@ -20,6 +20,7 @@
 ///   "mega_form": {"atk":Int, "def":Int, "spa":Int, "spd":Int, "spe":Int,
 ///                 "type1":String, "type2":String, "ability":String,
 ///                 "name_ja":String}?,  // optional; present if mega-capable
+///   "ivs": {"h":Int, "a":Int, "b":Int, "c":Int, "d":Int, "s":Int}?,
 ///   "moves":   [{"name":..., "type":..., "category":"物理"|"特殊"|"変化",
 ///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?}, ...]
 /// }
@@ -334,6 +335,7 @@ fn parse_combatant_json(
       let nature = parse_nature_field(m, ctx)
       let stat_points = parse_stat_points_field(m)
       let actual_stats = parse_actual_stats_field(m)
+      let ivs = parse_ivs_field(m)
       {
         pokemon: poke,
         moves,
@@ -345,6 +347,7 @@ fn parse_combatant_json(
         nature,
         stat_points,
         actual_stats,
+        ivs,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
@@ -420,6 +423,29 @@ fn parse_stat_points_field(m : Map[String, Json]) -> Array[Int]? {
 /// 既存の base_stats だけで動いていたケースの後方互換を取るため optional)。
 fn parse_actual_stats_field(m : Map[String, Json]) -> Array[Int]? {
   match m.get("actual_stats") {
+    Some(Object(st)) => {
+      let keys = ["h", "a", "b", "c", "d", "s"]
+      let out : Array[Int] = Array::make(6, 0)
+      for i in 0..<6 {
+        match st.get(keys[i]) {
+          Some(Number(n, ..)) => out[i] = n.to_int()
+          _ => return None
+        }
+      }
+      Some(out)
+    }
+    _ => None
+  }
+}
+
+///|
+/// `ivs`: `{h,a,b,c,d,s}` 形式の 6 要素 IV (Standard format 専用)。
+/// post-mega 実数値の再計算で使う「個体値」そのもの。Champions は IV 廃止
+/// のため読み込んでも damage/stat 計算では無視される (schema 側でも Standard
+/// 構築のみに emit する運用)。キー欠損・部分欠損は `None` フォールバックで、
+/// recompute_actual_stats_for_mega 側で 31 揃い (完璧個体) を仮定する。
+fn parse_ivs_field(m : Map[String, Json]) -> Array[Int]? {
+  match m.get("ivs") {
     Some(Object(st)) => {
       let keys = ["h", "a", "b", "c", "d", "s"]
       let out : Array[Int] = Array::make(6, 0)
@@ -512,6 +538,7 @@ fn mk_empty_combatant() -> Combatant {
     nature: None,
     stat_points: None,
     actual_stats: None,
+    ivs: None,
   }
 }
 

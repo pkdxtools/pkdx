@@ -122,11 +122,13 @@ Phase 0でユーザー選択値（battle_format, mechanics, version, regulation�
 
 ## メンバー確定共通: 育成データ入力
 
-メンバーの特性・持ち物確定後に呼び出す共通サブフロー。性格・SP（Champions）/ EV（deprecated）・実数値を `members[i].nature` / `members[i].stat_points` / `members[i].actual_stats` に格納する。
+メンバーの特性・持ち物確定後に呼び出す共通サブフロー。性格・SP（Champions）/ EV（deprecated）・実数値を `members[i].nature` / `members[i].stat_points` / `members[i].actual_stats` に格納する。Standard (= EV/IV) 系の version では追加で `members[i].ivs` も格納する。
 
 ### なぜ必要か
 
 `pkdx select` / `pkdx nash graph` はこの 3 フィールドを読んで `DamageCalcInput.atk_nature` / `def_nature` / `atk_stat_override` / `def_stat_override` / `def_hp_override` を設定する。未設定のメンバーは「攻撃側 SP=32 +性格補正 / 防御側 SP=0 無補正」の engine legacy default で計算されるため、実構築の打点・耐久とずれる。**未設定のまま Phase 8 に進むと、Phase 6 のマッチアップ分析や `pkdx select` の選出最適化が実戦と乖離する。**
+
+Standard 形式ではメガ進化後の実数値を再計算するときに個体値 (IV) が必要になる。`members[i].ivs` を設定しないと select は 31 揃い (完璧個体) を仮定するため、0 攻撃の特殊アタッカーや 0 素早さのトリックルーム要員など、非 31 IV を意図的に使った構築は post-mega 実数値がユーザー意図からずれる。Champions はゲーム仕様上 IV が廃止されているため、`ivs` を設定しても無視される (Standard 構築のみで有効)。
 
 ### 入力フロー
 
@@ -139,6 +141,8 @@ Phase 0でユーザー選択値（battle_format, mechanics, version, regulation�
    - **ユーザー直接指定**: "H252 A252 S4 余り" のような自由文字列を SP/EV に解釈
 
    stat_points は `{h, a, b, c, d, s}` 形式で格納（Champions は各 ≤ 32 合計 ≤ 66、deprecated は各 4 刻み ≤ 252 合計 ≤ 510）。
+
+   **Standard (EV/IV) 系 version 限定**: ユーザーが IV を指定したら `members[i].ivs = {h, a, b, c, d, s}` に格納する。特に指定がなければ `{h:31, a:31, b:31, c:31, d:31, s:31}` を既定とする。ただし 0 攻撃 (特殊アタッカーの混乱自傷ケア) や 0 素早さ (トリックルーム下位行動) のような非 31 IV 運用が明示されたときは、その値を必ず保存する (select のメガ進化後再計算がこの値を使う)。Champions では IV がゲーム仕様上存在しないので `ivs` は**格納しない**（`null` のまま）。
 
 3. **実数値の算出**: SP/EV 確定後、`$PKDX stat-calc` で実数値を出す:
 

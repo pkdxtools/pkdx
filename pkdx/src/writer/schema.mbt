@@ -94,6 +94,10 @@ fn member_schema(
       "nature": nullable(b, b.string()),
       "stat_points": nullable(b, stats_schema_short(b)),
       "actual_stats": nullable(b, stats_schema_short(b)),
+      // Standard format のみ使用する個体値 (H/A/B/C/D/S)。メガ進化後の実数値
+      // 再計算で非 31 IV のユーザ spread (0 Atk 特殊 / 0 Spe トリル等) を
+      // 保持するために必要。Champions は IV 廃止のため無視される。
+      "ivs": nullable(b, stats_schema_short(b)),
     },
     required=[
       "name", "types", "base_stats", "ability", "item", "role", "moves",

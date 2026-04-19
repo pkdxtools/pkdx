@@ -1,2 +1,2 @@
 ///|
-let pkdx_version : String = "0.4.7"
+let pkdx_version : String = "0.4.8"

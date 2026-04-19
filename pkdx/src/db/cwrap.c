@@ -310,7 +310,8 @@ int32_t pkdx_exec_query_typed(
     int32_t row_count = 0;
     char **cells = (char **)libc_malloc(sizeof(char *) * capacity * col_count);
 
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    int step_rc;
+    while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         if (row_count >= capacity) {
             capacity *= 2;
             cells = (char **)realloc(cells, sizeof(char *) * capacity * col_count);
@@ -331,6 +332,20 @@ int32_t pkdx_exec_query_typed(
             }
         }
         row_count++;
+    }
+
+    /* DML routed through this path (INSERT/UPDATE/DELETE via exec_binds →
+       query_binds_impl) must surface SQLITE_CONSTRAINT / SQLITE_BUSY etc.
+       so runner.mbt rolls back the transaction instead of committing a
+       partially-applied migration. */
+    if (step_rc != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        int32_t total = row_count * col_count;
+        for (int32_t i = 0; i < total; i++) {
+            if (cells[i]) libc_free(cells[i]);
+        }
+        libc_free(cells);
+        return step_rc;
     }
 
     sqlite3_finalize(stmt);

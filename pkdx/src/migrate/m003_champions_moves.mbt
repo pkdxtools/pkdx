@@ -15,6 +15,19 @@ pub fn run_003(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
   }
   let waza_version = "Champions"
+  // local_waza / local_waza_language にも UNIQUE 制約が無いため、
+  // `INSERT OR REPLACE` / `INSERT OR IGNORE` が重複行を積み上げる。
+  // --resync 対応のため Champions 行を明示的に削除してから再投入する。
+  for t in ["local_waza", "local_waza_language"] {
+    match @db.exec_binds(
+        db,
+        "DELETE FROM " + t + " WHERE version = ?",
+        [@db.BindText(waza_version)],
+      ) {
+      Err(e) => return Err(e)
+      Ok(_) => ()
+    }
+  }
   for entry_json in entries {
     let m = match entry_json {
       Object(o) => o

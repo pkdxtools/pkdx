@@ -14,6 +14,13 @@ pub fn run_005(db : @db.Db, _repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
+  // `champions_learnset` は 005 が所有するテーブル。--resync で 004 が
+  // local_pokedex_waza を再投入した後、再び此処に INSERT する際に重複
+  // しないよう、実行のたびに全行を捨てて正規化結果で上書きする。
+  match @db.exec(db, "DELETE FROM champions_learnset") {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
   let type_rows = match @db.query_binds(
       db,
       "SELECT waza, type FROM local_waza WHERE version = 'Champions'",

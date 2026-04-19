@@ -16,6 +16,18 @@ pub fn run_004(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
   }
   let waza_version = "Champions"
+  // local_pokedex_waza にも UNIQUE 制約が無いので、--resync 時に重複が
+  // 発生しないよう Champions 行を先にクリアする。通常フローでは 005 が
+  // 最後に同条件で削除するため不要だが、005 失敗後の resync でも安全に
+  // 再走するようここで防御する。
+  match @db.exec_binds(
+      db,
+      "DELETE FROM local_pokedex_waza WHERE version = ?",
+      [@db.BindText(waza_version)],
+    ) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
   for entry_json in entries {
     let entry = match entry_json {
       Object(o) => o

@@ -55,9 +55,16 @@ fn run_with_db(
     Ok(_) => ()
   }
   if resync {
-    // All migrations listed below are idempotent upserts (UPDATE /
-    // INSERT OR REPLACE / ensure_column), so clearing bookkeeping and
-    // re-running is safe and converges the DB to the data.json SSoT.
+    // 各 migration は冪等に実装されている:
+    //   - 001 / 007: UPDATE のみ / read-only 検証
+    //   - 002 / 003 / 004 / 005: 先頭で自身が書き込む Champions / 自己所有
+    //     テーブルを DELETE してから再投入し、UNIQUE 制約が無い表でも
+    //     重複を生まないようにしている
+    //   - 006 / 008 / 010: move_meta (name_ja PRIMARY KEY) に対する
+    //     INSERT OR REPLACE / UPDATE-first upsert
+    // この前提で bookkeeping を空にして全件再適用しても DB は data.json
+    // の現在状態に収束する。新しい migration を追加する際はこの不変条件
+    // (プレーン INSERT で table を育てない) を壊さないこと。
     match @db.exec(db, "DELETE FROM pkdx_migrations") {
       Err(e) => return Err(e)
       Ok(_) => ()

@@ -17,6 +17,26 @@ pub fn run_002(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
   }
   let version = "champions"
+  // local_pokedex / _status / _type / _ability には UNIQUE 制約が無く、
+  // `INSERT OR REPLACE` が実質プレーン INSERT になる。--resync で再投入
+  // する前に Champions 行を明示的に削除しておくと、table は data.json の
+  // 現在状態へ収束する (pokedex_name と pokedex は UPDATE-first で吸収)。
+  let cleanup_tables = [
+    "local_pokedex",
+    "local_pokedex_status",
+    "local_pokedex_type",
+    "local_pokedex_ability",
+  ]
+  for t in cleanup_tables {
+    match @db.exec_binds(
+        db,
+        "DELETE FROM " + t + " WHERE version = ?",
+        [@db.BindText(version)],
+      ) {
+      Err(e) => return Err(e)
+      Ok(_) => ()
+    }
+  }
   for entry_json in entries {
     let entry = match entry_json {
       Object(m) => m

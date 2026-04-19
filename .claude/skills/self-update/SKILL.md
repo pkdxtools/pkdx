@@ -212,7 +212,7 @@ $REPO_ROOT/bin/pkdx version
 
 ### 2-4: DB resync
 
-upstream の data.json 変更（道具メタ、反動技、状態異常技 等）を既存 DB に反映する。`--resync` は `pkdx_migrations` bookkeeping をクリアして全マイグレーションを upsert し直すため、data.json が SSoT として機能する。全マイグレーションは冪等な upsert なので再適用は安全。
+upstream の data.json 変更（道具メタ、反動技、状態異常技 等）を既存 DB に反映する。`--resync` は `pkdx_migrations` bookkeeping をクリアして全マイグレーションを再適用するため、data.json が SSoT として機能する。全マイグレーションは冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されており、再適用しても DB は data.json の状態へ収束する。
 
 ```bash
 cd $REPO_ROOT && bin/pkdx migrate --resync

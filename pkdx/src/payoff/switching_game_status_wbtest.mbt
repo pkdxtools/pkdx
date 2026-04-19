@@ -962,3 +962,113 @@ test "alive_actions: recharge=false retains full enumeration (baseline)" {
   let actions = alive_actions(0, hps, team, true)
   assert_eq(actions.length(), 2)
 }
+
+///|
+/// Regression: after a recharging Pokemon faints to end-of-turn damage the
+/// slot keeps `must_recharge = true` until the next turn's
+/// `clear_consumed_recharge` fires. `alive_actions` correctly enumerates a
+/// forced `Switch(...)` (active KO-d, so the recharge short-circuit
+/// intentionally does **not** apply). `per_side_attempt` must mirror that:
+/// a Switch action must pass through even with `must_recharge=true`, so the
+/// side can replace its dead active instead of being stranded.
+test "per_side_attempt: Switch bypasses must_recharge (forced replacement)" {
+  let out = per_side_attempt(@model.None, true, Switch(1), 100)
+  assert_eq(out.length(), 1)
+  assert_eq(out[0].prob, 1.0)
+  assert_true(out[0].acts)
+}
+
+///|
+test "per_side_attempt: UseMove still skipped by must_recharge" {
+  let out = per_side_attempt(@model.None, true, UseMove(0), 100)
+  assert_eq(out.length(), 1)
+  assert_eq(out[0].prob, 1.0)
+  assert_false(out[0].acts)
+}
+
+///|
+test "per_side_attempt: Mega still skipped by must_recharge" {
+  let out = per_side_attempt(@model.None, true, Mega(0), 100)
+  assert_eq(out.length(), 1)
+  assert_eq(out[0].prob, 1.0)
+  assert_false(out[0].acts)
+}
+
+///|
+/// End-to-end regression: a recharging Pokemon that faints to end-of-turn
+/// poison on the same turn the recharge flag was set must still be able to
+/// send a replacement next turn. Before the fix, `per_side_attempt`
+/// short-circuited the forced Switch to `acts=false`, which left the DP in
+/// an illegal state with a dead active and no way to replace it.
+test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
+  // Active (A) holds Hyper Beam. Poisoned with 1 HP so the end-of-turn tick
+  // after firing Hyper Beam reduces HP to 0 (clamp_zero) on the same turn
+  // that the recharge flag gets set. Faster than the opponent to avoid a
+  // speed-tie fan-out that would inflate `outs1.length()` past 1.
+  let a_with_hb = mk_combatant_with_moves(
+    mk_stat_pokemon("A", 200, 100, 120),
+    [mk_move("hb", "ノーマル", @model.Special, 150, recharge=true)],
+  )
+  let b_with_mv = mk_combatant_with_moves(
+    mk_stat_pokemon("B", 200, 100, 100),
+    [mk_move("tackle", "ノーマル", @model.Physical, 40)],
+  )
+  let opp_with_idle = mk_combatant_with_moves(
+    mk_stat_pokemon("Z", 300, 100, 60),
+    [mk_move("idle", "ノーマル", @model.Status, 0)],
+  )
+  let my_team = [a_with_hb, b_with_mv]
+  let opp_team = [opp_with_idle]
+  // Turn 0 → 1: Active at 1 HP, poisoned. Hyper Beam lands → recharge flag
+  // set post-hit; EOT poison tick kills active (1 HP - max/8 clamped to 0).
+  let s0 : SwitchingGameState = {
+    my_active: 0,
+    opp_active: 0,
+    my_hps: [1, 200],
+    opp_hps: [300],
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    my_mega_used: false,
+    opp_mega_used: false,
+    my_megaed: [false, false],
+    opp_megaed: [false],
+    my_status: [@model.Poison, @model.None],
+    opp_status: [@model.None],
+    my_must_recharge: [false, false],
+    opp_must_recharge: [false],
+    turn: 0,
+  }
+  let outs1 = attempt_turn_with_cache(
+    s0, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  assert_eq(outs1.length(), 1)
+  let (_, s1) = outs1[0]
+  // Active died to the EOT poison tick but the recharge flag is still live
+  // (set fresh this turn, so `clear_consumed_recharge` did not consume it).
+  assert_eq(s1.my_hps[0], 0)
+  assert_eq(s1.my_must_recharge[0], true)
+  // alive_actions must now enumerate a forced Switch to slot 1.
+  let forced = alive_actions(
+    s1.my_active, s1.my_hps, my_team, s1.my_mega_used,
+    must_recharge=s1.my_must_recharge[s1.my_active],
+  )
+  assert_eq(forced.length(), 1)
+  match forced[0] {
+    Switch(i) => assert_eq(i, 1)
+    _ => abort("expected forced Switch(1) after active KO")
+  }
+  // Turn 1 → 2: the forced Switch must execute even though the dead slot's
+  // recharge flag is still set. Previously this was short-circuited to a
+  // no-op, leaving the side with a dead active and no legal follow-up.
+  let outs2 = attempt_turn_with_cache(
+    s1, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  assert_eq(outs2.length(), 1)
+  let (_, s2) = outs2[0]
+  // Switch completed: new active is slot 1, at full HP.
+  assert_eq(s2.my_active, 1)
+  assert_true(s2.my_hps[1] > 0)
+  // Dead slot's stale recharge flag cleared by `clear_consumed_recharge`
+  // (it was true at the start of turn 2).
+  assert_eq(s2.my_must_recharge[0], false)
+}

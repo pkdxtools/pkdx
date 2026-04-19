@@ -92,12 +92,14 @@ pub const PARALYZE_SKIP_RATE : Double = 0.125
 /// The Switch action is always deterministic — status / accuracy don't gate
 /// switching. Only `UseMove` / `Mega` can skip.
 ///
-/// `must_recharge` short-circuits every action to a guaranteed no-op skip
-/// (paralysis/sleep overrides do not stack on top; recharge wins outright
-/// when set). The entire turn is forfeit, matching the mainline Hyper Beam
-/// / Giga Impact behaviour; `alive_actions` already filters the enumeration
-/// down to a single placeholder so Switch/Mega should never reach here
-/// during recharge, but this branch stays as a defensive no-op.
+/// `must_recharge` short-circuits `UseMove` / `Mega` to a guaranteed no-op
+/// skip (paralysis/sleep overrides do not stack on top; recharge wins
+/// outright when set). Switch is **never** gated here — `alive_actions`
+/// collapses the enumeration to the `UseMove(0)` placeholder while the
+/// active is alive, so any Switch that reaches this helper with
+/// `must_recharge = true` is a forced replacement after the recharging slot
+/// fainted to end-of-turn damage. Short-circuiting that would strand the
+/// side with an illegal dead active.
 pub fn per_side_attempt(
   status : @model.StatusCondition,
   must_recharge : Bool,
@@ -105,7 +107,11 @@ pub fn per_side_attempt(
   accuracy : Int,
 ) -> Array[SideAttempt] {
   if must_recharge {
-    return [{ prob: 1.0, acts: false, action, post_status: status }]
+    match action {
+      UseMove(_) | Mega(_) =>
+        return [{ prob: 1.0, acts: false, action, post_status: status }]
+      Switch(_) => ()
+    }
   }
   let acts_only : Array[SideAttempt] = [
     { prob: 1.0, acts: true, action, post_status: status },

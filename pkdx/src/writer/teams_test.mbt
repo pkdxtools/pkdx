@@ -225,6 +225,144 @@ test "build_team_document: memo with newlines collapsed to single row" {
 }
 
 ///|
+test "build_team_document: build data section hidden when no nature/sp/actual" {
+  // 従来の cache JSON (nature / stat_points / actual_stats を持たない) で出力
+  // しても「## 育成データ」セクションが生えないこと。
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let md = @markdown.serialize(doc)
+  assert_false(md.contains("## 育成データ"))
+}
+
+///|
+test "build_team_document: build data section renders when populated" {
+  // Champions vision 取り込み後の cache を想定。nature / stat_points /
+  // actual_stats が揃っているとき「## 育成データ」テーブルに行が出ること。
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "メガシンカ",
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "members": [{
+    #|    "name": "マンムー",
+    #|    "types": ["こおり","じめん"],
+    #|    "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|    "ability": "あついしぼう",
+    #|    "item": "こだわりスカーフ",
+    #|    "role": "物理エース",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"つららおとし","type":"こおり","category":"物理","power":85},
+    #|      {"name":"つららばり","type":"こおり","category":"物理","power":25},
+    #|      {"name":"ばかぢから","type":"かくとう","category":"物理","power":120}
+    #|    ],
+    #|    "nature": "ようき",
+    #|    "stat_points": {"h":20,"a":32,"b":0,"c":0,"d":0,"s":14},
+    #|    "actual_stats": {"h":205,"a":181,"b":100,"c":90,"d":80,"s":124}
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "マンムー", "2026-04-19")
+  let md = @markdown.serialize(doc)
+  assert_true(md.contains("## 育成データ"))
+  assert_true(md.contains("ようき"))
+  assert_true(md.contains("20/32/0/0/0/14"))
+  assert_true(md.contains("205/181/100/90/80/124"))
+}
+
+///|
+test "build_team_document: build data row shows hyphen when member lacks fields" {
+  // members[0] のみ nature/SP/actual_stats を埋め、members[1] は未設定。
+  // 育成データテーブルは (少なくとも 1 体埋まっていれば) 表示され、
+  // 未設定行は "-" 埋めで差分が可視化されること。
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "メガシンカ",
+    #|  "version": "champions",
+    #|  "regulation": "M-A",
+    #|  "members": [
+    #|    {
+    #|      "name": "マンムー",
+    #|      "types": ["こおり","じめん"],
+    #|      "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|      "ability": "あついしぼう",
+    #|      "item": "こだわりスカーフ",
+    #|      "role": "",
+    #|      "moves": [
+    #|        {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|        {"name":"つららおとし","type":"こおり","category":"物理","power":85},
+    #|        {"name":"つららばり","type":"こおり","category":"物理","power":25},
+    #|        {"name":"ばかぢから","type":"かくとう","category":"物理","power":120}
+    #|      ],
+    #|      "nature": "ようき",
+    #|      "stat_points": {"h":20,"a":32,"b":0,"c":0,"d":0,"s":14},
+    #|      "actual_stats": {"h":205,"a":181,"b":100,"c":90,"d":80,"s":124}
+    #|    },
+    #|    {
+    #|      "name": "ガブリアス",
+    #|      "types": ["ドラゴン","じめん"],
+    #|      "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|      "ability": "さめはだ",
+    #|      "item": "いのちのたま",
+    #|      "role": "",
+    #|      "moves": [
+    #|        {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|        {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|        {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|        {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|      ],
+    #|      "nature": null,
+    #|      "stat_points": null,
+    #|      "actual_stats": null
+    #|    }
+    #|  ],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "マンムー", "2026-04-19")
+  let md = @markdown.serialize(doc)
+  assert_true(md.contains("## 育成データ"))
+  // 2 行目 (ガブリアス) は nature / SP / 実数値すべて "-" で出力される
+  assert_true(md.contains("| 2 | ガブリアス | - | - | - |"))
+}
+
+///|
 test "build_team_document: coverage and defense matrix" {
   let src =
     #|{

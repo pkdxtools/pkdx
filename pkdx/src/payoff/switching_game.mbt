@@ -573,6 +573,11 @@ fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
         dream_ability: "",
         weight: base.weight,
       }
+      // mega 後は base が変化するため、もともとユーザが指定した pre-mega
+      // actual_stats は使えない。SP / 性格から post-mega 実数値を再計算するのが
+      // 理想だが、Combatant に SP を持たせていないのでここでは nature のみ
+      // 伝搬し actual_stats は落とす (= engine は post-mega base + 既定投資 +
+      // 伝搬済み nature で再計算する)。
       {
         pokemon: effective_pokemon,
         moves: c.moves,
@@ -581,6 +586,8 @@ fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
         tera_type: c.tera_type,
         stat_system: c.stat_system,
         mega_form: c.mega_form,
+        nature: c.nature,
+        actual_stats: None,
       }
     }
     _ => c

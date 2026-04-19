@@ -331,6 +331,8 @@ fn parse_combatant_json(
         Some(mj) => Some(parse_mega_form_json(mj, ctx + ".mega_form"))
         None => None
       }
+      let nature = parse_nature_field(m)
+      let actual_stats = parse_actual_stats_field(m)
       {
         pokemon: poke,
         moves,
@@ -339,9 +341,44 @@ fn parse_combatant_json(
         tera_type: parse_str_field(m, "tera"),
         stat_system,
         mega_form,
+        nature,
+        actual_stats,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
+  }
+}
+
+///|
+/// `nature` (日本語名) を `@model.Nature` へ解決する。存在しない名前は
+/// `None` として扱い、damage engine のデフォルト (+10% 補正) にフォールバック。
+fn parse_nature_field(m : Map[String, Json]) -> @model.Nature? {
+  match m.get("nature") {
+    Some(String(s)) => @model.nature_from_ja(s)
+    _ => None
+  }
+}
+
+///|
+/// `actual_stats`: `{h,a,b,c,d,s}` の 6 要素を HP/Atk/Def/SpA/SpD/Spe 順の
+/// 配列として返す。team-builder の cache スキーマと揃えた short key 形式のみ
+/// 受け付ける (long key は breed 側の pokemon_schema 専用)。欠損・部分欠損は
+/// `None` にフォールバックする (厳密にして skill 側のバグを隠したくないが、
+/// 既存の base_stats だけで動いていたケースの後方互換を取るため optional)。
+fn parse_actual_stats_field(m : Map[String, Json]) -> Array[Int]? {
+  match m.get("actual_stats") {
+    Some(Object(st)) => {
+      let keys = ["h", "a", "b", "c", "d", "s"]
+      let out : Array[Int] = Array::make(6, 0)
+      for i in 0..<6 {
+        match st.get(keys[i]) {
+          Some(Number(n, ..)) => out[i] = n.to_int()
+          _ => return None
+        }
+      }
+      Some(out)
+    }
+    _ => None
   }
 }
 
@@ -419,6 +456,8 @@ fn mk_empty_combatant() -> Combatant {
     tera_type: "",
     stat_system: @model.Champions,
     mega_form: None,
+    nature: None,
+    actual_stats: None,
   }
 }
 

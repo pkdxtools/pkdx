@@ -89,8 +89,15 @@ fn member_schema(
         min_items=moves_min,
         max_items=4,
       ),
+      // select が実数値/性格を使った damage 計算を行うために必要。
+      // 欠損 (null) 時は engine のデフォルト (攻撃側 max SP+性格 / 防御側 無投資) へフォールバック。
+      "nature": nullable(b, b.string()),
+      "stat_points": nullable(b, stats_schema_short(b)),
+      "actual_stats": nullable(b, stats_schema_short(b)),
     },
-    required_all=true,
+    required=[
+      "name", "types", "base_stats", "ability", "item", "role", "moves",
+    ],
   )
 }
 

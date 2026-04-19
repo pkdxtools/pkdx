@@ -144,6 +144,75 @@ fn format_stats(json : Json, key : String) -> String {
 }
 
 ///|
+/// member に optional で保持する nature / stat_points / actual_stats を
+/// "-" フォールバック付きで取り出す。Json::null / 欠損 / 0 埋めを区別せず
+/// 表示上すべて "-" 扱いにすると SP=0 の振りを消してしまうため、存在する
+/// キーは値として出すが、親キーが null/欠損なら "-" を返す。
+fn format_stats_opt(json : Json, key : String) -> String {
+  match json {
+    Object(obj) =>
+      match obj.get(key) {
+        Some(Object(st)) => {
+          let get = fn(k : String) -> String {
+            match st.get(k) {
+              Some(Number(n, ..)) => n.to_int().to_string()
+              _ => "-"
+            }
+          }
+          let h = get("h")
+          let a = get("a")
+          let b = get("b")
+          let c = get("c")
+          let d = get("d")
+          let sp = get("s")
+          "\{h}/\{a}/\{b}/\{c}/\{d}/\{sp}"
+        }
+        _ => "-"
+      }
+    _ => "-"
+  }
+}
+
+///|
+/// nullable 文字列用。null / 欠損 / 空文字 を "-" として扱う。
+fn json_string_opt(json : Json, key : String) -> String {
+  match json {
+    Object(m) =>
+      match m.get(key) {
+        Some(String(v)) => if v.length() == 0 { "-" } else { v }
+        _ => "-"
+      }
+    _ => "-"
+  }
+}
+
+///|
+/// members に育成データ (nature / stat_points / actual_stats) が 1 つでも
+/// 入っているかを判定。全員 null / 欠損なら育成テーブル自体を出さない。
+fn has_any_build_data(members : Array[Json]) -> Bool {
+  for m in members {
+    match m {
+      Object(obj) => {
+        match obj.get("nature") {
+          Some(String(s)) if s.length() > 0 => return true
+          _ => ()
+        }
+        match obj.get("stat_points") {
+          Some(Object(_)) => return true
+          _ => ()
+        }
+        match obj.get("actual_stats") {
+          Some(Object(_)) => return true
+          _ => ()
+        }
+      }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 fn make_table(
   header : Array[@markdown.TableCell],
   alignments : Array[@markdown.TableAlign],
@@ -166,6 +235,31 @@ fn none_aligns(n : Int) -> Array[@markdown.TableAlign] {
     arr.push(@markdown.TableAlign::None)
   }
   arr
+}
+
+///|
+/// 性格 / SP or EV / 実数値を 1 つのテーブルにまとめる。
+/// select が damage 計算で利用するフィールドのため、各メンバーの欠損状況が
+/// 可視化されていることが重要。欠損セルは "-" で空値を示す。
+fn build_build_data_table(members : Array[Json]) -> @markdown.Block {
+  let header = [
+    cell("#"),
+    cell("ポケモン"),
+    cell("性格"),
+    cell("SP/EV (H/A/B/C/D/S)"),
+    cell("実数値 (H/A/B/C/D/S)"),
+  ]
+  let rows : Array[Array[@markdown.TableCell]] = []
+  for i, m in members {
+    rows.push([
+      cell((i + 1).to_string()),
+      cell(json_string(m, "name")),
+      cell(json_string_opt(m, "nature")),
+      cell(format_stats_opt(m, "stat_points")),
+      cell(format_stats_opt(m, "actual_stats")),
+    ])
+  }
+  make_table(header, none_aligns(5), rows)
 }
 
 ///|
@@ -344,6 +438,10 @@ pub fn build_team_document(
   )
   blocks.push(heading(2, "チーム"))
   blocks.push(build_members_table(members))
+  if has_any_build_data(members) {
+    blocks.push(heading(2, "育成データ"))
+    blocks.push(build_build_data_table(members))
+  }
   blocks.push(heading(2, "推奨技構成"))
   blocks.push_iter(build_moves_section(members).iter())
   let coverage = json_array(json, "coverage")

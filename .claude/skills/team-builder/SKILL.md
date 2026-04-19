@@ -63,14 +63,16 @@ Phase 0でユーザー選択値（battle_format, mechanics, version, regulation�
 |-------|-------------|
 | 0 | battle_format + mechanics + version + regulation |
 | 1 | + members[0]（軸ポケモン: name/types/base_stats、role は空文字でも可） |
-| 2 | + members[0].ability + coverage初期値 + members[0].role（ポケモンメモ） |
-| 3 | + members[1-2]（攻め補完メンバー） + coverage更新 + 各 role（ポケモンメモ） |
-| 4 | + members[3-4]（受け補完メンバー） + defense_matrix + 各 role（ポケモンメモ） |
-| 5 | + 全メンバーの moves 確定 + members[5]（素早さ枠等） + 各 role（ポケモンメモ） |
+| 2 | + members[0].ability + coverage初期値 + members[0].role（ポケモンメモ） + members[0] 育成データ（nature / stat_points / actual_stats） |
+| 3 | + members[1-2]（攻め補完メンバー） + coverage更新 + 各 role（ポケモンメモ） + 育成データ |
+| 4 | + members[3-4]（受け補完メンバー） + defense_matrix + 各 role（ポケモンメモ） + 育成データ |
+| 5 | + 全メンバーの moves 確定 + members[5]（素早さ枠等） + 各 role（ポケモンメモ） + 育成データ |
 | 6 | + matchup_plans（仮想敵分析結果） |
-| 7 | + strengths + weaknesses + 全メンバーの item 確定 + 残スロットの role（ポケモンメモ） |
+| 7 | + strengths + weaknesses + 全メンバーの item 確定 + 残スロットの role（ポケモンメモ） + 未確定メンバーの育成データ最終確定 |
 
 > **メモ**: `role` フィールドはスキーマ上は文字列だが、SKILL では役割（物理アタッカー / 受け / サポート 等）に限定せず、採用理由・型名・対面時の注意点などを自由に書ける**ポケモンメモ欄**として扱う（空文字可）。詳細は [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) を参照。
+
+> **育成データ**: `members[i].nature` / `members[i].stat_points` / `members[i].actual_stats` の 3 フィールド。`pkdx select` / `pkdx nash graph` がこれらを読んで damage 計算の実数値を確定させる。未設定のまま Phase 8 まで進むと `select` は「攻撃側 SP=32 +性格補正 / 防御側 SP=0 無補正」の固定デフォルトで計算してしまい、実戦値とずれる。詳細は [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) を参照。
 
 ### Phase 8での扱い
 
@@ -115,6 +117,58 @@ Phase 0でユーザー選択値（battle_format, mechanics, version, regulation�
 | Phase 5-5 後 | 素早さ枠の確定直後 |
 | Phase 7-1 後 | 残未確定スロットの確定直後 |
 | Phase 1-Team-Vision 確認後 | スクショから 6 体確定後、`members[0]` → `members[5]` の順に 1 体ずつ本サブフローを呼び出す |
+
+---
+
+## メンバー確定共通: 育成データ入力
+
+メンバーの特性・持ち物確定後に呼び出す共通サブフロー。性格・SP（Champions）/ EV（deprecated）・実数値を `members[i].nature` / `members[i].stat_points` / `members[i].actual_stats` に格納する。
+
+### なぜ必要か
+
+`pkdx select` / `pkdx nash graph` はこの 3 フィールドを読んで `DamageCalcInput.atk_nature` / `def_nature` / `atk_stat_override` / `def_stat_override` / `def_hp_override` を設定する。未設定のメンバーは「攻撃側 SP=32 +性格補正 / 防御側 SP=0 無補正」の engine legacy default で計算されるため、実構築の打点・耐久とずれる。**未設定のまま Phase 8 に進むと、Phase 6 のマッチアップ分析や `pkdx select` の選出最適化が実戦と乖離する。**
+
+### 入力フロー
+
+1. **性格**: AskUserQuestion で性格名を選択（ようき / ひかえめ / いじっぱり / ずぶとい など）。判断材料として `$SKILL_DIR/references/stat_thresholds.md` の "素早さティア" / "耐久ベンチマーク" を提示する。
+
+2. **SP/EV**: 以下のいずれかで確定:
+   - **攻撃型**: A or C を 32（max）、S を抜き先に応じて調整し、残りを HP/耐久に振る
+   - **耐久型**: `$PKDX hbd "<name>" --nature "<性格>" --fixed-ev "_,0,_,0,_,<S_sp>"` で最適配分を取得し、上位候補を AskUserQuestion で提示
+   - **スカーフ型**: S=32、A or C=32、残りを HP に
+   - **ユーザー直接指定**: "H252 A252 S4 余り" のような自由文字列を SP/EV に解釈
+
+   stat_points は `{h, a, b, c, d, s}` 形式で格納（Champions は各 ≤ 32 合計 ≤ 66、deprecated は各 4 刻み ≤ 252 合計 ≤ 510）。
+
+3. **実数値の算出**: SP/EV 確定後、`$PKDX stat-calc` で実数値を出す:
+
+   ```bash
+   $PKDX stat-calc "<ポケモン名>" \
+     --ev "H,A,B,C,D,S" \
+     --nature "<性格>" \
+     --version "<version>" \
+     --format json
+   ```
+
+   JSON の `stats` (または実数値フィールド) を取り出して `members[i].actual_stats = {h,a,b,c,d,s}` に格納。手計算に頼らず CLI 出力を SSoT とする。
+
+4. **キャッシュ書き戻し + Team State Block 更新**: `members[i]` の 3 フィールドを埋めてキャッシュ JSON を再保存し、Team State Block の該当行に「性格: / SP: / 実数値:」を反映する。
+
+### Champions Vision 取り込み時の扱い
+
+Phase 1-Team-Vision で vision 抽出 + `pkdx stat-reverse` 検証済みの SP / 実数値 / 性格は、**本サブフローを経由せず直接 `members[i]` に書き込む**（既に値が揃っているため再質問は冗長）。vision 検証で矛盾が出た個体のみ、AskUserQuestion で修正を受け付ける。
+
+### 呼び出しタイミング
+
+| 呼び出し元 | タイミング |
+|-----------|-----------|
+| Phase 2-5 後 | 軸ポケモンの特性・持ち物確定直後（ポケモンメモ入力の後） |
+| Phase 3-6 後 | 攻め補完メンバー（2-3 体）の確定直後 |
+| Phase 4-5 後 | 受け補完メンバー（2 体）の確定直後 |
+| Phase 5-5 後 | 素早さ枠の確定直後 |
+| Phase 7-1 後 | 残未確定スロットの確定直後 |
+
+ポケモンメモ入力と本サブフローは連続して呼び出す（メモ → 育成データ → 次のメンバーへ）。
 
 ---
 
@@ -266,6 +320,12 @@ Champions のチーム画面スクショ 2 枚を、次のメッセージにま�
 2. **SP 逆算検証**: `pkdx stat-reverse "<name>" --stats "<HP>,<A>,<B>,<C>,<D>,<S>" --version champions --format json` の出力 SP と vision 抽出 SP を比較。複数解は「いずれかと一致」で OK
 3. **性格確定**: ↑↓マーカーが読めていれば性格テーブルから直接特定。読めない場合は SP + 実数値の整合性で候補を絞る (`team-builder/references/champions_sp.md` 参照)。候補 1 つなら自動確定、複数候補は後段で AskUserQuestion
 4. **技詳細補完**: `pkdx moves "<name>" --version champions --format json` で抽出した 4 つの技名を DB 照合し `type/category/power/accuracy` を埋める
+5. **育成データ格納**: 1-3 で検証済みの性格・SP・実数値を直接 `members[i]` に書き込む:
+   - `members[i].nature = "<性格名 JP>"` (例: `"ようき"`)
+   - `members[i].stat_points = {h, a, b, c, d, s}` (vision 抽出 SP、stat-reverse と一致するもの)
+   - `members[i].actual_stats = {h, a, b, c, d, s}` (vision 抽出の Lv50 実数値)
+
+   本サブフローは [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) を**経由しない**（既に 3 種すべてが vision から取得済みで、再質問は冗長）。vision 検証で矛盾が出た個体のみ、手順 4 の確認画面で AskUserQuestion により修正を受け付ける。
 
 ### 4. 6 体分まとめて表示 + 一括確認
 
@@ -438,6 +498,10 @@ AskUserQuestionで持ち物を確定（「後で決める」も選択可）。
 
 [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) の手順で軸ポケモンのメモを `members[0].role` に格納する。
 
+### 2-7: 育成データ入力
+
+[メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) の手順で軸ポケモンの性格・SP (Champions) or EV (deprecated)・実数値を `members[0].nature` / `members[0].stat_points` / `members[0].actual_stats` に格納する。
+
 ---
 
 ## Phase 3: 攻めの相性補完
@@ -512,6 +576,7 @@ AskUserQuestionで:
 4. **持ち物重複チェック**: 既に確定済みの持ち物と同じものを提案しない。重複する場合は代替を提示。
 5. AskUserQuestionで持ち物を確定
 6. [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) で `members[i].role` を埋める
+7. [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) で `members[i].nature` / `stat_points` / `actual_stats` を埋める
 
 ---
 
@@ -591,6 +656,7 @@ AskUserQuestionで:
 3. 役割に応じた推奨持ち物を提案（既使用持ち物を除外）
 4. AskUserQuestionで持ち物を確定
 5. [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) で `members[i].role` を埋める
+6. [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) で `members[i].nature` / `stat_points` / `actual_stats` を埋める
 
 ---
 
@@ -645,6 +711,7 @@ AskUserQuestionで素早さ枠の方針を確認。
 3. 推奨持ち物を提案（既使用持ち物を除外。スカーフ枠ならこだわりスカーフを優先提案）
 4. AskUserQuestionで持ち物を確定
 5. [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) で `members[i].role` を埋める
+6. [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) で `members[i].nature` / `stat_points` / `actual_stats` を埋める
 
 ### 5-6: 耐久重視ポケモンのSP/EV最適化
 
@@ -740,12 +807,26 @@ AskUserQuestionで仮想敵リストを提示し、入れ替えを受付。
 | 6 | 汎用/糊枠 | 残りの弱点を埋める |
 
 未確定のスロットがある場合、Phase 3-5の候補リストから提案し、AskUserQuestionで決定。
-各未確定メンバーの確定時にも特性選択 + 持ち物提案 + ポケモンメモ入力を行う（Phase 3-5と同様のフロー）。メモ入力は [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) を参照。
+各未確定メンバーの確定時にも特性選択 + 持ち物提案 + ポケモンメモ入力 + 育成データ入力を行う（Phase 3-5と同様のフロー）。メモ入力は [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力)、育成データは [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) を参照。
 
 ### 7-1b: 持ち物重複の最終検証
 
 6体全員の持ち物を一覧し、重複がないことを確認。
 重複がある場合はAskUserQuestionで代替を提案。
+
+### 7-1c: 育成データ埋め検証（Phase 6 マッチアップ前提）
+
+6 体の `nature` / `stat_points` / `actual_stats` が全員分揃っていることを確認する。未設定のメンバーがいれば [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) を個別に呼び、最終的に全員 3 フィールドが埋まった状態で Phase 7-2 以降（カバー率計算 / 選出パターン決定）に進む。
+
+**理由**: Phase 7-3 の選出パターン決定は ダメージ計算 (pkdx damage) を前提としており、また Phase 8 で保存された `box/teams/*.meta.json` が `pkdx select` への入力になる。ここで未設定のまま進むと、後段の分析結果が実構築と乖離する。
+
+埋まっていない場合の Team State Block の確定メンバー行例:
+
+```
+  2. ガブリアス (攻め補完) 特性:さめはだ 持ち物:こだわりハチマキ メモ: 性格:未設定 SP:未設定 実数値:未設定
+```
+
+このような「未設定」表記が 1 件でも残っている場合、本ステップで必ず埋めてから次に進む。
 
 ### 7-2: チーム全体のカバー率計算
 
@@ -877,8 +958,8 @@ SP: {HP}-{攻撃}-{防御}-{特攻}-{特防}-{素早さ}
 
 **注意事項**:
 - Champions では「SP」、deprecated バージョンでは「努力値」と表記する
-- 実数値・SP・性格はbreedスキルで育成データが確定している場合のみ記載。未確定の場合は `実数値: 未設定` / `SP: 未設定` / `性格: 未設定` と記載
-- `box/pokemons/<name>/` 配下にbreedスキルの出力ファイルが存在する場合、そこから実数値・SP・性格を読み取る
+- 実数値・SP・性格は **Phase 7-1c で埋め済みの `members[i].actual_stats` / `members[i].stat_points` / `members[i].nature`** から読み取る。未設定のまま Phase 8 に到達することは 7-1c でブロックしているため通常は発生しないが、例外的に未設定があれば `実数値: 未設定` / `SP: 未設定` / `性格: 未設定` と記載してユーザーに警告する
+- team-builder cache に育成データが欠けていて、かつ `box/pokemons/<name>/` 配下に breed 出力がある場合は breed 側 meta.json を fallback source として利用可能（同一ポケモン・同一性格の場合のみ）
 - 技はPhase 8のレポートで推奨した4技を使用
 
 ---
@@ -899,12 +980,12 @@ SP: {HP}-{攻撃}-{防御}-{特攻}-{特防}-{素早さ}
 耐性: {タイプ(倍率)}（特性補正込み）
 素早さ: Tier {X} (base {S})
 確定メンバー:
-  1. {名前} (軸) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入}
-  2. {名前 or 検討中} (攻め補完) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入}
-  3. {名前 or 検討中} (受け補完) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入}
-  4. {名前 or 検討中} (素早さ枠) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入}
-  5. {名前 or 検討中} (メタ対策) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入}
-  6. {名前 or 検討中} (汎用) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入}
+  1. {名前} (軸) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入} 性格:{nature or 未設定} SP:{HABCDS or 未設定} 実数値:{HABCDS or 未設定}
+  2. {名前 or 検討中} (攻め補完) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入} 性格:{nature or 未設定} SP:{HABCDS or 未設定} 実数値:{HABCDS or 未設定}
+  3. {名前 or 検討中} (受け補完) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入} 性格:{nature or 未設定} SP:{HABCDS or 未設定} 実数値:{HABCDS or 未設定}
+  4. {名前 or 検討中} (素早さ枠) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入} 性格:{nature or 未設定} SP:{HABCDS or 未設定} 実数値:{HABCDS or 未設定}
+  5. {名前 or 検討中} (メタ対策) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入} 性格:{nature or 未設定} SP:{HABCDS or 未設定} 実数値:{HABCDS or 未設定}
+  6. {名前 or 検討中} (汎用) 特性:{特性名} 持ち物:{持ち物名} メモ:{role or 未記入} 性格:{nature or 未設定} SP:{HABCDS or 未設定} 実数値:{HABCDS or 未設定}
 使用済み持ち物: [{持ち物1}, {持ち物2}, ...]
 【doubles時のみ】S操作手段: {おいかぜ/トリックルーム/ねこだまし等}
 【doubles時のみ】横の並びペア: {主要な先発ペアとそのシナジー}

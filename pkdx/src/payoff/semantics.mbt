@@ -56,6 +56,14 @@ pub(all) enum TeamPayoffModel {
 /// A single-Pokemon combatant with moves and equipment. The underlying
 /// `Pokemon` carries base stats; `stat_system` controls Lv50 stat realisation
 /// (Standard EV252/IV31 or Champions SP).
+///
+/// `nature` / `actual_stats` は team-builder (またはユーザー) が実数値・
+/// 性格を確定させている場合のみ `Some`。`actual_stats` は 6 要素 (H/A/B/C/D/Spe)
+/// の Lv50 実数値。damage engine の `atk_nature` / `def_nature` /
+/// `atk_stat_override` / `def_stat_override` / `def_hp_override` へ流し込まれる
+/// ため、select は base_stats + 既定投資ではなく、ユーザーの実構築そのままの
+/// 打点を評価できる。両方 `None` のときは従来どおり engine デフォルト
+/// (攻撃側 max SP+性格 / 防御側 無投資) にフォールバックする。
 pub(all) struct Combatant {
   pokemon : @model.Pokemon
   moves : Array[@model.Move]
@@ -66,6 +74,8 @@ pub(all) struct Combatant {
   // メガ進化後のステータス差分。`None` なら mega 不可。`Some(_)` なら
   // `SwitchingGame` の `Mega` アクションで mega_form 値に切り替わる。
   mega_form : @model.MegaForm?
+  nature : @model.Nature?
+  actual_stats : Array[Int]?
 } derive(Show)
 
 ///|

@@ -49,6 +49,8 @@ fn mk_int_combatant(
     tera_type: "",
     stat_system: @model.Standard,
     mega_form: None,
+    nature: None,
+    actual_stats: None,
   }
 }
 

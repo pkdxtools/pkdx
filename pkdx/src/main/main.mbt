@@ -135,8 +135,54 @@ fn build_cli() -> @admiral.CliApp {
       cmd_nash(),
       cmd_select(),
       cmd_meta_divergence(),
+      cmd_migrate(),
     ],
   )
+}
+
+///|
+/// `pkdx migrate` — apply pkdx_patch migrations to pokedex.db. Runs all
+/// unapplied migrations in declaration order inside per-step transactions.
+fn cmd_migrate() -> @admiral.CommandDef {
+  @admiral.command(
+    name="migrate",
+    description="Apply pkdx_patch migrations to pokedex.db (replaces apply.rb)",
+    options=[
+      @admiral.string(
+        "repo-root",
+        description="Repo root (defaults to CWD)",
+        default=Some(""),
+      ),
+    ],
+    run=Some(fn(ctx) {
+      let repo_root = {
+        let r = ctx_str(ctx, "repo-root")
+        if r.length() > 0 { r } else { "." }
+      }
+      run_migrate(repo_root)
+    }),
+  )
+}
+
+///|
+fn run_migrate(repo_root : String) -> Unit {
+  let db_path = match @sys.get_env_var("POKEDEX_DB") {
+    Some(p) => p
+    None => repo_root + "/pokedex/pokedex.db"
+  }
+  match @migrate.run(db_path, repo_root) {
+    Err(e) => exit_error(e)
+    Ok(report) =>
+      println(
+        "pkdx_patch: " +
+        report.applied.to_string() +
+        " applied, " +
+        report.skipped.to_string() +
+        " already applied (" +
+        report.total.to_string() +
+        " total)",
+      )
+  }
 }
 
 ///|

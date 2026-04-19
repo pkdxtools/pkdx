@@ -89,6 +89,11 @@ pkdx/                     # MoonBit CLI ツール (native binary)
       screened_switching_game.mbt  # MC screening → SwitchingGame refine パイプライン
       team_payoff.mbt       # 選出 (k-combination) ディスパッチ
       cli_nash.mbt, cli_select.mbt, cli_meta.mbt  # JSON/DOT ハンドラ
+    migrate/               # pkdx_patch マイグレーションランナー
+      runner.mbt            # pkdx_migrations 管理 + トランザクション + 順次適用
+      migrations.mbt        # 登録配列 (001〜010)
+      json_util.mbt         # Json アクセサ
+      m001_mega_legendsza.mbt 〜 m010_move_meta_posthit.mbt
 
 bin/
   pkdx                    # Unix用ラッパースクリプト (ローカルビルド優先)
@@ -134,7 +139,7 @@ pokedex/                  # git submodule (towakey/pokedex)
 - `local_waza*` / `local_pokedex_waza*` テーブルの `version` は Mixed Case（`Scarlet_Violet`）— pkdx 内部で自動変換
 - タイプ名は日本語（`ほのお`, `みず` 等）
 - `globalNo` はゼロ埋め4桁（`0445`）— pkdx は入力を自動正規化
-- `pkdx_patch/` 配下にパッチマイグレーションがあり、`setup.sh` の Step 2.5 で自動適用される。Champions フォーマット等 pokedex submodule に含まれないデータはここで追加される。パッチは冪等（`pkdx_migrations` テーブルで適用済み管理）
+- `pkdx_patch/NNN_name/data.json` にパッチデータを置き、マイグレーションロジックは `pkdx/src/migrate/mNNN_*.mbt` で実装する。`setup.sh` Step 3.5 が `pkdx migrate` を呼び出し、pokedex.db へ順次適用する。pkdx バイナリ内蔵 SQLite3 で完結するため Ruby / sqlite3 gem は不要（cc on the web 等のコンテナでも動作）。パッチは冪等（`pkdx_migrations` テーブルで適用済み管理）
 
 ## Champions SP (Stat Points) システム
 

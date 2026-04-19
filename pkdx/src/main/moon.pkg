@@ -6,6 +6,7 @@ import {
   "pkdxtools/pkdx/src/model",
   "pkdxtools/pkdx/src/writer",
   "pkdxtools/pkdx/src/payoff",
+  "pkdxtools/pkdx/src/migrate",
   "mizchi/markdown",
   "mizchi/admiral",
   "moonbitlang/core/json",

@@ -85,15 +85,6 @@ else
   echo "  Done."
 fi
 
-# --- Step 2.5: pkdx_patch ---
-echo "[2.5/5] Applying pkdx patches..."
-if [ -f "$REPO_ROOT/pkdx_patch/apply.rb" ]; then
-  ruby "$REPO_ROOT/pkdx_patch/apply.rb"
-  echo "  Done."
-else
-  echo "  No patch runner found. Skipping."
-fi
-
 # --- Step 2.7: BLAS dependency (for nash / select / meta-divergence) ---
 # nash/select/meta-divergence 系サブコマンドは numbt / mizchi/blas 経由で BLAS
 # に依存する。OS 別に利用可否を案内し、必要な環境変数を echo する。
@@ -189,6 +180,24 @@ if [ "$NEED_DOWNLOAD" = true ]; then
       echo "  (requires MoonBit toolchain: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash)"
     fi
   }
+fi
+
+# --- Step 3.5: pkdx_patch migrations ---
+# Binary download (Step 3) precedes migrate so `bin/pkdx` is resolvable.
+# 旧 Ruby 版 (pkdx_patch/apply.rb + sqlite3 gem) は pkdx バイナリ内蔵の
+# SQLite3 を使う MoonBit 実装に置き換え済み。コンテナで sqlite3 gem が
+# ビルドできない環境 (cc on the web 等) でも動作する。
+echo "[3.5/5] Applying pkdx patches..."
+if [ -f "$REPO_ROOT/pokedex/pokedex.db" ]; then
+  export POKEDEX_DB="$REPO_ROOT/pokedex/pokedex.db"
+  if "$REPO_ROOT/bin/pkdx" migrate --repo-root "$REPO_ROOT"; then
+    :
+  else
+    echo "  Error: pkdx migrate failed." >&2
+    exit 1
+  fi
+else
+  echo "  Skipped (pokedex.db not found)."
 fi
 
 # --- Step 4: box directory ---

@@ -201,7 +201,7 @@ $PKDX query "<ポケモン名>" --version "<version>" --format json
 
 「はい」の場合:
 ```bash
-ruby $REPO_ROOT/scripts/patch_mega.rb
+"$REPO_ROOT/bin/pkdx" migrate --repo-root "$REPO_ROOT"
 ```
 
 実行後、元のクエリを再実行してデータを取得する。取得できた場合はそのまま続行。

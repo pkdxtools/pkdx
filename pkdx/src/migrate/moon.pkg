@@ -1,0 +1,9 @@
+import {
+  "pkdxtools/pkdx/src/db",
+  "moonbitlang/core/json" @json,
+  "moonbitlang/core/strconv" @strconv,
+}
+
+options(
+  "supported-targets": "native",
+)

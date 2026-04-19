@@ -120,12 +120,48 @@ int32_t pkdx_db_open(const uint8_t *path, PkdxDb **out) {
     return 0;
 }
 
+/* Open the database in read-write mode for migrations. Unlike pkdx_db_open,
+   this does not pass SQLITE_OPEN_CREATE: the DB file must already exist
+   (pokedex submodule's import_db.rb is responsible for generating it). */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_db_open_rw(const uint8_t *path, PkdxDb **out) {
+    sqlite3 *db = NULL;
+    int rc = sqlite3_open_v2((const char *)path, &db,
+                             SQLITE_OPEN_READWRITE, NULL);
+    if (rc != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return rc;
+    }
+    PkdxDb *wrapper = moonbit_make_external_object(
+        &pkdx_db_destructor, sizeof(PkdxDb));
+    wrapper->db = db;
+    out[0] = wrapper;
+    return 0;
+}
+
 MOONBIT_FFI_EXPORT
 void pkdx_db_close(PkdxDb *wrapper) {
     if (wrapper && wrapper->db) {
         sqlite3_close(wrapper->db);
         wrapper->db = NULL;
     }
+}
+
+/* Execute a SQL statement (or statement list) that returns no rows.
+   Accepts semicolon-separated DDL/DML via sqlite3_exec. Used for
+   CREATE TABLE, ALTER TABLE, BEGIN/COMMIT, etc. */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_exec_sql(PkdxDb *db_wrapper, const uint8_t *sql) {
+    if (!db_wrapper || !db_wrapper->db) return -1;
+    return sqlite3_exec(db_wrapper->db, (const char *)sql, NULL, NULL, NULL);
+}
+
+/* Number of rows modified by the most recent INSERT/UPDATE/DELETE on the
+   connection. Used by 002 to branch UPDATE vs INSERT on pokedex rows. */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_db_changes(PkdxDb *db_wrapper) {
+    if (!db_wrapper || !db_wrapper->db) return 0;
+    return sqlite3_changes(db_wrapper->db);
 }
 
 /* PkdxResultSet を MoonBit の external_object として確保することで、
@@ -215,6 +251,91 @@ int32_t pkdx_exec_query(
     rs->cells = cells;
     out[0] = rs;
     return 0;
+}
+
+/* Bind with per-parameter type tags. Needed for migration SQL that must
+   distinguish NULL from empty string (e.g. COALESCE patterns in 001/002).
+   tags[i]: 0 = NULL, 1 = TEXT (values[i] is null-terminated utf-8),
+            2 = INTEGER (values[i] is ASCII decimal). */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_exec_query_typed(
+    PkdxDb *db_wrapper,
+    const uint8_t *sql,
+    int32_t bind_count,
+    const int32_t *tags,
+    const uint8_t **bind_values,
+    PkdxResultSet **out
+) {
+    if (!db_wrapper || !db_wrapper->db) return -1;
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(db_wrapper->db, (const char *)sql, -1,
+                                &stmt, NULL);
+    if (rc != SQLITE_OK || !stmt) return rc ? rc : -1;
+
+    for (int32_t i = 0; i < bind_count; i++) {
+        int32_t tag = tags[i];
+        if (tag == 0) {
+            sqlite3_bind_null(stmt, i + 1);
+        } else if (tag == 2) {
+            long long v = strtoll((const char *)bind_values[i], NULL, 10);
+            sqlite3_bind_int64(stmt, i + 1, v);
+        } else {
+            sqlite3_bind_text(stmt, i + 1, (const char *)bind_values[i],
+                             -1, SQLITE_TRANSIENT);
+        }
+    }
+
+    int32_t col_count = sqlite3_column_count(stmt);
+
+    /* Two allocations per cell: marker + (optional) text. Markers encode
+       NULL by storing a sentinel cell pointer == NULL. Callers use
+       pkdx_result_is_null / pkdx_result_get to discriminate. */
+    int32_t capacity = 64;
+    int32_t row_count = 0;
+    char **cells = (char **)libc_malloc(sizeof(char *) * capacity * col_count);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (row_count >= capacity) {
+            capacity *= 2;
+            cells = (char **)realloc(cells, sizeof(char *) * capacity * col_count);
+        }
+        for (int32_t c = 0; c < col_count; c++) {
+            if (sqlite3_column_type(stmt, c) == SQLITE_NULL) {
+                cells[row_count * col_count + c] = NULL;
+            } else {
+                const char *text = (const char *)sqlite3_column_text(stmt, c);
+                if (text) {
+                    size_t len = strlen(text);
+                    char *copy = (char *)libc_malloc(len + 1);
+                    memcpy(copy, text, len + 1);
+                    cells[row_count * col_count + c] = copy;
+                } else {
+                    cells[row_count * col_count + c] = NULL;
+                }
+            }
+        }
+        row_count++;
+    }
+
+    sqlite3_finalize(stmt);
+
+    PkdxResultSet *rs = (PkdxResultSet *)moonbit_make_external_object(
+        &pkdx_rs_destructor, sizeof(PkdxResultSet));
+    rs->row_count = row_count;
+    rs->col_count = col_count;
+    rs->cells = cells;
+    out[0] = rs;
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT
+int32_t pkdx_result_is_null(PkdxResultSet *rs, int32_t row, int32_t col) {
+    if (!rs || row < 0 || row >= rs->row_count ||
+        col < 0 || col >= rs->col_count) {
+        return 1;
+    }
+    return rs->cells[row * rs->col_count + col] == NULL ? 1 : 0;
 }
 
 MOONBIT_FFI_EXPORT
@@ -406,4 +527,40 @@ void pkdx_exit(int32_t code) {
 MOONBIT_FFI_EXPORT
 void pkdx_eprintln(const uint8_t *msg) {
     fprintf(stderr, "%s\n", (const char *)msg);
+}
+
+/* 8 MiB is a safety cap for migration JSON inputs. LegendsZA.json is
+   currently <1 MiB and the largest data.json is ~300 KiB, so this is
+   comfortable headroom while still bounding memory. */
+#define PKDX_READ_FILE_MAX (8 * 1024 * 1024)
+
+MOONBIT_FFI_EXPORT
+moonbit_string_t pkdx_read_file(const uint8_t *path) {
+    FILE *f = fopen((const char *)path, "rb");
+    if (!f) return moonbit_make_string(0, 0);
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return moonbit_make_string(0, 0); }
+    long sz = ftell(f);
+    if (sz < 0 || sz > PKDX_READ_FILE_MAX) { fclose(f); return moonbit_make_string(0, 0); }
+    rewind(f);
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return moonbit_make_string(0, 0); }
+    size_t n = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    buf[n] = '\0';
+    moonbit_string_t result = utf8_to_moonbit_string(buf);
+    free(buf);
+    return result;
+}
+
+MOONBIT_FFI_EXPORT
+int32_t pkdx_file_exists(const uint8_t *path) {
+    struct stat st;
+    return stat((const char *)path, &st) == 0 ? 1 : 0;
+}
+
+MOONBIT_FFI_EXPORT
+void pkdx_println(const uint8_t *msg) {
+    fputs((const char *)msg, stdout);
+    fputc('\n', stdout);
+    fflush(stdout);
 }

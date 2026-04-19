@@ -153,24 +153,29 @@ fn cmd_migrate() -> @admiral.CommandDef {
         description="Repo root (defaults to CWD)",
         default=Some(""),
       ),
+      @admiral.bool(
+        "resync",
+        description="Clear bookkeeping and re-apply every migration; use after pulling data.json edits",
+      ),
     ],
     run=Some(fn(ctx) {
       let repo_root = {
         let r = ctx_str(ctx, "repo-root")
         if r.length() > 0 { r } else { "." }
       }
-      run_migrate(repo_root)
+      let resync = ctx.get_bool("resync")
+      run_migrate(repo_root, resync)
     }),
   )
 }
 
 ///|
-fn run_migrate(repo_root : String) -> Unit {
+fn run_migrate(repo_root : String, resync : Bool) -> Unit {
   let db_path = match @sys.get_env_var("POKEDEX_DB") {
     Some(p) => p
     None => repo_root + "/pokedex/pokedex.db"
   }
-  match @migrate.run(db_path, repo_root) {
+  match @migrate.run(db_path, repo_root, resync~) {
     Err(e) => exit_error(e)
     Ok(report) =>
       println(

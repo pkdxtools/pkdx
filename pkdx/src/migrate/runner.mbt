@@ -23,8 +23,14 @@ pub(all) struct Report {
 /// the bookkeeping table if missing, then iterates `migrations()` in
 /// declaration order. Each pending migration runs inside a transaction;
 /// success records its name in `pkdx_migrations`, failure rolls back and
-/// propagates the error.
-pub fn run(db_path : String, repo_root : String) -> Result[Report, String] {
+/// propagates the error. When `resync` is true, all bookkeeping rows are
+/// cleared first so every migration re-applies — used to propagate data.json
+/// edits to installs that already applied the owning migration.
+pub fn run(
+  db_path : String,
+  repo_root : String,
+  resync~ : Bool = false,
+) -> Result[Report, String] {
   if not(@db.file_exists(db_path)) {
     return Err(db_path + " not found. Run ./setup.sh first.")
   }
@@ -32,17 +38,31 @@ pub fn run(db_path : String, repo_root : String) -> Result[Report, String] {
     Ok(d) => d
     Err(e) => return Err(e)
   }
-  let result = run_with_db(db, repo_root)
+  let result = run_with_db(db, repo_root, resync)
   @db.close(db)
   result
 }
 
 ///|
-fn run_with_db(db : @db.Db, repo_root : String) -> Result[Report, String] {
+fn run_with_db(
+  db : @db.Db,
+  repo_root : String,
+  resync : Bool,
+) -> Result[Report, String] {
   let create_sql = "CREATE TABLE IF NOT EXISTS pkdx_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))"
   match @db.exec(db, create_sql) {
     Err(e) => return Err(e)
     Ok(_) => ()
+  }
+  if resync {
+    // All migrations listed below are idempotent upserts (UPDATE /
+    // INSERT OR REPLACE / ensure_column), so clearing bookkeeping and
+    // re-running is safe and converges the DB to the data.json SSoT.
+    match @db.exec(db, "DELETE FROM pkdx_migrations") {
+      Err(e) => return Err(e)
+      Ok(_) => ()
+    }
+    @db.println_progress("  Resync: cleared bookkeeping, re-applying all")
   }
   let all = migrations()
   let mut applied = 0

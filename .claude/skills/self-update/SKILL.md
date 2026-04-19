@@ -210,6 +210,16 @@ rm -f "$CACHE_DIR"/pkdx-*
 $REPO_ROOT/bin/pkdx version
 ```
 
+### 2-4: DB resync
+
+upstream の data.json 変更（道具メタ、反動技、状態異常技 等）を既存 DB に反映する。`--resync` は `pkdx_migrations` bookkeeping をクリアして全マイグレーションを upsert し直すため、data.json が SSoT として機能する。全マイグレーションは冪等な upsert なので再適用は安全。
+
+```bash
+cd $REPO_ROOT && bin/pkdx migrate --resync
+```
+
+スキップした場合（例: `pkdx tools` 更新を skip したケース）は、この step も実行不要。
+
 ## Phase 3: Stash復元
 
 Phase 0でstashした場合:

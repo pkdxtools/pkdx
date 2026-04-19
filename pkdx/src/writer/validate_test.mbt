@@ -30,6 +30,40 @@ test "validate_team_json: valid minimal input" {
 }
 
 ///|
+// Regression guard for issue #68: `pkdx moves --format json` always emits the
+// `accuracy` field, so `pkdx write teams` must accept it in member.moves
+// without a pre-processing pass that strips the property.
+test "validate_team_json: moves with accuracy accepted" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120,"accuracy":100},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80,"accuracy":100},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100,"accuracy":80}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": ["テスト"],
+    #|  "weaknesses": ["テスト"]
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_team_json(json), content="Ok(())")
+}
+
+///|
 test "validate_team_json: missing fields reports all errors" {
   let src =
     #|{"battle_format": "singles"}

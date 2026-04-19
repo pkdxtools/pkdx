@@ -85,7 +85,7 @@ fn member_schema(
       "item": b.string(),
       "role": b.string(),
       "moves": b.array(
-        items=move_schema(b, strict~),
+        items=move_schema(b, strict~, with_accuracy=true),
         min_items=moves_min,
         max_items=4,
       ),

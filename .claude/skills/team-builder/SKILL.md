@@ -221,11 +221,13 @@ AskUserQuestionで有効メカニクスを質問（multiSelect: true）:
 
 ### 0-5: バージョン確認
 
-AskUserQuestionでゲームバージョンを質問:
-- `scarlet_violet`（デフォルト）
-- `legendsza`
-- `champions`
+AskUserQuestion でゲームバージョンを質問:
+- `champions`（**デフォルト / 推奨**）
+- `scarlet_violet`（deprecated: 旧 EV/IV 制。SP 制の champions が現行推奨）
+- `legendsza`（deprecated: 同上）
 - その他（ユーザー入力）
+
+**推奨の理由**: Champions 以降は SP (Stat Points) 制に一本化されており、damage 計算・実数値算出・select のメガ進化後再計算ともに SP 前提で最適化されている。旧 EV/IV 制 (`scarlet_violet` / `legendsza` 等) は後方互換のために残しているが、新規構築は `champions` を選択すること。
 
 `champions` 選択時は続けてレギュレーションを質問:
 - `M-A`（current）

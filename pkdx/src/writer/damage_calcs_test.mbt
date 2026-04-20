@@ -198,8 +198,16 @@ test "build_damage_calc_entry: ransuu omits guaranteed_hits" {
   guard e.get("attacker") is Some(Object(a)) else { fail("attacker missing") }
   guard a.get("ranks") is Some(Object(rm)) else { fail("ranks missing") }
   inspect(rm.is_empty(), content="true")
-  // title empty → null
-  inspect(e.get("title") is Some(Null), content="true")
+  // 空 optional は key ごと省略する (FE schema の z.string().optional() 準拠)。
+  inspect(e.get("title"), content="None")
+  inspect(e.get("note"), content="None")
+  guard e.get("attacker") is Some(Object(att)) else { fail("attacker missing") }
+  inspect(att.get("ability"), content="None")
+  inspect(att.get("item"), content="None")
+  inspect(att.get("nature"), content="None")
+  inspect(att.get("tera_type"), content="None")
+  guard e.get("defender") is Some(Object(defn)) else { fail("defender missing") }
+  inspect(defn.get("tera_type"), content="None")
 }
 
 ///|
@@ -215,6 +223,61 @@ test "build_damage_calc_entry: 16 rolls populated" {
     fail("rolls_percent missing")
   }
   inspect(rolls.length(), content="16")
+}
+
+///|
+test "validate_attach_team_path: accepts canonical path" {
+  inspect(
+    validate_attach_team_path("box/teams/garchomp-build-2026-04-20.meta.json"),
+    content="Ok(())",
+  )
+  inspect(
+    validate_attach_team_path("./box/teams/x.meta.json"),
+    content="Ok(())",
+  )
+}
+
+///|
+test "validate_attach_team_path: rejects traversal" {
+  guard validate_attach_team_path("box/teams/../etc/passwd.meta.json") is Err(_) else {
+    fail("traversal via .. must be rejected")
+  }
+  guard validate_attach_team_path("box/teams/sub/../../.ssh/id.meta.json") is Err(_) else {
+    fail("nested traversal must be rejected")
+  }
+}
+
+///|
+test "validate_attach_team_path: rejects absolute / home" {
+  guard validate_attach_team_path("/etc/passwd") is Err(_) else {
+    fail("absolute path must be rejected")
+  }
+  guard validate_attach_team_path("~/box/teams/x.meta.json") is Err(_) else {
+    fail("~ expansion must be rejected")
+  }
+}
+
+///|
+test "validate_attach_team_path: rejects outside box/teams" {
+  guard validate_attach_team_path("box/pokemons/x.meta.json") is Err(_) else {
+    fail("outside box/teams must be rejected")
+  }
+  guard validate_attach_team_path("other/teams/x.meta.json") is Err(_) else {
+    fail("non-box root must be rejected")
+  }
+}
+
+///|
+test "validate_attach_team_path: rejects wrong suffix" {
+  guard validate_attach_team_path("box/teams/x.json") is Err(_) else {
+    fail(".json without .meta must be rejected")
+  }
+  guard validate_attach_team_path("box/teams/x.md") is Err(_) else {
+    fail(".md must be rejected")
+  }
+  guard validate_attach_team_path("") is Err(_) else {
+    fail("empty must be rejected")
+  }
 }
 
 ///|

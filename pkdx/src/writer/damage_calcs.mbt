@@ -2,10 +2,10 @@
 /// `pkdx damage --attach-team` 用ヘルパ。計算結果を
 /// `box/teams/<slug>.meta.json` の `damage_calcs[]` に追記する。
 ///
-/// FE (site/src/lib/team-meta.ts) の `DamageCalc` schema に合わせて
-/// JSON を組み立てる。未指定フィールド (note / title / 空性格等) は
-/// optional 側に倒し、FE の z.safeParse が外れないように null / missing
-/// を使い分ける。
+/// FE (site/src/lib/team-meta.ts) の `DamageCalc` schema は optional を
+/// `z.string().optional()` で定義しており `null` は受け付けない。空値は
+/// キーごと省略する (`null` を書き込むと z.safeParse が外れて team page の
+/// メタ情報が丸ごと欠落する)。
 fn weather_to_jp(w : @model.Weather) -> String {
   match w {
     None => ""
@@ -63,11 +63,9 @@ fn nature_to_jp_opt(n : @model.Nature?) -> String {
 }
 
 ///|
-fn optional_string(s : String) -> Json {
-  if s.length() == 0 {
-    Json::null()
-  } else {
-    s.to_json()
+fn set_optional_string(m : Map[String, Json], key : String, value : String) -> Unit {
+  if value.length() > 0 {
+    m[key] = value.to_json()
   }
 }
 
@@ -105,39 +103,35 @@ pub fn build_damage_calc_entry(
   let attacker : Map[String, Json] = {
     "name": input.attacker.name_ja.to_json(),
     "level": (50 : Int).to_json(),
-    "ability": optional_string(input.atk_ability),
-    "item": optional_string(input.atk_item),
-    "nature": optional_string(nature_to_jp_opt(input.atk_nature)),
-    "tera_type": optional_string(input.tera_type),
     "ranks": rank_entry(atk_stat_key, input.atk_rank).to_json(),
   }
+  set_optional_string(attacker, "ability", input.atk_ability)
+  set_optional_string(attacker, "item", input.atk_item)
+  set_optional_string(attacker, "nature", nature_to_jp_opt(input.atk_nature))
+  set_optional_string(attacker, "tera_type", input.tera_type)
   let defender : Map[String, Json] = {
     "name": input.defender.name_ja.to_json(),
     "level": (50 : Int).to_json(),
-    "ability": optional_string(input.def_ability),
-    "item": optional_string(input.def_item),
-    "nature": optional_string(nature_to_jp_opt(input.def_nature)),
-    "tera_type": Json::null(),
     "hp_stat": result.defender_hp.to_json(),
     "ranks": rank_entry(def_stat_key, input.def_rank).to_json(),
   }
+  set_optional_string(defender, "ability", input.def_ability)
+  set_optional_string(defender, "item", input.def_item)
+  set_optional_string(defender, "nature", nature_to_jp_opt(input.def_nature))
   let move_obj : Map[String, Json] = {
     "name": input.move_.name.to_json(),
     "type": input.move_.type_.to_json(),
     "category": @model.category_to_jp(input.move_.category).to_json(),
     "power": input.move_.power.to_json(),
   }
-  let conditions : Map[String, Json] = {
-    "weather": optional_string(weather_to_jp(input.weather)),
-    "field": optional_string(field_to_jp(input.field)),
-    "crit": input.critical.to_json(),
-  }
+  let conditions : Map[String, Json] = { "crit": input.critical.to_json() }
+  set_optional_string(conditions, "weather", weather_to_jp(input.weather))
+  set_optional_string(conditions, "field", field_to_jp(input.field))
   let rolls : Array[Json] = []
   for i = 0; i < 16; i = i + 1 {
     rolls.push(result.percents[i].to_json())
   }
   let entry : Map[String, Json] = {
-    "title": optional_string(title),
     "attacker": attacker.to_json(),
     "defender": defender.to_json(),
     "move": move_obj.to_json(),
@@ -145,13 +139,39 @@ pub fn build_damage_calc_entry(
     "rolls_percent": rolls.to_json(),
     "min_percent": result.min_percent.to_json(),
     "max_percent": result.max_percent.to_json(),
-    "note": optional_string(note),
   }
+  set_optional_string(entry, "title", title)
+  set_optional_string(entry, "note", note)
   match parse_guaranteed_hits(result.ko_text) {
     Some(n) => entry["guaranteed_hits"] = n.to_json()
     None => ()
   }
   entry.to_json()
+}
+
+///|
+/// `--attach-team` で受け取ったパスを検証する。box/teams/ 配下の
+/// .meta.json のみ許可する。`..` の混入や絶対パス / ホーム展開を禁じ、
+/// 任意箇所への書き込み primitive として使われないようにする。
+pub fn validate_attach_team_path(path : String) -> Result[Unit, String] {
+  if path.length() == 0 {
+    return Err("path is empty")
+  }
+  if path.has_prefix("/") || path.has_prefix("~") {
+    return Err("path must be relative to the workspace")
+  }
+  if path.contains("..") {
+    return Err("path must not contain '..'")
+  }
+  let under_box = path.has_prefix("box/teams/") ||
+    path.has_prefix("./box/teams/")
+  if not(under_box) {
+    return Err("path must be under box/teams/")
+  }
+  if not(path.has_suffix(".meta.json")) {
+    return Err("path must end in .meta.json")
+  }
+  Ok(())
 }
 
 ///|

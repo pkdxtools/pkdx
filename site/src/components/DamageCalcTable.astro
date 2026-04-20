@@ -20,18 +20,55 @@ function formatPercent(n: number | undefined): string {
   if (n == null) return '-';
   return `${n.toFixed(1)}%`;
 }
+
+function formatRanks(ranks: Record<string, number> | undefined): string {
+  if (!ranks) return '';
+  const labelMap: Record<string, string> = {
+    atk: 'A',
+    def: 'B',
+    spa: 'C',
+    spd: 'D',
+    spe: 'S',
+  };
+  const parts = Object.entries(ranks)
+    .filter(([, v]) => v !== 0)
+    .map(([k, v]) => `${labelMap[k] ?? k}${v > 0 ? '+' : ''}${v}`);
+  return parts.join(' ');
+}
+
+function formatConditions(conditions: DamageCalc['conditions']): string[] {
+  if (!conditions) return [];
+  const parts: string[] = [];
+  if (conditions.weather) parts.push(conditions.weather);
+  if (conditions.field) parts.push(`${conditions.field}フィールド`);
+  if (conditions.crit) parts.push('急所');
+  return parts;
+}
 ---
 {calcs.length > 0 && (
   <section class="damage-calcs">
     <h2>ダメージ計算</h2>
-    {calcs.map((calc) => (
+    {calcs.map((calc) => {
+      const attackerRanks = formatRanks(calc.attacker.ranks);
+      const defenderRanks = formatRanks(calc.defender.ranks);
+      const conditionsParts = formatConditions(calc.conditions);
+      return (
       <article class="calc-card">
         {calc.title && <h3 class="calc-title">{calc.title}</h3>}
         <div class="calc-header">
           <div class="calc-side">
             <span class="side-label">攻撃</span>
             <strong>{calc.attacker.name ?? '-'}</strong>
+            {calc.attacker.tera_type && (
+              <span class="tera">テラス: {calc.attacker.tera_type}</span>
+            )}
+            {(calc.attacker.ability || calc.attacker.nature) && (
+              <span class="muted small">
+                {[calc.attacker.ability, calc.attacker.nature].filter(Boolean).join(' / ')}
+              </span>
+            )}
             {calc.attacker.item && <span class="muted small">@ {calc.attacker.item}</span>}
+            {attackerRanks && <span class="muted small">ランク: {attackerRanks}</span>}
           </div>
           <div class="calc-move">
             <TypeBadge type={calc.move.type} size="sm" />
@@ -41,9 +78,27 @@ function formatPercent(n: number | undefined): string {
           <div class="calc-side">
             <span class="side-label">防御</span>
             <strong>{calc.defender.name ?? '-'}</strong>
-            {calc.defender.ability && <span class="muted small">/ {calc.defender.ability}</span>}
+            {calc.defender.tera_type && (
+              <span class="tera">テラス: {calc.defender.tera_type}</span>
+            )}
+            {(calc.defender.ability || calc.defender.nature) && (
+              <span class="muted small">
+                {[calc.defender.ability, calc.defender.nature].filter(Boolean).join(' / ')}
+              </span>
+            )}
+            {calc.defender.item && <span class="muted small">@ {calc.defender.item}</span>}
+            {calc.defender.hp_stat != null && (
+              <span class="muted small">HP実数値: {calc.defender.hp_stat}</span>
+            )}
+            {defenderRanks && <span class="muted small">ランク: {defenderRanks}</span>}
           </div>
         </div>
+
+        {conditionsParts.length > 0 && (
+          <p class="calc-conditions">
+            {conditionsParts.map((c) => <span class="cond">{c}</span>)}
+          </p>
+        )}
 
         {(calc.min_percent != null || calc.max_percent != null || calc.guaranteed_hits != null) && (
           <p class="calc-summary">
@@ -65,7 +120,8 @@ function formatPercent(n: number | undefined): string {
 
         {calc.note && <p class="calc-note">{calc.note}</p>}
       </article>
-    ))}
+      );
+    })}
   </section>
 )}
 
@@ -100,6 +156,24 @@ function formatPercent(n: number | undefined): string {
     align-items: center;
     gap: 0.2rem;
     padding: 0 0.5rem;
+  }
+  .calc-conditions {
+    margin: 0.5rem 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+  }
+  .cond {
+    background: var(--c-surface-alt, rgba(0,0,0,0.05));
+    color: var(--c-text-muted);
+    padding: 0.1em 0.55em;
+    border-radius: 999px;
+  }
+  .tera {
+    font-size: 0.75rem;
+    color: var(--c-accent);
+    font-weight: 600;
   }
   .calc-summary {
     margin: 0.5rem 0 0.75rem;

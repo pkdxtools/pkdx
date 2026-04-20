@@ -1368,6 +1368,13 @@ fn attach_damage_calc_to_meta(
   title : String,
   note : String,
 ) -> Unit {
+  match @writer.validate_attach_team_path(meta_path) {
+    Ok(_) => ()
+    Err(reason) => {
+      exit_error("--attach-team: invalid path '" + meta_path + "' (" + reason + ")")
+      return
+    }
+  }
   let existing = match @db.read_file(meta_path) {
     Some(s) => s
     None => {

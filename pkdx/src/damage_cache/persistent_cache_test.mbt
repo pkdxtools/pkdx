@@ -127,12 +127,9 @@ test "persistent_cache: schema_version mismatch clears entries" {
 test "persistent_cache: corrupted file recovers to empty cache" {
   let path = test_path("corrupted")
   cleanup(path)
-  // Write random bytes so SQLite cannot read it.
-  guard @db.open_rwc(path) is Ok(db) else { fail("pre-setup open failed") }
-  @db.close(db)
-  // Overwrite the file with non-SQLite content.
-  @db.println_progress("") // no-op (writer helper is private)
-  // Use pkdx_write_file via the wrapper in model? Use std write_file.
+  // Plant non-SQLite bytes at the cache path so the first `open_or_init`
+  // fails SQLite header validation and the unlink-then-retry recovery
+  // path has to run to produce a usable cache.
   let _ = write_raw_file(path, "not a sqlite database")
   guard open_or_init(path, "0.4.10", "head-a") is Ok(cache) else {
     fail("corrupted file should still yield a fresh cache")

@@ -90,7 +90,10 @@ jobs:
         run: bun test
       - name: Type check
         working-directory: site
-        run: bunx astro check
+        # `bunx` は runtime fetch (サプライチェーン攻撃の表面積を広げる)。
+        # `bun run check` なら `bun install --frozen-lockfile` で node_modules に
+        # 固定された astro@6.1.8 の binstub が呼ばれる。
+        run: bun run check
       - name: Build smoke test (fixtures)
         working-directory: site
         run: bun run smoke

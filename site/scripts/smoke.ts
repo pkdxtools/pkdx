@@ -19,7 +19,10 @@ const env = {
 };
 
 console.log(`[smoke] Building with CONTENT_ROOT=${contentRoot}`);
-const build = spawnSync('bunx', ['astro', 'build'], { stdio: 'inherit', env });
+// `bunx` は runtime fetch (サプライチェーン攻撃の表面積を広げる)。
+// `bun install --frozen-lockfile` で pin された astro の binstub を直接呼ぶ。
+const astroBin = resolve(cwd, 'node_modules/.bin/astro');
+const build = spawnSync(astroBin, ['build'], { stdio: 'inherit', env });
 if (build.status !== 0) {
   console.error('[smoke] astro build failed');
   process.exit(build.status ?? 1);

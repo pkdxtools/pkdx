@@ -1,0 +1,85 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MemberCard from '../../components/MemberCard.astro';
+import CoverageChart from '../../components/CoverageChart.astro';
+import DefenseMatrix from '../../components/DefenseMatrix.astro';
+import DamageCalcTable from '../../components/DamageCalcTable.astro';
+import { isPublishableTeam } from '../../content.config';
+import { loadTeamMeta } from '../../lib/team-meta';
+
+export async function getStaticPaths() {
+  const entries = (await getCollection('teams')).filter(isPublishableTeam);
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry, meta: loadTeamMeta(entry.id) },
+  }));
+}
+
+const { entry, meta } = Astro.props;
+const { Content } = await render(entry);
+const formatLabel = entry.data.battle_format === 'doubles' ? 'ダブル' : 'シングル';
+const dateStr = entry.data.date.toISOString().slice(0, 10);
+---
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <article class="team-article">
+    <header class="hero">
+      <p class="muted small hero-date">
+        <time datetime={dateStr}>{dateStr}</time>
+      </p>
+      <h1>{entry.data.title}</h1>
+      <div class="hero-meta">
+        <span class="tag">{formatLabel}</span>
+        <span class="tag">{entry.data.mechanics}</span>
+        {entry.data.regulation && <span class="tag">{entry.data.regulation}</span>}
+        <span class="tag">{entry.data.version}</span>
+      </div>
+      {entry.data.description && <p class="hero-desc">{entry.data.description}</p>}
+    </header>
+
+    {meta && meta.members.length > 0 && (
+      <section class="members-section">
+        <h2>メンバー</h2>
+        <div class="members-grid">
+          {meta.members.map((m, i) => <MemberCard member={m} index={i} />)}
+        </div>
+      </section>
+    )}
+
+    <section class="md-body">
+      <Content />
+    </section>
+
+    {meta && <CoverageChart rows={meta.coverage} />}
+    {meta && <DefenseMatrix rows={meta.defense_matrix} members={meta.members} />}
+    {meta && <DamageCalcTable calcs={meta.damage_calcs} />}
+
+    {entry.data.tags.length > 0 && (
+      <footer class="tags-footer">
+        {entry.data.tags.map((t) => <span class="tag">#{t}</span>)}
+      </footer>
+    )}
+  </article>
+</BaseLayout>
+
+<style>
+  .team-article { display: flex; flex-direction: column; gap: 1rem; }
+  .hero { padding: 1rem 0 0.5rem; border-bottom: 1px solid var(--c-border); }
+  .hero h1 { margin: 0.25rem 0; }
+  .hero-date { margin: 0; }
+  .hero-meta { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+  .hero-desc { margin-top: 0.5rem; color: var(--c-text-muted); }
+  .members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+  }
+  .md-body :global(table) { font-size: 0.85rem; }
+  .tags-footer {
+    border-top: 1px solid var(--c-border);
+    padding-top: 1rem;
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+</style>

@@ -1,0 +1,56 @@
+---
+import '../styles/global.css';
+import { loadSiteConfig } from '../lib/site-config';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const config = loadSiteConfig();
+const pageTitle = title ? `${title} - ${config.site_name}` : config.site_name;
+const base = import.meta.env.BASE_URL;
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="icon" href={`${base}favicon.svg`} />
+  </head>
+  <body>
+    <header class="container">
+      <nav>
+        <a href={base} class="site-name"><strong>{config.site_name}</strong></a>
+        <span class="links">
+          <a href={`${base}teams/`}>構築</a>
+          <a href={`${base}blog/`}>ブログ</a>
+        </span>
+      </nav>
+    </header>
+
+    <main class="container">
+      <slot />
+    </main>
+
+    <footer class="container muted">
+      {config.author ? <small>© {config.author}</small> : <small>pkdx teams</small>}
+    </footer>
+
+    <style>
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--c-border);
+        margin-bottom: 1.5rem;
+      }
+      nav .links a { margin-left: 1rem; }
+      footer { border-top: 1px solid var(--c-border); margin-top: 3rem; padding-top: 1rem; }
+    </style>
+  </body>
+</html>

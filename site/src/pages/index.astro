@@ -1,0 +1,39 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TeamCard from '../components/TeamCard.astro';
+import PostCard from '../components/PostCard.astro';
+import { isPublishableTeam, isPublishableBlog } from '../content.config';
+
+const teams = (await getCollection('teams')).filter(isPublishableTeam);
+const blog = (await getCollection('blog')).filter(isPublishableBlog);
+
+type Item =
+  | { kind: 'team'; slug: string; date: Date; entry: typeof teams[number] }
+  | { kind: 'blog'; slug: string; date: Date; entry: typeof blog[number] };
+
+const items: Item[] = [
+  ...teams.map((e) => ({ kind: 'team' as const, slug: e.id, date: e.data.date, entry: e })),
+  ...blog.map((e) => ({ kind: 'blog' as const, slug: e.id, date: e.data.date, entry: e })),
+].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
+---
+<BaseLayout title="最新">
+  <h1>最新の投稿</h1>
+  {items.length === 0 ? (
+    <p class="empty-state">まだ記事がありません。</p>
+  ) : (
+    <div class="feed">
+      {items.map((item) => item.kind === 'team'
+        ? <TeamCard slug={item.slug} data={item.entry.data} />
+        : <PostCard slug={item.slug} data={item.entry.data} />)}
+    </div>
+  )}
+</BaseLayout>
+
+<style>
+  .feed {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+</style>

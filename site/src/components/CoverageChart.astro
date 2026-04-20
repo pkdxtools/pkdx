@@ -1,0 +1,58 @@
+---
+import TypeBadge from './TypeBadge.astro';
+import type { CoverageRow } from '../lib/team-meta';
+
+interface Props {
+  rows: CoverageRow[];
+}
+
+const { rows } = Astro.props;
+
+function multiplierClass(m: number | undefined): string {
+  if (m == null) return 'mult-unknown';
+  if (m >= 4) return 'mult-4x';
+  if (m >= 2) return 'mult-2x';
+  if (m >= 1) return 'mult-1x';
+  if (m >= 0.5) return 'mult-half';
+  if (m > 0) return 'mult-quarter';
+  return 'mult-zero';
+}
+---
+{rows.length > 0 && (
+  <section class="coverage">
+    <h2>攻撃カバー率</h2>
+    <p class="muted small">自分の技で各タイプをどれだけ貫通できるか。</p>
+    <table class="coverage-table">
+      <thead>
+        <tr>
+          <th>対象タイプ</th>
+          <th>最大打点</th>
+          <th>使用者</th>
+          <th>倍率</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr>
+            <td><TypeBadge type={row.defending_type} size="sm" /></td>
+            <td>{row.best_move_type ? <TypeBadge type={row.best_move_type} size="sm" /> : <span class="muted">-</span>}</td>
+            <td>{row.user ?? <span class="muted">-</span>}</td>
+            <td class={multiplierClass(row.multiplier)}>{row.multiplier != null ? `x${row.multiplier}` : '-'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+)}
+<style>
+  .coverage-table { display: table; width: 100%; }
+  .coverage-table td, .coverage-table th { text-align: center; }
+  .small { font-size: 0.85rem; }
+  .mult-4x { background: color-mix(in srgb, var(--mult-4x) 25%, transparent); font-weight: 700; }
+  .mult-2x { background: color-mix(in srgb, var(--mult-2x) 20%, transparent); font-weight: 600; }
+  .mult-1x { background: transparent; }
+  .mult-half { background: color-mix(in srgb, var(--mult-0-5x) 20%, transparent); }
+  .mult-quarter { background: color-mix(in srgb, var(--mult-0-25x) 25%, transparent); }
+  .mult-zero { background: color-mix(in srgb, var(--mult-0x) 25%, transparent); color: var(--c-text-muted); }
+  .mult-unknown { color: var(--c-text-muted); }
+</style>

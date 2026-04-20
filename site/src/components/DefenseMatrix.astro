@@ -1,0 +1,95 @@
+---
+import TypeBadge from './TypeBadge.astro';
+import type { DefenseMatrixRow, TeamMember } from '../lib/team-meta';
+
+interface Props {
+  rows: DefenseMatrixRow[];
+  members: TeamMember[];
+}
+
+const { rows, members } = Astro.props;
+
+function multiplierClass(m: number | undefined): string {
+  if (m == null) return 'mult-unknown';
+  if (m >= 4) return 'mult-4x';
+  if (m >= 2) return 'mult-2x';
+  if (m >= 1) return 'mult-1x';
+  if (m >= 0.5) return 'mult-half';
+  if (m > 0) return 'mult-quarter';
+  return 'mult-zero';
+}
+
+function formatMultiplier(m: number | undefined): string {
+  if (m == null) return '-';
+  if (m === 0) return '0';
+  if (m === 0.25) return '¼';
+  if (m === 0.5) return '½';
+  return `x${m}`;
+}
+---
+{rows.length > 0 && (
+  <section class="defense-matrix">
+    <h2>防御相性マトリクス</h2>
+    <p class="muted small">相手の攻撃タイプに対する各メンバーの被ダメージ倍率。</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>攻撃タイプ</th>
+            {members.map((m) => <th class="member-head">{m.name}</th>)}
+            <th>最善受け</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr>
+              <td><TypeBadge type={row.attack_type} size="sm" /></td>
+              {members.map((_m, i) => {
+                const v = row.multipliers?.[i];
+                return <td class={multiplierClass(v)}>{formatMultiplier(v)}</td>;
+              })}
+              <td>{row.best_switch ?? <span class="muted">-</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <figcaption class="legend">
+      <span class="swatch mult-4x"></span>x4
+      <span class="swatch mult-2x"></span>x2
+      <span class="swatch mult-1x"></span>x1
+      <span class="swatch mult-half"></span>½
+      <span class="swatch mult-quarter"></span>¼
+      <span class="swatch mult-zero"></span>0
+    </figcaption>
+  </section>
+)}
+
+<style>
+  .table-scroll { overflow-x: auto; }
+  .defense-matrix table { display: table; min-width: 100%; font-size: 0.85rem; }
+  .defense-matrix td, .defense-matrix th { text-align: center; }
+  .member-head { writing-mode: horizontal-tb; white-space: nowrap; }
+  .mult-4x { background: color-mix(in srgb, var(--mult-4x) 35%, transparent); color: #7f1d1d; font-weight: 700; }
+  .mult-2x { background: color-mix(in srgb, var(--mult-2x) 25%, transparent); font-weight: 600; }
+  .mult-1x { background: transparent; }
+  .mult-half { background: color-mix(in srgb, var(--mult-0-5x) 25%, transparent); }
+  .mult-quarter { background: color-mix(in srgb, var(--mult-0-25x) 35%, transparent); font-weight: 600; }
+  .mult-zero { background: color-mix(in srgb, var(--mult-0x) 30%, transparent); color: var(--c-text-muted); }
+  .mult-unknown { color: var(--c-text-muted); }
+  .legend {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+    margin-top: 0.5rem;
+  }
+  .swatch {
+    display: inline-block;
+    width: 1.2em;
+    height: 0.9em;
+    margin-left: 0.5rem;
+    border: 1px solid var(--c-border);
+  }
+</style>

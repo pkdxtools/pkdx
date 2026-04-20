@@ -1,0 +1,28 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import TeamCard from '../../components/TeamCard.astro';
+import { isPublishableTeam } from '../../content.config';
+
+const teams = (await getCollection('teams'))
+  .filter(isPublishableTeam)
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+---
+<BaseLayout title="構築一覧">
+  <h1>構築一覧</h1>
+  {teams.length === 0 ? (
+    <p class="empty-state">まだ構築記事がありません。<code>pkdx write teams</code> で生成した MD が <code>box/teams/</code> に入ると自動で公開されます。</p>
+  ) : (
+    <div class="grid">
+      {teams.map((entry) => <TeamCard slug={entry.id} data={entry.data} />)}
+    </div>
+  )}
+</BaseLayout>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+</style>

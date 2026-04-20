@@ -1,0 +1,30 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { isPublishableBlog } from '../../content.config';
+
+export async function getStaticPaths() {
+  const entries = (await getCollection('blog')).filter(isPublishableBlog);
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const dateStr = entry.data.date.toISOString().slice(0, 10);
+---
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <article class="post-article">
+    <header>
+      <p class="muted small"><time datetime={dateStr}>{dateStr}</time></p>
+      <h1>{entry.data.title}</h1>
+      {entry.data.description && <p class="muted">{entry.data.description}</p>}
+      {entry.data.tags.length > 0 && (
+        <div class="tags">{entry.data.tags.map((t) => <span class="tag">#{t}</span>)}</div>
+      )}
+    </header>
+    <Content />
+  </article>
+</BaseLayout>
+<style>
+  .tags { margin-top: 0.5rem; }
+</style>

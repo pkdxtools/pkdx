@@ -1,0 +1,63 @@
+---
+interface Props {
+  type: string;
+  size?: 'sm' | 'md';
+}
+
+const { type, size = 'md' } = Astro.props;
+
+const typeKeyMap: Record<string, string> = {
+  ノーマル: 'normal',
+  ほのお: 'fire',
+  みず: 'water',
+  でんき: 'electric',
+  くさ: 'grass',
+  こおり: 'ice',
+  かくとう: 'fighting',
+  どく: 'poison',
+  じめん: 'ground',
+  ひこう: 'flying',
+  エスパー: 'psychic',
+  むし: 'bug',
+  いわ: 'rock',
+  ゴースト: 'ghost',
+  ドラゴン: 'dragon',
+  あく: 'dark',
+  はがね: 'steel',
+  フェアリー: 'fairy',
+};
+
+const key = typeKeyMap[type] ?? 'normal';
+---
+<span class:list={['type-badge', `type-${key}`, `size-${size}`]}>{type}</span>
+<style>
+  .type-badge {
+    display: inline-block;
+    color: #fff;
+    font-weight: 600;
+    border-radius: 999px;
+    text-align: center;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  }
+  .type-badge.size-md { padding: 0.15em 0.75em; font-size: 0.85rem; min-width: 4em; }
+  .type-badge.size-sm { padding: 0.1em 0.5em; font-size: 0.7rem; min-width: 3.2em; }
+  .type-normal { background: var(--type-normal); }
+  .type-fire { background: var(--type-fire); }
+  .type-water { background: var(--type-water); }
+  .type-electric { background: var(--type-electric); color: #3b3b3b; text-shadow: none; }
+  .type-grass { background: var(--type-grass); }
+  .type-ice { background: var(--type-ice); color: #3b3b3b; text-shadow: none; }
+  .type-fighting { background: var(--type-fighting); }
+  .type-poison { background: var(--type-poison); }
+  .type-ground { background: var(--type-ground); color: #3b3b3b; text-shadow: none; }
+  .type-flying { background: var(--type-flying); }
+  .type-psychic { background: var(--type-psychic); }
+  .type-bug { background: var(--type-bug); }
+  .type-rock { background: var(--type-rock); }
+  .type-ghost { background: var(--type-ghost); }
+  .type-dragon { background: var(--type-dragon); }
+  .type-dark { background: var(--type-dark); }
+  .type-steel { background: var(--type-steel); color: #3b3b3b; text-shadow: none; }
+  .type-fairy { background: var(--type-fairy); }
+</style>

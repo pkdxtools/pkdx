@@ -1,0 +1,134 @@
+---
+import TypeBadge from './TypeBadge.astro';
+import type { DamageCalc } from '../lib/team-meta';
+
+interface Props {
+  calcs: DamageCalc[];
+}
+
+const { calcs } = Astro.props;
+
+function hitsLabel(n: number | undefined): string {
+  if (n == null) return '';
+  if (n === 1) return '確1';
+  if (n === 2) return '確2';
+  if (n === 3) return '確3';
+  return `確${n}`;
+}
+
+function formatPercent(n: number | undefined): string {
+  if (n == null) return '-';
+  return `${n.toFixed(1)}%`;
+}
+---
+{calcs.length > 0 && (
+  <section class="damage-calcs">
+    <h2>ダメージ計算</h2>
+    {calcs.map((calc) => (
+      <article class="calc-card">
+        {calc.title && <h3 class="calc-title">{calc.title}</h3>}
+        <div class="calc-header">
+          <div class="calc-side">
+            <span class="side-label">攻撃</span>
+            <strong>{calc.attacker.name ?? '-'}</strong>
+            {calc.attacker.item && <span class="muted small">@ {calc.attacker.item}</span>}
+          </div>
+          <div class="calc-move">
+            <TypeBadge type={calc.move.type} size="sm" />
+            <strong>{calc.move.name}</strong>
+            <span class="muted small">{calc.move.category}{calc.move.power ? ` / 威力${calc.move.power}` : ''}</span>
+          </div>
+          <div class="calc-side">
+            <span class="side-label">防御</span>
+            <strong>{calc.defender.name ?? '-'}</strong>
+            {calc.defender.ability && <span class="muted small">/ {calc.defender.ability}</span>}
+          </div>
+        </div>
+
+        {(calc.min_percent != null || calc.max_percent != null || calc.guaranteed_hits != null) && (
+          <p class="calc-summary">
+            <span class="pct">{formatPercent(calc.min_percent)} 〜 {formatPercent(calc.max_percent)}</span>
+            {calc.guaranteed_hits != null && <span class="hits">{hitsLabel(calc.guaranteed_hits)}</span>}
+          </p>
+        )}
+
+        {calc.rolls_percent.length > 0 && (
+          <table class="rolls-table">
+            <thead>
+              <tr>{calc.rolls_percent.map((_, i) => <th>{i + 1}</th>)}</tr>
+            </thead>
+            <tbody>
+              <tr>{calc.rolls_percent.map((r) => <td>{r.toFixed(1)}</td>)}</tr>
+            </tbody>
+          </table>
+        )}
+
+        {calc.note && <p class="calc-note">{calc.note}</p>}
+      </article>
+    ))}
+  </section>
+)}
+
+<style>
+  .calc-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  .calc-title { margin: 0 0 0.5rem 0; font-size: 1.05rem; }
+  .calc-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0.75rem;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .calc-side { display: flex; flex-direction: column; gap: 0.15rem; }
+  .calc-side:last-child { text-align: right; }
+  .side-label {
+    font-size: 0.7rem;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .calc-move {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0 0.5rem;
+  }
+  .calc-summary {
+    margin: 0.5rem 0 0.75rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+  .pct { font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 600; }
+  .hits {
+    background: var(--c-accent-bg);
+    color: var(--c-accent);
+    padding: 0.1em 0.6em;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .rolls-table {
+    display: table;
+    width: 100%;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+  .rolls-table th, .rolls-table td { text-align: center; padding: 0.25rem; }
+  .calc-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: var(--c-text-muted);
+    white-space: pre-wrap;
+  }
+  .small { font-size: 0.8rem; }
+</style>

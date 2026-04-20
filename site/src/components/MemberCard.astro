@@ -1,0 +1,188 @@
+---
+import TypeBadge from './TypeBadge.astro';
+import type { TeamMember } from '../lib/team-meta';
+
+interface Props {
+  member: TeamMember;
+  index: number;
+}
+
+const { member, index } = Astro.props;
+const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
+  ['h', 'HP'],
+  ['a', 'こうげき'],
+  ['b', 'ぼうぎょ'],
+  ['c', 'とくこう'],
+  ['d', 'とくぼう'],
+  ['s', 'すばやさ'],
+];
+---
+<article class="member-card">
+  <header class="member-head">
+    <div class="member-title">
+      <span class="member-index">#{index + 1}</span>
+      <h3 class="member-name">{member.name}</h3>
+    </div>
+    <div class="member-types">
+      {member.types.map((t) => <TypeBadge type={t} />)}
+    </div>
+  </header>
+
+  {member.role && (
+    <section class="member-role">
+      <h4 class="role-label">役割</h4>
+      <p>{member.role}</p>
+    </section>
+  )}
+
+  <dl class="member-meta">
+    {member.ability && <><dt>特性</dt><dd>{member.ability}</dd></>}
+    {member.item && <><dt>持ち物</dt><dd>{member.item}</dd></>}
+    {member.nature && <><dt>性格</dt><dd>{member.nature}</dd></>}
+  </dl>
+
+  {member.base_stats && (
+    <section class="stats-section">
+      <h4>種族値</h4>
+      <table class="stats-table">
+        <thead>
+          <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
+        </thead>
+        <tbody>
+          <tr>{statsOrder.map(([key]) => <td>{member.base_stats?.[key]}</td>)}</tr>
+        </tbody>
+      </table>
+    </section>
+  )}
+
+  {member.actual_stats && (
+    <section class="stats-section">
+      <h4>実数値</h4>
+      <table class="stats-table">
+        <thead>
+          <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
+        </thead>
+        <tbody>
+          <tr>{statsOrder.map(([key]) => <td>{member.actual_stats?.[key] ?? '-'}</td>)}</tr>
+        </tbody>
+      </table>
+    </section>
+  )}
+
+  {member.moves.length > 0 && (
+    <section class="moves-section">
+      <h4>技構成</h4>
+      <ul class="moves-list">
+        {member.moves.map((m) => (
+          <li>
+            <span class="move-name">{m.name}</span>
+            <TypeBadge type={m.type} size="sm" />
+            <span class="move-meta muted">{m.category}{m.power ? ` / ${m.power}` : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</article>
+
+<style>
+  .member-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .member-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .member-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .member-index {
+    color: var(--c-text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+  }
+  .member-name {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+  .member-types {
+    display: flex;
+    gap: 0.3rem;
+  }
+  .member-role {
+    background: var(--c-accent-bg);
+    border-left: 4px solid var(--c-accent);
+    padding: 0.75rem 1rem;
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .role-label {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--c-accent);
+  }
+  .member-role p {
+    margin: 0;
+    font-size: 1rem;
+    white-space: pre-wrap;
+  }
+  .member-meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 0.75rem;
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .member-meta dt {
+    color: var(--c-text-muted);
+    font-size: 0.8rem;
+  }
+  .member-meta dd { margin: 0; }
+  .stats-section h4, .moves-section h4 {
+    margin: 0 0 0.35rem 0;
+    font-size: 0.85rem;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .stats-table {
+    display: table;
+    width: 100%;
+    font-size: 0.85rem;
+    margin: 0;
+  }
+  .stats-table th, .stats-table td {
+    text-align: center;
+    white-space: nowrap;
+  }
+  .moves-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.4rem;
+  }
+  .moves-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--c-bg);
+    border-radius: 4px;
+  }
+  .move-name { font-weight: 600; flex: 1; }
+  .move-meta { font-size: 0.75rem; white-space: nowrap; }
+</style>

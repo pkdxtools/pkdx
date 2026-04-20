@@ -62,6 +62,27 @@ Claude Code / Codex (CLI / デスクトップアプリどちらでも可) をこ
 
 作成したチーム・型は `./box` 配下に置かれる。手動で編集もできるし、Claude Code / Codex経由で閲覧・編集も可能。
 
+### 構築をブログとして公開する（GitHub Pages）
+
+GitHub にフォークしていれば、作成した構築記事とブログ記事を GitHub Pages に自動デプロイできる。
+
+1. リポジトリの Settings → Pages → Source を **"GitHub Actions"** に切り替える
+2. `main` に push すると、`.github/workflows/deploy-pages.yml` が自動で Astro サイトをビルドして公開する (URL は Actions ログに表示される)
+3. 初回だけ手動でテストしたい場合は Actions タブから `Deploy Pages` → `Run workflow` をクリック
+
+公開対象・編集ポリシー:
+
+- `box/teams/*.md` + `box/teams/*.meta.json` → 構築記事ページとしてレンダリング (役割・タイプ相性・ダメ計・選出プランが自動表示される)
+- `box/blog/*.md` → 自由記事としてレンダリング。ひな形は `box/blog/TEMPLATE.md.example` を参考にコピーして使う
+- 非公開にしたい場合は該当ファイルの frontmatter に `draft: true` を追加
+- 構築 MD を手動で書き換えた後、team-builder の再生成で上書きされたくないときは frontmatter に `edited: true` を追加 (※ MoonBit 側の edit-lock サポートは別 PR で提供予定)
+- `box/site.config.json` でサイト名・著者を設定可能 (`{ "site_name": "...", "author": "...", "enabled": true }`)
+
+カスタムドメイン: `site/public/CNAME` にドメイン名 1 行のファイルを置くと有効化。
+
+公開を停止: Settings → Pages → Disable、または `box/site.config.json` の `enabled` を `false` にする。
+
+サイト本体 (`site/` 配下) は upstream 管理なので直接編集は非推奨。カスタマイズは `box/site.config.json` と `site/public/` 経由で行う。
 
 ### CLI 単体でも使える
 

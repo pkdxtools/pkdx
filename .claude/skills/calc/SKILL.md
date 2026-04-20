@@ -201,9 +201,36 @@ AskUserQuestionで追加計算を提案:
 
 | # | 質問 | header | オプション |
 |---|------|--------|-----------|
-| 1 | 続けて計算しますか？ | 追加計算 | 別の技で計算, 別の相手で計算, 攻防入替, 終了 |
+| 1 | 続けて計算しますか？ | 追加計算 | 別の技で計算, 別の相手で計算, 攻防入替, 構築ブログに貼り付け, 終了 |
 
 選択に応じてPhase 1に戻る（既知の情報は保持）。終了を選んだ場合はスキルを終了。
+
+### Phase 4-1: 構築ブログに貼り付け (`--attach-team`)
+
+ユーザーが「構築ブログに貼り付け」を選んだ場合、計算結果を `box/teams/<slug>.meta.json` の `damage_calcs[]` に追記する。GitHub Pages (Astro) 側が読み取って構築記事ページに 16 段階の乱数テーブルとしてレンダリングする。
+
+1. `box/teams/` 配下の `*.meta.json` を `ls box/teams/*.meta.json` で列挙し、AskUserQuestion でユーザーに選んでもらう
+2. 見出し (`--attach-title`) と任意コメント (`--attach-note`) を尋ねる (例: 「HD特化カビゴンに じしん」「スカーフ前提の最速 vs さむいギルガルド」等、ブログ読者が意味を取れる説明)
+3. 直前の `$PKDX damage` 呼び出しに `--attach-team <path> --attach-title "<title>" --attach-note "<note>"` を足して再実行する (計算結果は stdout にそのまま出るので表示ブロックはそのまま作れる)
+
+```bash
+$PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
+  --attach-team "box/teams/<slug>.meta.json" \
+  --attach-title "vs <防御側名> (<一口メモ>)" \
+  --attach-note "<任意コメント>" \
+  <その他の修飾子オプション>
+```
+
+成功時は stderr に `Attached damage calc to <path>` と出るのでユーザーに通知する。**同じ計算を複数回 attach すると単純に重複追加される** — 誤登録に気付いた場合は `.meta.json` の `damage_calcs[]` を手動で編集する必要があることを案内する。
+
+ブログに表示される粒度:
+- 見出し (`--attach-title`) / 攻撃側・防御側のポケモン名・特性・持ち物・性格・ランク・テラスタイプ
+- 技名・タイプ・分類・威力
+- 天候・フィールド・急所有無
+- 16 段階の乱数割合 (%) / 確定数 (確定N発 のみ `guaranteed_hits` を付与 — 乱数系は rolls_percent から FE 側で再計算)
+- 任意コメント (`--attach-note`)
+
+未記入フィールド (特性なし、性格なし等) は FE 側で非表示になる。
 
 ---
 

@@ -128,6 +128,10 @@ pub fn team_schema(
       "matchup_plans": b.array(items=b.any()),
       "strengths": b.array(items=b.string()),
       "weaknesses": b.array(items=b.string()),
+      // `pkdx damage --attach-team` が追記する計算スナップショット。
+      // ブログ表示用で skill フローでは読まないため schema は緩く (any[])
+      // 保持する — 構造は site/src/lib/team-meta.ts (DamageCalc) 側で検証される。
+      "damage_calcs": b.array(items=b.any()),
       "updated_at": b.string(),
     },
     required=[

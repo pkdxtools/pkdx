@@ -678,6 +678,21 @@ fn cmd_damage() -> @admiral.CommandDef {
       @admiral.int("def-rank", description="Defender stat stage (-6..+6)", default=Some(0)),
       @admiral.int("fainted-count", description="Number of fainted allies (0-5, for Supreme Overlord/そうだいしょう)", default=Some(2)),
       @admiral.bool("no-cache", description="Bypass the persistent damage cache (box/cache/damage_cache.sqlite)"),
+      @admiral.string(
+        "attach-team",
+        description="Append this damage calc to a team meta.json (path to box/teams/<slug>.meta.json)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "attach-title",
+        description="Title shown in the blog for this calc (with --attach-team)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "attach-note",
+        description="Optional note / commentary shown under the calc (with --attach-team)",
+        default=Some(""),
+      ),
     ],
     positionals=[
       @admiral.positional("attacker", description="Attacker Pokemon name", required=true),
@@ -718,6 +733,9 @@ fn cmd_damage() -> @admiral.CommandDef {
         ctx_int(ctx, "def-rank"),
         ctx_int(ctx, "fainted-count"),
         ctx.get_bool("no-cache"),
+        ctx_str(ctx, "attach-team"),
+        ctx_str(ctx, "attach-title"),
+        ctx_str(ctx, "attach-note"),
       )
     }),
   )
@@ -735,9 +753,17 @@ fn cmd_write() -> @admiral.CommandDef {
         options=[
           @admiral.string("date", description="YYYY-MM-DD", required=true),
           @admiral.string("axis", description="Axis Pokemon name", required=true),
+          @admiral.bool(
+            "force",
+            description="Overwrite existing MD even if frontmatter has `edited: true`",
+          ),
         ],
         run=Some(fn(ctx) {
-          run_write_teams(ctx_str(ctx, "date"), ctx_str(ctx, "axis"))
+          run_write_teams(
+            ctx_str(ctx, "date"),
+            ctx_str(ctx, "axis"),
+            ctx.get_bool("force"),
+          )
         }),
       ),
       @admiral.command(
@@ -1127,6 +1153,9 @@ fn run_damage(
   def_rank : Int,
   fainted_count : Int,
   no_cache : Bool,
+  attach_team : String,
+  attach_title : String,
+  attach_note : String,
 ) -> Unit {
   if atk_rank < -6 || atk_rank > 6 {
     println("Error: --atk-rank must be in [-6, 6]")
@@ -1160,8 +1189,10 @@ fn run_damage(
   }
   // Cache path: only active for JSON output because the cached value is
   // JSON-shaped and table rendering depends on the original DamageCalcInput.
+  // `--attach-team` もバイパス — attach 処理は DamageCalcInput / Result が
+  // 必要で、cached JSON からは復元できないため、毎回 fresh に計算する。
   let use_cache = match format {
-    @cli.Json => not(no_cache)
+    @cli.Json => not(no_cache) && attach_team.length() == 0
     _ => false
   }
   let cache_key_opt : String? = if use_cache {
@@ -1308,7 +1339,54 @@ fn run_damage(
       _ => ()
     }
     println(output)
+    if attach_team.length() > 0 {
+      attach_damage_calc_to_meta(
+        attach_team,
+        input,
+        result,
+        attach_title,
+        attach_note,
+      )
+    }
   })
+}
+
+///|
+/// `pkdx damage --attach-team <meta_path>` サポート。計算 JSON を
+/// site/src/lib/team-meta.ts `DamageCalc` schema に整形して追記する。
+/// 書き出しは file-level 冪等 — 同じ計算を複数回 attach すると単純に重複追加される
+/// (skill 側で重複排除方針を決めるため、ここでは単純 append に留める)。
+fn attach_damage_calc_to_meta(
+  meta_path : String,
+  input : @model.DamageCalcInput,
+  result : @model.DamageCalcResult,
+  title : String,
+  note : String,
+) -> Unit {
+  let existing = match @db.read_file(meta_path) {
+    Some(s) => s
+    None => {
+      exit_error("--attach-team: meta.json not found at " + meta_path)
+      return
+    }
+  }
+  let meta_json = @json.parse(existing) catch {
+    e => {
+      exit_error("--attach-team: JSON parse error in " + meta_path + ": " + e.to_string())
+      return
+    }
+  }
+  let entry = @writer.build_damage_calc_entry(input, result, title, note)
+  let updated = @writer.append_damage_calc(meta_json, entry)
+  let rc = pkdx_write_file(
+    @db.to_c_bytes(meta_path),
+    @db.to_c_bytes(updated.stringify()),
+  )
+  if rc != 0 {
+    exit_error("--attach-team: failed to write " + meta_path)
+  } else {
+    pkdx_eprintln(@db.to_c_bytes("Attached damage calc to " + meta_path))
+  }
 }
 
 ///|
@@ -1481,7 +1559,7 @@ fn exit_error(msg : String) -> Unit {
 }
 
 ///|
-fn run_write_teams(date : String, axis : String) -> Unit {
+fn run_write_teams(date : String, axis : String, force : Bool) -> Unit {
   if !(is_safe_path_component(axis)) || !(is_safe_path_component(date)) {
     exit_error("Invalid characters in --axis or --date")
     return
@@ -1513,10 +1591,30 @@ fn run_write_teams(date : String, axis : String) -> Unit {
   let base = "box/teams/" + axis + "-build-" + date
   let md_path = base + ".md"
   let meta_path = base + ".meta.json"
-  let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
-  if rc != 0 {
-    exit_error("Failed to write " + md_path)
-    return
+  // `edited: true` frontmatter を持つ手編集済み MD は --force なしでは上書きしない。
+  // meta.json は常に更新 — 構造化データはビルダーが SSoT。
+  let skip_md = if force {
+    false
+  } else {
+    match @db.read_file(md_path) {
+      Some(existing) => @writer.has_edit_lock(existing)
+      None => false
+    }
+  }
+  if not(skip_md) {
+    let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
+    if rc != 0 {
+      exit_error("Failed to write " + md_path)
+      return
+    }
+  } else {
+    pkdx_eprintln(
+      @db.to_c_bytes(
+        "Preserved hand-edited " +
+        md_path +
+        " (frontmatter edited: true). meta.json was updated. Re-run with --force to overwrite.",
+      ),
+    )
   }
   let meta = json.stringify()
   let rc2 = pkdx_write_file(@db.to_c_bytes(meta_path), @db.to_c_bytes(meta))

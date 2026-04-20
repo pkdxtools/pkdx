@@ -942,6 +942,34 @@ CLIはキャッシュ JSON のスキーマ（`members` + `coverage` + `defense_m
 
 **エラー時の再試行**: exit code が 0 以外の場合、stderrのエラーメッセージに基づいてキャッシュ JSON を修正し再試行する。最大3回まで。
 
+**生成される md の frontmatter**: GitHub Pages 公開 (`site/` の Astro が読む) 用に、以下の YAML frontmatter が自動付与される:
+
+```yaml
+---
+title: "<軸ポケモン名> 構築"
+axis: "<軸ポケモン名>"
+date: YYYY-MM-DD
+battle_format: "singles" | "doubles"
+mechanics: "..."
+version: "..."
+regulation: "..."      # nullable
+members: ["...", ...]  # 名前フロー配列
+tags: []
+edited: false          # ユーザーが手編集した場合に true に書き換える
+draft: false           # true で GitHub Pages 非公開
+generated_by: "pkdx"
+schema_version: 1
+---
+```
+
+**edit-lock (`edited: true`)**: ブログ向けに手編集した md は `edited: true` に書き換えておくと、次回以降の `pkdx write teams` 実行時に **md を上書きしない** (`.meta.json` は毎回更新される)。強制上書きしたい場合は `--force` を付ける:
+
+```bash
+cat $CACHE_FILE | $PKDX write teams --date "YYYY-MM-DD" --axis "..." --force
+```
+
+skip 時は stderr に `Preserved hand-edited box/teams/<slug>.md` と出るので、ユーザーには「前回の手編集を保持した。上書きしたい場合は再実行時に『--force で上書き』と伝えて」と案内する。
+
 レポート出力後、ファイルパスをユーザーに通知。キャッシュファイルを削除する。
 
 ### 8-3: ポケソルテキスト出力

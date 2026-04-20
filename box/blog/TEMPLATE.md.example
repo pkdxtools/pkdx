@@ -4,7 +4,7 @@ date: 2026-04-20
 description: "記事の短い紹介（検索結果やカードに出ます）"
 tags: ["タグ1", "タグ2"]
 # eyecatch: "assets/hero.png"  # 画像を使う場合、box/blog/assets/ に置いて相対パスで指定
-draft: false                      # true にすると公開されません
+published: true                   # false にすると非公開 (省略時は公開扱い)
 ---
 
 # 記事本文
@@ -32,4 +32,4 @@ const hello = "world";
 1. このファイルをコピーして `.example` 拡張子を外す: `cp TEMPLATE.md.example my-first-post.md`
 2. frontmatter とタイトル、本文を編集
 3. `main` に push すると GitHub Actions が自動でサイトを再ビルドして公開します
-4. 下書き中は `draft: true` にしておけば公開されません
+4. 下書き中は `published: false` にしておけば公開されません

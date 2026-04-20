@@ -759,7 +759,7 @@ fn cmd_write() -> @admiral.CommandDef {
           ),
           @admiral.bool(
             "publish",
-            description="Mark this team for publication on the build blog (default: draft only)",
+            description="Mark this team for publication on the build blog (default: unpublished)",
           ),
         ],
         run=Some(fn(ctx) {

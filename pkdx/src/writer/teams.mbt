@@ -528,11 +528,11 @@ pub fn build_team_frontmatter(
   add_plain("members", members_value)
   add_plain("tags", "[]")
   add_plain("edited", "false")
-  // `publish=true` 指定時だけ draft: false にする。構築を意図せず公開しない
-  // ための安全側デフォルト。team-builder Phase 8 の「構築ブログに公開するか」
+  // `published: false` を既定にして、構築を意図せず公開しない。`--publish` で
+  // `true` に書き換わる。team-builder Phase 8 の「構築ブログで公開するか」
   // 質問で「はい」が選ばれた時のみ build_team_document(publish=true) が呼ばれる。
-  let draft_value = if publish { "false" } else { "true" }
-  add_plain("draft", draft_value)
+  let published_value = if publish { "true" } else { "false" }
+  add_plain("published", published_value)
   add_plain("generated_by", "team-builder")
   add_plain("schema_version", "1")
   { raw: buf.to_string(), entries, span: s }

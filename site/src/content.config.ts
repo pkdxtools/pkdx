@@ -19,7 +19,9 @@ const teamSchema = z.object({
   eyecatch: z.string().optional(),
   tags: z.array(z.string()).default([]),
   edited: z.boolean().default(false),
-  draft: z.boolean().default(false),
+  // falsy = 非公開。team-builder が `--publish` 付きで生成したときだけ true。
+  // 明示されていない (既存の手書き md など) 場合は公開寄りに倒す。
+  published: z.boolean().default(true),
   generated_by: z.string().optional(),
   schema_version: z.number().default(1),
 });
@@ -30,7 +32,8 @@ const blogSchema = z.object({
   description: z.string().optional(),
   tags: z.array(z.string()).default([]),
   eyecatch: z.string().optional(),
-  draft: z.boolean().default(false),
+  // falsy = 非公開。TEMPLATE からコピーしたときは `published: true` が入る。
+  published: z.boolean().default(true),
 });
 
 const teams = defineCollection({
@@ -63,7 +66,7 @@ export function isPublishableTeam<T extends { data: TeamFrontmatter }>(
 ): entry is T & { data: PublishedTeamData } {
   const d = entry.data;
   return (
-    !d.draft &&
+    d.published !== false &&
     typeof d.title === 'string' &&
     typeof d.axis === 'string' &&
     d.date instanceof Date &&
@@ -75,5 +78,5 @@ export function isPublishableTeam<T extends { data: TeamFrontmatter }>(
 }
 
 export function isPublishableBlog<T extends { data: BlogFrontmatter }>(entry: T): boolean {
-  return entry.data.draft !== true;
+  return entry.data.published !== false;
 }

@@ -6,7 +6,7 @@ battle_format: singles
 mechanics: "テラスタル"
 version: "sv"
 members: ["ミミッキュ"]
-draft: true
+published: false
 ---
 
 ## メモ

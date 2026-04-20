@@ -36,7 +36,7 @@ interface Check {
 
 const checks: Check[] = [
   { path: 'dist/teams/full/index.html', expected: true, label: 'full team is published' },
-  { path: 'dist/teams/drafty/index.html', expected: false, label: 'drafty team is hidden (draft:true filtered)' },
+  { path: 'dist/teams/drafty/index.html', expected: false, label: 'unpublished team is hidden (published:false filtered)' },
   { path: 'dist/teams/legacy/index.html', expected: false, label: 'legacy MD without frontmatter is skipped' },
   { path: 'dist/teams/index.html', expected: true, label: 'teams index is rendered' },
   { path: 'dist/blog/hello/index.html', expected: true, label: 'blog fixture is published' },

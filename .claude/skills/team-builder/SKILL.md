@@ -922,9 +922,9 @@ megaメカニクスが有効な場合:
 - **はい** → `{軸ポケモン名}-build-{YYYY-MM-DD}` （通常のファイル名）
 - **いいえ** → `__no_save.{軸ポケモン名}-build-{YYYY-MM-DD}` （gitignore対象）
 
-質問3の回答は md の frontmatter `draft:` を決める:
-- **いいえ** (default) → `draft: true` (ブログ非掲載)。後から公開したくなったら md の `draft:` を `false` に書き換えるか、同じ引数で **--publish** を付けて `pkdx write teams` を再実行する
-- **はい** → `draft: false` (ブログ掲載)。既存 md の edit-lock はそのまま有効
+質問3の回答は md の frontmatter `published:` を決める:
+- **いいえ** (default) → `published: false` (ブログ非掲載)。後から公開したくなったら md の `published:` を `true` に書き換えるか、同じ引数で **--publish** を付けて `pkdx write teams` を再実行する
+- **はい** → `published: true` (ブログ掲載)。既存 md の edit-lock はそのまま有効
 
 ### 8-2: mdレポート出力（キャッシュ JSON → pkdx write）
 
@@ -939,10 +939,10 @@ megaメカニクスが有効な場合:
 - バージョン管理なし → `--axis "__no_save.<軸ポケモン名>"`
 
 ```bash
-# 8-1 の質問3 が「いいえ」: 下書き状態で保存 (draft: true)
+# 8-1 の質問3 が「いいえ」: 非公開で保存 (published: false)
 cat $CACHE_FILE | $PKDX write teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>"
 
-# 8-1 の質問3 が「はい」: 構築ブログに掲載 (draft: false)
+# 8-1 の質問3 が「はい」: 構築ブログに掲載 (published: true)
 cat $CACHE_FILE | $PKDX write teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>" --publish
 ```
 
@@ -965,7 +965,7 @@ regulation: "..."      # nullable
 members: ["...", ...]  # 名前フロー配列
 tags: []
 edited: false          # ユーザーが手編集した場合に true に書き換える
-draft: true            # `--publish` 指定時だけ false。構築ブログ掲載可否を決める
+published: false       # `--publish` 指定時だけ true。構築ブログ掲載可否を決める (falsy = 非公開)
 generated_by: "pkdx"
 schema_version: 1
 ---

@@ -9,7 +9,7 @@ regulation: "H"
 members: ["ガブリアス", "カイリュー", "ラプラス", "エースバーン", "ハッサム", "ウーラオス"]
 tags: ["ドラゴン軸", "スタンダード"]
 edited: false
-draft: false
+published: true
 generated_by: team-builder
 schema_version: 1
 description: "高速物理ドラゴンを軸にした先発制圧型スタン。"

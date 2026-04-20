@@ -433,9 +433,9 @@ test "build_team_document: emits YAML frontmatter with core fields" {
   assert_true(md.contains("regulation: \"H\""))
   assert_true(md.contains("members: [\"ガブリアス\", \"カイリュー\"]"))
   assert_true(md.contains("edited: false"))
-  // Default: 未公開扱い (draft: true)。ユーザーが Phase 8 で明示的に
+  // Default: 未公開扱い (published: false)。ユーザーが Phase 8 で明示的に
   // 「構築ブログで公開する」を選ばない限り誰からも見えない。
-  assert_true(md.contains("draft: true"))
+  assert_true(md.contains("published: false"))
   assert_true(md.contains("generated_by: team-builder"))
   assert_true(md.contains("schema_version: 1"))
   let body_start = md.find("\n---\n")
@@ -443,7 +443,7 @@ test "build_team_document: emits YAML frontmatter with core fields" {
 }
 
 ///|
-test "build_team_document: publish=true flips draft to false" {
+test "build_team_document: publish=true flips published to true" {
   let src =
     #|{
     #|  "battle_format": "singles",
@@ -459,8 +459,8 @@ test "build_team_document: publish=true flips draft to false" {
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-20", publish=true)
   let md = @markdown.serialize(doc)
-  assert_true(md.contains("draft: false"))
-  assert_false(md.contains("draft: true"))
+  assert_true(md.contains("published: true"))
+  assert_false(md.contains("published: false"))
 }
 
 ///|

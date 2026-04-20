@@ -127,7 +127,7 @@ flowchart LR
 
 - `box/teams/*.md` + `box/teams/*.meta.json` → 構築記事ページとしてレンダリング (役割・タイプ相性・ダメ計・選出プランが自動表示される)
 - `box/blog/*.md` → 自由記事としてレンダリング。ひな形は `box/blog/TEMPLATE.md.example` を参考にコピーして使う
-- 非公開にしたい場合は該当ファイルの frontmatter に `draft: true` を追加
+- 非公開にしたい場合は該当ファイルの frontmatter に `published: false` を追加
 - 構築 md を手動で書き換えた後、team-builder の再生成で上書きされたくないときは frontmatter に `edited: true` を追加 (`.meta.json` は SSoT のため毎回更新される)
 - `box/site.config.json` でサイト名・著者を設定可能 (`{ "site_name": "...", "author": "...", "enabled": true }`)
 

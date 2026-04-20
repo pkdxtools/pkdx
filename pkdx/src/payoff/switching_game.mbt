@@ -774,9 +774,45 @@ pub fn new_damage_cache(
 /// Materialize a `CacheKeyInput` for the L2 cache from the resolved
 /// (post-mega) Combatant pair. Matches the CLI `pkdx damage` key schema
 /// so disk entries written by the CLI and the payoff layer share
-/// identity. Weather / field are always empty (payoff omits them) and
-/// `fainted_count` is 0 / `is_double` is false / `critical` is false —
-/// same canonicalization as `build_input_with_ranks`.
+/// identity.
+///
+/// Completeness argument — every field of `DamageCalcInput` that
+/// `compute_mean_damage` feeds into `@damage.calc_damage` is either
+/// (a) encoded below, (b) canonicalized to a constant because payoff never
+/// varies it, or (c) determined by an encoded field. Mapping by
+/// `DamageCalcInput` member:
+///
+///   * `attacker` / `defender` (`Pokemon`) — keyed by `name_ja`, which is
+///     the canonical species+form+mega identifier in pokedex.db (mega
+///     variants carry distinct `m.name_ja` via `effective_combatant`, and
+///     alt-form rows have distinct Japanese names). Types / base stats /
+///     weight therefore follow from the name.
+///   * `move_` (`Move`) — keyed by `mv.name`. Move rows are 1:1 with name
+///     per version, so power / type / category / accuracy follow.
+///   * `atk_ability` / `def_ability` / `atk_item` / `def_item` — encoded.
+///   * `weather` / `field` — canonicalized to "": payoff always passes
+///     `Weather::None` / `Field::None` via `build_input_with_ranks`.
+///   * `tera_type` — encoded (attacker only; `calc_damage` does not read a
+///     defender tera, so there is no `def_tera` to encode).
+///   * `critical` — always false in payoff (we model expected damage, not
+///     crit rolls); canonicalized to false.
+///   * `atk_nature` / `def_nature` — encoded as `name_ja`, which uniquely
+///     identifies the `Nature` row (name → stat modifiers are 1:1).
+///   * `atk_stat_override` / `def_stat_override` / `def_hp_override` —
+///     encoded via `build_input_with_ranks`. When these are 0 the engine
+///     falls back to `pokemon.base_stat + stat_system`, and both of those
+///     are already keyed (species name + `version_str`).
+///   * `atk_rank` / `def_rank` — encoded.
+///   * `fainted_count` — canonicalized to 0: payoff does not model
+///     last-respects / rage-fist.
+///   * `is_double` — canonicalized to false: payoff only solves singles.
+///   * `stat_system` — encoded via `version_str` ("champions" vs
+///     "scarlet_violet"); both arms of the enum produce distinct strings.
+///
+/// `cache_key_completeness_test.mbt` asserts that toggling every one of
+/// these factors (ability, item, tera, ranks, stat overrides, nature, move
+/// name, species name, stat_system) changes the key, and that the
+/// canonicalized fields are never threaded through.
 fn combatant_to_cache_key_input(
   atk : Combatant,
   dfn : Combatant,

@@ -181,7 +181,7 @@ fn run_damage_bench(
 ) -> Unit {
   let cache = match
     @damage_cache.open_or_init(
-      DAMAGE_CACHE_PATH,
+      resolve_damage_cache_path(),
       pkdx_version,
       @migrate.latest_migration_name(),
     ) {
@@ -332,7 +332,9 @@ fn cmd_cache_clear() -> @admiral.CommandDef {
       @admiral.command(
         name="damage",
         description="Clear the persistent damage cache (" +
-          DAMAGE_CACHE_PATH +
+          DAMAGE_CACHE_REL_PATH +
+          "; override via " +
+          DAMAGE_CACHE_ENV_VAR +
           ")",
         run=Some(fn(_ctx) { run_cache_clear_damage() }),
       ),
@@ -346,7 +348,7 @@ fn run_cache_clear_damage() -> Unit {
   // keeps the command idempotent.
   let cache = match
     @damage_cache.open_or_init(
-      DAMAGE_CACHE_PATH,
+      resolve_damage_cache_path(),
       pkdx_version,
       @migrate.latest_migration_name(),
     ) {
@@ -410,10 +412,11 @@ fn run_migrate(repo_root : String, resync : Bool) -> Unit {
       // invocations don't needlessly wipe their entries. Only sync when
       // the cache file already exists — otherwise we'd create an empty
       // SQLite DB purely as a side effect of running migrations.
-      if @db.file_exists(DAMAGE_CACHE_PATH) {
+      let cache_path = resolve_damage_cache_path()
+      if @db.file_exists(cache_path) {
         match
           @damage_cache.sync_meta_after_migrate(
-            DAMAGE_CACHE_PATH,
+            cache_path,
             pkdx_version,
             @migrate.latest_migration_name(),
           ) {
@@ -964,10 +967,44 @@ fn run_learners(
 }
 
 ///|
+/// Cache path relative to the repo root. Combined with the resolved root in
+/// `resolve_damage_cache_path` — `pkdx damage`, `pkdx select`, and
+/// `pkdx cache-clear damage` must land on the same file regardless of CWD.
+const DAMAGE_CACHE_REL_PATH : String = "box/cache/damage_cache.sqlite"
+
 ///|
-/// Path to the persistent damage cache. Relative to the CWD, which is
-/// expected to be the project root when users invoke `pkdx damage`.
-const DAMAGE_CACHE_PATH : String = "box/cache/damage_cache.sqlite"
+/// Environment override for the damage cache path. Mirrors `POKEDEX_DB` so
+/// callers running outside the repo layout (CI, sandboxes, tests) can point
+/// the cache anywhere writable.
+const DAMAGE_CACHE_ENV_VAR : String = "PKDX_DAMAGE_CACHE"
+
+///|
+/// Resolve the persistent damage cache path. Precedence:
+///   1. `PKDX_DAMAGE_CACHE` env var (absolute or relative — used verbatim).
+///   2. Repo root anchor: probe the same candidates as `resolve_db_path`
+///      (`./pokedex/pokedex.db`, `../pokedex/pokedex.db`) and return
+///      `<root>/box/cache/damage_cache.sqlite` for the first match. This keeps
+///      `pkdx damage` / `pkdx select` pointing at the same cache whether they
+///      are run from the repo root or from `pkdx/` during development.
+///   3. Fallback: CWD-relative `box/cache/damage_cache.sqlite`, matching the
+///      historical behavior when the repo root cannot be located.
+fn resolve_damage_cache_path() -> String {
+  match @sys.get_env_var(DAMAGE_CACHE_ENV_VAR) {
+    Some(p) if p.length() > 0 => return p
+    _ => ()
+  }
+  let anchors : Array[(String, String)] = [
+    ("pokedex/pokedex.db", "."),
+    ("../pokedex/pokedex.db", ".."),
+  ]
+  for i = 0; i < anchors.length(); i = i + 1 {
+    let (marker, root) = anchors[i]
+    if @db.file_exists(marker) {
+      return root + "/" + DAMAGE_CACHE_REL_PATH
+    }
+  }
+  DAMAGE_CACHE_REL_PATH
+}
 
 ///|
 fn run_damage(
@@ -1074,7 +1111,7 @@ fn run_damage(
     Some(_) =>
       match
         @damage_cache.open_or_init(
-          DAMAGE_CACHE_PATH,
+          resolve_damage_cache_path(),
           pkdx_version,
           @migrate.latest_migration_name(),
         ) {
@@ -1898,7 +1935,7 @@ fn run_select_cmd() -> Unit {
   // Failure to open is non-fatal — we just fall back to L1-only behavior.
   let disk = match
     @damage_cache.open_or_init(
-      DAMAGE_CACHE_PATH,
+      resolve_damage_cache_path(),
       pkdx_version,
       @migrate.latest_migration_name(),
     ) {

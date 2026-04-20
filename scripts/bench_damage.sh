@@ -28,6 +28,20 @@ while getopts "N:I:" opt; do
   esac
 done
 
+# Preflight: fail loudly with a clear hint if the wrapper is missing or not
+# executable. Without this check the loop below silently does nothing because
+# the TSV on stderr stays empty and the redirection hides shell errors.
+if [ ! -x "$PKDX" ]; then
+  echo "bench_damage.sh: $PKDX is missing or not executable." >&2
+  echo "  Run ./setup.sh from the repo root to install the pkdx wrapper and binary." >&2
+  exit 1
+fi
+if ! "$PKDX" version >/dev/null 2>&1; then
+  echo "bench_damage.sh: '$PKDX version' failed — the wrapper cannot reach a usable binary." >&2
+  echo "  Rerun ./setup.sh to refresh the cached/downloaded binary." >&2
+  exit 1
+fi
+
 cd "$REPO_ROOT"
 
 for N in $ENTRIES_LIST; do

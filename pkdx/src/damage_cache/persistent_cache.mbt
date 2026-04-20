@@ -155,11 +155,25 @@ fn try_open_and_init(
 }
 
 ///|
+/// Error strings from the @db layer embed the raw SQLite rc as
+/// `(rc=N)`. These two codes are the only ones that unambiguously mean
+/// "the file on disk is not a usable SQLite database" — SQLITE_CORRUPT
+/// (11) on a malformed image and SQLITE_NOTADB (26) on a non-SQLite
+/// file. Transient failures (SQLITE_BUSY=5, SQLITE_IOERR=10,
+/// SQLITE_PERM=3, SQLITE_CANTOPEN=14, …) must NOT trigger recovery
+/// because a passing blip would otherwise wipe a healthy cache used
+/// by normal `pkdx damage` / `pkdx select` flows.
+fn looks_like_corruption(err : String) -> Bool {
+  err.contains("(rc=11)") || err.contains("(rc=26)")
+}
+
+///|
 /// Open (creating when missing) the SQLite-backed damage cache at `path`.
 ///
-/// On any failure that plausibly indicates a corrupted file (open error,
-/// schema init error, meta query error) the file is unlinked and we try
-/// once more. If the second attempt also fails, the error is returned.
+/// Only a definitive corruption signal (SQLITE_CORRUPT / SQLITE_NOTADB)
+/// triggers the destructive unlink-then-retry recovery path; every
+/// other failure — transient IO, busy, permission, schema init SQL
+/// errors — is surfaced to the caller with the cache file untouched.
 pub fn open_or_init(
   path : String,
   current_pkdx_version : String,
@@ -168,12 +182,16 @@ pub fn open_or_init(
   match try_open_and_init(path, current_pkdx_version, current_migration_head) {
     Ok(cache) => Ok(cache)
     Err(first_err) =>
-      match @db.unlink_file(path) {
-        Err(u) => Err("open failed: " + first_err + "; unlink failed: " + u)
-        Ok(_) =>
-          try_open_and_init(
-            path, current_pkdx_version, current_migration_head,
-          )
+      if looks_like_corruption(first_err) {
+        match @db.unlink_file(path) {
+          Err(u) => Err("open failed: " + first_err + "; unlink failed: " + u)
+          Ok(_) =>
+            try_open_and_init(
+              path, current_pkdx_version, current_migration_head,
+            )
+        }
+      } else {
+        Err(first_err)
       }
   }
 }

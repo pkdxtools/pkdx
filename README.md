@@ -72,8 +72,6 @@ GitHub にフォークしていれば、作成した構築記事とブログ記�
 2. `main` に push すると、`.github/workflows/deploy-pages.yml` が自動で Astro サイトをビルドして公開する (URL は Actions ログに表示される)
 3. 初回だけ手動でテストしたい場合は Actions タブから `Deploy Pages` → `Run workflow` をクリック
 
-> **upstream (`pkdxtools/pkdx`) での挙動**: upstream 側は Pages を有効化していないため、CI の build/test までは毎回走るが deploy ステップは preflight ジョブでスキップされる。ブログ記事のビルド可否は PR artifact (`site-dist`) にアップロードされるのでメンテナーはダウンロードしてローカル preview で確認できる。fork 側で Settings → Pages を切り替えた時点で deploy が動き始める。
-
 #### team-build → ブログ公開のデータフロー
 
 ```mermaid

@@ -1,8 +1,13 @@
 import {
   "mizchi/markdown",
   "mizchi/jsonschema",
+  "pkdxtools/pkdx/src/model",
 }
 
 import {
   "moonbitlang/core/json",
 } for "test"
+
+options(
+  "supported-targets": "native",
+)

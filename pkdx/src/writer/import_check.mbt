@@ -46,23 +46,23 @@ pub fn import_check_result_to_json(r : ImportCheckResult) -> Json {
 }
 
 ///|
-/// Pokemon cache JSON から比較用タプルを抽出
+/// Pokemon cache JSON から比較用タプルを抽出 (新 schema: stat_points short keys)
 pub fn extract_pokemon_tuple(json : Json) -> PokemonTuple {
   let species = json_str_at(json, ["pokemon", "name"])
   let nature = json_str_at(json, ["build", "nature"])
   let ability = json_str_at(json, ["build", "ability"])
   let item = json_str_at(json, ["build", "item"])
-  let evs = [
-    json_int_at(json, ["build", "evs", "hp"]),
-    json_int_at(json, ["build", "evs", "atk"]),
-    json_int_at(json, ["build", "evs", "def"]),
-    json_int_at(json, ["build", "evs", "spa"]),
-    json_int_at(json, ["build", "evs", "spd"]),
-    json_int_at(json, ["build", "evs", "spe"]),
+  let stat_points = [
+    json_int_at(json, ["build", "stat_points", "h"]),
+    json_int_at(json, ["build", "stat_points", "a"]),
+    json_int_at(json, ["build", "stat_points", "b"]),
+    json_int_at(json, ["build", "stat_points", "c"]),
+    json_int_at(json, ["build", "stat_points", "d"]),
+    json_int_at(json, ["build", "stat_points", "s"]),
   ]
   let moves = json_str_array_at(json, ["build", "moves"], "name")
   moves.sort()
-  { species, nature, ability, item, evs, moves }
+  { species, nature, ability, item, stat_points, moves }
 }
 
 ///|
@@ -71,7 +71,7 @@ pub(all) struct PokemonTuple {
   nature : String
   ability : String
   item : String
-  evs : Array[Int]
+  stat_points : Array[Int]
   moves : Array[String]
 } derive(Show, Eq)
 
@@ -135,8 +135,8 @@ fn diff_pokemon_tuple(
   if a.item != b.item {
     d.push("item")
   }
-  if a.evs != b.evs {
-    d.push("evs")
+  if a.stat_points != b.stat_points {
+    d.push("stat_points")
   }
   if a.moves != b.moves {
     d.push("moves")

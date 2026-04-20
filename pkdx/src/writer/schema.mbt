@@ -38,11 +38,6 @@ fn stats_schema_short(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 }
 
 ///|
-fn stats_schema_long(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
-  stats_schema(b, ["hp", "atk", "def", "spa", "spd", "spe"])
-}
-
-///|
 /// Move schema. When `with_accuracy` is set, adds the `accuracy` property
 /// (required shape for breed / pokemon-build caches).
 fn move_schema(
@@ -85,7 +80,7 @@ fn member_schema(
       "item": b.string(),
       "role": b.string(),
       "moves": b.array(
-        items=move_schema(b, strict~),
+        items=move_schema(b, strict~, with_accuracy=true),
         min_items=moves_min,
         max_items=4,
       ),
@@ -147,30 +142,22 @@ pub fn pokemon_schema(
   b : @jsonschema.Builder,
   strict~ : Bool = true,
 ) -> @jsonschema.JsonSchema {
+  let arr_min = if strict { 1 } else { 0 }
   let pokemon_info = b.object(
     properties={
       "name": b.string(),
       "name_en": b.string(),
       "globalNo": b.string(),
-      "type1": b.string(),
-      "type2": b.string(),
-      "base_stats": stats_schema_long(b),
-      "abilities": b.object(
-        properties={
-          "ability1": b.string(),
-          "ability2": b.string(),
-          "dream_ability": b.string(),
-        },
-      ),
+      "types": b.array(items=b.string(), min_items=arr_min, max_items=2),
+      "base_stats": stats_schema_short(b),
+      "abilities": b.array(items=b.string(), min_items=arr_min, max_items=3),
     },
-    required=["name", "type1", "base_stats"],
+    required=["name", "types", "base_stats", "abilities"],
   )
   let moves_min = if strict { 1 } else { 0 }
   let build_info = b.object(
     properties={
       "nature": strict_string(b, strict~),
-      "nature_up": strict_string(b, strict~),
-      "nature_down": strict_string(b, strict~),
       "ability": strict_string(b, strict~),
       "item": strict_string(b, strict~),
       "moves": b.array(
@@ -178,12 +165,13 @@ pub fn pokemon_schema(
         min_items=moves_min,
         max_items=4,
       ),
-      "evs": stats_schema_long(b),
-      "actual_stats": stats_schema_long(b),
+      "stat_points": stats_schema_short(b),
+      "actual_stats": stats_schema_short(b),
+      // member と揃えた自由メモ (Phase 1-Team-Vision の role と対称)
+      "role": nullable(b, b.string()),
     },
     required=[
-      "nature", "nature_up", "nature_down", "ability", "item", "moves", "evs",
-      "actual_stats",
+      "nature", "ability", "item", "moves", "stat_points", "actual_stats",
     ],
   )
   b.object(

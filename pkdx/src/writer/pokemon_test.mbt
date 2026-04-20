@@ -5,14 +5,12 @@ test "build_pokemon_document: deterministic output" {
     #|  "version": "scarlet_violet",
     #|  "pokemon": {
     #|    "name": "ガブリアス",
-    #|    "type1": "ドラゴン",
-    #|    "type2": "じめん",
-    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "abilities": ["さめはだ"]
     #|  },
     #|  "build": {
     #|    "nature": "ようき",
-    #|    "nature_up": "すばやさ",
-    #|    "nature_down": "とくこう",
     #|    "ability": "さめはだ",
     #|    "item": "こだわりスカーフ",
     #|    "moves": [
@@ -21,8 +19,8 @@ test "build_pokemon_document: deterministic output" {
     #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80,"accuracy":100},
     #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100,"accuracy":80}
     #|    ],
-    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
-    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|    "stat_points": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
+    #|    "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169}
     #|  },
     #|  "damage_calcs": []
     #|}
@@ -54,14 +52,12 @@ test "build_pokemon_document: with damage calcs" {
     #|  "version": "scarlet_violet",
     #|  "pokemon": {
     #|    "name": "ガブリアス",
-    #|    "type1": "ドラゴン",
-    #|    "type2": "じめん",
-    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102}
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "abilities": ["さめはだ"]
     #|  },
     #|  "build": {
     #|    "nature": "ようき",
-    #|    "nature_up": "すばやさ",
-    #|    "nature_down": "とくこう",
     #|    "ability": "さめはだ",
     #|    "item": "きあいのタスキ",
     #|    "moves": [
@@ -70,8 +66,8 @@ test "build_pokemon_document: with damage calcs" {
     #|      {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0,"accuracy":0},
     #|      {"name":"ステルスロック","type":"いわ","category":"変化","power":0,"accuracy":0}
     #|    ],
-    #|    "evs": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
-    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|    "stat_points": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
+    #|    "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169}
     #|  },
     #|  "damage_calcs": [{
     #|    "direction": "attack",
@@ -98,14 +94,12 @@ test "build_pokemon_document: dual type pokemon" {
     #|  "version": "scarlet_violet",
     #|  "pokemon": {
     #|    "name": "サーフゴー",
-    #|    "type1": "はがね",
-    #|    "type2": "ゴースト",
-    #|    "base_stats": {"hp":87,"atk":60,"def":95,"spa":133,"spd":91,"spe":84}
+    #|    "types": ["はがね", "ゴースト"],
+    #|    "base_stats": {"h":87,"a":60,"b":95,"c":133,"d":91,"s":84},
+    #|    "abilities": ["おうごんのからだ"]
     #|  },
     #|  "build": {
     #|    "nature": "ひかえめ",
-    #|    "nature_up": "とくこう",
-    #|    "nature_down": "こうげき",
     #|    "ability": "おうごんのからだ",
     #|    "item": "こだわりメガネ",
     #|    "moves": [
@@ -114,8 +108,8 @@ test "build_pokemon_document: dual type pokemon" {
     #|      {"name":"きあいだま","type":"かくとう","category":"特殊","power":120,"accuracy":70},
     #|      {"name":"トリック","type":"エスパー","category":"変化","power":0,"accuracy":100}
     #|    ],
-    #|    "evs": {"hp":0,"atk":0,"def":0,"spa":252,"spd":4,"spe":252},
-    #|    "actual_stats": {"hp":162,"atk":72,"def":115,"spa":200,"spd":112,"spe":136}
+    #|    "stat_points": {"h":0,"a":0,"b":0,"c":252,"d":4,"s":252},
+    #|    "actual_stats": {"h":162,"a":72,"b":115,"c":200,"d":112,"s":136}
     #|  },
     #|  "damage_calcs": []
     #|}

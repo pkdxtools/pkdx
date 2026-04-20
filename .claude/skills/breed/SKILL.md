@@ -49,12 +49,12 @@ bin/pkdx init-cache pokemon > "$CACHE_FILE"
 ```
 
 生成されるJSONの特徴:
-- nullableフィールド（nature, ability, item, moves[].name）は `null`
-- 数値フィールド（stats, evs）は `0`
-- 配列（damage_calcs）は `[]`
+- nullableフィールド（nature, ability, item, moves[].name, role）は `null`
+- 数値フィールド（stats, stat_points）は `0`
+- 配列（damage_calcs, pokemon.types, pokemon.abilities）は `[]`
 - 技スロットは4枠分のプレースホルダが生成される
 
-Phase 1でDB結果を `pokemon` オブジェクトにマージし、以降のPhaseで `build` フィールドを段階的に埋めていく。
+Phase 1でDB結果を `pokemon` オブジェクトにマージし（`types[]` と `abilities[]` は canonical order: type1→type2 / ability1→ability2→dream_ability、null は除外）、以降のPhaseで `build` フィールドを段階的に埋めていく。ステータス関連のキーは全て短縮形式 `{h, a, b, c, d, s}`。
 
 ### 更新タイミング
 
@@ -62,12 +62,12 @@ Phase 1でDB結果を `pokemon` オブジェクトにマージし、以降のPha
 
 | Phase | 書き込む内容 |
 |-------|-------------|
-| 1 | pokemon情報 + base_stats + abilities |
-| 2 | + nature / nature_up / nature_down + actual_stats再計算 |
+| 1 | pokemon情報 (types[] / abilities[]) + base_stats (短縮キー) |
+| 2 | + nature + actual_stats再計算 (nature_up/down は writer が nature から導出するため保存不要) |
 | 3 | + ability |
 | 4 | + item |
 | 5 | + moves（name/type/category/power/accuracy を含む詳細オブジェクト） |
-| 6 | + evs + actual_stats最終値 |
+| 6 | + stat_points + actual_stats最終値 |
 | 7 | + damage_calcs（ダメ計実行ごとに追記） |
 
 ### Phase 8での扱い
@@ -622,4 +622,5 @@ CLIはキャッシュ JSON のスキーマ（`pokemon` + `build` セクション
 | ダメ計で免疫 | 「タイプ相性または特性により無効です」と案内 |
 | 変化技でダメ計 | 「この技はダメージを与えません」と案内し攻撃技を再選択 |
 | 同名ファイル存在 | 上書き確認をAskUserQuestionで行う |
+| `pkdx write pokemon` が `legacy schema detected` エラー | 既存 box/pokemons 配下の .meta.json が旧 schema のまま。`bin/pkdx convert meta --in <path> --in-place` で変換。`./setup.sh` を流すと `box/pokemons/**/*.meta.json` を一括変換できる |
 | ファイル名に使用不可文字 | 「ファイル名に使用できない文字が含まれています」と案内し再入力 |

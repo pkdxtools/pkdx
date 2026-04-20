@@ -658,6 +658,27 @@ fn recompute_actual_stats_for_mega(
 }
 
 ///|
+/// Apply burn to a pre-burn mean damage. Single source of truth for burn
+/// semantics so L1-only and L2-backed paths cannot drift: both reduce the
+/// 16-roll table to a mean first (`s / 16`), then this helper halves the
+/// mean when the attacker is burned and the move is Physical. Special /
+/// Status moves are unaffected.
+fn apply_burn_to_mean(
+  mean : Int,
+  category : @model.MoveCategory,
+  atk_burn : Bool,
+) -> Int {
+  if atk_burn {
+    match category {
+      @model.Physical => mean / 2
+      _ => mean
+    }
+  } else {
+    mean
+  }
+}
+
+///|
 /// Compute the mean damage for the given `(attacker, defender, move, ranks)`
 /// tuple directly, without cache lookup. The numeric kernel underneath
 /// `mean_damage_cached` — call-sites should reach it via the cache wrapper
@@ -680,16 +701,7 @@ fn compute_mean_damage(
   for i in 0..<16 {
     s += r.damages[i]
   }
-  let mean = s / 16
-  // やけど + 物理技: 攻撃半減 (gen3+ ルール)。特殊 / 変化は影響なし。
-  if atk_burn {
-    match mv.category {
-      @model.Physical => mean / 2
-      _ => mean
-    }
-  } else {
-    mean
-  }
+  apply_burn_to_mean(s / 16, mv.category, atk_burn)
 }
 
 ///|
@@ -812,8 +824,11 @@ fn combatant_to_cache_key_input(
 }
 
 ///|
-/// L2 lookup / populate for a resolved matchup. Returns the pre-burn mean
-/// damage. Caller is responsible for halving on burn + physical.
+/// L2 lookup / populate for a resolved matchup. Returns the mean damage,
+/// burn already applied via `apply_burn_to_mean` so callers never need to
+/// re-apply it — this keeps the L1-only and L2-backed paths semantically
+/// identical. The L2 stored value remains the raw pre-burn 16-roll table,
+/// so one disk entry still serves both burn and non-burn callers.
 ///
 /// Never raises: key-build errors, JSON parse failures, and `put` errors
 /// all fall back to a direct compute so an unusable L2 never blocks the
@@ -825,10 +840,14 @@ fn mean_damage_via_disk(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
+  atk_burn~ : Bool = false,
 ) -> Int {
   let disk = match cache.disk {
     Some(d) => d
-    None => return compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
+    None =>
+      return compute_mean_damage(
+        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+      )
   }
   let key_input = combatant_to_cache_key_input(
     attacker, defender, mv, atk_rank, def_rank,
@@ -836,20 +855,25 @@ fn mean_damage_via_disk(
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
     Err(_) =>
-      return compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
+      return compute_mean_damage(
+        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+      )
   }
   match @damage_cache.get(disk, key) {
     Some(json) =>
       match @damage_cache.parse_damages_from_json(json) {
         Some(damages) => {
           cache.disk_hits = cache.disk_hits + 1
-          @damage_cache.mean_of_damages(damages)
+          apply_burn_to_mean(
+            @damage_cache.mean_of_damages(damages), mv.category, atk_burn,
+          )
         }
         None => {
           // Parse failed → recompute and overwrite.
           cache.disk_misses = cache.disk_misses + 1
           compute_and_populate_disk(
             disk, key, attacker, defender, mv, atk_rank, def_rank,
+            atk_burn=atk_burn,
           )
         }
       }
@@ -857,14 +881,16 @@ fn mean_damage_via_disk(
       cache.disk_misses = cache.disk_misses + 1
       compute_and_populate_disk(
         disk, key, attacker, defender, mv, atk_rank, def_rank,
+        atk_burn=atk_burn,
       )
     }
   }
 }
 
 ///|
-/// Run the damage engine, store the full JSON in L2, and return the
-/// pre-burn mean damage.
+/// Run the damage engine, store the pre-burn 16-roll table in L2, and
+/// return the mean damage with burn applied via `apply_burn_to_mean` so
+/// the return value matches `compute_mean_damage` exactly.
 fn compute_and_populate_disk(
   disk : @damage_cache.DamageDiskCache,
   key : String,
@@ -873,6 +899,7 @@ fn compute_and_populate_disk(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
+  atk_burn~ : Bool = false,
 ) -> Int {
   let input = build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank)
   let r = @damage.calc_damage(input)
@@ -888,7 +915,7 @@ fn compute_and_populate_disk(
   for i in 0..<16 {
     s += r.damages[i]
   }
-  s / 16
+  apply_burn_to_mean(s / 16, mv.category, atk_burn)
 }
 
 ///|
@@ -957,22 +984,14 @@ pub fn mean_damage_cached(
       cache.misses = cache.misses + 1
       let attacker = effective_combatant(raw_attacker, atk_mega)
       let defender = effective_combatant(raw_defender, def_mega)
+      // Both branches reduce through `apply_burn_to_mean`, so the L2-backed
+      // path is guaranteed bit-identical to the L1-only path for the same
+      // matchup — the disk still stores only pre-burn 16-roll tables.
       let v = match cache.disk {
-        // L2 stores the pre-burn mean; apply burn in the caller so the
-        // disk entry is shared across burn / non-burn matchups.
-        Some(_) => {
-          let pre = mean_damage_via_disk(
-            cache, attacker, defender, mv, atk_rank, def_rank,
+        Some(_) =>
+          mean_damage_via_disk(
+            cache, attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
           )
-          if atk_burn {
-            match mv.category {
-              @model.Physical => pre / 2
-              _ => pre
-            }
-          } else {
-            pre
-          }
-        }
         None =>
           compute_mean_damage(
             attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,

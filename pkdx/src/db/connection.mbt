@@ -33,6 +33,33 @@ pub fn open_rw(path : String) -> Result[Db, String] {
 }
 
 ///|
+/// Open (or create) a database in read-write mode. Used by the damage
+/// cache, which is created lazily on first access.
+pub fn open_rwc(path : String) -> Result[Db, String] {
+  let path_bytes = to_c_bytes(path)
+  let out : FixedArray[Db] = FixedArray::make(1, pkdx_null_db())
+  let rc = pkdx_db_open_rwc(path_bytes, out)
+  if rc == 0 {
+    Ok(out[0])
+  } else {
+    Err(
+      "Failed to open/create database (rc=" + rc.to_string() + "): " + path,
+    )
+  }
+}
+
+///|
+/// Remove a file. Succeeds silently when the file does not exist.
+pub fn unlink_file(path : String) -> Result[Unit, String] {
+  let rc = pkdx_unlink_file(to_c_bytes(path))
+  if rc == 0 {
+    Ok(())
+  } else {
+    Err("unlink failed (errno=" + rc.to_string() + "): " + path)
+  }
+}
+
+///|
 /// Close a database connection.
 pub fn close(db : Db) -> Unit {
   pkdx_db_close(db)

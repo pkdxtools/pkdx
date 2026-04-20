@@ -3,6 +3,7 @@ import {
   "pkdxtools/pkdx/src/db",
   "pkdxtools/pkdx/src/types",
   "pkdxtools/pkdx/src/damage",
+  "pkdxtools/pkdx/src/damage_cache",
   "pkdxtools/pkdx/src/model",
   "pkdxtools/pkdx/src/writer",
   "pkdxtools/pkdx/src/payoff",

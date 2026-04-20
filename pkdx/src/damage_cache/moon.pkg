@@ -1,0 +1,11 @@
+// `db` を import するのは、cwrap.c の `pkdx_monotonic_ns` をネイティブ link
+// するための依存宣言。MoonBit 側は未使用警告を出すが、native stub の
+// シンボル解決に必要。
+import {
+  "pkdxtools/pkdx/src/db",
+  "moonbitlang/core/json" @json,
+}
+
+options(
+  "supported-targets": "native",
+)

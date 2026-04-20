@@ -728,13 +728,167 @@ pub(all) struct DamageKey {
 /// would be unsound (indices rebind).
 pub(all) struct DamageCache {
   data : @hashmap.HashMap[DamageKey, Int]
+  // Optional L2 layer backed by SQLite. Populated across sessions — a
+  // previous nash solve's 16-roll tables are reused on L1 miss so a
+  // slightly-perturbed team doesn't re-pay the damage-engine cost for
+  // matchups already seen.
+  disk : @damage_cache.DamageDiskCache?
   mut hits : Int
   mut misses : Int
+  mut disk_hits : Int
+  mut disk_misses : Int
 }
 
 ///|
-pub fn new_damage_cache() -> DamageCache {
-  { data: @hashmap.HashMap::new(), hits: 0, misses: 0 }
+/// Construct a fresh L1 damage cache. Pass `disk~=Some(...)` to wire an
+/// L2 SQLite-backed layer underneath for cross-session reuse — typical
+/// CLI entry points (`pkdx select`, `pkdx meta-divergence`, `pkdx nash
+/// graph`) should; tests and short-lived paths leave it defaulted to
+/// `None` and the disk is never touched.
+pub fn new_damage_cache(
+  disk~ : @damage_cache.DamageDiskCache? = None,
+) -> DamageCache {
+  {
+    data: @hashmap.HashMap::new(),
+    disk,
+    hits: 0,
+    misses: 0,
+    disk_hits: 0,
+    disk_misses: 0,
+  }
+}
+
+///|
+/// Materialize a `CacheKeyInput` for the L2 cache from the resolved
+/// (post-mega) Combatant pair. Matches the CLI `pkdx damage` key schema
+/// so disk entries written by the CLI and the payoff layer share
+/// identity. Weather / field are always empty (payoff omits them) and
+/// `fainted_count` is 0 / `is_double` is false / `critical` is false —
+/// same canonicalization as `build_input_with_ranks`.
+fn combatant_to_cache_key_input(
+  atk : Combatant,
+  dfn : Combatant,
+  mv : @model.Move,
+  atk_rank : Int,
+  def_rank : Int,
+) -> @damage_cache.CacheKeyInput {
+  let input = build_input_with_ranks(atk, dfn, mv, atk_rank, def_rank)
+  let version_str = match atk.stat_system {
+    @model.Champions => "champions"
+    @model.Standard => "scarlet_violet"
+  }
+  let atk_nature_str = match atk.nature {
+    Some(n) => n.name_ja
+    None => ""
+  }
+  let def_nature_str = match dfn.nature {
+    Some(n) => n.name_ja
+    None => ""
+  }
+  {
+    version: version_str,
+    regulation: "",
+    attacker: atk.pokemon.name_ja,
+    defender: dfn.pokemon.name_ja,
+    move_name: mv.name,
+    atk_ability: atk.ability,
+    def_ability: dfn.ability,
+    atk_item: atk.item,
+    def_item: dfn.item,
+    weather: "",
+    field: "",
+    tera_type: atk.tera_type,
+    critical: false,
+    is_double: false,
+    atk_stat: input.atk_stat_override,
+    def_stat: input.def_stat_override,
+    def_hp: input.def_hp_override,
+    atk_nature: atk_nature_str,
+    def_nature: def_nature_str,
+    atk_rank,
+    def_rank,
+    fainted_count: 0,
+  }
+}
+
+///|
+/// L2 lookup / populate for a resolved matchup. Returns the pre-burn mean
+/// damage. Caller is responsible for halving on burn + physical.
+///
+/// Never raises: key-build errors, JSON parse failures, and `put` errors
+/// all fall back to a direct compute so an unusable L2 never blocks the
+/// actual calculation.
+fn mean_damage_via_disk(
+  cache : DamageCache,
+  attacker : Combatant,
+  defender : Combatant,
+  mv : @model.Move,
+  atk_rank : Int,
+  def_rank : Int,
+) -> Int {
+  let disk = match cache.disk {
+    Some(d) => d
+    None => return compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
+  }
+  let key_input = combatant_to_cache_key_input(
+    attacker, defender, mv, atk_rank, def_rank,
+  )
+  let key = match @damage_cache.build_cache_key(key_input) {
+    Ok(k) => k
+    Err(_) =>
+      return compute_mean_damage(attacker, defender, mv, atk_rank, def_rank)
+  }
+  match @damage_cache.get(disk, key) {
+    Some(json) =>
+      match @damage_cache.parse_damages_from_json(json) {
+        Some(damages) => {
+          cache.disk_hits = cache.disk_hits + 1
+          @damage_cache.mean_of_damages(damages)
+        }
+        None => {
+          // Parse failed → recompute and overwrite.
+          cache.disk_misses = cache.disk_misses + 1
+          compute_and_populate_disk(
+            disk, key, attacker, defender, mv, atk_rank, def_rank,
+          )
+        }
+      }
+    None => {
+      cache.disk_misses = cache.disk_misses + 1
+      compute_and_populate_disk(
+        disk, key, attacker, defender, mv, atk_rank, def_rank,
+      )
+    }
+  }
+}
+
+///|
+/// Run the damage engine, store the full JSON in L2, and return the
+/// pre-burn mean damage.
+fn compute_and_populate_disk(
+  disk : @damage_cache.DamageDiskCache,
+  key : String,
+  attacker : Combatant,
+  defender : Combatant,
+  mv : @model.Move,
+  atk_rank : Int,
+  def_rank : Int,
+) -> Int {
+  let input = build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank)
+  let r = @damage.calc_damage(input)
+  let json_format = @cli.parse_output_format("json")
+  let json = @cli.format_damage(r, input, json_format)
+  // put errors are swallowed — they'd just force next invocation to
+  // recompute, which is harmless.
+  let _ = @damage_cache.put(disk, key, json)
+  if r.is_immune {
+    return 0
+  }
+  let mut s = 0
+  for i in 0..<16 {
+    s += r.damages[i]
+  }
+  s / 16
 }
 
 ///|
@@ -803,9 +957,27 @@ pub fn mean_damage_cached(
       cache.misses = cache.misses + 1
       let attacker = effective_combatant(raw_attacker, atk_mega)
       let defender = effective_combatant(raw_defender, def_mega)
-      let v = compute_mean_damage(
-        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
-      )
+      let v = match cache.disk {
+        // L2 stores the pre-burn mean; apply burn in the caller so the
+        // disk entry is shared across burn / non-burn matchups.
+        Some(_) => {
+          let pre = mean_damage_via_disk(
+            cache, attacker, defender, mv, atk_rank, def_rank,
+          )
+          if atk_burn {
+            match mv.category {
+              @model.Physical => pre / 2
+              _ => pre
+            }
+          } else {
+            pre
+          }
+        }
+        None =>
+          compute_mean_damage(
+            attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+          )
+      }
       cache.data[key] = v
       v
     }
@@ -1987,8 +2159,11 @@ pub fn switching_game_winrate(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
+  disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> Double {
-  let (v, _, _) = switching_game_winrate_stats(my_team, opp_team, turn_limit)
+  let (v, _, _) = switching_game_winrate_stats(
+    my_team, opp_team, turn_limit, disk~,
+  )
   v
 }
 
@@ -2001,6 +2176,7 @@ pub fn switching_game_winrate_stats(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
+  disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> (Double, ValueStats, DamageCache) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
@@ -2029,7 +2205,7 @@ pub fn switching_game_winrate_stats(
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   let stats = new_stats()
-  let dmg_cache = new_damage_cache()
+  let dmg_cache = new_damage_cache(disk~)
   let v = value(state, my_team, opp_team, turn_limit, cache, stats, dmg_cache)
   stats.cached_states = cache.length()
   (v, stats, dmg_cache)

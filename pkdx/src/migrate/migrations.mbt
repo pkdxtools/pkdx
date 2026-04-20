@@ -15,3 +15,16 @@ pub fn migrations() -> Array[Migration] {
     { name: "010_move_meta_posthit", run: run_010 },
   ]
 }
+
+///|
+/// The tail migration name. Used by the damage cache to decide when the
+/// on-disk pokedex has fallen behind the code and its cached damage
+/// results must be invalidated.
+pub fn latest_migration_name() -> String {
+  let all = migrations()
+  if all.length() == 0 {
+    ""
+  } else {
+    all[all.length() - 1].name
+  }
+}

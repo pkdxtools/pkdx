@@ -28,6 +28,7 @@ pub fn team_payoff_matrix_screened(
   keep_top_quantile : Double,
   refine_turn_limit~ : Int = DP_TURN_LIMIT,
   mc_turn_limit~ : Int = MC_TURN_LIMIT,
+  disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -55,7 +56,9 @@ pub fn team_payoff_matrix_screened(
   // matrix builder. This guarantees bit-exact parity with the unscreened path
   // (required by the oracle test) and avoids duplicate MC + refine work.
   if keep_top_quantile >= 1.0 {
-    let m = team_payoff_matrix_switching(team_a, team_b, format, refine_turn_limit)
+    let m = team_payoff_matrix_switching(
+      team_a, team_b, format, refine_turn_limit, disk~,
+    )
     let rows = Array::make(size_a, 0)
     for i in 0..<size_a {
       rows[i] = i
@@ -100,7 +103,9 @@ pub fn team_payoff_matrix_screened(
     for j in 0..<col_keep.length() {
       let picked_a = pick_combatants(team_a, sel_a[row_keep[i]])
       let picked_b = pick_combatants(team_b, sel_b[col_keep[j]])
-      row[j] = switching_game_winrate(picked_a, picked_b, refine_turn_limit)
+      row[j] = switching_game_winrate(
+        picked_a, picked_b, refine_turn_limit, disk~,
+      )
     }
     data[i] = row
   }

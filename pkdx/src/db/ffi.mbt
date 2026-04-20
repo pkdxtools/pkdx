@@ -30,6 +30,21 @@ extern "C" fn pkdx_db_open_rw(
 ) -> Int = "pkdx_db_open_rw"
 
 ///|
+/// Open (or create) a SQLite database in read-write mode. Used by the
+/// damage cache, which is lazily created on first access.
+#borrow(path, out)
+extern "C" fn pkdx_db_open_rwc(
+  path : Bytes,
+  out : FixedArray[Db],
+) -> Int = "pkdx_db_open_rwc"
+
+///|
+/// Remove a file. Returns 0 on success, 0 when the file does not exist,
+/// or errno on other failures.
+#borrow(path)
+extern "C" fn pkdx_unlink_file(path : Bytes) -> Int = "pkdx_unlink_file"
+
+///|
 /// Close an open database connection.
 #borrow(db)
 extern "C" fn pkdx_db_close(db : Db) -> Unit = "pkdx_db_close"

@@ -701,6 +701,7 @@ pub fn compute_select_with_team_model(
   opponent : Array[Combatant],
   format : BattleFormat,
   team_model : TeamPayoffModel,
+  disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> SelectResult raise NashCliError {
   let k = match format {
     Single => 3
@@ -715,7 +716,7 @@ pub fn compute_select_with_team_model(
     ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) => {
       let (m, rows, cols) = try team_payoff_matrix_screened(
           team, opponent, format, trials, seed, keep_top,
-          refine_turn_limit=refine_tl,
+          refine_turn_limit=refine_tl, disk~,
         ) catch {
         err => raise InnerError(err.to_string())
       }
@@ -723,7 +724,7 @@ pub fn compute_select_with_team_model(
     }
     _ => {
       let m = try team_payoff_matrix_with_team_model(
-          team, opponent, format, team_model,
+          team, opponent, format, team_model, disk~,
         ) catch {
         err => raise InnerError(err.to_string())
       }
@@ -853,7 +854,10 @@ fn parse_stat_system_field(s : String) -> @model.StatSystem raise NashCliError {
 /// on each move's JSON entry (`priority`, `stat_effects`) — skills should
 /// take the fields straight from `pkdx moves` output, which JOINs
 /// `move_meta` and emits them.
-pub fn run_select(input_json : String) -> String raise NashCliError {
+pub fn run_select(
+  input_json : String,
+  disk~ : @damage_cache.DamageDiskCache? = None,
+) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
     err => raise InvalidJson(err.to_string())
   }
@@ -895,7 +899,7 @@ pub fn run_select(input_json : String) -> String raise NashCliError {
       )
     _ => ()
   }
-  let r = compute_select_with_team_model(team, opp, format, team_model)
+  let r = compute_select_with_team_model(team, opp, format, team_model, disk~)
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()

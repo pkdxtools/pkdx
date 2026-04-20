@@ -1,6 +1,10 @@
 # skill cache
 box/cache/breed_cache_*.json
 box/cache/team_cache_*.json
+box/cache/damage_cache.sqlite
+box/cache/damage_cache.sqlite-journal
+box/cache/damage_cache.sqlite-wal
+box/cache/damage_cache.sqlite-shm
 
 # version管理対象外のスキル出力
 box/**/__no_save.*

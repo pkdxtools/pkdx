@@ -2,6 +2,8 @@
 #include <moonbit.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 
 /* ---- UTF-8 -> UTF-16 conversion for Japanese text ---- */
 
@@ -109,6 +111,24 @@ int32_t pkdx_db_open(const uint8_t *path, PkdxDb **out) {
     sqlite3 *db = NULL;
     int rc = sqlite3_open_v2((const char *)path, &db,
                              SQLITE_OPEN_READONLY, NULL);
+    if (rc != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return rc;
+    }
+    PkdxDb *wrapper = moonbit_make_external_object(
+        &pkdx_db_destructor, sizeof(PkdxDb));
+    wrapper->db = db;
+    out[0] = wrapper;
+    return 0;
+}
+
+/* Open the database in read-write mode, creating it if it doesn't exist.
+   Used by the damage cache, which is expected to be created on first use. */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_db_open_rwc(const uint8_t *path, PkdxDb **out) {
+    sqlite3 *db = NULL;
+    int rc = sqlite3_open_v2((const char *)path, &db,
+                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
     if (rc != SQLITE_OK) {
         if (db) sqlite3_close(db);
         return rc;
@@ -593,4 +613,23 @@ void pkdx_println(const uint8_t *msg) {
     fputs((const char *)msg, stdout);
     fputc('\n', stdout);
     fflush(stdout);
+}
+
+/* Monotonic clock in nanoseconds. Used by pkdx damage-bench to measure
+   per-phase timings without being affected by wall-clock adjustments. */
+MOONBIT_FFI_EXPORT
+int64_t pkdx_monotonic_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+}
+
+/* Remove a regular file at `path`. Returns 0 on success, errno-like on
+   failure. Treats ENOENT as success so tests can call cleanup blindly. */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_unlink_file(const uint8_t *path) {
+    int rc = unlink((const char *)path);
+    if (rc == 0) return 0;
+    if (errno == ENOENT) return 0;
+    return errno;
 }

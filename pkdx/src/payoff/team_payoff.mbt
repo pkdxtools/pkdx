@@ -68,6 +68,7 @@ pub fn team_payoff_matrix_switching(
   team_b : Array[Combatant],
   format : BattleFormat,
   turn_limit : Int,
+  disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> @nash.FiniteMatrix raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -95,7 +96,7 @@ pub fn team_payoff_matrix_switching(
     for j in 0..<size_b {
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
-      row[j] = switching_game_winrate(picked_a, picked_b, turn_limit)
+      row[j] = switching_game_winrate(picked_a, picked_b, turn_limit, disk~)
     }
     data[i] = row
   }
@@ -120,6 +121,7 @@ pub fn team_payoff_matrix_with_team_model(
   team_b : Array[Combatant],
   format : BattleFormat,
   team_model : TeamPayoffModel,
+  disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> @nash.FiniteMatrix raise PayoffError {
   match team_model {
     SwitchingGame(turn_limit) => {
@@ -130,7 +132,7 @@ pub fn team_payoff_matrix_with_team_model(
           )
         Single => ()
       }
-      team_payoff_matrix_switching(team_a, team_b, format, turn_limit)
+      team_payoff_matrix_switching(team_a, team_b, format, turn_limit, disk~)
     }
     ScreenedSwitchingGame(_, _, _, _) =>
       raise UnsupportedFormat(

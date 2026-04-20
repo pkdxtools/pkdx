@@ -1,36 +1,4 @@
 ///|
-/// long → short stat key mapping used across pokemon/build sections.
-/// 旧 schema と新 schema の唯一の対応付け表。
-let stat_key_long_short : Array[(String, String)] = [
-  ("hp", "h"),
-  ("atk", "a"),
-  ("def", "b"),
-  ("spa", "c"),
-  ("spd", "d"),
-  ("spe", "s"),
-]
-
-///|
-/// 旧 long-key stats {hp,atk,...} / 新 short-key stats {h,a,...} のどちらが来ても
-/// 常に short-key で返す。冪等。
-fn normalize_stats_to_short(value : Json) -> Json {
-  guard value is Object(obj) else { return value }
-  let out : Map[String, Json] = {}
-  for pair in stat_key_long_short {
-    let (long_k, short_k) = pair
-    match obj.get(short_k) {
-      Some(v) => out[short_k] = v
-      None =>
-        match obj.get(long_k) {
-          Some(v) => out[short_k] = v
-          None => ()
-        }
-    }
-  }
-  out.to_json()
-}
-
-///|
 /// 旧 type1+type2 から canonical order の types[] を構築。
 /// null / 空 / 欠損は除外。既に types[] がある場合はそのまま返す。
 fn normalize_types(pokemon : Map[String, Json]) -> Array[Json] {
@@ -147,18 +115,25 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
 }
 
 ///|
-/// members[] に含まれる stats 系オブジェクト (base_stats / stat_points /
-/// actual_stats / ivs) を long-key → short-key に正規化する。冪等。
-/// 新 schema で要求される短 key のみを validate が受け入れるため、旧 team
-/// meta (hp/atk/def/... 長 key) を救済するには各 member を書き換える必要がある。
+/// 与えられたキーが `stats_field_names` (SSoT) に含まれるか。
+fn is_stats_field(key : String) -> Bool {
+  for name in stats_field_names {
+    if name == key {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// members[] に含まれる stats 系オブジェクトを long-key → short-key に正規化する。
+/// 対象フィールドは `stats_field_names` (SSoT) で管理し、detector 側と一致させる。
+/// 冪等 — new-format input は no-op。
 fn migrate_team_member(m : Json) -> Json {
   guard m is Object(obj) else { return m }
   let out : Map[String, Json] = {}
   for k, v in obj {
-    if k == "base_stats" ||
-      k == "stat_points" ||
-      k == "actual_stats" ||
-      k == "ivs" {
+    if is_stats_field(k) {
       match v {
         Object(_) => out[k] = normalize_stats_to_short(v)
         _ => out[k] = v

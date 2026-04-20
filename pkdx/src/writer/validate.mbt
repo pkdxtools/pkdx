@@ -54,20 +54,8 @@ fn validate_champions_sp(sp_obj : Map[String, Json]) -> Array[String] {
 }
 
 ///|
-/// stats 系オブジェクトに long key (hp/atk/def/spa/spd/spe) が含まれていれば true。
-/// migrate 側 (`normalize_stats_to_short`) が変換対象とする shape と一致させる。
-fn has_long_stat_key(obj : Map[String, Json]) -> Bool {
-  obj.get("hp") is Some(_) ||
-  obj.get("atk") is Some(_) ||
-  obj.get("def") is Some(_) ||
-  obj.get("spa") is Some(_) ||
-  obj.get("spd") is Some(_) ||
-  obj.get("spe") is Some(_)
-}
-
-///|
-/// stats 系フィールド (base_stats / stat_points / actual_stats / ivs) が
-/// long-key 形式なら legacy エラーを `errs` に push する。
+/// stats 系フィールドが long-key 形式なら legacy エラーを `errs` に push。
+/// 判定ロジックは `has_long_stat_key` (stat_keys.mbt) を共有する。
 fn check_long_stats_field(
   errs : Array[String],
   obj : Map[String, Json],
@@ -85,39 +73,54 @@ fn check_long_stats_field(
 }
 
 ///|
+/// obj 内の `stats_field_names` (SSoT) 全フィールドを一括で検査する。
+/// migrator (convert.mbt) と同じリストを走査するため、列を増減しても
+/// detector 側を書き換える必要はない。
+fn check_all_stats_fields(
+  errs : Array[String],
+  obj : Map[String, Json],
+  path_prefix : String,
+  hint : String,
+) -> Unit {
+  for field in stats_field_names {
+    check_long_stats_field(errs, obj, field, path_prefix, hint)
+  }
+}
+
+///|
+let legacy_hint : String = "legacy schema detected — run: pkdx convert meta --in-place <path>"
+
+///|
 /// v011 より前のスキーマを検出。検出時は `pkdx convert meta --in-place` への
 /// 誘導メッセージを返す（ユーザー体験: 手動でスキーマ差分を読まずに復旧可能）。
 /// migrate_pokemon_meta_v011 が変換する全 shape を網羅する必要がある。
 fn detect_legacy_pokemon(root : Map[String, Json]) -> Array[String] {
   let errs : Array[String] = []
-  let hint = "legacy schema detected — run: pkdx convert meta --in-place <path>"
   match root.get("pokemon") {
     Some(Object(p)) => {
       if p.get("type1") is Some(_) {
-        errs.push("#/pokemon/type1: \{hint}")
+        errs.push("#/pokemon/type1: \{legacy_hint}")
       }
       match p.get("abilities") {
-        Some(Object(_)) => errs.push("#/pokemon/abilities: \{hint}")
+        Some(Object(_)) => errs.push("#/pokemon/abilities: \{legacy_hint}")
         _ => ()
       }
-      check_long_stats_field(errs, p, "base_stats", "#/pokemon", hint)
+      check_all_stats_fields(errs, p, "#/pokemon", legacy_hint)
     }
     _ => ()
   }
   match root.get("build") {
     Some(Object(b)) => {
       if b.get("evs") is Some(_) {
-        errs.push("#/build/evs: \{hint}")
+        errs.push("#/build/evs: \{legacy_hint}")
       }
       if b.get("nature_up") is Some(_) {
-        errs.push("#/build/nature_up: \{hint}")
+        errs.push("#/build/nature_up: \{legacy_hint}")
       }
       if b.get("nature_down") is Some(_) {
-        errs.push("#/build/nature_down: \{hint}")
+        errs.push("#/build/nature_down: \{legacy_hint}")
       }
-      check_long_stats_field(errs, b, "stat_points", "#/build", hint)
-      check_long_stats_field(errs, b, "actual_stats", "#/build", hint)
-      check_long_stats_field(errs, b, "ivs", "#/build", hint)
+      check_all_stats_fields(errs, b, "#/build", legacy_hint)
     }
     _ => ()
   }
@@ -126,21 +129,15 @@ fn detect_legacy_pokemon(root : Map[String, Json]) -> Array[String] {
 
 ///|
 /// migrate_team_meta_v011 が members[] の stats 系全フィールドを short-key へ
-/// 揃えるため、検出器も同じ範囲をカバーする。
+/// 揃えるため、検出器も同じ範囲 (`stats_field_names`) をカバーする。
 fn detect_legacy_team(root : Map[String, Json]) -> Array[String] {
   let errs : Array[String] = []
-  let hint = "legacy schema detected — run: pkdx convert meta --in-place <path>"
   match root.get("members") {
     Some(Array(members)) =>
       for i, m in members {
         match m {
-          Object(mo) => {
-            let prefix = "#/members/\{i}"
-            check_long_stats_field(errs, mo, "base_stats", prefix, hint)
-            check_long_stats_field(errs, mo, "stat_points", prefix, hint)
-            check_long_stats_field(errs, mo, "actual_stats", prefix, hint)
-            check_long_stats_field(errs, mo, "ivs", prefix, hint)
-          }
+          Object(mo) =>
+            check_all_stats_fields(errs, mo, "#/members/\{i}", legacy_hint)
           _ => ()
         }
       }

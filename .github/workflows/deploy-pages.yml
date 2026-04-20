@@ -109,15 +109,16 @@ jobs:
           path: site/dist
           retention-days: 7
       # Pages にデプロイするときだけ専用 artifact を別途作る。
+      # main への push、または workflow_dispatch (任意 branch の手動 deploy) で発火。
       - name: Upload Pages artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.preflight.outputs.pages-enabled == 'true'
+        if: needs.preflight.outputs.pages-enabled == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: site/dist
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.preflight.outputs.pages-enabled == 'true'
+    if: needs.preflight.outputs.pages-enabled == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     needs: [preflight, build]
     runs-on: ubuntu-latest
     environment:

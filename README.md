@@ -107,7 +107,7 @@ flowchart LR
     U -- "自由記事" --> BLOG
     TEAMS -- "git push" --> GIT
     BLOG -- "git push" --> GIT
-    GIT -- "preflight 合格時のみ" --> WF
+    GIT -- "自動ビルド" --> WF
     WF -- "site/dist デプロイ" --> PAGES
 
     classDef user fill:#fef3c7,stroke:#b45309,color:#111
@@ -133,7 +133,7 @@ flowchart LR
 
 カスタムドメイン: `site/public/CNAME` にドメイン名 1 行のファイルを置くと有効化。
 
-公開を停止: Settings → Pages → Disable、または `box/site.config.json` の `enabled` を `false` にする。いずれの方法でも preflight ジョブが deploy を丸ごとスキップするため CI は green のまま。
+公開を停止: Settings → Pages → Disable、または `box/site.config.json` の `enabled` を `false` にする。
 
 サイト本体 (`site/` 配下) は upstream 管理なので直接編集は非推奨。カスタマイズは `box/site.config.json` と `site/public/` 経由で行う。
 

@@ -1,0 +1,77 @@
+---
+import type { MatchupPlan } from '../lib/team-meta';
+
+interface Props {
+  plans: MatchupPlan[];
+  heading?: string;
+  headingLevel?: 2 | 3;
+}
+
+const { plans, heading = '選出パターン', headingLevel = 2 } = Astro.props;
+const HeadingTag = `h${headingLevel}` as 'h2' | 'h3';
+---
+{plans.length > 0 && (
+  <section class="matchup-plans">
+    {heading && <HeadingTag>{heading}</HeadingTag>}
+    {plans.map((p) => (
+      <article class="plan-card">
+        <h3 class="plan-title">vs {p.opponent}</h3>
+        {p.selection && p.selection.length > 0 && (
+          <p class="plan-line">
+            <span class="plan-label">選出</span>
+            <span class="plan-value">{p.selection.join(' / ')}</span>
+          </p>
+        )}
+        {p.leads && p.leads.length > 0 && (
+          <p class="plan-line">
+            <span class="plan-label">先発</span>
+            <span class="plan-value">{p.leads.join(' + ')}</span>
+          </p>
+        )}
+        {p.backs && p.backs.length > 0 && (
+          <p class="plan-line">
+            <span class="plan-label">後発</span>
+            <span class="plan-value">{p.backs.join(' + ')}</span>
+          </p>
+        )}
+        {p.note && <p class="plan-note">{p.note}</p>}
+      </article>
+    ))}
+  </section>
+)}
+
+<style>
+  .matchup-plans {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .plan-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+  }
+  .plan-title { margin: 0 0 0.5rem; font-size: 1.05rem; }
+  .plan-line {
+    margin: 0.15rem 0;
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    align-items: baseline;
+  }
+  .plan-label {
+    min-width: 3em;
+    color: var(--c-text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .plan-value { flex: 1; }
+  .plan-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+</style>

@@ -12,11 +12,6 @@ interface Props {
 const { member, index, calcs } = Astro.props;
 ---
 <section class="member-detail" id={`member-${index + 1}`}>
-  <h3 class="member-detail-title">
-    <span class="member-detail-index">#{index + 1}</span>
-    {member.name}
-  </h3>
-
   <MemberCard member={member} index={index} />
 
   {member.role && (
@@ -34,7 +29,7 @@ const { member, index, calcs } = Astro.props;
   .member-detail {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1.5rem;
     padding-bottom: 1.5rem;
     margin-bottom: 1.5rem;
     border-bottom: 1px solid var(--c-border);
@@ -43,23 +38,6 @@ const { member, index, calcs } = Astro.props;
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
-  }
-  .member-detail-title {
-    margin: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-  }
-  .member-detail-index {
-    color: var(--c-text-muted);
-    font-variant-numeric: tabular-nums;
-    font-size: 0.85em;
-  }
-  .member-detail-body {
-    background: var(--c-surface);
-    border-left: 4px solid var(--c-accent);
-    padding: 0.75rem 1rem;
-    border-radius: 0 var(--radius) var(--radius) 0;
   }
   .member-detail-body p {
     margin: 0;

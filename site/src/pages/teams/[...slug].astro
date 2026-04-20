@@ -6,6 +6,7 @@ import MemberDetail from '../../components/MemberDetail.astro';
 import CoverageChart from '../../components/CoverageChart.astro';
 import DefenseMatrix from '../../components/DefenseMatrix.astro';
 import DamageCalcTable from '../../components/DamageCalcTable.astro';
+import MatchupPlans from '../../components/MatchupPlans.astro';
 import { isPublishableTeam } from '../../content.config';
 import { loadTeamMeta, type DamageCalc, type TeamMember } from '../../lib/team-meta';
 
@@ -60,6 +61,23 @@ const unassignedCalcs = allCalcs.filter(
         {meta && <CoverageChart rows={meta.coverage} />}
         {meta && <DefenseMatrix rows={meta.defense_matrix} members={meta.members} />}
 
+        {meta && (meta.strengths.length > 0 || meta.weaknesses.length > 0) && (
+          <section class="team-commentary">
+            {meta.strengths.length > 0 && (
+              <div class="commentary-col">
+                <h3>構築の強み</h3>
+                <ul>{meta.strengths.map((s) => <li>{s}</li>)}</ul>
+              </div>
+            )}
+            {meta.weaknesses.length > 0 && (
+              <div class="commentary-col">
+                <h3>構築の弱み・注意点</h3>
+                <ul>{meta.weaknesses.map((w) => <li>{w}</li>)}</ul>
+              </div>
+            )}
+          </section>
+        )}
+
         {unassignedCalcs.length > 0 && (
           <DamageCalcTable calcs={unassignedCalcs} heading="共通ダメージ計算" headingLevel={3} />
         )}
@@ -72,6 +90,13 @@ const unassignedCalcs = allCalcs.filter(
         {members.map((m, i) => (
           <MemberDetail member={m} index={i} calcs={calcsForMember(allCalcs, m)} />
         ))}
+      </section>
+    )}
+
+    {meta && meta.matchup_plans.length > 0 && (
+      <section class="chapter" aria-labelledby="chapter-matchups">
+        <h2 id="chapter-matchups">選出パターン</h2>
+        <MatchupPlans plans={meta.matchup_plans} heading="" />
       </section>
     )}
 
@@ -104,6 +129,17 @@ const unassignedCalcs = allCalcs.filter(
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 1rem;
+  }
+  .team-commentary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+  .commentary-col h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+  .commentary-col ul {
+    margin: 0;
+    padding-left: 1.25rem;
+    line-height: 1.6;
   }
   .tags-footer {
     border-top: 1px solid var(--c-border);

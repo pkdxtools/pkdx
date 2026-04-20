@@ -210,7 +210,7 @@ AskUserQuestionで追加計算を提案:
 ユーザーが「構築ブログに貼り付け」を選んだ場合、計算結果を `box/teams/<slug>.meta.json` の `damage_calcs[]` に追記する。GitHub Pages (Astro) 側が読み取って構築記事ページに 16 段階の乱数テーブルとしてレンダリングする。
 
 1. `box/teams/` 配下の `*.meta.json` を `ls box/teams/*.meta.json` で列挙し、AskUserQuestion でユーザーに選んでもらう
-2. 見出し (`--attach-title`) と任意コメント (`--attach-note`) を尋ねる (例: 「HD特化カビゴンに じしん」「スカーフ前提の最速 vs さむいギルガルド」等、ブログ読者が意味を取れる説明)
+2. 見出し (`--attach-title`) と任意コメント (`--attach-note`) を尋ねる
 3. 直前の `$PKDX damage` 呼び出しに `--attach-team <path> --attach-title "<title>" --attach-note "<note>"` を足して再実行する (計算結果は stdout にそのまま出るので表示ブロックはそのまま作れる)
 
 ```bash

@@ -66,21 +66,76 @@ Claude Code / Codex (CLI / デスクトップアプリどちらでも可) をこ
 
 GitHub にフォークしていれば、作成した構築記事とブログ記事を GitHub Pages に自動デプロイできる。
 
+#### セットアップ (1 回だけ)
+
 1. リポジトリの Settings → Pages → Source を **"GitHub Actions"** に切り替える
 2. `main` に push すると、`.github/workflows/deploy-pages.yml` が自動で Astro サイトをビルドして公開する (URL は Actions ログに表示される)
 3. 初回だけ手動でテストしたい場合は Actions タブから `Deploy Pages` → `Run workflow` をクリック
 
-公開対象・編集ポリシー:
+> **upstream (`pkdxtools/pkdx`) での挙動**: upstream 側は Pages を有効化していないため、CI の build/test までは毎回走るが deploy ステップは preflight ジョブでスキップされる。ブログ記事のビルド可否は PR artifact (`site-dist`) にアップロードされるのでメンテナーはダウンロードしてローカル preview で確認できる。fork 側で Settings → Pages を切り替えた時点で deploy が動き始める。
+
+#### team-build → ブログ公開のデータフロー
+
+```mermaid
+flowchart LR
+    subgraph Local["ローカル (fork clone)"]
+        direction TB
+        U["ユーザー"]:::user
+        CC["Claude Code / Codex"]:::tool
+        TB["/team-builder<br/>skill"]:::skill
+        CA["/calc<br/>skill"]:::skill
+        PKDX["bin/pkdx<br/>(MoonBit CLI)"]:::cli
+        CACHE[("box/cache/<br/>team_cache_*.json")]:::store
+        TEAMS[("box/teams/<br/>&lt;slug&gt;.md<br/>&lt;slug&gt;.meta.json")]:::store
+        BLOG[("box/blog/<br/>*.md")]:::store
+    end
+    subgraph GitHub["GitHub (fork)"]
+        direction TB
+        GIT[("main branch")]:::store
+        WF["deploy-pages.yml<br/>(Astro build)"]:::ci
+        PAGES[("GitHub Pages<br/>&lt;user&gt;.github.io/pkdx/")]:::pub
+    end
+
+    U -- "対話" --> CC
+    CC -- "Phase 0-8" --> TB
+    TB -- "pkdx query/search<br/>pkdx hbd 等" --> PKDX
+    TB -- "書き込み" --> CACHE
+    CACHE -- "cat | pkdx write teams<br/>(+ frontmatter)" --> PKDX
+    PKDX -- "生成" --> TEAMS
+    CC -- "ダメ計" --> CA
+    CA -- "pkdx damage<br/>--attach-team" --> PKDX
+    PKDX -- "damage_calcs[] 追記" --> TEAMS
+    U -- "手編集<br/>(edited: true)" --> TEAMS
+    U -- "自由記事" --> BLOG
+    TEAMS -- "git push" --> GIT
+    BLOG -- "git push" --> GIT
+    GIT -- "preflight 合格時のみ" --> WF
+    WF -- "site/dist デプロイ" --> PAGES
+
+    classDef user fill:#fef3c7,stroke:#b45309,color:#111
+    classDef tool fill:#e0e7ff,stroke:#4338ca,color:#111
+    classDef skill fill:#d1fae5,stroke:#047857,color:#111
+    classDef cli fill:#f3e8ff,stroke:#6d28d9,color:#111
+    classDef store fill:#f3f4f6,stroke:#4b5563,color:#111
+    classDef ci fill:#fee2e2,stroke:#b91c1c,color:#111
+    classDef pub fill:#cffafe,stroke:#0e7490,color:#111
+```
+
+- **書き込み SSoT**: `box/teams/<slug>.meta.json` が構造化データの SSoT。Astro 側が `.meta.json` を読み、同名 `.md` の本文 (matchup_plans 等の自由記述) と合わせてページを組み立てる。
+- **ダメージ計算の添付**: `/calc` で打った計算を `pkdx damage --attach-team ...` で対応する `.meta.json` の `damage_calcs[]` に追記できる。ブログには 16 段階の乱数テーブル・確定数・条件付きでレンダリングされる。
+- **手編集の保護 (edit-lock)**: `box/teams/<slug>.md` の frontmatter に `edited: true` を付けておくと、`pkdx write teams` 再実行で md が上書きされなくなる (`.meta.json` は毎回更新)。強制上書きは `pkdx write teams --force`。
+
+#### 公開対象・編集ポリシー
 
 - `box/teams/*.md` + `box/teams/*.meta.json` → 構築記事ページとしてレンダリング (役割・タイプ相性・ダメ計・選出プランが自動表示される)
 - `box/blog/*.md` → 自由記事としてレンダリング。ひな形は `box/blog/TEMPLATE.md.example` を参考にコピーして使う
 - 非公開にしたい場合は該当ファイルの frontmatter に `draft: true` を追加
-- 構築 MD を手動で書き換えた後、team-builder の再生成で上書きされたくないときは frontmatter に `edited: true` を追加 (※ MoonBit 側の edit-lock サポートは別 PR で提供予定)
+- 構築 md を手動で書き換えた後、team-builder の再生成で上書きされたくないときは frontmatter に `edited: true` を追加 (`.meta.json` は SSoT のため毎回更新される)
 - `box/site.config.json` でサイト名・著者を設定可能 (`{ "site_name": "...", "author": "...", "enabled": true }`)
 
 カスタムドメイン: `site/public/CNAME` にドメイン名 1 行のファイルを置くと有効化。
 
-公開を停止: Settings → Pages → Disable、または `box/site.config.json` の `enabled` を `false` にする。
+公開を停止: Settings → Pages → Disable、または `box/site.config.json` の `enabled` を `false` にする。いずれの方法でも preflight ジョブが deploy を丸ごとスキップするため CI は green のまま。
 
 サイト本体 (`site/` 配下) は upstream 管理なので直接編集は非推奨。カスタマイズは `box/site.config.json` と `site/public/` 経由で行う。
 

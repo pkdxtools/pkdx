@@ -28,8 +28,50 @@ permissions:
   id-token: write
 
 jobs:
+  # GitHub Pages がそもそも有効化されていない repo (upstream pkdxtools/pkdx 等)
+  # で deploy を走らせないためのゲート。Fork 側で Settings → Pages → Source を
+  # "GitHub Actions" に切り替えた時点で pages-enabled が true になる。
+  # `box/site.config.json` の enabled フィールドは二次ゲート（一時停止したい
+  # ユーザー向け）。両方 true のときだけ Pages アーティファクトを作る。
+  preflight:
+    name: Resolve deploy gates
+    runs-on: ubuntu-latest
+    outputs:
+      pages-enabled: ${{ steps.check.outputs.pages-enabled }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          pages_api=false
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" > /dev/null 2>&1; then
+            pages_api=true
+          else
+            echo "::notice::GitHub Pages is not enabled for ${GITHUB_REPOSITORY}. Deploy will be skipped. Enable it under Settings → Pages → Source: GitHub Actions."
+          fi
+
+          config_enabled=true
+          if [ -f box/site.config.json ]; then
+            if jq -e '.enabled == false' box/site.config.json > /dev/null 2>&1; then
+              config_enabled=false
+              echo "::notice::box/site.config.json has enabled=false. Deploy will be skipped."
+            fi
+          fi
+
+          if [ "$pages_api" = "true" ] && [ "$config_enabled" = "true" ]; then
+            echo "pages-enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pages-enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    name: Build site (always)
     runs-on: ubuntu-22.04
+    needs: preflight
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -53,15 +95,25 @@ jobs:
           SITE_URL: https://${{ github.repository_owner }}.github.io
           SITE_BASE: /${{ github.event.repository.name }}
         run: bun run build
+      # 常にプレビュー用アーティファクトを上げる。upstream の PR でもブログ
+      # 生成結果をメンテナーがダウンロードして確認できるようにする。
+      - name: Upload site dist (preview)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: site-dist
+          path: site/dist
+          retention-days: 7
+      # Pages にデプロイするときだけ専用 artifact を別途作る。
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.preflight.outputs.pages-enabled == 'true'
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: site/dist
 
   deploy:
-    if: github.event_name != 'pull_request'
-    needs: build
+    name: Deploy to GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.preflight.outputs.pages-enabled == 'true'
+    needs: [preflight, build]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

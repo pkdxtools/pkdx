@@ -4,9 +4,12 @@ import type { DamageCalc } from '../lib/team-meta';
 
 interface Props {
   calcs: DamageCalc[];
+  heading?: string;
+  headingLevel?: 2 | 3 | 4;
 }
 
-const { calcs } = Astro.props;
+const { calcs, heading = 'ダメージ計算', headingLevel = 2 } = Astro.props;
+const HeadingTag = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
 
 function hitsLabel(n: number | undefined): string {
   if (n == null) return '';
@@ -47,7 +50,7 @@ function formatConditions(conditions: DamageCalc['conditions']): string[] {
 ---
 {calcs.length > 0 && (
   <section class="damage-calcs">
-    <h2>ダメージ計算</h2>
+    {heading && <HeadingTag>{heading}</HeadingTag>}
     {calcs.map((calc) => {
       const attackerRanks = formatRanks(calc.attacker.ranks);
       const defenderRanks = formatRanks(calc.defender.ranks);

@@ -61,8 +61,9 @@ interface ContentCheck {
 }
 
 const contentChecks: ContentCheck[] = [
-  { path: 'dist/teams/full/index.html', needle: 'role-label', label: 'full team renders role card markup' },
-  { path: 'dist/teams/full/index.html', needle: '先発で展開を作る高速物理アタッカー', label: 'full team renders role prose verbatim' },
+  { path: 'dist/teams/full/index.html', needle: 'member-detail', label: 'full team renders per-member detail sections' },
+  { path: 'dist/teams/full/index.html', needle: '先発で展開を作る高速物理アタッカー', label: 'full team renders role prose as detail body' },
+  { path: 'dist/teams/full/index.html', needle: '個別解説', label: 'full team renders 2-chapter layout (個別解説)' },
   { path: 'dist/teams/full/index.html', needle: 'damage-calcs', label: 'full team renders damage-calcs section' },
   { path: 'dist/teams/full/index.html', needle: 'defense-matrix', label: 'full team renders defense-matrix section' },
   { path: 'dist/teams/full/index.html', needle: 'coverage', label: 'full team renders coverage section' },

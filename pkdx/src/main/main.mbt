@@ -136,8 +136,102 @@ fn build_cli() -> @admiral.CliApp {
       cmd_select(),
       cmd_meta_divergence(),
       cmd_migrate(),
+      cmd_convert(),
     ],
   )
+}
+
+///|
+/// `pkdx convert meta` — migrate a single box meta.json to the new schema
+/// introduced in issue #66. Idempotent (already-migrated files pass through).
+fn cmd_convert() -> @admiral.CommandDef {
+  @admiral.command(
+    name="convert",
+    description="Convert legacy box JSON (box/pokemons|teams/*.meta.json) to the new schema",
+    subcommands=[
+      @admiral.command(
+        name="meta",
+        description="Migrate a single meta.json to the new schema (issue #66)",
+        options=[
+          @admiral.string("in", description="Input .meta.json path", required=true),
+          @admiral.string(
+            "out",
+            description="Output path (stdout if unset, ignored when --in-place is set)",
+            default=Some(""),
+          ),
+          @admiral.bool(
+            "in-place",
+            description="Overwrite <in>; creates <in>.bak once (skipped if it already exists)",
+          ),
+        ],
+        run=Some(fn(ctx) {
+          run_convert_meta(
+            ctx_str(ctx, "in"),
+            ctx_str(ctx, "out"),
+            ctx.get_bool("in-place"),
+          )
+        }),
+      ),
+    ],
+  )
+}
+
+///|
+fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Unit {
+  let raw = match @db.read_file(in_path) {
+    None => {
+      exit_error("File not found or empty: " + in_path)
+      return
+    }
+    Some(s) => s
+  }
+  let json = @json.parse(raw) catch {
+    e => {
+      exit_error("JSON parse error (" + in_path + "): " + e.to_string())
+      return
+    }
+  }
+  let migrated = match @writer.migrate_meta_v011(json) {
+    Ok(j) => j
+    Err(msg) => {
+      exit_error(msg)
+      return
+    }
+  }
+  let out_str = migrated.stringify()
+  if in_place {
+    // Preserve the original content once (.bak 上書き防止) so the migration
+    // is reversible for the user; subsequent runs become no-ops.
+    let bak_path = in_path + ".bak"
+    if not(@db.file_exists(bak_path)) {
+      let rc_bak = pkdx_write_file(
+        @db.to_c_bytes(bak_path),
+        @db.to_c_bytes(raw),
+      )
+      if rc_bak != 0 {
+        exit_error("Failed to write backup: " + bak_path)
+        return
+      }
+    }
+    let rc = pkdx_write_file(@db.to_c_bytes(in_path), @db.to_c_bytes(out_str))
+    if rc != 0 {
+      exit_error("Failed to write: " + in_path)
+      return
+    }
+    println(in_path)
+  } else if out_path.length() > 0 {
+    let rc = pkdx_write_file(
+      @db.to_c_bytes(out_path),
+      @db.to_c_bytes(out_str),
+    )
+    if rc != 0 {
+      exit_error("Failed to write: " + out_path)
+      return
+    }
+    println(out_path)
+  } else {
+    println(out_str)
+  }
 }
 
 ///|

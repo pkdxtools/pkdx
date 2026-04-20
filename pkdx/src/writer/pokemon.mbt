@@ -12,7 +12,7 @@ fn get_nested(json : Json, key1 : String) -> Json {
 }
 
 ///|
-/// キャッシュ JSON の nested path から int を取得 (long key: hp/atk/def/spa/spd/spe)
+/// キャッシュ JSON の nested path から int を取得 (short key: h/a/b/c/d/s)
 fn nested_int(json : Json, section : String, obj : String, key : String) -> Int {
   match json {
     Object(m) =>
@@ -43,12 +43,12 @@ fn format_stat_table(json : Json) -> @markdown.Block {
   let stat_labels = [
     "HP", "こうげき", "ぼうぎょ", "とくこう", "とくぼう", "すばやさ",
   ]
-  let stat_keys = ["hp", "atk", "def", "spa", "spd", "spe"]
+  let stat_keys = ["h", "a", "b", "c", "d", "s"]
   let rows : Array[Array[@markdown.TableCell]] = []
   for i, label in stat_labels {
     let key = stat_keys[i]
     let base = nested_int(json, "pokemon", "base_stats", key)
-    let ev = nested_int(json, "build", "evs", key)
+    let ev = nested_int(json, "build", "stat_points", key)
     let actual = nested_int(json, "build", "actual_stats", key)
     rows.push([
       cell(label),
@@ -153,20 +153,47 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
 }
 
 ///|
+/// StatIndex を pokemon.mbt 表示層で使う日本語ラベル (format_stat_table と同じ) に変換。
+fn stat_label_ja(idx : @model.StatIndex) -> String {
+  match idx {
+    HP => "HP"
+    Atk => "こうげき"
+    Def => "ぼうぎょ"
+    SpA => "とくこう"
+    SpD => "とくぼう"
+    Spe => "すばやさ"
+  }
+}
+
+///|
+/// build.nature の日本語名から (up, down) 日本語ラベルを導出。
+/// Neutral nature では ("-", "-") を返し、表示上も "-↑ -↓" で表現する。
+fn derive_nature_updown(nature_name : String) -> (String, String) {
+  match @model.nature_from_ja(nature_name) {
+    Some(n) => {
+      let up = match n.up {
+        Some(idx) => stat_label_ja(idx)
+        None => "-"
+      }
+      let down = match n.down {
+        Some(idx) => stat_label_ja(idx)
+        None => "-"
+      }
+      (up, down)
+    }
+    None => ("-", "-")
+  }
+}
+
+///|
 pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document {
   let blocks : Array[@markdown.Block] = []
   let pokemon = get_nested(json, "pokemon")
   let build = get_nested(json, "build")
-  let type1 = json_string(pokemon, "type1")
-  let type2 = json_string(pokemon, "type2")
-  let types_str = if type2.length() > 0 {
-    "\{type1}/\{type2}"
-  } else {
-    type1
-  }
+  let types_arr = json_string_array(pokemon, "types")
+  let types_str = types_arr.join("/")
   let nature_name = json_string(build, "nature")
-  let nature_up = json_string(build, "nature_up")
-  let nature_down = json_string(build, "nature_down")
+  let (nature_up, nature_down) = derive_nature_updown(nature_name)
   let nature_str = "\{nature_name} (\{nature_up}↑ \{nature_down}↓)"
   let ability = json_string(build, "ability")
   let item = json_string(build, "item")
@@ -188,9 +215,9 @@ pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document 
   blocks.push(format_move_table(json))
   blocks.push_iter(format_damage_calcs(json).iter())
   blocks.push(heading(2, "ダメージ計算用コマンド"))
-  let a_val = nested_int(json, "build", "actual_stats", "atk").to_string()
-  let b_val = nested_int(json, "build", "actual_stats", "def").to_string()
-  let hp_val = nested_int(json, "build", "actual_stats", "hp").to_string()
+  let a_val = nested_int(json, "build", "actual_stats", "a").to_string()
+  let b_val = nested_int(json, "build", "actual_stats", "b").to_string()
+  let hp_val = nested_int(json, "build", "actual_stats", "h").to_string()
   let atk_cmd = "bin/pkdx damage \"\{name}\" \"<相手>\" \"<技>\" --atk-stat \{a_val} --atk-ability \"\{ability}\" --atk-item \"\{item}\""
   let def_cmd = "bin/pkdx damage \"<相手>\" \"\{name}\" \"<技>\" --def-stat \{b_val} --def-hp \{hp_val}"
   blocks.push(

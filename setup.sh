@@ -207,6 +207,37 @@ for dir in "$REPO_ROOT/box/teams" "$REPO_ROOT/box/pokemons" "$REPO_ROOT/box/cach
 done
 echo "  Done."
 
+# --- Step 4.5: Migrate legacy box meta.json to new schema (issue #66) ---
+# 旧 breed/team-builder cache (type1/type2, evs, nature_up/down, 長 stat key) を
+# 新 schema (types[], stat_points, short key) に変換する。.bak が既に存在する
+# ファイルは上書きされないため何度実行しても安全。
+echo "[4.5/5] Migrating legacy box meta.json..."
+migrate_box_file() {
+  local f="$1"
+  if "$REPO_ROOT/bin/pkdx" convert meta --in "$f" --in-place >/dev/null 2>&1; then
+    :
+  else
+    echo "  Warning: failed to convert $f" >&2
+  fi
+}
+export -f migrate_box_file
+export REPO_ROOT
+
+CONVERT_COUNT=0
+for scope in teams pokemons; do
+  if [ -d "$REPO_ROOT/box/$scope" ]; then
+    while IFS= read -r -d '' f; do
+      migrate_box_file "$f"
+      CONVERT_COUNT=$((CONVERT_COUNT + 1))
+    done < <(find "$REPO_ROOT/box/$scope" -type f -name '*.meta.json' -print0)
+  fi
+done
+if [ "$CONVERT_COUNT" -gt 0 ]; then
+  echo "  Processed $CONVERT_COUNT meta.json file(s)."
+else
+  echo "  No meta.json files to process."
+fi
+
 # --- Step 5: Codex CLI compatibility (Windows symlink repair) ---
 # AGENTS.md と .agents/skills は git にシムリンクとしてコミットされている。
 # Windows Git は core.symlinks=false の場合シムリンクを「リンク先パス文字列を含む通常ファイル」として

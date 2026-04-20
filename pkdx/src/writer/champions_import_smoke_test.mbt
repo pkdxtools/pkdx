@@ -12,14 +12,12 @@ test "champions_import_smoke: round_trip_vision_json_to_md" {
     #|  "regulation": "M-A",
     #|  "pokemon": {
     #|    "name": "マンムー",
-    #|    "type1": "こおり",
-    #|    "type2": "じめん",
-    #|    "base_stats": {"hp":110,"atk":130,"def":80,"spa":70,"spd":60,"spe":80}
+    #|    "types": ["こおり", "じめん"],
+    #|    "base_stats": {"h":110,"a":130,"b":80,"c":70,"d":60,"s":80},
+    #|    "abilities": ["あついしぼう", "どんかん", "ゆきがくれ"]
     #|  },
     #|  "build": {
     #|    "nature": "ようき",
-    #|    "nature_up": "すばやさ",
-    #|    "nature_down": "とくこう",
     #|    "ability": "あついしぼう",
     #|    "item": "こだわりスカーフ",
     #|    "moves": [
@@ -28,8 +26,8 @@ test "champions_import_smoke: round_trip_vision_json_to_md" {
     #|      {"name":"つららばり","type":"こおり","category":"物理","power":25,"accuracy":100},
     #|      {"name":"ばかぢから","type":"かくとう","category":"物理","power":120,"accuracy":100}
     #|    ],
-    #|    "evs": {"hp":20,"atk":32,"def":0,"spa":0,"spd":0,"spe":14},
-    #|    "actual_stats": {"hp":205,"atk":182,"def":100,"spa":81,"spd":80,"spe":145}
+    #|    "stat_points": {"h":20,"a":32,"b":0,"c":0,"d":0,"s":14},
+    #|    "actual_stats": {"h":205,"a":182,"b":100,"c":81,"d":80,"s":145}
     #|  },
     #|  "damage_calcs": []
     #|}
@@ -60,6 +58,6 @@ test "champions_import_smoke: round_trip_vision_json_to_md" {
   assert_true(md.contains("205"))
   assert_true(md.contains("182"))
   assert_true(md.contains("145"))
-  // SP (Champions は evs フィールドを SP として出力)
+  // SP 値 (stat_points)
   assert_true(md.contains("32"))
 }

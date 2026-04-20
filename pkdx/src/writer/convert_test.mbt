@@ -264,7 +264,105 @@ test "migrate_pokemon_meta_v011: preserves role on new-format input" {
 }
 
 ///|
-/// migrate_team_meta_v011 は現状 identity（新スキーマは旧 member 形式に対して後方互換）。
+/// 旧 team cache: members[].base_stats が long key。validate 段階で legacy 判定
+/// されるため、migrate で short key へ正規化する必要がある。
+test "migrate_team_meta_v011: members long-key stats are shortened" {
+  let old_src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ],
+    #|    "stat_points": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let old = @json.parse(old_src)
+  let result = migrate_team_meta_v011(old)
+  guard result is Ok(converted) else { fail("Expected Ok") }
+  // 変換後は validate を通過する必要がある (legacy 誘導エラーが消えている)。
+  inspect(validate_team_json(converted), content="Ok(())")
+  // members[0].base_stats が short key になっている。
+  guard converted is Object(root) else { fail("root not object") }
+  guard root.get("members") is Some(Array(members)) else {
+    fail("members not array")
+  }
+  guard members[0] is Object(m0) else { fail("member not object") }
+  guard m0.get("base_stats") is Some(Object(bs)) else {
+    fail("base_stats not object")
+  }
+  assert_eq(bs.get("h"), Some((108 : Int).to_json()))
+  assert_eq(bs.get("s"), Some((102 : Int).to_json()))
+  assert_true(bs.get("hp") is None)
+  assert_true(bs.get("spe") is None)
+  guard m0.get("stat_points") is Some(Object(sp)) else {
+    fail("stat_points not object")
+  }
+  assert_eq(sp.get("s"), Some((252 : Int).to_json()))
+  assert_true(sp.get("spe") is None)
+}
+
+///|
+/// migrate_team_meta_v011 は冪等。新 schema 入力は no-op。
+test "migrate_team_meta_v011: idempotent on new-format input" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン", "じめん"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let input = @json.parse(src)
+  let once = match migrate_team_meta_v011(input) {
+    Ok(j) => j
+    Err(e) => {
+      fail("migrate failed: \{e}")
+    }
+  }
+  let twice = match migrate_team_meta_v011(once) {
+    Ok(j) => j
+    Err(e) => {
+      fail("migrate failed on new-format input: \{e}")
+    }
+  }
+  assert_eq(once, twice)
+}
+
+///|
+/// migrate_team_meta_v011: 既に short key の base_stats と long key の
+/// actual_stats が混在していても、全員 short key に揃える (冪等)。
 test "migrate_team_meta_v011: passthrough for new-format team cache" {
   let src =
     #|{

@@ -147,14 +147,55 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
 }
 
 ///|
-/// Convert a team meta.json (`members[]` shape). 新 schema は旧 member 形式を
-/// 受け入れられる (accuracy 許容のみ追加) ため、現状は identity に近い。
-/// 将来的に member 側の互換レイヤーを足す場所として関数を保持する。
+/// members[] に含まれる stats 系オブジェクト (base_stats / stat_points /
+/// actual_stats / ivs) を long-key → short-key に正規化する。冪等。
+/// 新 schema で要求される短 key のみを validate が受け入れるため、旧 team
+/// meta (hp/atk/def/... 長 key) を救済するには各 member を書き換える必要がある。
+fn migrate_team_member(m : Json) -> Json {
+  guard m is Object(obj) else { return m }
+  let out : Map[String, Json] = {}
+  for k, v in obj {
+    if k == "base_stats" ||
+      k == "stat_points" ||
+      k == "actual_stats" ||
+      k == "ivs" {
+      match v {
+        Object(_) => out[k] = normalize_stats_to_short(v)
+        _ => out[k] = v
+      }
+    } else {
+      out[k] = v
+    }
+  }
+  out.to_json()
+}
+
+///|
+/// Convert a team meta.json (`members[]` shape). 旧 member は stats 系を
+/// long-key で持つため、各 member を走査して short-key に揃える。
+/// 新 schema 入力は no-op (冪等)。
 pub fn migrate_team_meta_v011(input : Json) -> Result[Json, String] {
-  guard input is Object(_) else {
+  guard input is Object(root) else {
     return Err("migrate_team_meta_v011: expected object at top level")
   }
-  Ok(input)
+  let out : Map[String, Json] = {}
+  for k, v in root {
+    if k == "members" {
+      match v {
+        Array(members) => {
+          let migrated : Array[Json] = []
+          for m in members {
+            migrated.push(migrate_team_member(m))
+          }
+          out["members"] = migrated.to_json()
+        }
+        _ => out[k] = v
+      }
+    } else {
+      out[k] = v
+    }
+  }
+  Ok(out.to_json())
 }
 
 ///|

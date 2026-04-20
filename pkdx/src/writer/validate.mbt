@@ -54,8 +54,40 @@ fn validate_champions_sp(sp_obj : Map[String, Json]) -> Array[String] {
 }
 
 ///|
+/// stats 系オブジェクトに long key (hp/atk/def/spa/spd/spe) が含まれていれば true。
+/// migrate 側 (`normalize_stats_to_short`) が変換対象とする shape と一致させる。
+fn has_long_stat_key(obj : Map[String, Json]) -> Bool {
+  obj.get("hp") is Some(_) ||
+  obj.get("atk") is Some(_) ||
+  obj.get("def") is Some(_) ||
+  obj.get("spa") is Some(_) ||
+  obj.get("spd") is Some(_) ||
+  obj.get("spe") is Some(_)
+}
+
+///|
+/// stats 系フィールド (base_stats / stat_points / actual_stats / ivs) が
+/// long-key 形式なら legacy エラーを `errs` に push する。
+fn check_long_stats_field(
+  errs : Array[String],
+  obj : Map[String, Json],
+  field : String,
+  path_prefix : String,
+  hint : String,
+) -> Unit {
+  match obj.get(field) {
+    Some(Object(stats)) =>
+      if has_long_stat_key(stats) {
+        errs.push("\{path_prefix}/\{field}: \{hint}")
+      }
+    _ => ()
+  }
+}
+
+///|
 /// v011 より前のスキーマを検出。検出時は `pkdx convert meta --in-place` への
 /// 誘導メッセージを返す（ユーザー体験: 手動でスキーマ差分を読まずに復旧可能）。
+/// migrate_pokemon_meta_v011 が変換する全 shape を網羅する必要がある。
 fn detect_legacy_pokemon(root : Map[String, Json]) -> Array[String] {
   let errs : Array[String] = []
   let hint = "legacy schema detected — run: pkdx convert meta --in-place <path>"
@@ -68,6 +100,7 @@ fn detect_legacy_pokemon(root : Map[String, Json]) -> Array[String] {
         Some(Object(_)) => errs.push("#/pokemon/abilities: \{hint}")
         _ => ()
       }
+      check_long_stats_field(errs, p, "base_stats", "#/pokemon", hint)
     }
     _ => ()
   }
@@ -82,6 +115,9 @@ fn detect_legacy_pokemon(root : Map[String, Json]) -> Array[String] {
       if b.get("nature_down") is Some(_) {
         errs.push("#/build/nature_down: \{hint}")
       }
+      check_long_stats_field(errs, b, "stat_points", "#/build", hint)
+      check_long_stats_field(errs, b, "actual_stats", "#/build", hint)
+      check_long_stats_field(errs, b, "ivs", "#/build", hint)
     }
     _ => ()
   }
@@ -89,6 +125,8 @@ fn detect_legacy_pokemon(root : Map[String, Json]) -> Array[String] {
 }
 
 ///|
+/// migrate_team_meta_v011 が members[] の stats 系全フィールドを short-key へ
+/// 揃えるため、検出器も同じ範囲をカバーする。
 fn detect_legacy_team(root : Map[String, Json]) -> Array[String] {
   let errs : Array[String] = []
   let hint = "legacy schema detected — run: pkdx convert meta --in-place <path>"
@@ -96,14 +134,13 @@ fn detect_legacy_team(root : Map[String, Json]) -> Array[String] {
     Some(Array(members)) =>
       for i, m in members {
         match m {
-          Object(mo) =>
-            match mo.get("base_stats") {
-              Some(Object(bs)) =>
-                if bs.get("hp") is Some(_) {
-                  errs.push("#/members/\{i}/base_stats/hp: \{hint}")
-                }
-              _ => ()
-            }
+          Object(mo) => {
+            let prefix = "#/members/\{i}"
+            check_long_stats_field(errs, mo, "base_stats", prefix, hint)
+            check_long_stats_field(errs, mo, "stat_points", prefix, hint)
+            check_long_stats_field(errs, mo, "actual_stats", prefix, hint)
+            check_long_stats_field(errs, mo, "ivs", prefix, hint)
+          }
           _ => ()
         }
       }

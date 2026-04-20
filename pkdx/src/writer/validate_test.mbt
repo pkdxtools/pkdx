@@ -596,6 +596,162 @@ test "validate_pokemon_json: legacy schema detection for build.evs" {
 }
 
 ///|
+/// long-key base_stats のみで他は新形式の pokemon meta も legacy として誘導される。
+/// migrate_pokemon_meta_v011 が変換する shape は全て検出器でカバーする必要がある。
+test "validate_pokemon_json: legacy detection for long-key base_stats" {
+  let src =
+    #|{
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"hp":108,"atk":130,"def":95,"spa":80,"spd":85,"spe":102},
+    #|    "abilities": ["さめはだ"]
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "stat_points": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
+    #|    "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169}
+    #|  }
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) {
+      e.contains("#/pokemon/base_stats") &&
+      e.contains("legacy schema detected") &&
+      e.contains("pkdx convert meta")
+    }),
+    content="true",
+  )
+}
+
+///|
+/// long-key stat_points のみで他は新形式の pokemon meta も legacy として誘導される。
+test "validate_pokemon_json: legacy detection for long-key stat_points" {
+  let src =
+    #|{
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "abilities": ["さめはだ"]
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "stat_points": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252},
+    #|    "actual_stats": {"h":183,"a":182,"b":115,"c":90,"d":106,"s":169}
+    #|  }
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) {
+      e.contains("#/build/stat_points") &&
+      e.contains("legacy schema detected")
+    }),
+    content="true",
+  )
+}
+
+///|
+/// long-key actual_stats のみで他は新形式の pokemon meta も legacy として誘導される。
+test "validate_pokemon_json: legacy detection for long-key actual_stats" {
+  let src =
+    #|{
+    #|  "version": "scarlet_violet",
+    #|  "pokemon": {
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "abilities": ["さめはだ"]
+    #|  },
+    #|  "build": {
+    #|    "nature": "ようき",
+    #|    "ability": "さめはだ",
+    #|    "item": "きあいのタスキ",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100,"accuracy":100}
+    #|    ],
+    #|    "stat_points": {"h":0,"a":252,"b":0,"c":0,"d":4,"s":252},
+    #|    "actual_stats": {"hp":183,"atk":182,"def":115,"spa":90,"spd":106,"spe":169}
+    #|  }
+    #|}
+  let json = @json.parse(src)
+  let result = validate_pokemon_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) {
+      e.contains("#/build/actual_stats") &&
+      e.contains("legacy schema detected")
+    }),
+    content="true",
+  )
+}
+
+///|
+/// team member の long-key stat_points/actual_stats も legacy として検出する。
+test "validate_team_json: legacy detection for long-key stat_points on member" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガブリアス",
+    #|    "types": ["ドラゴン"],
+    #|    "base_stats": {"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},
+    #|    "ability": "さめはだ",
+    #|    "item": "こだわりハチマキ",
+    #|    "role": "軸",
+    #|    "moves": [
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},
+    #|      {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
+    #|    ],
+    #|    "stat_points": {"hp":0,"atk":252,"def":0,"spa":0,"spd":4,"spe":252}
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let result = validate_team_json(json)
+  guard result is Err(errors) else {
+    fail("Expected Err but got Ok")
+  }
+  inspect(
+    errors.iter().any(fn(e) {
+      e.contains("#/members/0/stat_points") &&
+      e.contains("legacy schema detected")
+    }),
+    content="true",
+  )
+}
+
+///|
 test "validate_team_json: legacy schema detection for long stat keys" {
   let src =
     #|{

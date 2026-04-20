@@ -420,6 +420,7 @@ pub fn build_team_document(
   json : Json,
   axis : String,
   date : String,
+  publish~ : Bool = false,
 ) -> @markdown.Document {
   let blocks : Array[@markdown.Block] = []
   let battle_format = json_string(json, "battle_format")
@@ -470,7 +471,11 @@ pub fn build_team_document(
     blocks.push(bullet_list(weaknesses))
   }
 
-  { frontmatter: Some(build_team_frontmatter(json, axis, date)), children: blocks, span: s }
+  {
+    frontmatter: Some(build_team_frontmatter(json, axis, date, publish~)),
+    children: blocks,
+    span: s,
+  }
 }
 
 ///|
@@ -483,6 +488,7 @@ pub fn build_team_frontmatter(
   json : Json,
   axis : String,
   date : String,
+  publish~ : Bool = false,
 ) -> @markdown.Frontmatter {
   let battle_format = json_string(json, "battle_format")
   let mechanics = json_string(json, "mechanics")
@@ -522,7 +528,11 @@ pub fn build_team_frontmatter(
   add_plain("members", members_value)
   add_plain("tags", "[]")
   add_plain("edited", "false")
-  add_plain("draft", "false")
+  // `publish=true` 指定時だけ draft: false にする。構築を意図せず公開しない
+  // ための安全側デフォルト。team-builder Phase 8 の「構築ブログに公開するか」
+  // 質問で「はい」が選ばれた時のみ build_team_document(publish=true) が呼ばれる。
+  let draft_value = if publish { "false" } else { "true" }
+  add_plain("draft", draft_value)
   add_plain("generated_by", "team-builder")
   add_plain("schema_version", "1")
   { raw: buf.to_string(), entries, span: s }

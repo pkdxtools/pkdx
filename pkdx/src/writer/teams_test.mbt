@@ -433,11 +433,34 @@ test "build_team_document: emits YAML frontmatter with core fields" {
   assert_true(md.contains("regulation: \"H\""))
   assert_true(md.contains("members: [\"ガブリアス\", \"カイリュー\"]"))
   assert_true(md.contains("edited: false"))
-  assert_true(md.contains("draft: false"))
+  // Default: 未公開扱い (draft: true)。ユーザーが Phase 8 で明示的に
+  // 「構築ブログで公開する」を選ばない限り誰からも見えない。
+  assert_true(md.contains("draft: true"))
   assert_true(md.contains("generated_by: team-builder"))
   assert_true(md.contains("schema_version: 1"))
   let body_start = md.find("\n---\n")
   assert_true(body_start is Some(_))
+}
+
+///|
+test "build_team_document: publish=true flips draft to false" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "sv",
+    #|  "members": [{"name":"ガブリアス","types":["ドラゴン","じめん"],"base_stats":{"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},"ability":"さめはだ","item":"こだわりハチマキ","role":"軸","moves":[{"name":"じしん","type":"じめん","category":"物理","power":100},{"name":"げきりん","type":"ドラゴン","category":"物理","power":120},{"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},{"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}]}],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-20", publish=true)
+  let md = @markdown.serialize(doc)
+  assert_true(md.contains("draft: false"))
+  assert_false(md.contains("draft: true"))
 }
 
 ///|

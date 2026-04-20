@@ -910,16 +910,21 @@ megaメカニクスが有効な場合:
 
 ### 8-1: 出力形式の確認
 
-**AskUserQuestion**（2問）:
+**AskUserQuestion**（3問）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
 | 1 | ポケソル形式のテキストも出力しますか？ | ポケソル出力 | はい(desc: ダメージ計算SV等で読み込めるテキストも出力), いいえ(desc: mdレポートのみ) | false |
 | 2 | この構築データをバージョン管理の対象にしますか？ | バージョン管理 | はい(desc: gitで変更履歴を残す。GitHubアカウントがあればクラウドにもバックアップ可能), いいえ(desc: 手元にのみ保存。gitには記録しない) | false |
+| 3 | この構築を構築ブログで公開しますか？ | ブログ公開 | いいえ(default, desc: 下書き状態で保存。ブログには掲載されない), はい(desc: 公開状態で保存。fork で構築ブログを有効化済みなら push 時に掲載される) | false |
 
 質問2の回答に基づきファイル名を決定:
 - **はい** → `{軸ポケモン名}-build-{YYYY-MM-DD}` （通常のファイル名）
 - **いいえ** → `__no_save.{軸ポケモン名}-build-{YYYY-MM-DD}` （gitignore対象）
+
+質問3の回答は md の frontmatter `draft:` を決める:
+- **いいえ** (default) → `draft: true` (ブログ非掲載)。後から公開したくなったら md の `draft:` を `false` に書き換えるか、同じ引数で **--publish** を付けて `pkdx write teams` を再実行する
+- **はい** → `draft: false` (ブログ掲載)。既存 md の edit-lock はそのまま有効
 
 ### 8-2: mdレポート出力（キャッシュ JSON → pkdx write）
 
@@ -934,7 +939,11 @@ megaメカニクスが有効な場合:
 - バージョン管理なし → `--axis "__no_save.<軸ポケモン名>"`
 
 ```bash
+# 8-1 の質問3 が「いいえ」: 下書き状態で保存 (draft: true)
 cat $CACHE_FILE | $PKDX write teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>"
+
+# 8-1 の質問3 が「はい」: 構築ブログに掲載 (draft: false)
+cat $CACHE_FILE | $PKDX write teams --date "YYYY-MM-DD" --axis "<軸ポケモン名 or __no_save.軸ポケモン名>" --publish
 ```
 
 CLIはキャッシュ JSON のスキーマ（`members` + `coverage` + `defense_matrix` 等）をバリデーションする。
@@ -942,7 +951,7 @@ CLIはキャッシュ JSON のスキーマ（`members` + `coverage` + `defense_m
 
 **エラー時の再試行**: exit code が 0 以外の場合、stderrのエラーメッセージに基づいてキャッシュ JSON を修正し再試行する。最大3回まで。
 
-**生成される md の frontmatter**: GitHub Pages 公開 (`site/` の Astro が読む) 用に、以下の YAML frontmatter が自動付与される:
+**生成される md の frontmatter**: 構築ブログ (`site/` の Astro が読む) 用に、以下の YAML frontmatter が自動付与される:
 
 ```yaml
 ---
@@ -956,7 +965,7 @@ regulation: "..."      # nullable
 members: ["...", ...]  # 名前フロー配列
 tags: []
 edited: false          # ユーザーが手編集した場合に true に書き換える
-draft: false           # true で GitHub Pages 非公開
+draft: true            # `--publish` 指定時だけ false。構築ブログ掲載可否を決める
 generated_by: "pkdx"
 schema_version: 1
 ---

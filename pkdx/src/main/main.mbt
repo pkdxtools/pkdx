@@ -757,12 +757,17 @@ fn cmd_write() -> @admiral.CommandDef {
             "force",
             description="Overwrite existing MD even if frontmatter has `edited: true`",
           ),
+          @admiral.bool(
+            "publish",
+            description="Mark this team for publication on the build blog (default: draft only)",
+          ),
         ],
         run=Some(fn(ctx) {
           run_write_teams(
             ctx_str(ctx, "date"),
             ctx_str(ctx, "axis"),
             ctx.get_bool("force"),
+            ctx.get_bool("publish"),
           )
         }),
       ),
@@ -1559,7 +1564,12 @@ fn exit_error(msg : String) -> Unit {
 }
 
 ///|
-fn run_write_teams(date : String, axis : String, force : Bool) -> Unit {
+fn run_write_teams(
+  date : String,
+  axis : String,
+  force : Bool,
+  publish : Bool,
+) -> Unit {
   if !(is_safe_path_component(axis)) || !(is_safe_path_component(date)) {
     exit_error("Invalid characters in --axis or --date")
     return
@@ -1586,7 +1596,7 @@ fn run_write_teams(date : String, axis : String, force : Bool) -> Unit {
     }
     Ok(_) => ()
   }
-  let doc = @writer.build_team_document(json, axis, date)
+  let doc = @writer.build_team_document(json, axis, date, publish~)
   let md = @markdown.serialize(doc)
   let base = "box/teams/" + axis + "-build-" + date
   let md_path = base + ".md"

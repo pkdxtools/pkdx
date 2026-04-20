@@ -401,3 +401,215 @@ test "build_team_document: coverage and defense matrix" {
   assert_true(md.contains("## 防御相性マトリクス"))
   assert_true(md.contains("| みず |"))
 }
+
+///|
+test "build_team_document: emits YAML frontmatter with core fields" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "sv",
+    #|  "regulation": "H",
+    #|  "members": [
+    #|    {"name":"ガブリアス","types":["ドラゴン","じめん"],"base_stats":{"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},"ability":"さめはだ","item":"こだわりハチマキ","role":"軸","moves":[{"name":"じしん","type":"じめん","category":"物理","power":100},{"name":"げきりん","type":"ドラゴン","category":"物理","power":120},{"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},{"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}]},
+    #|    {"name":"カイリュー","types":["ドラゴン","ひこう"],"base_stats":{"h":91,"a":134,"b":95,"c":100,"d":100,"s":80},"ability":"マルチスケイル","item":"いのちのたま","role":"中速","moves":[{"name":"しんそく","type":"ノーマル","category":"物理","power":80},{"name":"げきりん","type":"ドラゴン","category":"物理","power":120},{"name":"じしん","type":"じめん","category":"物理","power":100},{"name":"はねやすめ","type":"ひこう","category":"変化","power":0}]}
+    #|  ],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-20")
+  let md = @markdown.serialize(doc)
+  assert_true(md.has_prefix("---\n"))
+  assert_true(md.contains("title: \"ガブリアス軸構築 - 2026-04-20\""))
+  assert_true(md.contains("axis: \"ガブリアス\""))
+  assert_true(md.contains("date: 2026-04-20"))
+  assert_true(md.contains("battle_format: singles"))
+  assert_true(md.contains("mechanics: \"テラスタル\""))
+  assert_true(md.contains("version: sv"))
+  assert_true(md.contains("regulation: \"H\""))
+  assert_true(md.contains("members: [\"ガブリアス\", \"カイリュー\"]"))
+  assert_true(md.contains("edited: false"))
+  assert_true(md.contains("draft: false"))
+  assert_true(md.contains("generated_by: team-builder"))
+  assert_true(md.contains("schema_version: 1"))
+  let body_start = md.find("\n---\n")
+  assert_true(body_start is Some(_))
+}
+
+///|
+test "build_team_document: omits regulation when empty" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "sv",
+    #|  "members": [{"name":"ガブリアス","types":["ドラゴン","じめん"],"base_stats":{"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},"ability":"さめはだ","item":"こだわりハチマキ","role":"軸","moves":[{"name":"じしん","type":"じめん","category":"物理","power":100},{"name":"げきりん","type":"ドラゴン","category":"物理","power":120},{"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},{"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}]}],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ガブリアス", "2026-04-20")
+  let md = @markdown.serialize(doc)
+  assert_false(md.contains("regulation:"))
+}
+
+///|
+test "build_team_document: frontmatter survives parse round-trip" {
+  let src =
+    #|{
+    #|  "battle_format": "doubles",
+    #|  "mechanics": "ダイマックス",
+    #|  "version": "sword_shield",
+    #|  "regulation": "E",
+    #|  "members": [{"name":"ザシアン","types":["フェアリー"],"base_stats":{"h":92,"a":130,"b":115,"c":80,"d":115,"s":138},"ability":"ふとうのけん","item":"くちたけん","role":"軸","moves":[{"name":"きょじゅうざん","type":"はがね","category":"物理","power":110},{"name":"じゃれつく","type":"フェアリー","category":"物理","power":90},{"name":"せいなるつるぎ","type":"かくとう","category":"物理","power":90},{"name":"みがわり","type":"ノーマル","category":"変化","power":0}]}],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "ザシアン", "2026-04-20")
+  let md = @markdown.serialize(doc)
+  let reparsed = @markdown.parse(md).document
+  match reparsed.frontmatter {
+    Some(fm) => {
+      let mut saw_title = false
+      let mut saw_axis = false
+      let mut saw_edited = false
+      let mut saw_schema_version = false
+      for entry in fm.entries {
+        let (k, v) = entry
+        if k == "title" && v == "ザシアン軸構築 - 2026-04-20" {
+          saw_title = true
+        }
+        if k == "axis" && v == "ザシアン" {
+          saw_axis = true
+        }
+        if k == "edited" && v == "false" {
+          saw_edited = true
+        }
+        if k == "schema_version" && v == "1" {
+          saw_schema_version = true
+        }
+      }
+      assert_true(saw_title)
+      assert_true(saw_axis)
+      assert_true(saw_edited)
+      assert_true(saw_schema_version)
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "build_team_document: axis with double quotes is escaped" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "テラスタル",
+    #|  "version": "sv",
+    #|  "members": [{"name":"テスト","types":["ノーマル"],"base_stats":{"h":100,"a":100,"b":100,"c":100,"d":100,"s":100},"ability":"テスト","item":"テスト","role":"軸","moves":[{"name":"a","type":"ノーマル","category":"物理","power":100},{"name":"b","type":"ノーマル","category":"物理","power":100},{"name":"c","type":"ノーマル","category":"物理","power":100},{"name":"d","type":"ノーマル","category":"物理","power":100}]}],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": [],
+    #|  "strengths": [],
+    #|  "weaknesses": []
+    #|}
+  let json = @json.parse(src)
+  let doc = build_team_document(json, "\"トリッキー\"", "2026-04-20")
+  let md = @markdown.serialize(doc)
+  assert_true(md.contains("axis: \"\\\"トリッキー\\\"\""))
+  let reparsed = @markdown.parse(md).document
+  match reparsed.frontmatter {
+    Some(_) => ()
+    None => assert_true(false)
+  }
+}
+
+///|
+test "has_edit_lock: recognises edited: true" {
+  let md =
+    #|---
+    #|title: "x"
+    #|edited: true
+    #|---
+    #|
+    #|# body
+  assert_true(has_edit_lock(md))
+}
+
+///|
+test "has_edit_lock: edited: false is unlocked" {
+  let md =
+    #|---
+    #|edited: false
+    #|---
+    #|
+    #|# body
+  assert_false(has_edit_lock(md))
+}
+
+///|
+test "has_edit_lock: missing frontmatter is unlocked" {
+  let md =
+    #|# just a heading
+    #|
+    #|no frontmatter here.
+  assert_false(has_edit_lock(md))
+}
+
+///|
+test "has_edit_lock: empty input is unlocked" {
+  assert_false(has_edit_lock(""))
+}
+
+///|
+test "has_edit_lock: capital True is unlocked (strict literal)" {
+  let md =
+    #|---
+    #|edited: True
+    #|---
+    #|
+    #|# body
+  assert_false(has_edit_lock(md))
+}
+
+///|
+test "has_edit_lock: quoted \"true\" is locked (parser strips quotes)" {
+  let md =
+    #|---
+    #|edited: "true"
+    #|---
+    #|
+    #|# body
+  assert_true(has_edit_lock(md))
+}
+
+///|
+test "has_edit_lock: key without space still works" {
+  let md =
+    #|---
+    #|edited:true
+    #|---
+    #|
+    #|# body
+  assert_true(has_edit_lock(md))
+}
+
+///|
+test "has_edit_lock: missing closing fence is unlocked" {
+  let md =
+    #|---
+    #|edited: true
+    #|
+    #|# body but never closed
+  assert_false(has_edit_lock(md))
+}

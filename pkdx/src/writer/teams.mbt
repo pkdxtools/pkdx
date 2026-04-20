@@ -470,5 +470,117 @@ pub fn build_team_document(
     blocks.push(bullet_list(weaknesses))
   }
 
-  { frontmatter: None, children: blocks, span: s }
+  { frontmatter: Some(build_team_frontmatter(json, axis, date)), children: blocks, span: s }
+}
+
+///|
+/// Build a YAML frontmatter for the generated team markdown.
+///
+/// The block_parser in mizchi/markdown only understands `key: value` lines and
+/// strips surrounding quotes, so we emit one scalar per line and rely on
+/// downstream Astro (gray-matter) for proper YAML parsing of flow arrays.
+pub fn build_team_frontmatter(
+  json : Json,
+  axis : String,
+  date : String,
+) -> @markdown.Frontmatter {
+  let battle_format = json_string(json, "battle_format")
+  let mechanics = json_string(json, "mechanics")
+  let version = json_string(json, "version")
+  let regulation = json_string(json, "regulation")
+  let members = json_array(json, "members")
+  let member_names = members.map(fn(m) -> String { json_string(m, "name") })
+  let title = "\{axis}軸構築 - \{date}"
+  let entries : Array[(String, String)] = []
+  let buf = StringBuilder::new()
+  fn add_quoted(key : String, value : String) -> Unit {
+    entries.push((key, value))
+    buf.write_string(key)
+    buf.write_string(": ")
+    buf.write_string(yaml_escape_double_quoted(value))
+    buf.write_char('\n')
+  }
+
+  fn add_plain(key : String, value : String) -> Unit {
+    entries.push((key, value))
+    buf.write_string(key)
+    buf.write_string(": ")
+    buf.write_string(value)
+    buf.write_char('\n')
+  }
+
+  add_quoted("title", title)
+  add_quoted("axis", axis)
+  add_plain("date", date)
+  add_plain("battle_format", battle_format)
+  add_quoted("mechanics", mechanics)
+  add_plain("version", version)
+  if regulation.length() > 0 {
+    add_quoted("regulation", regulation)
+  }
+  let members_value = yaml_string_array(member_names)
+  add_plain("members", members_value)
+  add_plain("tags", "[]")
+  add_plain("edited", "false")
+  add_plain("draft", "false")
+  add_plain("generated_by", "team-builder")
+  add_plain("schema_version", "1")
+  { raw: buf.to_string(), entries, span: s }
+}
+
+///|
+/// Return true when the given markdown text carries a frontmatter with
+/// `edited: true`. Unlocked on: missing frontmatter, missing `edited` key,
+/// non-literal-"true" values, and parse failures.
+pub fn has_edit_lock(md_text : String) -> Bool {
+  if md_text.length() == 0 {
+    return false
+  }
+  let result = @markdown.parse(md_text)
+  match result.document.frontmatter {
+    Some(fm) => {
+      for entry in fm.entries {
+        let (k, v) = entry
+        if k == "edited" {
+          return v == "true"
+        }
+      }
+      false
+    }
+    None => false
+  }
+}
+
+///|
+/// Escape a string for embedding in a YAML double-quoted scalar.
+/// Only `\` and `"` are escaped — keeping the parser contract simple.
+fn yaml_escape_double_quoted(content : String) -> String {
+  let buf = StringBuilder::new()
+  buf.write_char('"')
+  for c in content {
+    match c {
+      '\\' => buf.write_string("\\\\")
+      '"' => buf.write_string("\\\"")
+      _ => buf.write_char(c)
+    }
+  }
+  buf.write_char('"')
+  buf.to_string()
+}
+
+///|
+/// Emit a YAML flow-style string array: `["a", "b"]`.
+fn yaml_string_array(items : Array[String]) -> String {
+  let buf = StringBuilder::new()
+  buf.write_char('[')
+  let mut first = true
+  for item in items {
+    if not(first) {
+      buf.write_string(", ")
+    }
+    first = false
+    buf.write_string(yaml_escape_double_quoted(item))
+  }
+  buf.write_char(']')
+  buf.to_string()
 }

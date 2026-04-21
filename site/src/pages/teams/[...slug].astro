@@ -62,11 +62,7 @@ const unassignedCalcs = allCalcs.filter(
       <section class="chapter" aria-labelledby="chapter-team">
         <h2 id="chapter-team">チーム</h2>
         <div class="team-list">
-          {members.map((m, i) => (
-            <a class="member-anchor" href={`#member-${i + 1}`}>
-              <MemberCard member={m} />
-            </a>
-          ))}
+          {members.map((m) => <MemberCard member={m} />)}
         </div>
 
         {meta && <CoverageChart rows={meta.coverage} />}
@@ -87,10 +83,38 @@ const unassignedCalcs = allCalcs.filter(
       </section>
     )}
 
-    {meta && meta.matchup_plans.length > 0 && (
-      <section class="chapter" aria-labelledby="chapter-matchups">
-        <h2 id="chapter-matchups">選出パターン</h2>
-        <MatchupPlans plans={meta.matchup_plans} heading="" />
+    {meta && ((meta.primary_selection?.members?.length ?? 0) > 0
+              || (meta.alternate_selection?.members?.length ?? 0) > 0
+              || meta.matchup_plans.length > 0) && (
+      <section class="chapter" aria-labelledby="chapter-selections">
+        <h2 id="chapter-selections">選出パターン</h2>
+        {(meta.primary_selection?.members?.length ?? 0) > 0 && (
+          <div class="selection-plan">
+            <h3>表選出</h3>
+            <p class="selection-members">
+              {meta.primary_selection!.members.join(' / ')}
+            </p>
+            {meta.primary_selection!.note && (
+              <p class="selection-note">{meta.primary_selection!.note}</p>
+            )}
+          </div>
+        )}
+        {(meta.alternate_selection?.members?.length ?? 0) > 0 && (
+          <div class="selection-plan">
+            <h3>裏選出</h3>
+            <p class="selection-members">
+              {meta.alternate_selection!.members.join(' / ')}
+            </p>
+            {meta.alternate_selection!.note && (
+              <p class="selection-note">{meta.alternate_selection!.note}</p>
+            )}
+          </div>
+        )}
+        {(meta.primary_selection?.members?.length ?? 0) === 0
+          && (meta.alternate_selection?.members?.length ?? 0) === 0
+          && meta.matchup_plans.length > 0 && (
+          <MatchupPlans plans={meta.matchup_plans} heading="" />
+        )}
       </section>
     )}
 
@@ -104,6 +128,7 @@ const unassignedCalcs = allCalcs.filter(
 
 <style>
   .team-article { display: flex; flex-direction: column; }
+  .team-article :global(p) { line-height: 1.95; }
   .hero { padding: 1rem 0 1rem 0; }
   .hero h1 { margin: 0.25rem 0; }
   .hero-date { margin: 0; }
@@ -125,11 +150,6 @@ const unassignedCalcs = allCalcs.filter(
     flex-direction: column;
     gap: 12px;
   }
-  .team-list .member-anchor {
-    color: inherit;
-    text-decoration: none;
-    display: block;
-  }
   @media (min-width: 720px) {
     .team-list {
       display: grid;
@@ -139,8 +159,26 @@ const unassignedCalcs = allCalcs.filter(
   }
   .concept-body {
     margin: 0;
-    line-height: 1.8;
     white-space: pre-wrap;
+  }
+  .selection-plan {
+    padding-bottom: 1.25rem;
+  }
+  .selection-plan + .selection-plan {
+    padding-top: 1rem;
+    border-top: 1px solid var(--c-border);
+  }
+  .selection-plan > h3 {
+    margin: 0 0 0.25rem 0;
+  }
+  .selection-members {
+    margin: 0.25rem 0;
+    font-weight: 600;
+  }
+  .selection-note {
+    margin: 0.5rem 0 0;
+    white-space: pre-wrap;
+    color: var(--c-text-muted);
   }
   .tags-footer {
     border-top: 1px solid var(--c-border);

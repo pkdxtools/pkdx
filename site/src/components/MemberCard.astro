@@ -7,12 +7,12 @@ interface Props {
 
 const { member } = Astro.props;
 const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
-  ['h', 'HP'],
-  ['a', 'こうげき'],
-  ['b', 'ぼうぎょ'],
-  ['c', 'とくこう'],
-  ['d', 'とくぼう'],
-  ['s', 'すばやさ'],
+  ['h', 'H'],
+  ['a', 'A'],
+  ['b', 'B'],
+  ['c', 'C'],
+  ['d', 'D'],
+  ['s', 'S'],
 ];
 const typeKeyMap: Record<string, string> = {
   ノーマル: 'normal', ほのお: 'fire', みず: 'water', でんき: 'electric',
@@ -22,6 +22,38 @@ const typeKeyMap: Record<string, string> = {
   はがね: 'steel', フェアリー: 'fairy',
 };
 const typeKey = (t: string) => typeKeyMap[t] ?? 'normal';
+
+type StatKey = 'h' | 'a' | 'b' | 'c' | 'd' | 's';
+const natureModMap: Record<string, { up: StatKey; down: StatKey }> = {
+  さみしがり: { up: 'a', down: 'b' },
+  いじっぱり: { up: 'a', down: 'c' },
+  やんちゃ:   { up: 'a', down: 'd' },
+  ゆうかん:   { up: 'a', down: 's' },
+  ずぶとい:   { up: 'b', down: 'a' },
+  わんぱく:   { up: 'b', down: 'c' },
+  のうてんき: { up: 'b', down: 'd' },
+  のんき:     { up: 'b', down: 's' },
+  ひかえめ:   { up: 'c', down: 'a' },
+  おっとり:   { up: 'c', down: 'b' },
+  うっかりや: { up: 'c', down: 'd' },
+  れいせい:   { up: 'c', down: 's' },
+  おだやか:   { up: 'd', down: 'a' },
+  おとなしい: { up: 'd', down: 'b' },
+  しんちょう: { up: 'd', down: 'c' },
+  なまいき:   { up: 'd', down: 's' },
+  おくびょう: { up: 's', down: 'a' },
+  せっかち:   { up: 's', down: 'b' },
+  ようき:     { up: 's', down: 'c' },
+  むじゃき:   { up: 's', down: 'd' },
+};
+const natureMod = member.nature ? natureModMap[member.nature] : undefined;
+const statMod = (key: StatKey): '' | 'stats-up' | 'stats-down' => {
+  if (!natureMod) return '';
+  if (key === natureMod.up) return 'stats-up';
+  if (key === natureMod.down) return 'stats-down';
+  return '';
+};
+
 const types = member.types ?? [];
 const primaryKey = typeKey(types[0] ?? 'ノーマル');
 const secondaryKey = typeKey(types[1] ?? types[0] ?? 'ノーマル');
@@ -50,28 +82,28 @@ const typeCssVars = isDual
     {member.stat_points && (
       <section class="stats-section">
         <h4>SP</h4>
-        <table class="stats-table">
-          <thead>
-            <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
-          </thead>
-          <tbody>
-            <tr>{statsOrder.map(([key]) => <td>{member.stat_points?.[key] ?? '-'}</td>)}</tr>
-          </tbody>
-        </table>
+        <div class="stats-grid">
+          {statsOrder.map(([key, label]) => (
+            <div class:list={['stats-cell', 'stats-head', statMod(key)]}>{label}</div>
+          ))}
+          {statsOrder.map(([key]) => (
+            <div class:list={['stats-cell', statMod(key)]}>{member.stat_points?.[key] ?? '-'}</div>
+          ))}
+        </div>
       </section>
     )}
 
     {member.actual_stats && (
       <section class="stats-section">
         <h4>実数値</h4>
-        <table class="stats-table">
-          <thead>
-            <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
-          </thead>
-          <tbody>
-            <tr>{statsOrder.map(([key]) => <td>{member.actual_stats?.[key] ?? '-'}</td>)}</tr>
-          </tbody>
-        </table>
+        <div class="stats-grid">
+          {statsOrder.map(([key, label]) => (
+            <div class:list={['stats-cell', 'stats-head', statMod(key)]}>{label}</div>
+          ))}
+          {statsOrder.map(([key]) => (
+            <div class:list={['stats-cell', statMod(key)]}>{member.actual_stats?.[key] ?? '-'}</div>
+          ))}
+        </div>
       </section>
     )}
 
@@ -164,6 +196,7 @@ const typeCssVars = isDual
     gap: 0.25rem 0.75rem;
     margin: 0;
     font-size: 0.9rem;
+    align-items: center;
   }
   .member-meta dt {
     color: rgba(255, 255, 255, 0.75);
@@ -180,15 +213,40 @@ const typeCssVars = isDual
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
-  .stats-table {
-    display: table;
-    width: 100%;
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
     font-size: 0.85rem;
-    margin: 0;
+    border: 1px solid var(--c-border);
   }
-  .stats-table th, .stats-table td {
+  .stats-cell {
     text-align: center;
     white-space: nowrap;
+    padding: 0.35rem 0.4rem;
+    border-right: 1px solid var(--c-border);
+    border-bottom: 1px solid var(--c-border);
+  }
+  .stats-cell:nth-child(6n) {
+    border-right: none;
+  }
+  .stats-cell:nth-last-child(-n+6) {
+    border-bottom: none;
+  }
+  .stats-cell.stats-head {
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 600;
+  }
+  .stats-cell.stats-up {
+    color: #ff7a7a;
+  }
+  .stats-cell.stats-up.stats-head {
+    color: #ff7a7a;
+  }
+  .stats-cell.stats-down {
+    color: #7aa7ff;
+  }
+  .stats-cell.stats-down.stats-head {
+    color: #7aa7ff;
   }
   .moves-list {
     list-style: none;

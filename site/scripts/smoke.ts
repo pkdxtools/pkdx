@@ -69,6 +69,8 @@ const contentChecks: ContentCheck[] = [
   { path: 'dist/teams/full/index.html', needle: 'damage-calcs', label: 'full team renders damage-calcs section' },
   { path: 'dist/teams/full/index.html', needle: 'defense-matrix', label: 'full team renders defense-matrix section' },
   { path: 'dist/teams/full/index.html', needle: 'coverage', label: 'full team renders coverage section' },
+  { path: 'dist/teams/full/index.html', needle: '表選出', label: 'full team renders primary selection section' },
+  { path: 'dist/teams/full/index.html', needle: '裏選出', label: 'full team renders alternate selection section' },
   { path: 'dist/teams/index.html', needle: 'ガブリアス軸構築', label: 'teams index lists full team' },
   { path: 'dist/teams/index.html', needle: '未公開の試作構築', label: 'teams index does NOT list drafty', expectedMissing: true } as ContentCheck & { expectedMissing: boolean },
 ];

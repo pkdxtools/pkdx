@@ -125,6 +125,14 @@ pub fn team_schema(
       ),
       "coverage": b.array(items=b.any()),
       "defense_matrix": b.array(items=b.any()),
+      // Phase 7-3 で決める「表選出」「裏選出」。
+      // primary = チームの基本選出、alternate = 表が対応しきれない相手へのサブプラン。
+      // 構造は FE 側 (site/src/lib/team-meta.ts SelectionPlan) で厳密に検証。
+      "primary_selection": b.any(),
+      "alternate_selection": b.any(),
+      // 旧スキーマ: 仮想敵ごとの選出カード。新スキーマでは primary/alternate に統合
+      // されたため emit しないが、既存の meta.json 取り込み互換のため読み込みは
+      // 受け付ける (空配列 or undefined 可)。
       "matchup_plans": b.array(items=b.any()),
       // Phase 7-6 で入力する自由記述の構築コンセプト (記事冒頭に掲載される)。
       // 未入力なら空文字のまま保存され、FE / writer ともに省略する。
@@ -137,7 +145,7 @@ pub fn team_schema(
     },
     required=[
       "battle_format", "mechanics", "version", "members", "coverage",
-      "defense_matrix", "matchup_plans",
+      "defense_matrix",
     ],
   )
 }

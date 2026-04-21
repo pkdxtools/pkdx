@@ -416,6 +416,37 @@ fn build_matchup_plans(
 }
 
 ///|
+/// 表選出 / 裏選出 を「### 表選出 | ### 裏選出」の 2 セクションに分けて emit。
+/// members が空 (未入力) の場合そのセクションは省略する。
+fn build_selection_plan_block(
+  plan : Json,
+  heading_text : String,
+) -> Array[@markdown.Block] {
+  let blocks : Array[@markdown.Block] = []
+  let members = json_string_array(plan, "members")
+  if members.length() == 0 {
+    return blocks
+  }
+  blocks.push(heading(3, heading_text))
+  let sep = " + "
+  let members_str = members.join(sep)
+  let items : Array[String] = ["選出: \{members_str}"]
+  blocks.push(bullet_list(items))
+  let note = json_string(plan, "note")
+  if note.length() > 0 {
+    blocks.push(
+      @markdown.Block::Paragraph(
+        children=[text(note)],
+        span=s,
+        leading_trivia=t,
+        trailing_trivia=t,
+      ),
+    )
+  }
+  blocks
+}
+
+///|
 pub fn build_team_document(
   json : Json,
   axis : String,
@@ -467,8 +498,37 @@ pub fn build_team_document(
     blocks.push(heading(2, "防御相性マトリクス"))
     blocks.push(build_defense_table(defense, members))
   }
+  let empty_obj : Json = ({} : Map[String, Json]).to_json()
+  let primary_sel = match json {
+    Object(root) =>
+      match root.get("primary_selection") {
+        Some(v) => v
+        None => empty_obj
+      }
+    _ => empty_obj
+  }
+  let alternate_sel = match json {
+    Object(root) =>
+      match root.get("alternate_selection") {
+        Some(v) => v
+        None => empty_obj
+      }
+    _ => empty_obj
+  }
+  let primary_blocks = build_selection_plan_block(primary_sel, "表選出")
+  let alternate_blocks = build_selection_plan_block(
+    alternate_sel, "裏選出",
+  )
+  if primary_blocks.length() > 0 || alternate_blocks.length() > 0 {
+    blocks.push(heading(2, "選出パターン"))
+    blocks.push_iter(primary_blocks.iter())
+    blocks.push_iter(alternate_blocks.iter())
+  }
+  // 旧 schema 互換: primary/alternate が空で matchup_plans があれば従来の
+  // 「vs 相手」カードを emit (既存 meta.json 取り込み向け)。
   let plans = json_array(json, "matchup_plans")
-  if plans.length() > 0 {
+  let has_new = primary_blocks.length() > 0 || alternate_blocks.length() > 0
+  if not(has_new) && plans.length() > 0 {
     blocks.push(heading(2, "選出パターン"))
     blocks.push_iter(build_matchup_plans(plans, battle_format).iter())
   }

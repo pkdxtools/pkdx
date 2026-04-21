@@ -44,13 +44,15 @@
     { "attack_type": "こおり", "multipliers": [2, 4], "best_switch": "-" },
     { "attack_type": "フェアリー", "multipliers": [2, 2], "best_switch": "-" }
   ],
-  "matchup_plans": [
-    {
-      "opponent": "パオジアン",
-      "selection": ["ガブリアス", "ハッサム", "ラプラス"],
-      "note": "ハッサムで氷を受けつつガブリアスで詰める。"
-    }
-  ],
+  "matchup_plans": [],
+  "primary_selection": {
+    "members": ["ガブリアス", "ハッサム", "ラプラス"],
+    "note": "ハッサムで氷を受けつつガブリアスで詰める基本選出。"
+  },
+  "alternate_selection": {
+    "members": ["ガブリアス", "ラプラス", "ハッサム"],
+    "note": "相手がパオジアン軸で一貫する場合はラプラスを先発にし、こごえるかぜで削りつつ受け回す。"
+  },
   "concept": "高速物理ドラゴンで先発制圧し、テラスタルで弱点を変換しながら積み切るスタン構築。",
   "damage_calcs": [
     {

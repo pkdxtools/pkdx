@@ -54,6 +54,11 @@ const matchupPlanSchema = z.object({
   note: z.string().optional(),
 });
 
+const selectionPlanSchema = z.object({
+  members: z.array(z.string()).default([]),
+  note: z.string().optional(),
+});
+
 const statLineSchema = z.object({
   name: z.string().nullish(),
   level: z.number().nullish(),
@@ -100,6 +105,8 @@ export const teamMetaSchema = z.object({
   coverage: z.array(coverageRowSchema).default([]),
   defense_matrix: z.array(defenseMatrixRowSchema).default([]),
   matchup_plans: z.array(matchupPlanSchema).default([]),
+  primary_selection: selectionPlanSchema.optional(),
+  alternate_selection: selectionPlanSchema.optional(),
   concept: z.string().optional(),
   damage_calcs: z.array(damageCalcSchema).default([]),
   updated_at: z.string().optional(),
@@ -111,6 +118,7 @@ export type TeamMember = z.infer<typeof memberSchema>;
 export type CoverageRow = z.infer<typeof coverageRowSchema>;
 export type DefenseMatrixRow = z.infer<typeof defenseMatrixRowSchema>;
 export type MatchupPlan = z.infer<typeof matchupPlanSchema>;
+export type SelectionPlan = z.infer<typeof selectionPlanSchema>;
 export type DamageCalc = z.infer<typeof damageCalcSchema>;
 
 export function parseTeamMeta(jsonText: string | null): TeamMeta | null {

@@ -36,7 +36,7 @@ test "validate_team_json: missing fields reports all errors" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(errors.length() >= 6, content="true")
+  inspect(errors.length() >= 5, content="true")
 }
 
 ///|

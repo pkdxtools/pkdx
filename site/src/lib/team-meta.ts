@@ -55,39 +55,39 @@ const matchupPlanSchema = z.object({
 });
 
 const statLineSchema = z.object({
-  name: z.string().optional(),
-  level: z.number().optional(),
-  ability: z.string().optional(),
-  item: z.string().optional(),
-  nature: z.string().optional(),
-  tera_type: z.string().optional(),
-  hp_stat: z.number().optional(),
-  stats: baseStatsSchema.partial().optional(),
-  ranks: z.record(z.string(), z.number()).optional(),
+  name: z.string().nullish(),
+  level: z.number().nullish(),
+  ability: z.string().nullish(),
+  item: z.string().nullish(),
+  nature: z.string().nullish(),
+  tera_type: z.string().nullish(),
+  hp_stat: z.number().nullish(),
+  stats: baseStatsSchema.partial().nullish(),
+  ranks: z.record(z.string(), z.number()).nullish(),
 });
 
 const damageCalcSchema = z.object({
-  title: z.string().optional(),
+  title: z.string().nullish(),
   attacker: statLineSchema,
   defender: statLineSchema,
   move: z.object({
     name: z.string(),
     type: z.string(),
     category: z.string(),
-    power: z.number().optional(),
+    power: z.number().nullish(),
   }),
   conditions: z
     .object({
-      weather: z.string().optional(),
-      field: z.string().optional(),
-      crit: z.boolean().optional(),
+      weather: z.string().nullish(),
+      field: z.string().nullish(),
+      crit: z.boolean().nullish(),
     })
-    .optional(),
+    .nullish(),
   rolls_percent: z.array(z.number()).default([]),
-  min_percent: z.number().optional(),
-  max_percent: z.number().optional(),
-  guaranteed_hits: z.number().optional(),
-  note: z.string().optional(),
+  min_percent: z.number().nullish(),
+  max_percent: z.number().nullish(),
+  guaranteed_hits: z.number().nullish(),
+  note: z.string().nullish(),
 });
 
 export const teamMetaSchema = z.object({
@@ -100,8 +100,7 @@ export const teamMetaSchema = z.object({
   coverage: z.array(coverageRowSchema).default([]),
   defense_matrix: z.array(defenseMatrixRowSchema).default([]),
   matchup_plans: z.array(matchupPlanSchema).default([]),
-  strengths: z.array(z.string()).default([]),
-  weaknesses: z.array(z.string()).default([]),
+  concept: z.string().optional(),
   damage_calcs: z.array(damageCalcSchema).default([]),
   updated_at: z.string().optional(),
   schema_version: z.number().optional(),

@@ -211,9 +211,7 @@ test "team_schema: member moves accuracy optional is accepted" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let errors = validate_with_schema(schema, json)

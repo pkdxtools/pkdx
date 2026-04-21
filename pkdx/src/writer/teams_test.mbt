@@ -21,9 +21,7 @@ test "build_team_document: deterministic markdown output" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": ["広い攻撃範囲"],
-    #|  "weaknesses": ["氷4倍弱点"]
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-06")
@@ -38,10 +36,8 @@ test "build_team_document: deterministic markdown output" {
   assert_true(md.contains("## 推奨技構成"))
   assert_true(md.contains("### ガブリアス"))
   assert_true(md.contains("| じしん |"))
-  assert_true(md.contains("## 構築の強み"))
-  assert_true(md.contains("広い攻撃範囲"))
-  assert_true(md.contains("## 構築の弱み・注意点"))
-  assert_true(md.contains("氷4倍弱点"))
+  assert_true(not(md.contains("## 構築の強み")))
+  assert_true(not(md.contains("## 構築の弱み・注意点")))
 }
 
 ///|
@@ -73,9 +69,7 @@ test "build_team_document: doubles matchup plans" {
     #|    "leads": ["テスト", "テスト2"],
     #|    "backs": ["テスト3"],
     #|    "reason": "先発で有利"
-    #|  }],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  }]
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "テスト", "2026-04-06")
@@ -108,9 +102,7 @@ test "build_team_document: members table uses メモ header" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-06")
@@ -144,9 +136,7 @@ test "build_team_document: memo with pipe is escaped" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-06")
@@ -200,9 +190,7 @@ test "build_team_document: memo with newlines collapsed to single row" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-06")
@@ -249,9 +237,7 @@ test "build_team_document: build data section hidden when no nature/sp/actual" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-06")
@@ -288,9 +274,7 @@ test "build_team_document: build data section renders when populated" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "マンムー", "2026-04-19")
@@ -350,9 +334,7 @@ test "build_team_document: build data row shows hyphen when member lacks fields"
     #|  ],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "マンムー", "2026-04-19")
@@ -389,9 +371,7 @@ test "build_team_document: coverage and defense matrix" {
     #|  "defense_matrix": [
     #|    {"atk_type":"みず","matchups":{"A":"2.0"},"best_switch":"A"}
     #|  ],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "A", "2026-04-06")
@@ -416,9 +396,7 @@ test "build_team_document: emits YAML frontmatter with core fields" {
     #|  ],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-20")
@@ -452,9 +430,7 @@ test "build_team_document: publish=true flips published to true" {
     #|  "members": [{"name":"ガブリアス","types":["ドラゴン","じめん"],"base_stats":{"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},"ability":"さめはだ","item":"こだわりハチマキ","role":"軸","moves":[{"name":"じしん","type":"じめん","category":"物理","power":100},{"name":"げきりん","type":"ドラゴン","category":"物理","power":120},{"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},{"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}]}],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-20", publish=true)
@@ -473,9 +449,7 @@ test "build_team_document: omits regulation when empty" {
     #|  "members": [{"name":"ガブリアス","types":["ドラゴン","じめん"],"base_stats":{"h":108,"a":130,"b":95,"c":80,"d":85,"s":102},"ability":"さめはだ","item":"こだわりハチマキ","role":"軸","moves":[{"name":"じしん","type":"じめん","category":"物理","power":100},{"name":"げきりん","type":"ドラゴン","category":"物理","power":120},{"name":"アイアンヘッド","type":"はがね","category":"物理","power":80},{"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}]}],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ガブリアス", "2026-04-20")
@@ -494,9 +468,7 @@ test "build_team_document: frontmatter survives parse round-trip" {
     #|  "members": [{"name":"ザシアン","types":["フェアリー"],"base_stats":{"h":92,"a":130,"b":115,"c":80,"d":115,"s":138},"ability":"ふとうのけん","item":"くちたけん","role":"軸","moves":[{"name":"きょじゅうざん","type":"はがね","category":"物理","power":110},{"name":"じゃれつく","type":"フェアリー","category":"物理","power":90},{"name":"せいなるつるぎ","type":"かくとう","category":"物理","power":90},{"name":"みがわり","type":"ノーマル","category":"変化","power":0}]}],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "ザシアン", "2026-04-20")
@@ -542,9 +514,7 @@ test "build_team_document: axis with double quotes is escaped" {
     #|  "members": [{"name":"テスト","types":["ノーマル"],"base_stats":{"h":100,"a":100,"b":100,"c":100,"d":100,"s":100},"ability":"テスト","item":"テスト","role":"軸","moves":[{"name":"a","type":"ノーマル","category":"物理","power":100},{"name":"b","type":"ノーマル","category":"物理","power":100},{"name":"c","type":"ノーマル","category":"物理","power":100},{"name":"d","type":"ノーマル","category":"物理","power":100}]}],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let doc = build_team_document(json, "\"トリッキー\"", "2026-04-20")

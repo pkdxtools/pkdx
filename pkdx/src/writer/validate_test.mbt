@@ -21,9 +21,7 @@ test "validate_team_json: valid minimal input" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": ["テスト"],
-    #|  "weaknesses": ["テスト"]
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   inspect(validate_team_json(json), content="Ok(())")
@@ -38,7 +36,7 @@ test "validate_team_json: missing fields reports all errors" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(errors.length() >= 8, content="true")
+  inspect(errors.length() >= 6, content="true")
 }
 
 ///|
@@ -64,9 +62,7 @@ test "validate_team_json: invalid battle_format" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": ["テスト"],
-    #|  "weaknesses": ["テスト"]
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let result = validate_team_json(json)
@@ -99,9 +95,7 @@ test "validate_team_json: wrong moves count" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let result = validate_team_json(json)
@@ -292,9 +286,7 @@ test "validate_team_json: with regulation field" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": ["テスト"],
-    #|  "weaknesses": ["テスト"]
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   inspect(validate_team_json(json), content="Ok(())")
@@ -324,9 +316,7 @@ test "validate_team_json: regulation null is valid (backward compat)" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": ["テスト"],
-    #|  "weaknesses": ["テスト"]
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   inspect(validate_team_json(json), content="Ok(())")
@@ -733,9 +723,7 @@ test "validate_team_json: legacy detection for long-key stat_points on member" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let result = validate_team_json(json)
@@ -774,9 +762,7 @@ test "validate_team_json: legacy schema detection for long stat keys" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
   let result = validate_team_json(json)

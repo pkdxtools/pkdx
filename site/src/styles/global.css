@@ -37,7 +37,7 @@
   --mult-0x: #64748b;
 
   --radius: 0.5rem;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+  --font-sans: var(--font-ibm-plex-sans-jp);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -55,7 +55,15 @@
 
 * { box-sizing: border-box; }
 
-html { font-family: var(--font-sans); color: var(--c-text); background: var(--c-bg); }
+html {
+  font-family: var(--font-sans);
+  color: var(--c-text);
+  background: var(--c-bg);
+  /* ページの長さでスクロールバーが出たり消えたりするとビューポート幅が揺れて
+     container の auto margin もずれる。遷移時の横位置ブレ防止のため常に
+     スクロールバー領域を確保する。 */
+  scrollbar-gutter: stable;
+}
 
 body { margin: 0; line-height: 1.65; }
 

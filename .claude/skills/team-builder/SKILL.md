@@ -51,7 +51,7 @@ bin/pkdx init-cache team > "$CACHE_FILE"
 生成されるJSONの特徴:
 - nullableフィールド（battle_format, mechanics, version）は `null`
 - 数値フィールド（phase）は `0`
-- 配列（members, coverage, defense_matrix, matchup_plans, strengths, weaknesses）は `[]`
+- 配列（members, coverage, defense_matrix, matchup_plans）は `[]`、`concept` は空文字
 
 Phase 0でユーザー選択値（battle_format, mechanics, version, regulation）をマージし、以降のPhaseで members を段階的に追加していく。
 
@@ -68,7 +68,7 @@ Phase 0でユーザー選択値（battle_format, mechanics, version, regulation�
 | 4 | + members[3-4]（受け補完メンバー） + defense_matrix + 各 role（ポケモンメモ） + 育成データ |
 | 5 | + 全メンバーの moves 確定 + members[5]（素早さ枠等） + 各 role（ポケモンメモ） + 育成データ |
 | 6 | + matchup_plans（仮想敵分析結果） |
-| 7 | + strengths + weaknesses + 全メンバーの item 確定 + 残スロットの role（ポケモンメモ） + 未確定メンバーの育成データ最終確定 |
+| 7 | + 全メンバーの item 確定 + 残スロットの role（ポケモンメモ） + 未確定メンバーの育成データ最終確定 + concept (構築コンセプト) |
 
 > **メモ**: `role` フィールドはスキーマ上は文字列だが、SKILL では役割（物理アタッカー / 受け / サポート 等）に限定せず、採用理由・型名・対面時の注意点などを自由に書ける**ポケモンメモ欄**として扱う（空文字可）。詳細は [メンバー確定共通: ポケモンメモ入力](#メンバー確定共通-ポケモンメモ入力) を参照。
 
@@ -378,7 +378,7 @@ Champions のチーム画面スクショ 2 枚を、次のメッセージにま�
 | 1 | この後どうしますか? | 動線 | メタ分析・選出方針も対話で構築(desc: Phase 6 (仮想敵分析) に進む), 保存のみ(desc: Phase 8 に直行。メタ分析は空欄) | false |
 
 - `メタ分析・選出方針も対話で構築` → Phase 6 に進む。team cache の members[0..5] は埋まっているので Phase 2-5 (軸分析・補完・素早さ・耐久) は skip
-- `保存のみ` → team cache の `matchup_plans` / `strengths` / `weaknesses` を空配列のまま、Phase 8 に直行。出力 md の冒頭に「⚠ メタ分析セクションは未記入。`/team-builder` で再開可能」と注記を入れる
+- `保存のみ` → team cache の `matchup_plans` を空配列、`concept` を空文字のまま Phase 8 に直行。出力 md の冒頭に「⚠ メタ分析セクションは未記入。`/team-builder` で再開可能」と注記を入れる
 
 ### 6. team cache 組み立て + 冪等性判定
 
@@ -902,6 +902,16 @@ megaメカニクスが有効な場合:
 - メガシンカ可能なメンバーを特定
 - メガ後の種族値・タイプ・特性を取得して比較
 - AskUserQuestionで確定
+
+### 7-6: 構築コンセプト入力
+
+Phase 6 の仮想敵分析 / Phase 7-2 のカバー率計算 / Phase 7-3 の選出パターン / Phase 7-4〜5 のテラス・メガ配分を踏まえて、**構築コンセプト**（構築の狙い・勝ち筋・想定した立ち回り）を自由記述で入力する。team cache の `concept` フィールドに書き込まれ、記事冒頭のチャプター「構築コンセプト」として掲載される。
+
+- ここまでの分析結果（Phase 7-3 の選出パターン、7-4/5 の意図、仮想敵ごとの勝ち筋）を要約し、ユーザーに提示
+- AskUserQuestion でそのまま使う / 追記する / 書き直す を選択させる
+- 空のまま進むのも許可（`concept: ""` のまま Phase 8 へ）。その場合 md にも FE にも「構築コンセプト」セクションは出ない
+
+ダメージ計算結果の追記 (`pkdx damage --attach-team`) は calc スキル側の責務で、team-builder では実行しない。`concept` はその計算を前提にした勝ち筋の言語化として使う想定。
 
 
 ---

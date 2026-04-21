@@ -10,7 +10,11 @@ const { slug, data } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const dateStr = data.date.toISOString().slice(0, 10);
 ---
-<a class="team-card" href={`${base}teams/${encodeURIComponent(slug)}/`}>
+<a
+  class="team-card"
+  href={`${base}teams/${encodeURIComponent(slug)}/`}
+  transition:name={`team-card-${slug}`}
+>
   <div class="card-head">
     <time datetime={dateStr} class="muted small">{dateStr}</time>
     <span class="axis">{data.axis}</span>

@@ -36,7 +36,7 @@ const unassignedCalcs = allCalcs.filter(
 );
 ---
 <BaseLayout title={entry.data.title} description={entry.data.description}>
-  <article class="team-article">
+  <article class="team-article" transition:name={`team-card-${entry.id}`}>
     <header class="hero">
       <p class="muted small hero-date">
         <time datetime={dateStr}>{dateStr}</time>
@@ -51,32 +51,22 @@ const unassignedCalcs = allCalcs.filter(
       {entry.data.description && <p class="hero-desc">{entry.data.description}</p>}
     </header>
 
+    {meta?.concept && (
+      <section class="chapter" aria-labelledby="chapter-concept">
+        <h2 id="chapter-concept">構築コンセプト</h2>
+        <p class="concept-body">{meta.concept}</p>
+      </section>
+    )}
+
     {members.length > 0 && (
       <section class="chapter" aria-labelledby="chapter-team">
         <h2 id="chapter-team">チーム</h2>
-        <div class="members-grid">
-          {members.map((m, i) => <MemberCard member={m} index={i} />)}
-        </div>
+        <article class="team-card">
+          {members.map((m) => <MemberCard member={m} />)}
+        </article>
 
         {meta && <CoverageChart rows={meta.coverage} />}
         {meta && <DefenseMatrix rows={meta.defense_matrix} members={meta.members} />}
-
-        {meta && (meta.strengths.length > 0 || meta.weaknesses.length > 0) && (
-          <section class="team-commentary">
-            {meta.strengths.length > 0 && (
-              <div class="commentary-col">
-                <h3>構築の強み</h3>
-                <ul>{meta.strengths.map((s) => <li>{s}</li>)}</ul>
-              </div>
-            )}
-            {meta.weaknesses.length > 0 && (
-              <div class="commentary-col">
-                <h3>構築の弱み・注意点</h3>
-                <ul>{meta.weaknesses.map((w) => <li>{w}</li>)}</ul>
-              </div>
-            )}
-          </section>
-        )}
 
         {unassignedCalcs.length > 0 && (
           <DamageCalcTable calcs={unassignedCalcs} heading="共通ダメージ計算" headingLevel={3} />
@@ -109,8 +99,8 @@ const unassignedCalcs = allCalcs.filter(
 </BaseLayout>
 
 <style>
-  .team-article { display: flex; flex-direction: column; gap: 1.5rem; }
-  .hero { padding: 1rem 0 0.5rem; border-bottom: 1px solid var(--c-border); }
+  .team-article { display: flex; flex-direction: column; }
+  .hero { padding: 1rem 0 1rem 0; }
   .hero h1 { margin: 0.25rem 0; }
   .hero-date { margin: 0; }
   .hero-meta { display: flex; gap: 0.25rem; flex-wrap: wrap; }
@@ -119,27 +109,43 @@ const unassignedCalcs = allCalcs.filter(
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    padding-bottom: 60px;
   }
   .chapter > h2 {
     margin: 0;
     padding-bottom: 0.25rem;
     border-bottom: 2px solid var(--c-accent);
   }
-  .members-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 1rem;
+  .team-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
   }
-  .team-commentary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 1rem;
+  .team-card :global(.member-card) {
+    padding: 8px 12px;
   }
-  .commentary-col h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
-  .commentary-col ul {
+  .team-card :global(.member-card + .member-card) {
+    margin-top: 1rem;
+  }
+  @media (min-width: 720px) {
+    .team-card {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      padding: 1rem;
+    }
+    .team-card :global(.member-card) {
+      padding: 1.25rem;
+    }
+    .team-card :global(.member-card + .member-card) {
+      margin-top: 0;
+    }
+  }
+  .concept-body {
     margin: 0;
-    padding-left: 1.25rem;
-    line-height: 1.6;
+    line-height: 1.8;
+    white-space: pre-wrap;
   }
   .tags-footer {
     border-top: 1px solid var(--c-border);

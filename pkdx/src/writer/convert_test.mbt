@@ -290,9 +290,7 @@ test "migrate_team_meta_v011: members long-key stats are shortened" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let old = @json.parse(old_src)
   let result = migrate_team_meta_v011(old)
@@ -340,9 +338,7 @@ test "migrate_team_meta_v011: idempotent on new-format input" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let input = @json.parse(src)
   let once = match migrate_team_meta_v011(input) {
@@ -382,9 +378,7 @@ test "migrate_team_meta_v011: passthrough for new-format team cache" {
     #|  }],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let input = @json.parse(src)
   let result = migrate_team_meta_v011(input)

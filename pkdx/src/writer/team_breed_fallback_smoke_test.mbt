@@ -71,9 +71,7 @@ test "team_breed_fallback_smoke: breed build subtree feeds into team member" {
     #|  "members": [],
     #|  "coverage": [],
     #|  "defense_matrix": [],
-    #|  "matchup_plans": [],
-    #|  "strengths": [],
-    #|  "weaknesses": []
+    #|  "matchup_plans": []
     #|}
   let team = @json.parse(team_src)
   guard team is Object(team_root) else { fail("team parse failed") }

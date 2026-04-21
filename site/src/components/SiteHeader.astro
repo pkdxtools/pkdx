@@ -1,0 +1,27 @@
+---
+import { loadSiteConfig } from '../lib/site-config';
+
+const config = loadSiteConfig();
+const base = import.meta.env.BASE_URL;
+---
+<header class="site-header container">
+  <nav>
+    <a href={base} class="site-name"><strong>{config.site_name}</strong></a>
+    <span class="links">
+      <a href={`${base}teams/`}>構築</a>
+      <a href={`${base}blog/`}>ブログ</a>
+    </span>
+  </nav>
+</header>
+
+<style>
+  .site-header nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--c-border);
+    margin-bottom: 1.5rem;
+  }
+  .site-header nav .links a { margin-left: 1rem; }
+</style>

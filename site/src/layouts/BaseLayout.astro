@@ -1,5 +1,8 @@
 ---
 import '../styles/global.css';
+import { Font } from 'astro:assets';
+import { ClientRouter } from 'astro:transitions';
+import SiteHeader from '../components/SiteHeader.astro';
 import { loadSiteConfig } from '../lib/site-config';
 
 interface Props {
@@ -20,36 +23,21 @@ const base = import.meta.env.BASE_URL;
     <title>{pageTitle}</title>
     {description && <meta name="description" content={description} />}
     <link rel="icon" href={`${base}favicon.svg`} />
+    <Font cssVariable="--font-ibm-plex-sans-jp" preload />
+    <ClientRouter />
   </head>
   <body>
-    <header class="container">
-      <nav>
-        <a href={base} class="site-name"><strong>{config.site_name}</strong></a>
-        <span class="links">
-          <a href={`${base}teams/`}>構築</a>
-          <a href={`${base}blog/`}>ブログ</a>
-        </span>
-      </nav>
-    </header>
+    <SiteHeader transition:persist />
 
     <main class="container">
       <slot />
     </main>
 
-    <footer class="container muted">
+    <footer class="container muted" transition:persist>
       {config.author ? <small>© {config.author}</small> : <small>pkdx teams</small>}
     </footer>
 
     <style>
-      nav {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid var(--c-border);
-        margin-bottom: 1.5rem;
-      }
-      nav .links a { margin-left: 1rem; }
       footer { border-top: 1px solid var(--c-border); margin-top: 3rem; padding-top: 1rem; }
     </style>
   </body>

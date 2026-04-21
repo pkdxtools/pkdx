@@ -1,13 +1,11 @@
 ---
-import TypeBadge from './TypeBadge.astro';
 import type { TeamMember } from '../lib/team-meta';
 
 interface Props {
   member: TeamMember;
-  index: number;
 }
 
-const { member, index } = Astro.props;
+const { member } = Astro.props;
 const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
   ['h', 'HP'],
   ['a', 'こうげき'],
@@ -16,15 +14,29 @@ const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
   ['d', 'とくぼう'],
   ['s', 'すばやさ'],
 ];
+const typeKeyMap: Record<string, string> = {
+  ノーマル: 'normal', ほのお: 'fire', みず: 'water', でんき: 'electric',
+  くさ: 'grass', こおり: 'ice', かくとう: 'fighting', どく: 'poison',
+  じめん: 'ground', ひこう: 'flying', エスパー: 'psychic', むし: 'bug',
+  いわ: 'rock', ゴースト: 'ghost', ドラゴン: 'dragon', あく: 'dark',
+  はがね: 'steel', フェアリー: 'fairy',
+};
+const typeKey = (t: string) => typeKeyMap[t] ?? 'normal';
+const types = member.types ?? [];
+const primaryKey = typeKey(types[0] ?? 'ノーマル');
+const secondaryKey = typeKey(types[1] ?? types[0] ?? 'ノーマル');
+const isDual = types.length >= 2 && types[0] !== types[1];
+const typeCssVars = isDual
+  ? `--type-primary: var(--type-${primaryKey}); --type-secondary: var(--type-${secondaryKey});`
+  : `--type-primary: var(--type-${primaryKey});`;
 ---
-<article class="member-card">
+<article
+  class:list={['member-card', isDual ? 'dual-type' : 'single-type']}
+  style={typeCssVars}
+>
   <header class="member-head">
     <div class="member-title">
-      <span class="member-index">#{index + 1}</span>
       <h3 class="member-name">{member.name}</h3>
-    </div>
-    <div class="member-types">
-      {member.types.map((t) => <TypeBadge type={t} />)}
     </div>
   </header>
 
@@ -67,10 +79,8 @@ const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
       <h4>技構成</h4>
       <ul class="moves-list">
         {member.moves.map((m) => (
-          <li>
+          <li style={`border-left-color: var(--type-${typeKey(m.type)})`}>
             <span class="move-name">{m.name}</span>
-            <TypeBadge type={m.type} size="sm" />
-            <span class="move-meta muted">{m.category}{m.power ? ` / ${m.power}` : ''}</span>
           </li>
         ))}
       </ul>
@@ -80,13 +90,36 @@ const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
 
 <style>
   .member-card {
-    background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .member-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.3;
+    z-index: -1;
+  }
+  /* `\` ライン (135deg = 左上→右下) で色を区切る。複合はくっきり四角構成、
+     単タイプは下三角のみ色 + 上に向かって blur させる。 */
+  .member-card.dual-type::before {
+    background: linear-gradient(
+      135deg,
+      var(--type-primary) 0 48%,
+      var(--type-secondary) 52% 100%
+    );
+  }
+  .member-card.single-type::before {
+    background: linear-gradient(
+      135deg,
+      transparent 0 40%,
+      var(--type-primary) 80% 100%
+    );
   }
   .member-head {
     display: flex;
@@ -100,18 +133,9 @@ const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
     align-items: baseline;
     gap: 0.5rem;
   }
-  .member-index {
-    color: var(--c-text-muted);
-    font-variant-numeric: tabular-nums;
-    font-size: 0.9rem;
-  }
   .member-name {
     margin: 0;
     font-size: 1.3rem;
-  }
-  .member-types {
-    display: flex;
-    gap: 0.3rem;
   }
   .member-meta {
     display: grid;
@@ -156,8 +180,8 @@ const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
     gap: 0.5rem;
     padding: 0.3rem 0.5rem;
     background: var(--c-bg);
-    border-radius: 4px;
+    border-left: 2px solid transparent;
   }
-  .move-name { font-weight: 600; flex: 1; }
+  .move-name { flex: 1; }
   .move-meta { font-size: 0.75rem; white-space: nowrap; }
 </style>

@@ -12,7 +12,7 @@ interface Props {
 const { member, index, calcs } = Astro.props;
 ---
 <section class="member-detail" id={`member-${index + 1}`}>
-  <MemberCard member={member} index={index} />
+  <MemberCard member={member} />
 
   {member.role && (
     <div class="member-detail-body">
@@ -38,6 +38,9 @@ const { member, index, calcs } = Astro.props;
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
+  }
+  .member-detail :global(.member-card) {
+    padding: 8px 12px;
   }
   .member-detail-body p {
     margin: 0;

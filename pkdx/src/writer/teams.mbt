@@ -437,6 +437,18 @@ pub fn build_team_document(
       "ゲームバージョン: \{version}",
     ]),
   )
+  let concept = json_string(json, "concept")
+  if concept.length() > 0 {
+    blocks.push(heading(2, "構築コンセプト"))
+    blocks.push(
+      @markdown.Block::Paragraph(
+        children=[text(concept)],
+        span=s,
+        leading_trivia=t,
+        trailing_trivia=t,
+      ),
+    )
+  }
   blocks.push(heading(2, "チーム"))
   blocks.push(build_members_table(members))
   if has_any_build_data(members) {
@@ -460,17 +472,6 @@ pub fn build_team_document(
     blocks.push(heading(2, "選出パターン"))
     blocks.push_iter(build_matchup_plans(plans, battle_format).iter())
   }
-  let strengths = json_string_array(json, "strengths")
-  if strengths.length() > 0 {
-    blocks.push(heading(2, "構築の強み"))
-    blocks.push(bullet_list(strengths))
-  }
-  let weaknesses = json_string_array(json, "weaknesses")
-  if weaknesses.length() > 0 {
-    blocks.push(heading(2, "構築の弱み・注意点"))
-    blocks.push(bullet_list(weaknesses))
-  }
-
   {
     frontmatter: Some(build_team_frontmatter(json, axis, date, publish~)),
     children: blocks,

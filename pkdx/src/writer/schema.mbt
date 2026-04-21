@@ -126,8 +126,9 @@ pub fn team_schema(
       "coverage": b.array(items=b.any()),
       "defense_matrix": b.array(items=b.any()),
       "matchup_plans": b.array(items=b.any()),
-      "strengths": b.array(items=b.string()),
-      "weaknesses": b.array(items=b.string()),
+      // Phase 7-6 で入力する自由記述の構築コンセプト (記事冒頭に掲載される)。
+      // 未入力なら空文字のまま保存され、FE / writer ともに省略する。
+      "concept": b.string(),
       // `pkdx damage --attach-team` が追記する計算スナップショット。
       // ブログ表示用で skill フローでは読まないため schema は緩く (any[])
       // 保持する — 構造は site/src/lib/team-meta.ts (DamageCalc) 側で検証される。
@@ -136,7 +137,7 @@ pub fn team_schema(
     },
     required=[
       "battle_format", "mechanics", "version", "members", "coverage",
-      "defense_matrix", "matchup_plans", "strengths", "weaknesses",
+      "defense_matrix", "matchup_plans",
     ],
   )
 }

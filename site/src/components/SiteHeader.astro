@@ -1,5 +1,6 @@
 ---
 import { loadSiteConfig } from '../lib/site-config';
+import ThemeToggle from './ThemeToggle.astro';
 
 const config = loadSiteConfig();
 const base = import.meta.env.BASE_URL;
@@ -7,9 +8,12 @@ const base = import.meta.env.BASE_URL;
 <header class="site-header container">
   <nav>
     <a href={base} class="site-name"><strong>{config.site_name}</strong></a>
-    <span class="links">
-      <a href={`${base}teams/`}>構築</a>
-      <a href={`${base}blog/`}>ブログ</a>
+    <span class="actions">
+      <span class="links">
+        <a href={`${base}teams/`}>構築</a>
+        <a href={`${base}blog/`}>ブログ</a>
+      </span>
+      <ThemeToggle />
     </span>
   </nav>
 </header>
@@ -22,6 +26,13 @@ const base = import.meta.env.BASE_URL;
     padding: 0.75rem 0;
     border-bottom: 1px solid var(--c-border);
     margin-bottom: 1.5rem;
+  }
+  .site-header nav a,
+  .site-header nav a:hover { color: var(--c-text); }
+  .site-header nav .actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
   }
   .site-header nav .links a { margin-left: 1rem; }
 </style>

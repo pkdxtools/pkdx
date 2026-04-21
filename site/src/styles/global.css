@@ -1,15 +1,6 @@
 :root {
   color-scheme: light dark;
 
-  --c-bg: #fafafa;
-  --c-surface: #ffffff;
-  --c-border: #e4e4e7;
-  --c-text: #18181b;
-  --c-text-muted: #71717a;
-  --c-accent: #2563eb;
-  --c-accent-bg: #eff6ff;
-  --c-danger: #dc2626;
-
   --type-normal: #a8a77a;
   --type-fire: #ee8130;
   --type-water: #6390f0;
@@ -41,16 +32,28 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --c-bg: #0f0f10;
-    --c-surface: #1a1a1d;
-    --c-border: #3f3f46;
-    --c-text: #fafafa;
-    --c-text-muted: #a1a1aa;
-    --c-accent: #60a5fa;
-    --c-accent-bg: #1e3a8a33;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --c-bg: #fafafa;
+  --c-surface: #ffffff;
+  --c-border: #e4e4e7;
+  --c-text: #18181b;
+  --c-text-muted: #71717a;
+  --c-accent: #2563eb;
+  --c-accent-bg: #eff6ff;
+  --c-danger: #dc2626;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-bg: #0f0f10;
+  --c-surface: #1a1a1d;
+  --c-border: #3f3f46;
+  --c-text: #fafafa;
+  --c-text-muted: #a1a1aa;
+  --c-accent: #60a5fa;
+  --c-accent-bg: #1e3a8a33;
+  --c-danger: #dc2626;
 }
 
 * { box-sizing: border-box; }
@@ -63,6 +66,7 @@ html {
      container の auto margin もずれる。遷移時の横位置ブレ防止のため常に
      スクロールバー領域を確保する。 */
   scrollbar-gutter: stable;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 body { margin: 0; line-height: 1.65; }

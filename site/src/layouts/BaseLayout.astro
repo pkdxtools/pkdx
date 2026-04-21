@@ -20,6 +20,27 @@ const base = import.meta.env.BASE_URL;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>
+      (() => {
+        const storageKey = 'theme';
+        const root = document.documentElement;
+        const apply = (theme) => {
+          root.dataset.theme = theme;
+          root.style.colorScheme = theme;
+        };
+        const resolve = () => {
+          const saved = localStorage.getItem(storageKey);
+          if (saved === 'light' || saved === 'dark') return saved;
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        };
+        apply(resolve());
+        window.__applyTheme = apply;
+        window.__resolveTheme = resolve;
+      })();
+      document.addEventListener('astro:after-swap', () => {
+        window.__applyTheme(window.__resolveTheme());
+      });
+    </script>
     <title>{pageTitle}</title>
     {description && <meta name="description" content={description} />}
     <link rel="icon" href={`${base}favicon.svg`} />

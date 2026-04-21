@@ -38,9 +38,12 @@ const dateStr = data.date.toISOString().slice(0, 10);
   }
   .team-card:hover {
     text-decoration: none;
-    color: var(--c-accent);
+    color: var(--c-text);
   }
-  .team-card:hover .card-title { color: var(--c-accent); }
+  .team-card:hover .card-title {
+    color: var(--c-text);
+    text-decoration: underline;
+  }
   .team-card:last-child { border-bottom: none; }
   .card-head {
     display: flex;

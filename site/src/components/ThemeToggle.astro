@@ -1,0 +1,82 @@
+---
+---
+<button type="button" class="theme-toggle" role="switch" aria-label="テーマ切り替え" aria-checked="false">
+  <span class="icon icon-sun" aria-hidden="true">☀</span>
+  <span class="icon icon-moon" aria-hidden="true">☾</span>
+  <span class="thumb" aria-hidden="true"></span>
+</button>
+
+<script is:inline>
+  (() => {
+    const syncAria = (btn) => {
+      btn.setAttribute('aria-checked', document.documentElement.dataset.theme === 'dark' ? 'true' : 'false');
+    };
+    const bind = (btn) => {
+      if (btn.dataset.themeBound) return;
+      btn.dataset.themeBound = '1';
+      syncAria(btn);
+      btn.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        window.__applyTheme(next);
+        syncAria(btn);
+      });
+    };
+    document.querySelectorAll('.theme-toggle').forEach(bind);
+    document.addEventListener('astro:page-load', () => {
+      document.querySelectorAll('.theme-toggle').forEach((btn) => {
+        bind(btn);
+        syncAria(btn);
+      });
+    });
+    document.addEventListener('astro:after-swap', () => {
+      document.querySelectorAll('.theme-toggle').forEach(syncAria);
+    });
+  })();
+</script>
+
+<style>
+  .theme-toggle {
+    position: relative;
+    width: 44px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--c-border);
+    border-radius: 999px;
+    background: var(--c-accent-bg);
+    cursor: pointer;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+  .theme-toggle:hover { border-color: var(--c-accent); }
+
+  .icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    line-height: 1;
+    color: var(--c-text);
+    pointer-events: none;
+  }
+  .icon-sun { left: 5px; }
+  .icon-moon { right: 5px; }
+
+  .thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 50%;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.3s ease,
+                border-color 0.3s ease;
+  }
+  :global(:root[data-theme="dark"]) .thumb {
+    transform: translateX(22px);
+  }
+</style>

@@ -35,7 +35,7 @@ export function globWithPublishedAt(options: GlobArgs) {
     async load(ctx: Parameters<typeof base.load>[0]) {
       await base.load(ctx);
       const rootDir = fileURLToPath(ctx.config.root);
-      for (const [, entry] of ctx.store.entries()) {
+      for (const [id, entry] of ctx.store.entries()) {
         const data = entry.data as Record<string, unknown>;
         if (data.publishedAt) continue;
         if (data.published === false) continue;
@@ -43,10 +43,15 @@ export function globWithPublishedAt(options: GlobArgs) {
         const abs = resolve(rootDir, entry.filePath);
         const iso = gitFirstCommitIso(abs);
         if (!iso) continue;
-        ctx.store.set({
-          ...entry,
-          data: { ...data, publishedAt: iso },
+        const merged = { ...data, publishedAt: iso };
+        const validated = await ctx.parseData({
+          id,
+          data: merged,
+          filePath: entry.filePath,
         });
+        // digest を外さないと「同じ digest なら skip」で再 set が無視される
+        const { digest: _drop, ...rest } = entry;
+        ctx.store.set({ ...rest, data: validated });
       }
     },
   };

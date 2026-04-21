@@ -1,24 +1,24 @@
 :root {
   color-scheme: light dark;
 
-  --type-normal: #a8a77a;
-  --type-fire: #ee8130;
-  --type-water: #6390f0;
-  --type-electric: #f7d02c;
-  --type-grass: #7ac74c;
-  --type-ice: #96d9d6;
-  --type-fighting: #c22e28;
-  --type-poison: #a33ea1;
-  --type-ground: #e2bf65;
-  --type-flying: #a98ff3;
-  --type-psychic: #f95587;
-  --type-bug: #a6b91a;
-  --type-rock: #b6a136;
-  --type-ghost: #735797;
-  --type-dragon: #6f35fc;
+  --type-normal: #aea886;
+  --type-fire: #f45c19;
+  --type-water: #4a96d6;
+  --type-electric: #eaa317;
+  --type-grass: #28b25c;
+  --type-ice: #45a9c0;
+  --type-fighting: #9a3d3e;
+  --type-poison: #8f5b98;
+  --type-ground: #916d3c;
+  --type-flying: #7e9ecf;
+  --type-psychic: #d56d8b;
+  --type-bug: #989001;
+  --type-rock: #878052;
+  --type-ghost: #555fa4;
+  --type-dragon: #454ba6;
   --type-dark: #2f2a28;
-  --type-steel: #b7b7ce;
-  --type-fairy: #d685ad;
+  --type-steel: #9b9b9b;
+  --type-fairy: #ffbbff;
 
   --mult-4x: #b91c1c;
   --mult-2x: #f97316;
@@ -66,6 +66,7 @@ html {
      container の auto margin もずれる。遷移時の横位置ブレ防止のため常に
      スクロールバー領域を確保する。 */
   scrollbar-gutter: stable;
+  scroll-behavior: smooth;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 

@@ -62,7 +62,11 @@ const unassignedCalcs = allCalcs.filter(
       <section class="chapter" aria-labelledby="chapter-team">
         <h2 id="chapter-team">チーム</h2>
         <div class="team-list">
-          {members.map((m) => <MemberCard member={m} />)}
+          {members.map((m, i) => (
+            <a class="member-anchor" href={`#member-${i + 1}`}>
+              <MemberCard member={m} />
+            </a>
+          ))}
         </div>
 
         {meta && <CoverageChart rows={meta.coverage} />}
@@ -114,18 +118,23 @@ const unassignedCalcs = allCalcs.filter(
   .chapter > h2 {
     margin: 0;
     padding-bottom: 0.25rem;
-    border-bottom: 2px solid var(--c-accent);
+    border-bottom: 2px solid var(--c-text);
   }
   .team-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+  }
+  .team-list .member-anchor {
+    color: inherit;
+    text-decoration: none;
+    display: block;
   }
   @media (min-width: 720px) {
     .team-list {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 12px;
     }
   }
   .concept-body {

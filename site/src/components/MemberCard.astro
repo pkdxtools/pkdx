@@ -34,70 +34,75 @@ const typeCssVars = isDual
   class:list={['member-card', isDual ? 'dual-type' : 'single-type']}
   style={typeCssVars}
 >
-  <header class="member-head">
-    <div class="member-title">
-      <h3 class="member-name">{member.name}</h3>
-    </div>
-  </header>
+  <div class="member-inner">
+    <header class="member-head">
+      <div class="member-title">
+        <h3 class="member-name">{member.name}</h3>
+      </div>
+    </header>
 
-  <dl class="member-meta">
-    {member.ability && <><dt>特性</dt><dd>{member.ability}</dd></>}
-    {member.item && <><dt>持ち物</dt><dd>{member.item}</dd></>}
-    {member.nature && <><dt>性格</dt><dd>{member.nature}</dd></>}
-  </dl>
+    <dl class="member-meta">
+      {member.ability && <><dt>特性</dt><dd class="meta-strong">{member.ability}</dd></>}
+      {member.item && <><dt>持ち物</dt><dd class="meta-strong">{member.item}</dd></>}
+      {member.nature && <><dt>性格</dt><dd>{member.nature}</dd></>}
+    </dl>
 
-  {member.stat_points && (
-    <section class="stats-section">
-      <h4>SP</h4>
-      <table class="stats-table">
-        <thead>
-          <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
-        </thead>
-        <tbody>
-          <tr>{statsOrder.map(([key]) => <td>{member.stat_points?.[key] ?? '-'}</td>)}</tr>
-        </tbody>
-      </table>
-    </section>
-  )}
+    {member.stat_points && (
+      <section class="stats-section">
+        <h4>SP</h4>
+        <table class="stats-table">
+          <thead>
+            <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
+          </thead>
+          <tbody>
+            <tr>{statsOrder.map(([key]) => <td>{member.stat_points?.[key] ?? '-'}</td>)}</tr>
+          </tbody>
+        </table>
+      </section>
+    )}
 
-  {member.actual_stats && (
-    <section class="stats-section">
-      <h4>実数値</h4>
-      <table class="stats-table">
-        <thead>
-          <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
-        </thead>
-        <tbody>
-          <tr>{statsOrder.map(([key]) => <td>{member.actual_stats?.[key] ?? '-'}</td>)}</tr>
-        </tbody>
-      </table>
-    </section>
-  )}
+    {member.actual_stats && (
+      <section class="stats-section">
+        <h4>実数値</h4>
+        <table class="stats-table">
+          <thead>
+            <tr>{statsOrder.map(([, label]) => <th>{label}</th>)}</tr>
+          </thead>
+          <tbody>
+            <tr>{statsOrder.map(([key]) => <td>{member.actual_stats?.[key] ?? '-'}</td>)}</tr>
+          </tbody>
+        </table>
+      </section>
+    )}
 
-  {member.moves.length > 0 && (
-    <section class="moves-section">
-      <h4>技構成</h4>
-      <ul class="moves-list">
-        {member.moves.map((m) => (
-          <li style={`border-left-color: var(--type-${typeKey(m.type)})`}>
-            <span class="move-name">{m.name}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )}
+    {member.moves.length > 0 && (
+      <section class="moves-section">
+        <h4>技構成</h4>
+        <ul class="moves-list">
+          {member.moves.map((m) => (
+            <li style={`border-left-color: var(--type-${typeKey(m.type)})`}>
+              <span class="move-name">{m.name}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </div>
 </article>
 
 <style>
   .member-card {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
     overflow: hidden;
     isolation: isolate;
-    padding-left: 12px;
-    padding-right: 12px;
+    padding: 8px;
+  }
+  .member-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: #000;
+    padding: 8px;
   }
   .member-card::before {
     content: '';
@@ -134,6 +139,7 @@ const typeCssVars = isDual
     display: flex;
     align-items: baseline;
     gap: 0.5rem;
+    width: 100%;
   }
   .member-name {
     margin: 0;
@@ -151,6 +157,9 @@ const typeCssVars = isDual
     font-size: 0.8rem;
   }
   .member-meta dd { margin: 0; }
+  .member-meta dd.meta-strong {
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  }
   .stats-section h4, .moves-section h4 {
     margin: 0 0 0.35rem 0;
     font-size: 0.85rem;
@@ -181,7 +190,7 @@ const typeCssVars = isDual
     align-items: center;
     gap: 0.5rem;
     padding: 0.3rem 0.5rem;
-    background: var(--c-bg);
+    background: rgba(255, 255, 255, 0.1);
     border-left: 2px solid transparent;
   }
   .move-name { flex: 1; }

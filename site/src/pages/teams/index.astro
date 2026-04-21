@@ -13,16 +13,15 @@ const teams = (await getCollection('teams'))
   {teams.length === 0 ? (
     <p class="empty-state">まだ構築記事がありません。<code>pkdx write teams</code> で生成した MD が <code>box/teams/</code> に入ると自動で公開されます。</p>
   ) : (
-    <div class="grid">
+    <div class="list">
       {teams.map((entry) => <TeamCard slug={entry.id} data={entry.data} />)}
     </div>
   )}
 </BaseLayout>
 
 <style>
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
+  .list {
+    display: flex;
+    flex-direction: column;
   }
 </style>

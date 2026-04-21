@@ -1,5 +1,4 @@
 ---
-import TypeBadge from './TypeBadge.astro';
 import type { DamageCalc } from '../lib/team-meta';
 
 interface Props {
@@ -62,39 +61,47 @@ function formatConditions(conditions: DamageCalc['conditions']): string[] {
           <div class="calc-header">
             <div class="calc-side">
               <span class="side-label">攻撃</span>
-              <strong>{calc.attacker.name ?? '-'}</strong>
-              {calc.attacker.tera_type && (
-                <span class="tera">テラス: {calc.attacker.tera_type}</span>
-              )}
-              {(calc.attacker.ability || calc.attacker.nature) && (
-                <span class="muted small">
-                  {[calc.attacker.ability, calc.attacker.nature].filter(Boolean).join(' / ')}
-                </span>
-              )}
-              {calc.attacker.item && <span class="muted small">@ {calc.attacker.item}</span>}
-              {attackerRanks && <span class="muted small">ランク: {attackerRanks}</span>}
+              <strong class="side-name">{calc.attacker.name ?? '-'}</strong>
+              <div class="side-detail">
+                {calc.attacker.tera_type && (
+                  <span class="tera">テラス: {calc.attacker.tera_type}</span>
+                )}
+                {(calc.attacker.ability || calc.attacker.nature) && (
+                  <span class="muted small">
+                    {[calc.attacker.ability, calc.attacker.nature].filter(Boolean).join(' / ')}
+                  </span>
+                )}
+                {calc.attacker.item && <span class="muted small">@ {calc.attacker.item}</span>}
+                {attackerRanks && <span class="muted small">ランク: {attackerRanks}</span>}
+              </div>
             </div>
             <div class="calc-move">
-              <TypeBadge type={calc.move.type} size="sm" />
-              <span class="move-name">{calc.move.name}</span>
-              <span class="muted small">{calc.move.category}{calc.move.power ? ` / 威力${calc.move.power}` : ''}</span>
+              <span class="side-label" aria-hidden="true">&nbsp;</span>
+              <span class="side-name move-name">{calc.move.name}</span>
+              <div class="side-detail">
+                <span class="muted small">
+                  {calc.move.type} / {calc.move.category}{calc.move.power ? ` / 威力${calc.move.power}` : ''}
+                </span>
+              </div>
             </div>
             <div class="calc-side">
               <span class="side-label">防御</span>
-              <strong>{calc.defender.name ?? '-'}</strong>
-              {calc.defender.tera_type && (
-                <span class="tera">テラス: {calc.defender.tera_type}</span>
-              )}
-              {(calc.defender.ability || calc.defender.nature) && (
-                <span class="muted small">
-                  {[calc.defender.ability, calc.defender.nature].filter(Boolean).join(' / ')}
-                </span>
-              )}
-              {calc.defender.item && <span class="muted small">@ {calc.defender.item}</span>}
-              {calc.defender.hp_stat != null && (
-                <span class="muted small">HP実数値: {calc.defender.hp_stat}</span>
-              )}
-              {defenderRanks && <span class="muted small">ランク: {defenderRanks}</span>}
+              <strong class="side-name">{calc.defender.name ?? '-'}</strong>
+              <div class="side-detail">
+                {calc.defender.tera_type && (
+                  <span class="tera">テラス: {calc.defender.tera_type}</span>
+                )}
+                {(calc.defender.ability || calc.defender.nature) && (
+                  <span class="muted small">
+                    {[calc.defender.ability, calc.defender.nature].filter(Boolean).join(' / ')}
+                  </span>
+                )}
+                {calc.defender.item && <span class="muted small">@ {calc.defender.item}</span>}
+                {calc.defender.hp_stat != null && (
+                  <span class="muted small">HP実数値: {calc.defender.hp_stat}</span>
+                )}
+                {defenderRanks && <span class="muted small">ランク: {defenderRanks}</span>}
+              </div>
             </div>
           </div>
 
@@ -149,25 +156,34 @@ function formatConditions(conditions: DamageCalc['conditions']): string[] {
   .calc-header {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    gap: 0.75rem;
-    align-items: center;
+    grid-template-rows: auto auto auto;
+    column-gap: 0.75rem;
+    row-gap: 0.15rem;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--c-border);
   }
-  .calc-side { display: flex; flex-direction: column; gap: 0.15rem; }
+  /* 攻撃 / 技 / 防御 の 3 カラムそれぞれを親 grid の 3 行に subgrid で
+     揃える。結果、side-label / name / detail がカラム横断で同じ行に揃う。 */
+  .calc-side,
+  .calc-move {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: 1 / span 3;
+    row-gap: 0.15rem;
+  }
   .calc-side:last-child { text-align: right; }
+  .calc-move { text-align: center; padding: 0 0.5rem; }
   .side-label {
     font-size: 0.7rem;
     color: var(--c-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
-  .calc-move {
+  .side-name { line-height: 1.3; }
+  .side-detail {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.2rem;
-    padding: 0 0.5rem;
+    gap: 0.15rem;
   }
   .calc-conditions {
     margin: 0.5rem 0 0;
@@ -214,7 +230,13 @@ function formatConditions(conditions: DamageCalc['conditions']): string[] {
     margin: 0;
     white-space: nowrap;
   }
-  .rolls-table th, .rolls-table td { text-align: center; padding: 0.25rem; }
+  .rolls-table th, .rolls-table td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 0 0.25rem;
+    height: 2rem;
+    line-height: 2rem;
+  }
   .calc-note {
     margin: 0.5rem 0 0;
     font-size: 0.85rem;

@@ -61,9 +61,9 @@ const unassignedCalcs = allCalcs.filter(
     {members.length > 0 && (
       <section class="chapter" aria-labelledby="chapter-team">
         <h2 id="chapter-team">チーム</h2>
-        <article class="team-card">
+        <div class="team-list">
           {members.map((m) => <MemberCard member={m} />)}
-        </article>
+        </div>
 
         {meta && <CoverageChart rows={meta.coverage} />}
         {meta && <DefenseMatrix rows={meta.defense_matrix} members={meta.members} />}
@@ -116,30 +116,20 @@ const unassignedCalcs = allCalcs.filter(
     padding-bottom: 0.25rem;
     border-bottom: 2px solid var(--c-accent);
   }
-  .team-card {
-    background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
+  .team-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
   }
-  .team-card :global(.member-card) {
-    padding: 8px 12px;
-  }
-  .team-card :global(.member-card + .member-card) {
-    margin-top: 1rem;
+  .team-list :global(.member-card) {
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
   @media (min-width: 720px) {
-    .team-card {
+    .team-list {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 1rem;
-      padding: 1rem;
-    }
-    .team-card :global(.member-card) {
-      padding: 1.25rem;
-    }
-    .team-card :global(.member-card + .member-card) {
-      margin-top: 0;
+      gap: 0;
     }
   }
   .concept-body {

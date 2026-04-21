@@ -4,9 +4,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import TeamCard from '../../components/TeamCard.astro';
 import { isPublishableTeam } from '../../content.config';
 
+const sortKey = (d: { publishedAt?: Date; date: Date }) =>
+  (d.publishedAt ?? d.date).getTime();
 const teams = (await getCollection('teams'))
   .filter(isPublishableTeam)
-  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+  .sort((a, b) => sortKey(b.data) - sortKey(a.data));
 ---
 <BaseLayout title="構築一覧">
   <h1>構築一覧</h1>

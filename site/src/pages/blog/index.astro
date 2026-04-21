@@ -4,9 +4,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PostCard from '../../components/PostCard.astro';
 import { isPublishableBlog } from '../../content.config';
 
+const sortKey = (d: { publishedAt?: Date; date: Date }) =>
+  (d.publishedAt ?? d.date).getTime();
 const posts = (await getCollection('blog'))
   .filter(isPublishableBlog)
-  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+  .sort((a, b) => sortKey(b.data) - sortKey(a.data));
 ---
 <BaseLayout title="ブログ">
   <h1>ブログ</h1>

@@ -10,6 +10,9 @@ const teamSchema = z.object({
   title: z.string().optional(),
   axis: z.string().optional(),
   date: z.coerce.date().optional(),
+  // ソート用の公開時刻。published: false → true 切り替え時に ISO datetime を入れる。
+  // 未設定なら date にフォールバック。
+  publishedAt: z.coerce.date().optional(),
   battle_format: battleFormat.optional(),
   mechanics: z.string().optional(),
   version: z.string().optional(),
@@ -29,6 +32,7 @@ const teamSchema = z.object({
 const blogSchema = z.object({
   title: z.string(),
   date: z.coerce.date(),
+  publishedAt: z.coerce.date().optional(),
   description: z.string().optional(),
   tags: z.array(z.string()).default([]),
   eyecatch: z.string().optional(),

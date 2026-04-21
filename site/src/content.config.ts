@@ -1,6 +1,6 @@
 import { defineCollection } from 'astro:content';
-import { glob } from 'astro/loaders';
 import { z } from 'zod';
+import { globWithPublishedAt } from './loaders/with-published-at';
 
 const CONTENT_ROOT = process.env.CONTENT_ROOT ?? '../box';
 
@@ -41,12 +41,12 @@ const blogSchema = z.object({
 });
 
 const teams = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: `${CONTENT_ROOT}/teams` }),
+  loader: globWithPublishedAt({ pattern: '**/*.md', base: `${CONTENT_ROOT}/teams` }),
   schema: teamSchema,
 });
 
 const blog = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: `${CONTENT_ROOT}/blog` }),
+  loader: globWithPublishedAt({ pattern: '**/*.md', base: `${CONTENT_ROOT}/blog` }),
   schema: blogSchema,
 });
 

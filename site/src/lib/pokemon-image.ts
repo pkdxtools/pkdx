@@ -37,9 +37,11 @@ export function createPokemonImageResolver(opts: PokemonImageResolverOpts): Poke
 
     for (const filename of ordered) {
       if (filename.startsWith('.')) continue;
-      const ext = extname(filename).toLowerCase();
+      const rawExt = extname(filename);
+      const ext = rawExt.toLowerCase();
       if (!ALLOWED_EXTENSIONS.includes(ext as (typeof ALLOWED_EXTENSIONS)[number])) continue;
-      const stem = basename(filename, ext);
+      // Strip with the original-case extension so uppercase suffixes (FOO.PNG) are removed correctly.
+      const stem = basename(filename, rawExt);
       if (stem !== name) continue;
       return joinUrl(opts.baseUrl, filename);
     }

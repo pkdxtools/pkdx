@@ -79,4 +79,12 @@ describe('createPokemonImageResolver', () => {
     place('カバルドン.png');
     expect(resolve('カバルドン')).toBe(`/pokemons/${encodeURIComponent('カバルドン.png')}`);
   });
+
+  it('accepts uppercase extensions (FOO.PNG / FOO.JPG)', () => {
+    place('カバルドン.PNG');
+    place('マンムー.JPG');
+    const resolve = createPokemonImageResolver({ dir, baseUrl: '/' });
+    expect(resolve('カバルドン')).toBe(`/pokemons/${encodeURIComponent('カバルドン.PNG')}`);
+    expect(resolve('マンムー')).toBe(`/pokemons/${encodeURIComponent('マンムー.JPG')}`);
+  });
 });

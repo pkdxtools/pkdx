@@ -1110,6 +1110,131 @@ megaメカニクスが有効な場合:
 - **いいえ** (default) → `published: false` (ブログ非掲載)。後から公開したくなったら md の `published:` を `true` に書き換えるか、同じ引数で **--publish** を付けて `pkdx write teams` を再実行する
 - **はい** → `published: true` (ブログ掲載)。既存 md の edit-lock はそのまま有効
 
+### 8-1.5: ポケモン画像の一括添付（任意）
+
+構築ブログのメンバーカードは `site/public/pokemons/<member.name>.{png,jpg}` を**自動的に**右上に表示する。Phase 8-2 で md を書き出す前に、6 体分の画像を**チャットへ添付**することで一括登録できる。手動で `site/public/pokemons/` にファイルを置く必要はない。
+
+**外部 runtime 不要**: 画像配置は agent (Claude) が `file` で形式・寸法を判定し、`cp` で `site/public/pokemons/` へ直接保存する。Bun / Node 等の追加 runtime は不要。
+
+**スキップ可**: 画像が要らない / 後で blog skill の Phase H から登録する場合は、この 8-1.5 を丸ごと skip して 8-2 に進む。
+
+#### 8-1.5-1: 添付の希望確認
+
+**AskUserQuestion** (1問):
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | このタイミングでメンバー画像を添付しますか？ | 画像添付 | 後で(default, desc: 8-2 へ進む。後から blog skill の Phase H で追加可能), 今添付する(desc: 6 体分の画像を順番に添付) | false |
+
+「後で」なら 8-1.5 を終了し 8-2 に進む。
+
+#### 8-1.5-2: 既存の画像配置確認
+
+「今添付する」が選ばれた場合、cache の `members[].name` を全件列挙して、各メンバーの画像配置状況を表示する:
+
+```bash
+for name in $(キャッシュから member.name を順番に取得); do
+  if [ -f "$REPO_ROOT/site/public/pokemons/${name}.png" ]; then
+    echo "${name}  ✓ (png)"
+  elif [ -f "$REPO_ROOT/site/public/pokemons/${name}.jpg" ]; then
+    echo "${name}  ✓ (jpg)"
+  else
+    echo "${name}  ✗ (未配置)"
+  fi
+done
+```
+
+通常メッセージとして一覧を表示。
+
+#### 8-1.5-3: 添付対象の選択
+
+**AskUserQuestion** (multiSelect):
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | どのメンバーの画像を添付しますか？ | 対象 | members[] 各エントリ (各 desc に 「未配置 / 既存あり (差し替え)」を表示) | true |
+
+選択 0 件なら 8-1.5 を終了し 8-2 へ。
+
+#### 8-1.5-4: 各メンバーの画像を添付・検証・保存
+
+選択リストを順番に処理する。各メンバーごとに通常メッセージで以下を提示:
+
+```
+[1/3] カバルドン の画像を添付してください
+  仕様: 340×340 以上の正方形、PNG または JPEG
+  (skip する場合は「skip」と入力)
+```
+
+ユーザーが画像を添付すると agent にローカルファイルパスが渡される。以下を**この順序で**実行する (詳細は blog skill Phase H-4 と同一)。
+
+##### 8-1.5-4-a: symlink を拒否
+
+```bash
+SRC="<添付ファイルの絶対パス>"
+[ -L "$SRC" ] && echo "REJECT_SYMLINK"
+```
+
+`REJECT_SYMLINK` が出たら「symlink は受け付けません」を提示し再添付要求 (skip なら次へ)。
+
+##### 8-1.5-4-b: 形式と寸法を `file` で取得 + 判定
+
+```bash
+file "$SRC"
+```
+
+agent が出力をパース (BSD/GNU 共通フォーマット `PNG image data, W x H` / `JPEG image data, …, WxH`):
+
+- 形式が PNG / JPEG 以外 → reject
+- 寸法を抽出 (失敗時は **添付画像を agent が直接見て**おおよその寸法を判断)
+- W ≠ H → reject (「正方形にしてください: 480×320」)
+- W < 340 → reject (「340×340 以上にしてください: 200×200」)
+
+reject なら理由提示 + 再添付要求。skip なら次へ。
+
+##### 8-1.5-4-c: 拡張子決定 + 既存衝突確認
+
+形式から拡張子を決め (`PNG` → `.png`、`JPEG` → `.jpg`)、保存先パスを組み立て:
+
+```bash
+DEST="$REPO_ROOT/site/public/pokemons/<member.name>.<ext>"
+```
+
+既存ファイルがある場合のみ **AskUserQuestion** (1問):
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | `<member.name>` の画像 (`<DEST>`) が既に存在します。どうしますか？ | 上書き | 上書きする(desc: 既存を消して新しい画像で置き換え), skip(desc: 既存を残す), 中断(desc: 8-1.5 を抜けて 8-2 へ) | false |
+
+- 「skip」→ 次のメンバーへ
+- 「中断」→ 残メンバー処理せず 8-2 へ
+- 「上書きする」→ 8-1.5-4-d へ
+
+##### 8-1.5-4-d: cp で保存
+
+```bash
+mkdir -p "$REPO_ROOT/site/public/pokemons"
+cp "$SRC" "$DEST"
+```
+
+成功なら通常メッセージで「✓ <member.name>.<ext> を保存しました (<W>×<H>)」と報告し次のメンバーへ。
+
+#### 8-1.5-5: 完了報告
+
+全メンバー処理後、まとめを通常メッセージで出力:
+
+```
+画像添付完了:
+  ✓ カバルドン.png 保存
+  ✓ マンムー.png 保存
+  - アーマーガア skip
+
+site/public/pokemons/ 配下に作成されています。
+構築 md を出力します...
+```
+
+直後に**自動で 8-2 へ遷移**。site/public/pokemons/* への変更は team-builder からは commit しない (構築 md と一緒に blog skill の Phase G で反映確認するか、ユーザーが手動で commit する)。
+
 ### 8-2: mdレポート出力（キャッシュ JSON → pkdx write）
 
 キャッシュ JSON はPhase 0-7で段階的に構築済み。CLIがJSON→マークダウンCST→serializeを行うため、**マークダウンを直接書く必要はない**。

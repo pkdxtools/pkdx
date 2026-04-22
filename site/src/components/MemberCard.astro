@@ -1,11 +1,13 @@
 ---
 import type { TeamMember } from '../lib/team-meta';
+import { resolvePokemonImage } from '../lib/pokemon-image';
 
 interface Props {
   member: TeamMember;
 }
 
 const { member } = Astro.props;
+const imageUrl = resolvePokemonImage(member.name);
 const statsOrder: Array<['h' | 'a' | 'b' | 'c' | 'd' | 's', string]> = [
   ['h', 'H'],
   ['a', 'A'],
@@ -68,16 +70,28 @@ const typeCssVars = isDual
 >
   <div class="member-inner">
     <header class="member-head">
-      <div class="member-title">
-        <h3 class="member-name">{member.name}</h3>
+      <div class="member-summary">
+        <div class="member-title">
+          <h3 class="member-name">{member.name}</h3>
+        </div>
+        <dl class="member-meta">
+          {member.ability && <><dt>特性</dt><dd class="meta-strong">{member.ability}</dd></>}
+          {member.item && <><dt>持ち物</dt><dd class="meta-strong">{member.item}</dd></>}
+          {member.nature && <><dt>性格</dt><dd>{member.nature}</dd></>}
+        </dl>
       </div>
+      {imageUrl && (
+        <img
+          class="member-image"
+          src={imageUrl}
+          alt={member.name}
+          width="120"
+          height="120"
+          loading="lazy"
+          decoding="async"
+        />
+      )}
     </header>
-
-    <dl class="member-meta">
-      {member.ability && <><dt>特性</dt><dd class="meta-strong">{member.ability}</dd></>}
-      {member.item && <><dt>持ち物</dt><dd class="meta-strong">{member.item}</dd></>}
-      {member.nature && <><dt>性格</dt><dd>{member.nature}</dd></>}
-    </dl>
 
     {member.stat_points && (
       <section class="stats-section">
@@ -174,21 +188,33 @@ const typeCssVars = isDual
     );
   }
   .member-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: start;
+  }
+  .member-summary {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
   }
   .member-title {
     display: flex;
     align-items: baseline;
     gap: 0.5rem;
-    width: 100%;
   }
   .member-name {
     margin: 0;
     font-size: 1.3rem;
+  }
+  .member-image {
+    width: clamp(72px, 18vw, 120px);
+    height: clamp(72px, 18vw, 120px);
+    object-fit: cover;
+    border-radius: 16px;
+    display: block;
+    background: rgba(255, 255, 255, 0.06);
   }
   .member-meta {
     display: grid;

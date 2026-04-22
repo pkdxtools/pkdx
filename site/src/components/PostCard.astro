@@ -10,31 +10,50 @@ const { slug, data } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const dateStr = data.date.toISOString().slice(0, 10);
 ---
-<a class="post-card" href={`${base}blog/${encodeURIComponent(slug)}/`}>
-  <time datetime={dateStr} class="muted small">{dateStr}</time>
-  <h3 class="post-title">{data.title}</h3>
-  {data.description && <p class="post-desc">{data.description}</p>}
+<a
+  class="post-card"
+  href={`${base}blog/${encodeURIComponent(slug)}/`}
+  transition:name={`post-card-${slug}`}
+>
+  <div class="card-head">
+    <time datetime={dateStr} class="muted small">{dateStr}</time>
+  </div>
+  <h3 class="card-title">{data.title}</h3>
   {data.tags.length > 0 && (
-    <div class="post-tags">
+    <div class="card-meta">
       {data.tags.map((t) => <span class="tag">#{t}</span>)}
     </div>
   )}
+  {data.description && <p class="description">{data.description}</p>}
 </a>
 
 <style>
   .post-card {
     display: block;
-    background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 1rem;
+    padding: 1rem 0;
     color: inherit;
     text-decoration: none;
-    transition: border-color 0.15s;
   }
-  .post-card:hover { border-color: var(--c-accent); text-decoration: none; }
-  .post-title { margin: 0.25rem 0; font-size: 1.15rem; }
-  .post-desc { margin: 0.25rem 0; font-size: 0.9rem; color: var(--c-text-muted); }
-  .post-tags { margin-top: 0.5rem; }
+  .post-card:hover {
+    text-decoration: none;
+    color: var(--c-text);
+  }
+  .post-card:hover .card-title {
+    color: var(--c-text);
+    text-decoration: underline;
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.25rem;
+  }
+  .card-title {
+    margin: 0.25rem 0;
+    font-size: 1.15rem;
+    transition: color 0.15s;
+  }
+  .card-meta { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.5rem 0; }
+  .description { margin: 0.5rem 0 0; font-size: 0.9rem; }
   .small { font-size: 0.8rem; }
 </style>

@@ -15,16 +15,15 @@ const posts = (await getCollection('blog'))
   {posts.length === 0 ? (
     <p class="empty-state">まだブログ記事がありません。<code>box/blog/</code> に MD を追加すると自動公開されます。</p>
   ) : (
-    <div class="grid">
+    <div class="list">
       {posts.map((entry) => <PostCard slug={entry.id} data={entry.data} />)}
     </div>
   )}
 </BaseLayout>
 
 <style>
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
+  .list {
+    display: flex;
+    flex-direction: column;
   }
 </style>

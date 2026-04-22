@@ -13,7 +13,7 @@ const { Content } = await render(entry);
 const dateStr = entry.data.date.toISOString().slice(0, 10);
 ---
 <BaseLayout title={entry.data.title} description={entry.data.description}>
-  <article class="post-article">
+  <article class="post-article" transition:name={`post-card-${entry.id}`}>
     <header>
       <p class="muted small"><time datetime={dateStr}>{dateStr}</time></p>
       <h1>{entry.data.title}</h1>

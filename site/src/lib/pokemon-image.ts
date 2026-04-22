@@ -46,9 +46,7 @@ export function createPokemonImageResolver(opts: PokemonImageResolverOpts): Poke
   return (name: string): string | null => map.get(name) ?? null;
 }
 
-const defaultDir = process.env.POKEMON_IMAGE_DIR ?? resolve(process.cwd(), 'public/pokemons');
-
 export const resolvePokemonImage: PokemonImageResolver = createPokemonImageResolver({
-  dir: defaultDir,
+  dir: resolve(process.cwd(), 'public/pokemons'),
   baseUrl: import.meta.env.BASE_URL ?? '/',
 });

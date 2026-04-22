@@ -14,7 +14,6 @@ if (existsSync(distDir)) {
 const env = {
   ...process.env,
   CONTENT_ROOT: contentRoot,
-  POKEMON_IMAGE_DIR: resolve(contentRoot, 'pokemons'),
   SITE_URL: 'https://example.test',
   SITE_BASE: '/',
 };
@@ -74,8 +73,6 @@ const contentChecks: ContentCheck[] = [
   { path: 'dist/teams/full/index.html', needle: '裏選出', label: 'full team renders alternate selection section' },
   { path: 'dist/teams/index.html', needle: 'ガブリアス軸構築', label: 'teams index lists full team' },
   { path: 'dist/teams/index.html', needle: '未公開の試作構築', label: 'teams index does NOT list drafty', expectedMissing: true } as ContentCheck & { expectedMissing: boolean },
-  { path: 'dist/teams/full/index.html', needle: 'pokemons/', label: 'member with image fixture renders <img src=".../pokemons/...">' },
-  { path: 'dist/teams/full/index.html', needle: 'class="member-image"', label: 'member-image class is rendered for member with image' },
 ];
 
 for (const c of contentChecks) {

@@ -148,6 +148,40 @@ http://localhost:4321 で既に何かがリッスンしています。
 
 前提として `.claude/launch.json` に `site` エントリが必要 (この repo では既に配置済み)。`preview_start` は launch.json の `runtimeExecutable` / `runtimeArgs` / `cwd` / `port` を読んで `bun run dev` を `site/` 配下で起動する。
 
+**bun の存在確認**: `runtimeExecutable: "bun"` のため bun が PATH 上に無いと preview_start は失敗する。`setup.sh` は意図的に bun を入れないため、以下で検出し、未インストール時は `scripts/install_bun.sh` を案内する:
+
+```bash
+if ! command -v bun &>/dev/null; then
+  echo "MISSING_BUN"
+fi
+```
+
+`MISSING_BUN` が出力された場合、通常メッセージで以下を提示してから **AskUserQuestion** (1問) を出す:
+
+```
+dev server 起動には bun runtime が必要ですが、PATH 上に見つかりません。
+scripts/install_bun.sh で bun 1.3.12 (site/ の pin バージョン) をインストールできます。
+(~/.bun/bin/bun に入り、~/.zshrc / ~/.bashrc に PATH 追記されます)
+```
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | bun を今インストールしますか？ | インストール | インストールする(default, desc: scripts/install_bun.sh を実行), スキップ(desc: dev プレビューを使わず編集だけ進める) | false |
+
+「インストールする」を選ばれた場合:
+
+```bash
+bash "$REPO_ROOT/scripts/install_bun.sh"
+# 新シェルではなく現行シェル向けに PATH を通す
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+command -v bun  # 再確認
+```
+
+インストールに失敗 (exit code != 0) または `command -v bun` が依然空なら、「起動しない」相当で該当 Phase へ遷移する (DEV_PREVIEW_ID は設定しない)。成功したら次の preview_start 呼び出しへ進む。
+
+「スキップ」を選ばれた場合は「起動しない」相当で該当 Phase へ。
+
 ```
 preview_start(name="site")
 → { serverId, port: 4321, name: "site", reused: <bool> }

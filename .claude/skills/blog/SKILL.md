@@ -53,19 +53,39 @@ fi
 
 ### 0-3: 操作選択
 
-**AskUserQuestion**（1問）:
+最初の AskUserQuestion で編集系 4 操作（Phase A/B/C/D）のみ提示し、それら**すべてに該当しない**ときだけ 2 段目 AskUserQuestion を出す。ユーザー発話にすでに明確な意図がある場合（「サイト名を〇〇に変えたい」「一覧を見たい」等）は 1 段目を skip して該当 Phase に直接遷移してよい。
+
+**AskUserQuestion**（1問、ユーザー意図が既に明確なら skip 可）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | どの操作を行いますか？ | 操作 | 新規ブログ記事作成(desc: box/blog/ に新しい記事ファイルを作る), 記事の公開/非公開切替(desc: published フラグを反転する), 記事のフロントマター編集(desc: タイトル/説明文/タグを変更), 記事削除(desc: 記事ファイルを削除する) | false |
+| 1 | どの操作を行いますか？ | 操作 | 新規ブログ記事作成(desc: box/blog/ に新しい記事ファイルを作る), 記事の編集/削除/公開切替(desc: 既存記事の frontmatter 編集・削除・published フラグ反転), サイト設定 or 記事一覧(desc: site_name / author / enabled / 記事一覧表示), その他(desc: 上記以外を Other で入力) | false |
 
-上記で選ばれなかった操作が必要な場合は次の AskUserQuestion で:
+選択内容に応じて以下へ:
+- 「新規ブログ記事作成」 → Phase A
+- 「記事の編集/削除/公開切替」 → **続く AskUserQuestion**（下記）で B/C/D のどれかを確定
+- 「サイト設定 or 記事一覧」 → **続く AskUserQuestion**（下記）で E/F のどちらかを確定
+- 「その他」→ Other キーワードから判定
+
+「記事の編集/削除/公開切替」を選んだ場合、続く AskUserQuestion:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | 追加の操作 | 操作 | サイト設定変更(desc: site_name / author / enabled), 記事一覧を表示(desc: 全記事の公開状態を一覧) | false |
+| 1 | どの操作？ | 操作 | 公開/非公開切替(desc: Phase B), フロントマター編集(desc: Phase C), 削除(desc: Phase D) | false |
 
-Other で直接「新規」「編集」「一覧」「設定」等のキーワードでも判定可。
+「サイト設定 or 記事一覧」を選んだ場合、続く AskUserQuestion:
+
+| # | 質問 | header | オプション | multiSelect |
+|---|------|--------|-----------|-------------|
+| 1 | どちら？ | 操作 | サイト設定変更(desc: Phase E), 記事一覧表示(desc: Phase F) | false |
+
+Other での直接キーワード判定は以下:
+- 「新規」「作成」「書く」→ Phase A
+- 「公開」「下書き」「非公開」→ Phase B
+- 「編集」「タイトル変更」→ Phase C
+- 「削除」「消す」→ Phase D
+- 「設定」「サイト名」「author」→ Phase E（2段目 skip 可）
+- 「一覧」「リスト」→ Phase F（2段目 skip 可）
 
 選択結果に応じて該当 Phase へ遷移する。
 
@@ -103,6 +123,13 @@ slug バリデーション: `^[a-zA-Z0-9][a-zA-Z0-9\-]*$`。NG の場合は再�
 
 ### A-4: ファイル生成
 
+> **frontmatter 表記ルール（site/src/content.config.ts の blogSchema 準拠）**:
+> - `title` / `description`: ダブルクォート囲み（例: `title: "記事タイトル"`）
+> - `date`: クォート無し ISO 日付（`date: 2026-04-22`）
+> - `tags`: inline flow 配列、各要素ダブルクォート囲み（例: `tags: ["astro", "dev"]`）
+> - `published`: クォート無しの真偽値（`published: false`）
+> - `description` / `tags` / `eyecatch` は schema 側で optional。値が空の場合はキーごと省略してよい（`tags: []` 空配列も OK だが省略が推奨）
+
 重複チェック:
 
 ```bash
@@ -119,23 +146,28 @@ fi
 TODAY=$(date +%Y-%m-%d)
 ```
 
-Write tool で `$DEST` を以下の形式で生成する:
+Write tool で `$DEST` を上述の表記ルールに**完全準拠**した形式で生成する。以下は具体例 (タイトル="Astro アップグレードメモ", slug=astro-upgrade-notes, tags=astro/dev, published=false, 今日=2026-04-22):
 
 ```markdown
 ---
-title: "<ユーザー入力タイトル>"
-date: <TODAY>
-description: "<description または空>"
-tags: [<tags または 空配列>]
-published: <true | false>
+title: "Astro アップグレードメモ"
+date: 2026-04-22
+description: "Astro 6 系への移行メモ"
+tags: ["astro", "dev"]
+published: false
 ---
 
-# <ユーザー入力タイトル>
+# Astro アップグレードメモ
 
 ここから本文を書いてください。
 ```
 
-description / tags が空の場合はそのキー自体を省略してよい（schema で optional）。
+上記の各フィールドについて:
+- `title`: ユーザー入力を**必ずダブルクォート**で囲む
+- `date`: `TODAY=$(date +%Y-%m-%d)` の値をクォート無しで
+- `description`: **ダブルクォート**で囲む。空なら行ごと省略
+- `tags`: inline flow で**各要素ダブルクォート**。空なら行ごと省略（`tags: []` より推奨）
+- `published`: `true` / `false` をクォート無しで
 
 ### A-5: 完了報告
 
@@ -153,7 +185,9 @@ description / tags が空の場合はそのキー自体を省略してよい（s
 
 ### B-1: 対象コレクション選択
 
-**AskUserQuestion**（1問）:
+**skip 判定**: ユーザー発話に対象パスが含まれる場合（例: `box/teams/...md` や「team 記事」「blog 記事」の明示）、本ステップを skip して B-2 に直接進んでよい。skip した場合、対象コレクションは発話から判定する。
+
+**AskUserQuestion**（1問、skip 条件未適用時のみ）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
@@ -232,7 +266,7 @@ Edit tool で frontmatter に `publishedAt: <NOW>` を追加（既存があれ�
 
 ### C-1: 対象選択
 
-Phase B-1 / B-2 と同じフローで対象記事を選ぶ。
+Phase B-1 / B-2 と同じフローで対象記事を選ぶ。**B-1 の skip 判定ルールも同様に適用される**。
 
 ### C-2: 編集項目選択
 
@@ -272,7 +306,7 @@ Edit tool で frontmatter 内の対象行を書き換える。値が空で削除
 
 ### D-1: 対象選択
 
-Phase B-1 / B-2 と同じフローで対象記事を選ぶ。
+Phase B-1 / B-2 と同じフローで対象記事を選ぶ。**B-1 の skip 判定ルール（ユーザー発話に対象パスが含まれる場合、コレクション選択 AskUserQuestion を skip）も同様に適用される**。ユーザーが「box/teams/カバルドン-...md を削除したい」のようにパスを明示した場合は、コレクション選択を飛ばして D-2 に進む。
 
 ### D-2: 関連 meta.json の検出
 
@@ -391,9 +425,20 @@ cd "$REPO_ROOT"
 git status --short -- box/
 ```
 
-変更が無ければ（たとえば B で同じ値に切り替えた等）Phase G を即終了する。
+**差分判定ルール**: 上記コマンドの stdout が 1 行以上返れば「差分あり」とする。以下の prefix すべてを差分として扱う:
 
-差分ありの場合はユーザーへ変更ファイル一覧を提示する。
+- `??` 未追跡（新規作成 / Phase A）
+- ` M` / `M ` 変更（編集 / Phase C / Phase E）
+- ` D` / `D ` 削除（Phase D）
+- ` A` 追加 stage 済（通常は未使用だが念のため）
+
+変更が無ければ（stdout が空）以下を出力して Phase G を即終了する:
+
+```
+変更はありませんでした（編集前と同じ状態です）。
+```
+
+差分ありの場合はユーザーへ変更ファイル一覧（`git status --short` の出力そのまま）を提示する。
 
 ### G-2: 反映可否の確認
 
@@ -403,7 +448,7 @@ git status --short -- box/
 |---|------|--------|-----------|-------------|
 | 1 | 変更をサイトへ反映しますか？ push するとリモートへ送信され、GitHub Actions がサイトを再ビルドします。 | 反映 | 反映しない(desc: ローカルに変更を残して終了。あとで手動 push 可能), 反映する(desc: git commit + push を実行してサイトに反映) | false |
 
-「反映しない」を選ばれた場合はここで終了する。以下の案内を出す:
+「反映しない」を選ばれた場合は以下の案内を出す（`<files>` は G-1 で列挙した実ファイルパスに展開する）:
 
 ```
 ローカルに変更を残しました。あとで手動で反映する場合は:
@@ -411,6 +456,8 @@ git status --short -- box/
   git commit -m "<任意のメッセージ>"
   git push
 ```
+
+**案内出力後、skill セッション自体を終了する**（Phase 0 に戻らない / 追加操作を促さない）。ユーザーが再度 blog skill を起動すれば新規セッションとして扱う。
 
 ### G-3: ブランチ・リモート確認
 

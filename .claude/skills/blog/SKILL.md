@@ -15,6 +15,29 @@ allowed-tools: Bash, Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash
 
 **git push は Phase G で必ずユーザーの YES 確認を得てから実行する。** 無確認で push することはない。push を拒否された場合はローカルに変更を残したまま終了する。
 
+## Skip 判定 共通ルール
+
+全 Phase の AskUserQuestion に適用される共通ルール:
+
+**skip してよい条件（いずれか該当）**:
+- ユーザー発話に既に当該質問の回答が含まれている（例: 「カバルドン記事を削除したい」→ コレクション選択・記事選択 を skip）
+- 直前の Phase / AskUserQuestion で既に確定した情報を再確認する質問
+- ユーザーが操作対象パスを絶対 / 相対パスで明示している
+
+**skip 時の扱い**:
+- 想定される回答を skill 記載の手順通りに内部で決定
+- skip した事実と選んだ想定応答をユーザーへ通常メッセージで開示（例: 「対象コレクションを `teams` と判定して続行します」）
+
+**絶対に skip してはいけない質問**:
+- 削除確認ダイアログ（Phase D-3）
+- Phase G-2 の反映可否確認
+- Phase G-3 の送信先最終確認（「反映する」経路）
+- Phase G-4 の commit メッセージ確認
+
+## Phase 間遷移の原則
+
+各 Phase の完了報告（例: A-5, B-5, C-5, D-5, E-5）直後の Phase G への遷移は**自動**で行う。間に確認の AskUserQuestion は挟まない。ユーザーは完了報告テキストを見て、Phase G の差分提示へと続けて移行する。
+
 ## パス定義
 
 ```
@@ -146,12 +169,12 @@ fi
 TODAY=$(date +%Y-%m-%d)
 ```
 
-Write tool で `$DEST` を上述の表記ルールに**完全準拠**した形式で生成する。以下は具体例 (タイトル="Astro アップグレードメモ", slug=astro-upgrade-notes, tags=astro/dev, published=false, 今日=2026-04-22):
+Write tool で `$DEST` を上述の表記ルールに**完全準拠**した形式で生成する。以下は具体例 (タイトル="Astro アップグレードメモ", slug=astro-upgrade-notes, tags=astro/dev, published=false, date は **必ず `date +%Y-%m-%d` の実行結果を使う**。skill 内の例日付をそのまま写すと、実行日と違う場合にバグる):
 
 ```markdown
 ---
 title: "Astro アップグレードメモ"
-date: 2026-04-22
+date: 2026-04-22   # ← TODAY=$(date +%Y-%m-%d) の結果。例の値をそのまま使わない
 description: "Astro 6 系への移行メモ"
 tags: ["astro", "dev"]
 published: false
@@ -310,25 +333,39 @@ Phase B-1 / B-2 と同じフローで対象記事を選ぶ。**B-1 の skip 判�
 
 ### D-2: 関連 meta.json の検出
 
-team-builder 由来の記事には `<slug>.meta.json` が併置されている:
+team-builder 由来の記事（`box/teams/` 配下のみ）には `<slug>.meta.json` が併置されている。**`box/blog/` 配下には `.meta.json` 併置無し**のため、対象が blog の場合は本ステップ自体を skip する:
 
 ```bash
 SLUG=$(basename "$FILE" .md)
 META="$(dirname "$FILE")/$SLUG.meta.json"
-[ -f "$META" ] && echo "meta file exists"
+# box/teams/ 配下のみ検出対象
+if [[ "$FILE" == *"/box/teams/"* ]] && [ -f "$META" ]; then
+  echo "meta file exists: $META"
+fi
 ```
 
 ### D-3: 最終確認
+
+**削除対象一覧の提示方法**: AskUserQuestion の質問文本体には含めず、**質問直前の通常メッセージとして**別途提示する（質問文に長い一覧を詰めない）:
+
+```
+# 通常メッセージとして先に出力
+削除対象:
+  - box/teams/カバルドン-build-2026-04-21.md
+  - box/teams/カバルドン-build-2026-04-21.meta.json
+```
+
+そのあと AskUserQuestion を出す。
 
 **AskUserQuestion**（1問）:
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | 本当に削除しますか？ <削除対象ファイル一覧> | 削除確認 | キャンセル(desc: 削除しない), 削除する(desc: ファイルを削除。復元は git から可能) | false |
+| 1 | 上記ファイルを削除してよいですか？ | 削除確認 | キャンセル(desc: 削除しない), 削除する(desc: ファイルを削除。復元は git から可能) | false |
 
 削除対象には `.md` と（存在すれば）`.meta.json` の両方を含める。
 
-**user が「削除する」を選択した場合のみ削除を実行する。** `キャンセル` がデフォルト表示になるよう最初に配置する。
+**user が「削除する」を選択した場合のみ削除を実行する。** `キャンセル` がデフォルト表示になるよう最初に配置する。**本ダイアログは「Skip 判定 共通ルール」で skip 禁止と定めた critical 質問に該当するため、絶対に skip しない**。
 
 ### D-4: 削除実行
 
@@ -370,7 +407,11 @@ rm -- "$FILE"
 |---|------|--------|-----------|-------------|
 | 1 | どの項目を変更しますか？ | 項目 | site_name(desc: サイト名 ヘッダーや <title> に使用), author(desc: 著者名 フッターに表示), enabled(desc: false にするとデプロイが停止する) | true |
 
+**multiSelect 挙動**: ユーザーが選んだ項目**のみ** E-3 で新値入力を求める。選ばれなかった項目は touch しない（Edit も発火しない）。選択が 0 件なら E-4 以降を skip し「変更項目がないため終了」でセッション終了。
+
 ### E-3: 新しい値の入力
+
+E-2 で選ばれた項目それぞれについて新値を問う。選ばれなかった項目は本ステップを発火させない:
 
 - `site_name`: 文字列（空禁止）
 - `author`: 文字列 or null（「省略」で null に）
@@ -378,7 +419,7 @@ rm -- "$FILE"
 
 ### E-4: JSON 書き換え
 
-Edit tool で `$SITE_CONFIG` の対象行を書き換える。Write tool で全体を書き直してもよいが、Edit の方が他キーを温存できるため優先する。
+Edit tool で `$SITE_CONFIG` のうち **E-2 で選ばれた行のみ**書き換える。Write tool で全体を書き直してもよいが、Edit の方が他キーを温存できるため優先する。
 
 `author: null` の場合は `"author": null` と記述する（文字列 "null" ではなく JSON の null）。
 
@@ -438,7 +479,13 @@ git status --short -- box/
 変更はありませんでした（編集前と同じ状態です）。
 ```
 
-差分ありの場合はユーザーへ変更ファイル一覧（`git status --short` の出力そのまま）を提示する。
+差分ありの場合、**次の G-2 AskUserQuestion を出す直前に、通常メッセージとして**変更ファイル一覧（`git status --short` の出力そのまま）を提示する。AskUserQuestion の質問文本体にはファイル一覧を埋め込まない（質問文が長くなると UI で読めない）。
+
+```
+# 通常メッセージとして先に出力
+変更ファイル:
+ ?? box/blog/astro-upgrade-notes.md
+```
 
 ### G-2: 反映可否の確認
 

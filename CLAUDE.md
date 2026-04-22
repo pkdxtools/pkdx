@@ -1,16 +1,13 @@
-# CLAUDE.md
+# Project Overview
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+ポケモン対戦を支援する統合ツール。pkdx cliとワークフローを記述したAgent Skillによるハーネスで構成されている。
 
-## Project Overview
-
-ポケモン対戦構築支援リポジトリ。Claude Codeのスキル群として動作し、以下の機能を提供する。
-
-- **team-builder** — 6体構築のシングル（3体選出）/ダブル（4体選出）対戦チームビルドを対話的にガイド
-- **calc** — Lv50ダメージ計算（特性・持ち物・天候・フィールド・テラスタル・急所対応、16段階乱数テーブル出力）
-- **breed** — ポケモン育成シミュレーション（性格・努力値・実数値の対話的計算、.mdファイル出力）
-- **nash** — 零和ナッシュ均衡ソルバー / 選出最適化（`pkdx select`） / メタ乖離分析（`pkdx meta-divergence`）
-- **self-update** — フォーク先でupstreamの最新変更を安全にマージ
+- **team-builder**: 6体構築のシングル（3体選出）/ダブル（4体選出）対戦チームビルドを対話的にガイド。取り込んだ構築を元に構築ブログの作成
+- **calc**: Lv50ダメージ計算（特性・持ち物・天候・フィールド・テラスタル・急所対応、16段階乱数テーブル出力）
+- **breed**: ポケモン育成シミュレーション（性格・努力値・実数値の対話的計算、.mdファイル出力）
+- **nash**: 零和ナッシュ均衡ソルバー / 選出最適化（`pkdx select`） / メタ乖離分析（`pkdx meta-divergence`）
+- **self-update**: フォーク先でupstreamの最新変更を安全にマージ
+- **blog**: 構築ブログの管理
 
 CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、ダメージ計算、実数値計算・逆算、および構築・育成データのマークダウン出力、ゲーム理論に基づいた選出最適化計算などを担う。
 
@@ -18,16 +15,13 @@ CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、
 
 ## 求められる振る舞い
 
-1. ユーザーに対しては常にツールから求められる正確な情報をフォードバックする。あなたはタイプ相性、ダメージ計算、ポケモン自体の強さなどについて、自身の知識のみで一次解答してはならない。必ずpkdx cliを用いた計算結果をSSoTとすること。
-2. ユーザーの情報を未確認のままupstreamへ送信してはならない。必ずremoteを確認し、送信対象が合っているかユーザーへ確認すること。
-3. 余計な気を効かせない。補足情報を自身の知識のみで付与しない。ユーザーはあなたよりポケモンに詳しい。
-　　3.1 タイプ相性に関しては必ず `pkdx type-chart` で計算してからフィードバックする。あなたが最も間違える箇所
-    3.2 ダメージ計算に関しては必ず `pkdx damage` で計算してからフィードバックする。あなたが次に間違えやすい箇所
-4. 利用可能なポケモン、道具、技のプールを常にDBへ問い合わせ確認する。ユーザーが指定したフォーマット外の情報をフィードバックしてはならない
-    4.1 例: Champions M-Aレギュレーション選択中に、準伝説ポケモンやサーフゴーを案内してしまう（M-Aフォーマット外）
-    4.2 例: Champions M-Aレギュレーション選択中に、こだわりハチマキやとつげきチョッキを案内してしまう（M-Aフォーマット外）
-    4.3 DBデータからわからない場合は、ユーザーに許可をもらってから `WebSearch tool` を実行する
-
+1. ユーザーの情報を未確認のままupstreamへ送信してはならない。必ずremoteを確認し、送信対象が合っているかユーザーへ確認すること。
+2. 利用可能なポケモン、道具、技のプールを常にDBへ問い合わせ確認する。ユーザーが指定したフォーマット外の情報をフィードバックしてはならない
+    例: `Champions M-A` レギュレーション選択中に、準伝説ポケモンやサーフゴーを案内してしまう（M-Aフォーマット外）
+    例: `Champions M-A` レギュレーション選択中に、こだわりハチマキやとつげきチョッキを案内してしまう（M-Aフォーマット外）
+    例: DBデータからわからない場合は、ユーザーに許可をもらってから `WebSearch` を実行して最新の情報を取得する
+3. ダメージ計算に関しては必ず `pkdx damage` で計算してからフィードバックする。あなたが次に間違えやすい箇所
+4. タイプ相性に関しては必ず `pkdx type-chart` で計算してからフィードバックする。あなたが最も間違える箇所
 
 ## Setup
 
@@ -125,10 +119,14 @@ box/                      # ユーザーデータ出力先（フォーク先でg
       payoff_semantics.md    # SwitchingGame / ScreenedSwitchingGame 仕様
   self-update/
     SKILL.md              # upstream追従スキル
+  blog/
+    SKILL.md              # site/配下のブログ情報を管理するスキル
 
 pokedex/                  # git submodule (towakey/pokedex)
   pokedex.db              # SQLiteデータベース（生成が必要）
   er.md                   # DB ER図
+site/
+  src/                    # GitHub PagesへデプロイされるAstro製のブログ
 ```
 
 ## Database Notes
@@ -171,25 +169,3 @@ scripts/sync_version.sh
 - **`.claude/skills/nash/references/theory.md`** — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠。`pkdx nash solve` の正当性、数値安定性 (shift-and-normalize)、退化ケースの扱いに関する質問はここを第一参照。
 - **`.claude/skills/nash/references/exploitability.md`** — exploitability / NashConv / KL / L1 の定義と使い分け。Nash 判定基準 (≤ 1e-6)、メタ乖離分析の解釈に関する質問はここ。
 - **`.claude/skills/nash/references/payoff_semantics.md`** — `TeamPayoffModel` (SwitchingGame / ScreenedSwitchingGame) の仕様・計算量・選択基準。選出最適化のどのモデルを使うべきか、廃止済みの pairwise 系に関する履歴もここ。
-
-## Skill Flow
-
-### team-builder
-
-Phase 0（初期化）→ Phase 8（レポート出力）の順に進行。各フェーズ終了時に `=== Team State ===` ブロックを出力し、コンテキスト圧縮後も状態を復元可能にする。Phase 8で構造化JSONを `pkdx write teams` に渡し、決定的なマークダウンを `box/teams/{軸ポケモン名}-build-{YYYY-MM-DD}.md` として出力。
-
-### calc
-
-攻撃側・防御側・技名を受け取り、`pkdx damage` で計算を実行。16段階の乱数テーブル・確定数・割合をJSON出力する。オプションで特性・持ち物・天候・フィールド・テラスタル・急所・ランク補正を指定可能。
-
-### breed
-
-ポケモン1体の育成データを対話的に構築。Phase 0（初期化）→ Phase 8（保存）の順に進行し、各フェーズで実数値をフィードバック。Phase 8で構造化JSONを `pkdx write pokemon` に渡し、決定的なマークダウンを `box/pokemons/<name>/<filename>.md` に保存。`--atk-stat`/`--def-stat`/`--def-hp` を通じてcalcスキルと連携。
-
-### nash
-
-零和 2 人ゲームのナッシュ均衡ソルバーおよび、その上層の選出最適化 (`pkdx select`)・メタ乖離分析 (`pkdx meta-divergence`) を提供する。Phase 1 で計算種別 (nash solve / select / meta-divergence / nash graph) を選択し、対応する CLI サブコマンドに JSON を stdin で渡す。select の入力は `box/teams/*.meta.json` の `members` を `team`/`opponent` に詰め替えて渡す (team-builder / Champions スクショ取り込みで生成)。`pkdx select` は team-builder member 形式 (`types[]` + `base_stats{}`) を直接受け付ける。macOS/Linux のみ対応（Windows は BLAS 依存のため非対応）。詳細は `.claude/skills/nash/SKILL.md`。
-
-### self-update
-
-upstreamの最新変更をフォーク先に安全にマージする。`box/` 内のユーザーデータを保護しつつ、スキルファイルとCLIバイナリを更新する。

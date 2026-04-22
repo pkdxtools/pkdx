@@ -1,0 +1,12 @@
+{
+  "previews": {
+    "site": {
+      "name": "site",
+      "command": "bun",
+      "args": ["run", "dev"],
+      "cwd": "${workspaceFolder}/site",
+      "port": 4321,
+      "url": "http://localhost:4321/pkdx/"
+    }
+  }
+}

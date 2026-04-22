@@ -149,7 +149,7 @@ const typeCssVars = isDual
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
     padding: 12px;
     border: solid 1px black;
@@ -176,15 +176,15 @@ const typeCssVars = isDual
   .member-card.dual-type::before {
     background: linear-gradient(
       135deg,
-      var(--type-primary) 0 48%,
-      var(--type-secondary) 52% 100%
+      var(--type-primary) 0 30%,
+      var(--type-secondary) 70% 100%
     );
   }
   .member-card.single-type::before {
     background: linear-gradient(
       135deg,
-      transparent 0 40%,
-      var(--type-primary) 80% 100%
+      transparent 10% 30%,
+      var(--type-primary) 70% 100%
     );
   }
   .member-head {
@@ -209,12 +209,24 @@ const typeCssVars = isDual
     font-size: 1.3rem;
   }
   .member-image {
-    width: clamp(72px, 18vw, 120px);
-    height: clamp(72px, 18vw, 120px);
+    width: 120px;
+    height: 120px;
     object-fit: cover;
     border-radius: 16px;
     display: block;
     background: rgba(255, 255, 255, 0.06);
+  }
+  @media (max-width: 600px) {
+    .member-head {
+      grid-template-columns: 1fr;
+    }
+    .member-image {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1;
+      max-width: 220px;
+      margin: 0 auto;
+    }
   }
   .member-meta {
     display: grid;

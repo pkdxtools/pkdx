@@ -72,4 +72,11 @@ describe('createPokemonImageResolver', () => {
     const resolve = createPokemonImageResolver({ dir: missing, baseUrl: '/' });
     expect(resolve('カバルドン')).toBeNull();
   });
+
+  it('picks up files added after the resolver is created (dev hot-add)', () => {
+    const resolve = createPokemonImageResolver({ dir, baseUrl: '/' });
+    expect(resolve('カバルドン')).toBeNull();
+    place('カバルドン.png');
+    expect(resolve('カバルドン')).toBe(`/pokemons/${encodeURIComponent('カバルドン.png')}`);
+  });
 });

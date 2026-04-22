@@ -14,7 +14,7 @@ export async function getStaticPaths() {
   const entries = (await getCollection('teams')).filter(isPublishableTeam);
   return entries.map((entry) => ({
     params: { slug: entry.id },
-    props: { entry, meta: loadTeamMeta(entry.id) },
+    props: { entry, meta: loadTeamMeta(entry.filePath) },
   }));
 }
 

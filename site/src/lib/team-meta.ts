@@ -136,10 +136,16 @@ export function parseTeamMeta(jsonText: string | null): TeamMeta | null {
   return result.success ? result.data : null;
 }
 
-export function loadTeamMeta(slug: string): TeamMeta | null {
+// Astro の glob loader は entry.id を小文字化するが、meta.json は元ファイル名
+// （大文字小文字を保持）と対応する。case-sensitive な Linux (GitHub Actions) で
+// slug ベースに探すと取りこぼすため、entry.filePath から直接導出する。
+export function loadTeamMeta(filePath: string | undefined): TeamMeta | null {
+  if (!filePath) return null;
   try {
-    const base = process.env.CONTENT_ROOT ?? '../box';
-    const candidate = resolve(process.cwd(), `${base}/teams/${slug}.meta.json`);
+    const metaRelative = filePath.endsWith('.md')
+      ? filePath.slice(0, -3) + '.meta.json'
+      : `${filePath}.meta.json`;
+    const candidate = resolve(process.cwd(), metaRelative);
     if (!existsSync(candidate)) return null;
     const text = readFileSync(candidate, 'utf-8');
     return parseTeamMeta(text);

@@ -38,6 +38,9 @@ const checks: Check[] = [
   { path: 'dist/teams/full/index.html', expected: true, label: 'full team is published' },
   { path: 'dist/teams/drafty/index.html', expected: false, label: 'unpublished team is hidden (published:false filtered)' },
   { path: 'dist/teams/legacy/index.html', expected: false, label: 'legacy MD without frontmatter is skipped' },
+  // Astro の glob loader は id を小文字化するため、URL は lowercase。meta.json の
+  // 解決は filePath ベースで行う必要がある（case-sensitive な Linux CI で再発防止）。
+  { path: 'dist/teams/upper-case-guard/index.html', expected: true, label: 'uppercase-filename team lowercases to slug' },
   { path: 'dist/teams/index.html', expected: true, label: 'teams index is rendered' },
   { path: 'dist/blog/hello/index.html', expected: true, label: 'blog fixture is published' },
   { path: 'dist/blog/index.html', expected: true, label: 'blog index is rendered' },
@@ -71,6 +74,9 @@ const contentChecks: ContentCheck[] = [
   { path: 'dist/teams/full/index.html', needle: 'coverage', label: 'full team renders coverage section' },
   { path: 'dist/teams/full/index.html', needle: '表選出', label: 'full team renders primary selection section' },
   { path: 'dist/teams/full/index.html', needle: '裏選出', label: 'full team renders alternate selection section' },
+  // uppercase ファイル名でも meta.json が解決され、本文が空でないことを守る。
+  { path: 'dist/teams/upper-case-guard/index.html', needle: 'member-detail', label: 'uppercase-filename team resolves meta.json (member-detail rendered)' },
+  { path: 'dist/teams/upper-case-guard/index.html', needle: '構築コンセプト', label: 'uppercase-filename team resolves meta.json (concept chapter rendered)' },
   { path: 'dist/teams/index.html', needle: 'ガブリアス軸構築', label: 'teams index lists full team' },
   { path: 'dist/teams/index.html', needle: '未公開の試作構築', label: 'teams index does NOT list drafty', expectedMissing: true } as ContentCheck & { expectedMissing: boolean },
 ];

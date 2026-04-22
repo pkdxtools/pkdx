@@ -1,0 +1,72 @@
+{
+  "battle_format": "singles",
+  "mechanics": "テラスタル",
+  "version": "sv",
+  "regulation": "H",
+  "phase": 8,
+  "members": [
+    {
+      "name": "ガブリアス",
+      "types": ["ドラゴン", "じめん"],
+      "base_stats": { "h": 108, "a": 130, "b": 95, "c": 80, "d": 85, "s": 102 },
+      "ability": "さめはだ",
+      "item": "こだわりスカーフ",
+      "role": "先発で展開を作る高速物理アタッカー。スカーフで上から縛る。",
+      "nature": "いじっぱり",
+      "actual_stats": { "h": 183, "a": 200, "b": 115, "c": 91, "d": 105, "s": 169 },
+      "moves": [
+        { "name": "じしん", "type": "じめん", "category": "物理", "power": 100 },
+        { "name": "げきりん", "type": "ドラゴン", "category": "物理", "power": 120 },
+        { "name": "ストーンエッジ", "type": "いわ", "category": "物理", "power": 100 },
+        { "name": "はたきおとす", "type": "あく", "category": "物理", "power": 65 }
+      ]
+    },
+    {
+      "name": "カイリュー",
+      "types": ["ドラゴン", "ひこう"],
+      "base_stats": { "h": 91, "a": 134, "b": 95, "c": 100, "d": 100, "s": 80 },
+      "ability": "マルチスケイル",
+      "item": "いのちのたま",
+      "role": "中速アタッカー。体力満タンからの詰ませ役。",
+      "moves": [
+        { "name": "しんそく", "type": "ノーマル", "category": "物理", "power": 80 },
+        { "name": "げきりん", "type": "ドラゴン", "category": "物理", "power": 120 },
+        { "name": "じしん", "type": "じめん", "category": "物理", "power": 100 },
+        { "name": "はねやすめ", "type": "ひこう", "category": "変化" }
+      ]
+    }
+  ],
+  "coverage": [
+    { "defending_type": "ほのお", "best_move_type": "じめん", "user": "ガブリアス", "multiplier": 2 },
+    { "defending_type": "みず", "best_move_type": "ドラゴン", "user": "カイリュー", "multiplier": 1 }
+  ],
+  "defense_matrix": [
+    { "attack_type": "こおり", "multipliers": [2, 4], "best_switch": "-" },
+    { "attack_type": "フェアリー", "multipliers": [2, 2], "best_switch": "-" }
+  ],
+  "matchup_plans": [],
+  "primary_selection": {
+    "members": ["ガブリアス", "ハッサム", "ラプラス"],
+    "note": "ハッサムで氷を受けつつガブリアスで詰める基本選出。"
+  },
+  "alternate_selection": {
+    "members": ["ガブリアス", "ラプラス", "ハッサム"],
+    "note": "相手がパオジアン軸で一貫する場合はラプラスを先発にし、こごえるかぜで削りつつ受け回す。"
+  },
+  "concept": "高速物理ドラゴンで先発制圧し、テラスタルで弱点を変換しながら積み切るスタン構築。",
+  "damage_calcs": [
+    {
+      "title": "ガブリアス→カイリュー (げきりん)",
+      "attacker": { "name": "ガブリアス", "level": 50, "item": "こだわりスカーフ" },
+      "defender": { "name": "カイリュー", "level": 50, "ability": "マルチスケイル" },
+      "move": { "name": "げきりん", "type": "ドラゴン", "category": "物理", "power": 120 },
+      "rolls_percent": [54.1, 54.6, 55.0, 55.5, 55.9, 56.4, 56.8, 57.3, 57.7, 58.2, 58.6, 59.1, 59.5, 60.0, 60.4, 61.0],
+      "min_percent": 54.1,
+      "max_percent": 61.0,
+      "guaranteed_hits": 2,
+      "note": "マルチスケイル込み2発。削っていれば確1。"
+    }
+  ],
+  "updated_at": "2026-04-20",
+  "schema_version": 1
+}

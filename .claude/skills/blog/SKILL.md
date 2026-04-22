@@ -134,11 +134,11 @@ http://localhost:4321 で既に何かがリッスンしています。
 別ターミナルで起動済みの dev server を使うか、ご自分で確認してください。
 ```
 
-`$ALREADY_RUNNING` が空の場合のみ **AskUserQuestion** (1問):
+`$ALREADY_RUNNING` が空の場合のみ **AskUserQuestion** (1問)。**質問には bun runtime が必要である旨の断りを必ず含める** (setup.sh は bun を入れないため、ユーザーが未導入の可能性がある):
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | ローカルで dev プレビューしながら作業しますか？ (Astro の hot reload で編集結果がリアルタイムに反映されます) | プレビュー | 起動しない(default, desc: 編集だけ進めて、ブラウザで確認しない), 起動する(desc: preview_start で site を起動。Phase G 終了時に停止確認) | false |
+| 1 | ローカルで dev プレビューしながら作業しますか？ (Astro の hot reload で編集結果がリアルタイムに反映されます。**プレビュー起動には bun runtime が必要です。未導入の場合は scripts/install_bun.sh で自動インストールするか確認します**) | プレビュー | 起動しない(default, desc: 編集だけ進めて、ブラウザで確認しない), 起動する(desc: preview_start で site を起動。bun 未導入なら先にインストール確認。Phase G 終了時に停止確認) | false |
 
 「起動しない」を選ばれた場合はそのまま該当 Phase へ。
 

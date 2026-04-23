@@ -11,6 +11,12 @@ export default defineConfig({
   trailingSlash: 'always',
   build: { format: 'directory' },
   integrations: [sitemap()],
+  vite: {
+    // @resvg/resvg-js は native binary を含む。Vite の optimizeDeps に拾われると
+    // bundle 時に壊れるので exclude。endpoint 側では直接 node_modules から解決する。
+    optimizeDeps: { exclude: ['@resvg/resvg-js'] },
+    ssr: { external: ['@resvg/resvg-js'] },
+  },
   // 一覧ページから詳細へのリンクを hover/focus 時点で HTML prefetch する。
   // prefetch された HTML をブラウザがパースするタイミングで <link rel="preload">
   // のフォントも早期に disk cache に乗るので、遷移時の 304 ラウンドトリップが

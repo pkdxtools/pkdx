@@ -8,12 +8,23 @@ import { loadSiteConfig } from '../lib/site-config';
 interface Props {
   title?: string;
   description?: string;
+  ogImage?: string;
+  ogType?: 'article' | 'website';
 }
 
-const { title, description } = Astro.props;
+const { title, description, ogImage, ogType = 'website' } = Astro.props;
 const config = loadSiteConfig();
 const pageTitle = title ? `${title} - ${config.site_name}` : config.site_name;
 const base = import.meta.env.BASE_URL;
+
+// canonical / og:image は SNS クローラの都合で絶対 URL が必須。
+// Astro.site が設定されていない (dev / preview) 環境では og タグ自体を出さない。
+const siteUrl = Astro.site;
+const canonicalUrl = siteUrl ? new URL(Astro.url.pathname, siteUrl).href : null;
+const fallbackOg = siteUrl ? new URL(`${base}og/default.png`, siteUrl).href : null;
+const ogImageUrl = ogImage
+  ? (siteUrl ? new URL(ogImage, siteUrl).href : ogImage)
+  : fallbackOg;
 ---
 <!doctype html>
 <html lang="ja">
@@ -43,6 +54,24 @@ const base = import.meta.env.BASE_URL;
     </script>
     <title>{pageTitle}</title>
     {description && <meta name="description" content={description} />}
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+    <meta property="og:site_name" content={config.site_name} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={pageTitle} />
+    {description && <meta property="og:description" content={description} />}
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    {ogImageUrl && (
+      <>
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+      </>
+    )}
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    {description && <meta name="twitter:description" content={description} />}
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
     <link rel="icon" type="image/png" href={`${base}favicon.png`} />
     <Font cssVariable="--font-ibm-plex-sans-jp" preload />
     <ClientRouter />

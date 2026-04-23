@@ -9,6 +9,7 @@ import DamageCalcTable from '../../components/DamageCalcTable.astro';
 import MatchupPlans from '../../components/MatchupPlans.astro';
 import { isPublishableTeam } from '../../content.config';
 import { loadTeamMeta, type DamageCalc, type TeamMember } from '../../lib/team-meta';
+import { buildOgUrl } from '../../lib/og/meta-url';
 
 export async function getStaticPaths() {
   const entries = (await getCollection('teams')).filter(isPublishableTeam);
@@ -34,8 +35,17 @@ const assignedNames = new Set(members.map((m) => m.name));
 const unassignedCalcs = allCalcs.filter(
   (c) => !assignedNames.has(c.attacker.name ?? '') && !assignedNames.has(c.defender.name ?? ''),
 );
+
+const ogImage = Astro.site
+  ? buildOgUrl('teams', entry.id, Astro.site, import.meta.env.BASE_URL)
+  : undefined;
 ---
-<BaseLayout title={entry.data.title} description={entry.data.description}>
+<BaseLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  ogImage={ogImage}
+  ogType="article"
+>
   <article class="team-article" transition:name={`team-card-${entry.id}`}>
     <header class="hero">
       <p class="muted small hero-date">

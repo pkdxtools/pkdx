@@ -122,6 +122,27 @@ test "parental bond: damage is d1 + 25% d2 per roll index" {
 }
 
 ///|
+test "parental bond: 2nd hit equals an independent quarter-power calc" {
+  // Per Showdown spec the Parental Bond 2nd hit runs the full damage
+  // pipeline at 1/4 base power. Verify this by computing a plain hit at
+  // reduced power and checking d_pb[i] == d1[i] + d_quarter[i] for every
+  // roll index (the engine now re-enters compute_rolls per hit).
+  let atk = pb_pokemon("kangaskhan", "ノーマル")
+  let dfn = pb_pokemon("target", "ノーマル")
+  let full_power = pb_move("たいあたり", "ノーマル", 40)
+  let quarter_power = pb_move("たいあたり", "ノーマル", 10) // 40 / 4
+  let inp_pb = pb_input(atk, dfn, full_power, atk_ability="おやこあい")
+  let inp_1 = pb_input(atk, dfn, full_power)
+  let inp_2 = pb_input(atk, dfn, quarter_power)
+  let r_pb = calc_damage(inp_pb)
+  let r_1 = calc_damage(inp_1)
+  let r_2 = calc_damage(inp_2)
+  for i = 0; i < 16; i = i + 1 {
+    assert_eq(r_pb.damages[i], r_1.damages[i] + r_2.damages[i])
+  }
+}
+
+///|
 test "parental bond: skipped on multi-hit base moves" {
   // みずしゅりけん is already multi-hit — Parental Bond should not add a
   // Second hit on top. hits_dealt reflects the regular multi-hit plan.

@@ -257,10 +257,6 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
   }
 
-  // 4. Base damage
-  let inner = 22 * effective_power * atk_stat / def_stat
-  let damage_base = inner / 50 + 2
-
   // Type effectiveness (using x4 integer encoding)
   let atk_type_opt = @types.type_from_jp(move_type)
   let def1_opt = @types.type_from_jp(dfn.type1)
@@ -308,119 +304,130 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     4096
   }
 
-  // 16-roll damage loop
-  let damages : FixedArray[Int] = FixedArray::make(16, 0)
-  let percents : FixedArray[Double] = FixedArray::make(16, 0.0)
+  // 16-roll damage loop, factored into a closure so Parental Bond can re-run
+  // it at quarter power for the 2nd hit (Showdown-accurate per-hit pipeline).
+  // All non-power state (stat, ability, item, wall, STAB, type effectiveness,
+  // Tinted Lens) is closed over and shared between the two invocations.
+  let compute_rolls = fn(eff_pow : Int) -> FixedArray[Int] {
+    let safe_pow = if eff_pow < 1 { 1 } else { eff_pow }
+    let inner = 22 * safe_pow * atk_stat / def_stat
+    let damage_base = inner / 50 + 2
+    let out : FixedArray[Int] = FixedArray::make(16, 0)
+    for idx = 0; idx < 16; idx = idx + 1 {
+      let rand = 85 + idx
+      let mut dmg = damage_base
 
-  for idx = 0; idx < 16; idx = idx + 1 {
-    let rand = 85 + idx
-    let mut dmg = damage_base
-
-    // Spread move modifier (double battle, 0.75x)
-    if input.is_double && is_spread_move(move_name) {
-      dmg = round5(dmg, 3072)
-    }
-
-    // Weather damage mod
-    if weather.is_active() {
-      let w_mod = get_weather_damage_mod(weather, move_type)
-      if w_mod > 0 {
-        dmg = round5(dmg, w_mod)
+      // Spread move modifier (double battle, 0.75x)
+      if input.is_double && is_spread_move(move_name) {
+        dmg = round5(dmg, 3072)
       }
-    }
 
-    // Field mod
-    if field.is_active() {
-      let f_mod = get_field_damage_mod(field, move_type)
-      if f_mod > 0 {
-        dmg = round5(dmg, f_mod)
-      }
-    }
-
-    // Critical
-    if input.critical {
-      dmg = round5(dmg, 6144)
-    }
-
-    // Random roll
-    dmg = dmg * rand / 100
-
-    // STAB
-    if has_stab {
-      dmg = round5(dmg, stab_mult)
-    }
-
-    // Skin bonus
-    if skin_bonus {
-      dmg = round5(dmg, 4915)
-    }
-
-    // Type effectiveness (integer fraction)
-    dmg = dmg * eff1_x4 / 4
-    dmg = dmg * eff2_x4 / 4
-
-    // Defender ability final
-    if def_ability.length() > 0 {
-      let d_mod = get_def_ability_final(
-        def_ability, move_name, move_type, is_super_effective, is_special,
-      )
-      if d_mod > 0 {
-        dmg = round5(dmg, d_mod)
-      }
-    }
-
-    // Attacker ability final
-    if atk_ability.length() > 0 {
-      let a_mod = get_atk_ability_final(atk_ability, move_type, input.fainted_count)
-      if a_mod > 0 {
-        dmg = round5(dmg, a_mod)
-      }
-    }
-
-    // Walls (Reflect / Light Screen / Aurora Veil).
-    // Inserted between ability finals and Tinted Lens — matches the
-    // Showdown final-mod chain. Critical, screen_pierce (move-side bypass),
-    // and mold-breaker-family abilities each skip the multiplier
-    // independently.
-    let wall_ok = wall_applies(input.wall, is_physical) &&
-      not(input.critical) &&
-      not(input.screen_pierce) &&
-      not(is_wall_bypass_ability(atk_ability))
-    if wall_ok {
-      let wall_mod = if input.is_double { 2732 } else { 2048 }
-      dmg = round5(dmg, wall_mod)
-    }
-
-    // Tinted Lens
-    if atk_ability == "いろめがね" && is_not_very_effective {
-      dmg = dmg * 2
-    }
-
-    // Attacker item final
-    if atk_item.length() > 0 {
-      let i_mod = get_atk_item_final(atk_item, is_physical, is_super_effective)
-      if i_mod > 0 {
-        dmg = round5(dmg, i_mod)
-      }
-    }
-
-    // Resist berry
-    if def_item.length() > 0 {
-      let berry_type = get_resist_berry_type(def_item)
-      if berry_type.length() > 0 && berry_type == move_type {
-        if def_item == "ホズのみ" || is_super_effective {
-          dmg = round5(dmg, 2048)
+      // Weather damage mod
+      if weather.is_active() {
+        let w_mod = get_weather_damage_mod(weather, move_type)
+        if w_mod > 0 {
+          dmg = round5(dmg, w_mod)
         }
       }
-    }
 
-    // Minimum 1
-    if dmg < 1 {
-      dmg = 1
-    }
+      // Field mod
+      if field.is_active() {
+        let f_mod = get_field_damage_mod(field, move_type)
+        if f_mod > 0 {
+          dmg = round5(dmg, f_mod)
+        }
+      }
 
-    damages[idx] = dmg
-    percents[idx] = dmg.to_double() / def_hp.to_double() * 100.0
+      // Critical
+      if input.critical {
+        dmg = round5(dmg, 6144)
+      }
+
+      // Random roll
+      dmg = dmg * rand / 100
+
+      // STAB
+      if has_stab {
+        dmg = round5(dmg, stab_mult)
+      }
+
+      // Skin bonus
+      if skin_bonus {
+        dmg = round5(dmg, 4915)
+      }
+
+      // Type effectiveness (integer fraction)
+      dmg = dmg * eff1_x4 / 4
+      dmg = dmg * eff2_x4 / 4
+
+      // Defender ability final
+      if def_ability.length() > 0 {
+        let d_mod = get_def_ability_final(
+          def_ability, move_name, move_type, is_super_effective, is_special,
+        )
+        if d_mod > 0 {
+          dmg = round5(dmg, d_mod)
+        }
+      }
+
+      // Attacker ability final
+      if atk_ability.length() > 0 {
+        let a_mod = get_atk_ability_final(atk_ability, move_type, input.fainted_count)
+        if a_mod > 0 {
+          dmg = round5(dmg, a_mod)
+        }
+      }
+
+      // Walls (Reflect / Light Screen / Aurora Veil).
+      // Inserted between ability finals and Tinted Lens — matches the
+      // Showdown final-mod chain. Critical, screen_pierce (move-side bypass),
+      // and mold-breaker-family abilities each skip the multiplier
+      // independently.
+      let wall_ok = wall_applies(input.wall, is_physical) &&
+        not(input.critical) &&
+        not(input.screen_pierce) &&
+        not(is_wall_bypass_ability(atk_ability))
+      if wall_ok {
+        let wall_mod = if input.is_double { 2732 } else { 2048 }
+        dmg = round5(dmg, wall_mod)
+      }
+
+      // Tinted Lens
+      if atk_ability == "いろめがね" && is_not_very_effective {
+        dmg = dmg * 2
+      }
+
+      // Attacker item final
+      if atk_item.length() > 0 {
+        let i_mod = get_atk_item_final(atk_item, is_physical, is_super_effective)
+        if i_mod > 0 {
+          dmg = round5(dmg, i_mod)
+        }
+      }
+
+      // Resist berry
+      if def_item.length() > 0 {
+        let berry_type = get_resist_berry_type(def_item)
+        if berry_type.length() > 0 && berry_type == move_type {
+          if def_item == "ホズのみ" || is_super_effective {
+            dmg = round5(dmg, 2048)
+          }
+        }
+      }
+
+      // Minimum 1
+      if dmg < 1 {
+        dmg = 1
+      }
+
+      out[idx] = dmg
+    }
+    out
+  }
+  let damages = compute_rolls(effective_power)
+  let percents : FixedArray[Double] = FixedArray::make(16, 0.0)
+  for i = 0; i < 16; i = i + 1 {
+    percents[i] = damages[i].to_double() / def_hp.to_double() * 100.0
   }
 
   // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
@@ -430,10 +437,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     return disguise_blocked_result(def_hp)
   }
 
-  // Multi-hit post-processing. Parental Bond adds a 25%-power second hit as
-  // an approximation — precise re-computation through the full modifier
-  // chain would require splitting calc_damage into a per-hit callable, which
-  // is future work.
+  // Multi-hit post-processing. Parental Bond's 2nd hit is now computed by
+  // re-running the full 16-roll pipeline at 1/4 base power (Gen7+ spec). This
+  // is Showdown-accurate: every modifier (STAB, Skin, type eff., abilities,
+  // walls, items, berries, min-1 floor) is applied independently to each hit.
   let hit_plan = resolve_hit_plan(mv, atk_ability, input.multi_hit_mode)
   let (final_damages, final_percents, hits_dealt) : (
     FixedArray[Int],
@@ -451,11 +458,13 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       (out, pct, n)
     }
     ParentalBond => {
+      // 2nd hit at 1/4 power, full pipeline.
+      let pow2 = effective_power / 4
+      let damages2 = compute_rolls(pow2)
       let out : FixedArray[Int] = FixedArray::make(16, 0)
       let pct : FixedArray[Double] = FixedArray::make(16, 0.0)
       for i = 0; i < 16; i = i + 1 {
-        let d2 = round5(damages[i], 1024) // 25% modifier
-        out[i] = damages[i] + d2
+        out[i] = damages[i] + damages2[i]
         pct[i] = out[i].to_double() / def_hp.to_double() * 100.0
       }
       (out, pct, 2)

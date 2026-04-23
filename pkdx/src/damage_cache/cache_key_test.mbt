@@ -25,6 +25,17 @@ fn baseline() -> CacheKeyInput {
     atk_rank: 0,
     def_rank: 0,
     fainted_count: 2,
+    wall: "",
+    screen_pierce: false,
+    atk_status: "",
+    def_status: "",
+    atk_rank_up_count: 0,
+    def_rank_up_count: 0,
+    atk_hp_num: 0,
+    atk_hp_den: 0,
+    def_item_removable: false,
+    multi_hit_mode: "",
+    disguise_active: false,
   }
 }
 
@@ -68,6 +79,18 @@ test "build_cache_key: single-field change yields distinct key" {
     { ..baseline(), atk_rank: 2 },
     { ..baseline(), def_rank: -2 },
     { ..baseline(), fainted_count: 0 },
+    // rev2 additions: each new field must contribute to the key.
+    { ..baseline(), wall: "reflect" },
+    { ..baseline(), screen_pierce: true },
+    { ..baseline(), atk_status: "burn" },
+    { ..baseline(), def_status: "paralyze" },
+    { ..baseline(), atk_rank_up_count: 3 },
+    { ..baseline(), def_rank_up_count: 3 },
+    { ..baseline(), atk_hp_num: 1 },
+    { ..baseline(), atk_hp_den: 4 },
+    { ..baseline(), def_item_removable: true },
+    { ..baseline(), multi_hit_mode: "fixed:5" },
+    { ..baseline(), disguise_active: true },
   ]
   for i = 0; i < mutations.length(); i = i + 1 {
     guard build_cache_key(mutations[i]) is Ok(k) else {

@@ -39,35 +39,43 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
   }
 
+  // StatResolution に body press / psyshock / shell side arm / secret sword /
+  // unaware / critical を集約する。ここでは base stat (未補正) を比較材料と
+  // して渡す — shell side arm の動的判定は本来 nature/item 補正後の値で行う
+  // のが Showdown 準拠だが、現状 PR-A では base 比較で十分な近似とし、将来
+  // PR で精度向上する。既存テストは shell side arm を含まないため挙動不変。
+  let sr = resolve_stat_resolution(
+    mv,
+    atk_atk=atk.atk, atk_spa=atk.spa,
+    def_def=dfn.def_, def_spd=dfn.spd,
+    atk_ability~,
+    def_ability~,
+    critical=input.critical,
+  )
   // ボディプレスは攻撃側のDefenseを攻撃値として使う物理技。
   // Attack系の補正（ちからもち・はりきり・ハチマキ等）は適用されず、
   // Defense系の補正（ファーコート・しんかのきせき等）が適用される。
-  let is_body_press = move_name == "ボディプレス"
+  // StatResolution 経由で判定: atk_stat_kind=Def かつ物理扱いなら body press
+  // 相当 (技名で判定するより拡張性が高い)。
+  let is_body_press = sr.atk_stat_kind == @model.StatIndex::Def &&
+    sr.effective_physical
 
   // 2. Stat calculation
-  let atk_base = if is_physical {
-    if is_body_press {
-      atk.def_
-    } else {
-      atk.atk
-    }
-  } else {
-    atk.spa
+  let atk_base = match sr.atk_stat_kind {
+    @model.StatIndex::Atk => atk.atk
+    @model.StatIndex::Def => atk.def_
+    @model.StatIndex::SpA => atk.spa
+    // 下記 3 つは StatResolution が返さない値だが網羅性のため残す。
+    _ => atk.atk
   }
   let def_base_hp = dfn.hp
-  let def_base = if is_physical { dfn.def_ } else { dfn.spd }
-
-  // Nature が参照する stat index を決定する。
-  // 攻撃側: body press は Def、それ以外は move カテゴリに従って Atk / SpA。
-  // 防御側: move カテゴリに従って Def / SpD。
-  let atk_stat_index : @model.StatIndex = if is_body_press {
-    Def
-  } else if is_physical {
-    Atk
-  } else {
-    SpA
+  let def_base = match sr.def_stat_kind {
+    @model.StatIndex::Def => dfn.def_
+    @model.StatIndex::SpD => dfn.spd
+    _ => dfn.def_
   }
-  let def_stat_index : @model.StatIndex = if is_physical { Def } else { SpD }
+  let atk_stat_index : @model.StatIndex = sr.atk_stat_kind
+  let def_stat_index : @model.StatIndex = sr.def_stat_kind
 
   // Nature 補正 numerator/denominator:
   //   attacker default (None) = +10% (legacy 攻撃stat特化相当)
@@ -123,17 +131,21 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
   // 2a-2. Rank (stat stage) modifiers
   // override は「rank 前の実数値」として扱う。rank は常に掛ける。
-  let atk_stage = if input.critical && input.atk_rank < 0 {
-    0
-  } else {
-    input.atk_rank
-  }
+  // StatResolution の mask 情報に従って、てんねん / 急所 / せいなるつるぎ /
+  // SecretSword を直交合成する。
+  let atk_stage = apply_rank_masks(
+    input.atk_rank,
+    sr.atk_rank_mask,
+    sr.atk_rank_positive_mask,
+    sr.atk_rank_negative_mask,
+  )
   atk_stat = apply_rank(atk_stat, atk_stage)
-  let def_stage = if input.critical && input.def_rank > 0 {
-    0
-  } else {
-    input.def_rank
-  }
+  let def_stage = apply_rank_masks(
+    input.def_rank,
+    sr.def_rank_mask,
+    sr.def_rank_positive_mask,
+    sr.def_rank_negative_mask,
+  )
   def_stat = apply_rank(def_stat, def_stage)
 
   // 2b. Ability stat modifiers

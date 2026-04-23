@@ -856,6 +856,19 @@ fn combatant_to_cache_key_input(
     atk_rank,
     def_rank,
     fainted_count: 0,
+    // rev2: payoff never varies any of these. Defaults keep pre-rev2 cache
+    // semantics for disk entries recomputed under the extended key.
+    wall: "",
+    screen_pierce: false,
+    atk_status: "",
+    def_status: "",
+    atk_rank_up_count: 0,
+    def_rank_up_count: 0,
+    atk_hp_num: 0,
+    atk_hp_den: 0,
+    def_item_removable: false,
+    multi_hit_mode: "",
+    disguise_active: false,
   }
 }
 

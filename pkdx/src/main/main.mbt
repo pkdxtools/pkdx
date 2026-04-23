@@ -235,6 +235,17 @@ fn run_damage_bench(
     atk_rank: 0,
     def_rank: 0,
     fainted_count: 2,
+    wall: "",
+    screen_pierce: false,
+    atk_status: "",
+    def_status: "",
+    atk_rank_up_count: 0,
+    def_rank_up_count: 0,
+    atk_hp_num: 0,
+    atk_hp_den: 0,
+    def_item_removable: false,
+    multi_hit_mode: "",
+    disguise_active: false,
   }
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
@@ -1235,6 +1246,21 @@ fn run_damage(
       atk_rank,
       def_rank,
       fainted_count,
+      // rev2: CLI-layer extensions will populate these below after
+      // `--wall` / `--atk-status` / ... flags are wired up (PR-A task #8).
+      // For now the cache key records them as defaults so that existing
+      // cache entries stay reachable under the extended key format.
+      wall: "",
+      screen_pierce: false,
+      atk_status: "",
+      def_status: "",
+      atk_rank_up_count: 0,
+      def_rank_up_count: 0,
+      atk_hp_num: 0,
+      atk_hp_den: 0,
+      def_item_removable: false,
+      multi_hit_mode: "",
+      disguise_active: false,
     }
     match @damage_cache.build_cache_key(key_input) {
       Ok(k) => Some(k)

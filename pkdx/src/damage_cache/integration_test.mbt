@@ -45,6 +45,17 @@ fn int_baseline() -> CacheKeyInput {
     atk_rank: 0,
     def_rank: 0,
     fainted_count: 2,
+    wall: "",
+    screen_pierce: false,
+    atk_status: "",
+    def_status: "",
+    atk_rank_up_count: 0,
+    def_rank_up_count: 0,
+    atk_hp_num: 0,
+    atk_hp_den: 0,
+    def_item_removable: false,
+    multi_hit_mode: "",
+    disguise_active: false,
   }
 }
 

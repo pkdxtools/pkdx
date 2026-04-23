@@ -39,13 +39,23 @@ fn effective_hp(c : Combatant) -> Int {
 
 ///|
 /// `actual_stats` は `[H, A, B, C, D, Spe]` 順の HABCDS 配列。engine.mbt の
-/// `is_body_press` / `is_physical` 分岐と対応する stat index を返す:
+/// `stat_resolution` と同じ分岐を payoff 層でも辿る:
 ///   - ボディプレス → 攻撃側 Def (index 2)
-///   - 物理技       → 攻撃側 Atk (1)、防御側 Def (2)
-///   - 特殊技       → 攻撃側 SpA (3)、防御側 SpD (4)
+///   - Psyshock family (サイコショック / サイコブレイク / しんぴのつるぎ)
+///       → 防御側 Def (2) を参照する特殊技
+///   - 物理技   → 攻撃側 Atk (1)、防御側 Def (2)
+///   - 特殊技   → 攻撃側 SpA (3)、防御側 SpD (4)
+///
+/// シェルアームズは payoff 層では補正済み stat を持たない段階で判定できない
+/// ので、現状 Move.category (Special) のまま扱う。将来の PR で actual_stats
+/// から動的選択する場合は `payoff/team_monte_carlo` 側で早期判定する。
 fn attack_defense_stat_indices(mv : @model.Move) -> (Int, Int) {
   let is_physical = mv.category == @model.Physical
-  let is_body_press = mv.name == "ボディプレス"
+  let name = mv.name
+  let is_body_press = name == "ボディプレス"
+  let is_psyshock_family = name == "サイコショック" ||
+    name == "サイコブレイク" ||
+    name == "しんぴのつるぎ"
   let atk_idx = if is_body_press {
     2
   } else if is_physical {
@@ -53,7 +63,13 @@ fn attack_defense_stat_indices(mv : @model.Move) -> (Int, Int) {
   } else {
     3
   }
-  let def_idx = if is_physical { 2 } else { 4 }
+  let def_idx = if is_psyshock_family {
+    2
+  } else if is_physical {
+    2
+  } else {
+    4
+  }
   (atk_idx, def_idx)
 }
 

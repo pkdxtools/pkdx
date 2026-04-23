@@ -30,4 +30,16 @@ describe('buildOgUrl', () => {
     const url = buildOgUrl('blog', 'hello', site, '/pkdx');
     expect(url).toBe('https://example.github.io/pkdx/og/blog/hello.png');
   });
+
+  it('preserves `/` in nested slug so [...slug] route still matches', () => {
+    const url = buildOgUrl('blog', 'sub/dir/article', site, '/pkdx/');
+    expect(url).toBe('https://example.github.io/pkdx/og/blog/sub/dir/article.png');
+  });
+
+  it('encodes each nested segment independently', () => {
+    const url = buildOgUrl('blog', 'カテゴリ/カバルドン-build', site, '/pkdx/');
+    expect(url).toBe(
+      `https://example.github.io/pkdx/og/blog/${encodeURIComponent('カテゴリ')}/${encodeURIComponent('カバルドン-build')}.png`,
+    );
+  });
 });

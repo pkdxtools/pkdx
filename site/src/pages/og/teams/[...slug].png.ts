@@ -41,10 +41,13 @@ export const GET: APIRoute = async ({ props }) => {
     axisTypes,
   });
 
+  // `output: 'static'` ビルドでは endpoint の Response headers はディスクに
+  // 残らず捨てられる。GitHub Pages は custom Cache-Control を受け付けないので
+  // ここで Cache-Control を返しても no-op になる。キャッシュ無効化が必要な
+  // ときは URL 自体を変える (content hash / バージョン付与) 以外に手がない。
   return new Response(new Uint8Array(png), {
     headers: {
       'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=300, must-revalidate',
     },
   });
 };

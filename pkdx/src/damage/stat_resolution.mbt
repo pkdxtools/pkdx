@@ -12,6 +12,10 @@
 ///   Negative defender stages still apply.
 /// - シェルアームズ picks physical iff `atk_atk * def_spd > atk_spa * def_def`
 ///   (strict `>`; a tie falls to special, matching Showdown).
+///   WONDER_ROOM_NOT_SUPPORTED: Wonder Room swaps Def <-> SpD mid-turn, which
+///   would flip the Shell Side Arm ratio and the Psyshock-family defender
+///   lookup. pkdx assumes single battles and does not model it. If a future
+///   PR adds doubles / field hazards, re-examine this branch.
 /// - てんねん: if the defender has it, attacker's stages are fully masked
 ///   (`atk_rank_mask`). If the attacker has it, defender's stages are fully
 ///   masked. Both sides can hold it independently.
@@ -83,6 +87,9 @@ pub fn resolve_stat_resolution(
   }
 
   // Psyshock family: special category but target defender's Def.
+  // WONDER_ROOM_NOT_SUPPORTED: under Wonder Room the defender's Def/SpD roles
+  // would be swapped, so this override would need to flip to SpD. pkdx's
+  // single-battle scope treats the raw stat kind as the source of truth.
   if name == "サイコショック" ||
      name == "サイコブレイク" ||
      name == "しんぴのつるぎ" {
@@ -90,6 +97,8 @@ pub fn resolve_stat_resolution(
   }
 
   // Shell Side Arm dynamic choice. Use strict > so ties fall to special.
+  // WONDER_ROOM_NOT_SUPPORTED: the comparison reads raw Def/SpD which would
+  // be swapped under Wonder Room. Not handled today.
   if name == "シェルアームズ" {
     let phys_score = atk_atk * def_spd
     let spec_score = atk_spa * def_def

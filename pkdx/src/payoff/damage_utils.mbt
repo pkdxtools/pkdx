@@ -5,6 +5,12 @@
 
 ///|
 /// Mean damage over the 16-roll table. Zero for immune matchups.
+///
+/// ばけのかわが剥がれる初撃は engine が `damages=0` + `disguise_blocked=true`
+/// を返す。このターン攻撃側は実ダメを 0 しか稼げないが、防御側は 1/8 の
+/// chip ダメージを払う (Gen7 以降仕様) ので、payoff 層で「このターンの相手
+/// への与ダメ期待値」を評価する上では 0 ではなく `max_hp / 8` 固定を加算
+/// する方が現実に近い。本関数ではこれを固定加算として織り込む。
 fn avg_damage(r : @model.DamageCalcResult) -> Double {
   if r.is_immune {
     return 0.0
@@ -13,7 +19,12 @@ fn avg_damage(r : @model.DamageCalcResult) -> Double {
   for i in 0..<16 {
     s += r.damages[i]
   }
-  s.to_double() / 16.0
+  let base = s.to_double() / 16.0
+  if r.disguise_blocked {
+    base + r.defender_hp.to_double() / 8.0
+  } else {
+    base
+  }
 }
 
 ///|

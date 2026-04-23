@@ -295,6 +295,17 @@ fn run_damage_bench(
       } else {
         @model.Standard
       },
+      wall: @model.Wall::NoWall,
+      screen_pierce: false,
+      atk_status_condition: @model.StatusCondition::None,
+      def_status_condition: @model.StatusCondition::None,
+      atk_rank_up_count: 0,
+      def_rank_up_count: 0,
+      atk_hp_num: 2,
+      atk_hp_den: 2,
+      def_item_removable: false,
+      multi_hit_mode: @model.MultiHit::Auto,
+      disguise_active: false,
     }
     let json_format = @cli.parse_output_format("json")
     let report = @damage_cache.run_bench(cache, key, iterations, fn() {
@@ -1327,6 +1338,17 @@ fn run_damage(
       } else {
         @model.Standard
       },
+      wall: @model.Wall::NoWall,
+      screen_pierce: false,
+      atk_status_condition: @model.StatusCondition::None,
+      def_status_condition: @model.StatusCondition::None,
+      atk_rank_up_count: 0,
+      def_rank_up_count: 0,
+      atk_hp_num: 2,
+      atk_hp_den: 2,
+      def_item_removable: false,
+      multi_hit_mode: @model.MultiHit::Auto,
+      disguise_active: false,
     }
     let result = @damage.calc_damage(input)
     let output = @cli.format_damage(result, input, format)

@@ -422,6 +422,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     ko_text,
     defender_hp: def_hp,
     is_immune: false,
+    disguise_blocked: false,
+    hits_dealt: 1,
   }
 }
 
@@ -488,6 +490,8 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
     ko_text: "immune",
     defender_hp: def_hp,
     is_immune: true,
+    disguise_blocked: false,
+    hits_dealt: 1,
   }
 }
 

@@ -76,6 +76,17 @@ fn mk_input_for_test(
     fainted_count: 0,
     is_double: false,
     stat_system: @model.Standard,
+    wall: @model.Wall::NoWall,
+    screen_pierce: false,
+    atk_status_condition: @model.StatusCondition::None,
+    def_status_condition: @model.StatusCondition::None,
+    atk_rank_up_count: 0,
+    def_rank_up_count: 0,
+    atk_hp_num: 2,
+    atk_hp_den: 2,
+    def_item_removable: false,
+    multi_hit_mode: @model.MultiHit::Auto,
+    disguise_active: false,
   }
 }
 
@@ -101,6 +112,8 @@ fn mk_result_for_test(
     ko_text,
     defender_hp: 175,
     is_immune: false,
+    disguise_blocked: false,
+    hits_dealt: 1,
   }
 }
 

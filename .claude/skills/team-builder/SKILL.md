@@ -235,6 +235,19 @@ Phase 1-Team-Vision で vision 抽出 + `pkdx stat-reverse` 検証済みの SP /
 
 5. **計算実行 + attach**: 重要 — `pkdx damage` には `--atk-ev` / `--def-ev` オプションは存在しない。実数値は `--atk-stat` / `--def-stat` / `--def-hp` で直接渡す（pre-rank の生stat値）。実数値は **`pkdx stat-calc` の出力を SSoT** とし、手計算しない。
 
+   **rev2 フラグ (威力可変 / 壁 / 連続技 / 状態)**: 以下は該当する技 / 状況でのみ追加する。指定しなければ既定値 (威力素点・壁なし・状態なし・連続技=auto) でそのまま計算される。
+   - `--wall reflect|light-screen|aurora-veil` (または `リフレクター`/`ひかりのかべ`/`オーロラベール`) … 守り側の壁が場にある想定
+   - `--atk-status yakedo|mahi|doku|...` (または `やけど`/`まひ`/...) … やけっぱち の威力 2x 判定
+   - `--def-status ...` … たたりめ の威力 2x 判定
+   - `--atk-rank-up-count N` … アシストパワー の威力 = 20 + 20N
+   - `--def-rank-up-count N` … つけあがる の威力 = 20 + 20N
+   - `--atk-hp 1/2` (または `50%`) … やけっぱち の HP 半分以下判定
+   - `--def-item-removable` … はたきおとす の 1.5x 判定 (奪える持ち物のときのみ)
+   - `--multi-hit 5` … Skill Link 技で 5 発固定 / `auto` は DB 参照 (ロックブラスト等 2-5 乱数は中央値 3)
+   - `--disguise-active` … ミミッキュの初撃 (ダメージ 0 + `disguise_blocked=true`)
+
+   damage_calcs ブログ埋め込みでは `hits_dealt` と `disguise_blocked` も meta.json に記録される。連続技は 1 発ぶんを element-wise で n 倍して 16 段テーブルに反映される。
+
    **共通: opponent の実数値計算** (両 format で必要):
 
    ```bash

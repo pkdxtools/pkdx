@@ -115,10 +115,56 @@ $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
   [--atk-stat <value>] [--def-stat <value>] [--def-hp <value>] \
   [--atk-rank <n>] [--def-rank <n>] \
   [--fainted-count <n>] \
+  [--wall <kind>] [--pierce-screen] \
+  [--atk-status <name>] [--def-status <name>] \
+  [--atk-rank-up-count <n>] [--def-rank-up-count <n>] \
+  [--atk-hp <ratio>] [--def-item-removable] \
+  [--multi-hit <mode>] [--disguise-active] \
   --format json
 ```
 
 「なし」が選択された修飾子はオプションを省略する。
+
+### rev2 オプションの意味
+
+| フラグ | 意味 | 受け入れる値 (ja / en 両対応) | 用途 |
+|--------|------|-------------------------------|------|
+| `--wall <kind>` | 防御側の壁 | `reflect` / `リフレクター`, `light-screen` / `ひかりのかべ`, `aurora-veil` / `オーロラベール` | 壁込みダメ計 (0.5x / ダブルは 0.667x) |
+| `--pierce-screen` | 壁貫通 move | bool flag | かわらわり / サイコファング等 |
+| `--atk-status <name>` | 攻撃側状態異常 | `burn` / `やけど`, `paralyze` / `まひ`, `poison` / `どく`, `badpoison` / `もうどく`, `sleep` / `ねむり` | やけっぱち威力 2x 判定用 |
+| `--def-status <name>` | 防御側状態異常 | 同上 | たたりめ威力 2x 判定用 |
+| `--atk-rank-up-count <n>` | 攻撃側ランクアップ累積段数 | `0..6` | アシストパワー威力 = 20 + 20×n |
+| `--def-rank-up-count <n>` | 防御側ランクアップ累積段数 | `0..6` | つけあがる威力 = 20 + 20×n |
+| `--atk-hp <ratio>` | 攻撃側残 HP 比率 | `1/2`, `50%`, `1/3`, `33%` ... | やけっぱち (HP ≤ 1/2 で威力 2x) |
+| `--def-item-removable` | 防御側が奪える持ち物を持つ | bool flag | はたきおとす威力 = 65 × 1.5 = 97 |
+| `--multi-hit <mode>` | 連続技の回数固定 | `auto` (既定, DB 参照), `1..5` (固定) | 連続技の検証・Skill Link 再現 |
+| `--disguise-active` | ばけのかわが剥がれる前 | bool flag | 初撃ダメージ 0 + `disguise_blocked=true` |
+
+### 典型的な使用例
+
+```bash
+# ミミッキュ (ばけのかわ) の初撃検証
+$PKDX damage "ガブリアス" "ミミッキュ" "じしん" --disguise-active --format json
+
+# リフレクター下のガブリアス → カイリュー (物理)
+$PKDX damage "ガブリアス" "カイリュー" "じしん" --wall reflect --format json
+
+# アシストパワー (攻撃側が +2 を 2 stat = 計 4 段上がった状態)
+$PKDX damage "ミュウツー" "ハピナス" "アシストパワー" --atk-rank-up-count 4 --format json
+
+# やけっぱち (HP 半分以下で威力 2x)
+$PKDX damage "パチリス" "ガブリアス" "やけっぱち" --atk-hp 1/2 --format json
+
+# たたりめ (相手状態異常時 2x)
+$PKDX damage "ゲンガー" "トゲキッス" "たたりめ" --def-status paralyze --format json
+
+# はたきおとす (持ち物剥がせる相手に 1.5x)
+$PKDX damage "サザンドラ" "ハピナス" "はたきおとす" --def-item-removable --format json
+
+# Skill Link でロックブラスト 5 回固定
+$PKDX damage "ドリュウズ" "ナットレイ" "ロックブラスト" \
+  --atk-ability スキルリンク --multi-hit 5 --format json
+```
 
 ### 計算条件（デフォルト）
 
@@ -264,3 +310,10 @@ pkdx が `Error:` で始まる出力を返した場合、またはJSON出力の 
 
 ### その他
 テラスタル（`--tera-type`）, 急所（`--critical`）, ランク補正（`--atk-rank`, `--def-rank`、-6〜+6、第3世代以降仕様。急所時は攻撃側の負ランク・防御側の正ランクを無視。`--atk-stat`/`--def-stat` の override は「rank 前の実数値」として扱われ、rank は常に乗る）, 性格（`--atk-nature`, `--def-nature`, ja名）, ひんし数（`--fainted-count`、0-5、そうだいしょう用）
+
+### rev2 で追加された威力可変技 / 壁 / 連続技 / 状態
+- 威力可変技: ウェザーボール (天候自動判定), つけあがる (`--def-rank-up-count`), アシストパワー (`--atk-rank-up-count`), やけっぱち (`--atk-hp`), はたきおとす (`--def-item-removable`), たたりめ (`--def-status`)
+- カテゴリ / ランク override: サイコショック / サイコブレイク / しんぴのつるぎ (自動), シェルアームズ (自動), せいなるつるぎ (自動)
+- 特性: てんねん (atk/def_ability で自動), ばけのかわ (`--disguise-active`), おやこあい (atk_ability で自動, hits_dealt=2)
+- 壁: リフレクター / ひかりのかべ / オーロラベール (`--wall`), 貫通技 (`--pierce-screen`)
+- 連続技: 2 回固定 (ダブルチョップ等), 3 回固定 (トリプルキック等), 2-5 乱数 (`--multi-hit auto` は中央値 3, Skill Link で 5 固定), 任意固定 (`--multi-hit 1..5`)

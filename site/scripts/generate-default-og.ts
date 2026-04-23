@@ -9,7 +9,6 @@ const config = loadSiteConfig();
 
 const png = await renderBlogOg({
   title: 'ポケモン対戦と育成のメモ',
-  date: new Date(),
   tags: [],
   siteName: config.site_name,
 });

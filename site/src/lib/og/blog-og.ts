@@ -2,7 +2,7 @@ import { h, renderToPng, renderToSvg, type OgSize, type VNode } from './render.t
 
 export interface BlogOgInput {
   title: string;
-  date: Date;
+  date?: Date;
   tags: string[];
   siteName: string;
 }
@@ -31,7 +31,7 @@ function truncate(s: string, max: number): string {
 export function buildBlogOgNode(input: BlogOgInput): VNode {
   const title = truncate(input.title, 90);
   const fontSize = pickTitleFontSize(title.length);
-  const dateStr = dateISO(input.date);
+  const dateStr = input.date ? dateISO(input.date) : null;
   const tagText = input.tags.slice(0, 4).map((t) => `#${t}`).join('  ');
 
   return h(
@@ -109,7 +109,7 @@ export function buildBlogOgNode(input: BlogOgInput): VNode {
           marginBottom: 56,
         },
       },
-      h('span', { style: { display: 'flex' } }, dateStr),
+      dateStr ? h('span', { style: { display: 'flex' } }, dateStr) : null,
       tagText.length > 0 ? h('span', { style: { display: 'flex' } }, tagText) : null,
     ),
   );

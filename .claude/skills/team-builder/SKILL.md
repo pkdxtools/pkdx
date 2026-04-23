@@ -887,45 +887,15 @@ $PKDX hbd "<name>" --nature "<nature>" --fixed-ev "_,0,_,0,_,<S_ev>" --version s
 
 ### 6-1: メタデータ取得
 
-AskUserQuestionで取得方法を選択:
-- **Smogon Stats**: 自動取得
-- **手動入力**: ユーザーが仮想敵6体を直接指定
-
-#### Smogonからの自動取得
-
-1. 最新月の特定:
-```
-WebFetch: https://www.smogon.com/stats/
-Prompt: "ディレクトリ一覧から最新のYYYY-MM形式の月を返してください"
-```
-
-2. 使用率データ取得（フォールバック順）:
-
-**singles時**:
-```
-WebFetch: https://www.smogon.com/stats/{YYYY-MM}/gen9bssregi-1760.txt
-→ 失敗時: gen9bssregi-1695.txt
-→ 失敗時: gen9bssregi-0.txt
-→ 失敗時: gen9ou-1695.txt
-```
-
-**doubles時**:
-```
-WebFetch: https://www.smogon.com/stats/{YYYY-MM}/gen9bssfregidoubles-1760.txt
-→ 失敗時: gen9bssfregidoubles-1695.txt
-→ 失敗時: gen9bssfregidoubles-0.txt
-→ 失敗時: gen9doublesou-1695.txt
-→ 失敗時: gen9vgc2025-1695.txt
-```
-
-```
-Prompt: "パイプ区切りの表から、上位30体のポケモン名（英語名）と使用率（%）を抽出してください"
-```
+ユーザーに想定する仮想敵6体を直接指定してもらう（手動入力）。AskUserQuestionで以下を確認:
+- 現環境で意識したい上位ポケモン
+- 軸に不利がつく代表的なポケモン
+- よく当たる / 苦手意識のあるポケモン
 
 ### 6-2: 仮想敵6体の選出
 
-Top30から6体を選出する基準:
-1. **Top10から最低3体**（環境の中心）
+ユーザー提示のリストから6体を選出する基準:
+1. **環境の中心と目されるポケモン**を優先
 2. **軸に対して弱点を突けるポケモン**を優先（type.jsonで判定）
 3. **残りは環境全体のカバー**を考慮
 
@@ -1353,6 +1323,5 @@ SP: {HP}-{攻撃}-{防御}-{特攻}-{特防}-{素早さ}
 | pkdx / pokedex.db が見つからない | Phase 0でセットアップ手順を案内し終了 |
 | pkdx query の結果が空 | ポケモン名の確認を再度依頼。リージョンフォームの可能性を案内。メガシンカの場合はパッチ実行を提案 |
 | pkdx moves の結果が空 | version値の不一致の可能性を案内 |
-| Smogon Stats取得失敗 | フォールバック順で試行。全失敗時は手動入力モードに切り替え |
 | DB未収録のポケモン | AskUserQuestionでタイプ・種族値・主要技を手動入力してもらう |
 | `pkdx write teams` が `legacy schema detected` エラー | 該当 meta.json は旧 schema (hp/atk/... 長キー等)。`bin/pkdx convert meta --in <path> --in-place` で新 schema に変換してから再実行する |

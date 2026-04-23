@@ -4,9 +4,12 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let atk = input.attacker
   let dfn = input.defender
   let mv = input.move_
-  let mut move_type = mv.type_
   let move_name = mv.name
-  let move_power = mv.power
+  // ウェザーボール等の type/power 上書きは Skin ability / STAB 判定の前に行う。
+  // Normal→他タイプに変わった結果としてスキンが効かなくなる挙動が自然に成立。
+  let (resolved_power, resolved_type) = resolve_move_type_override(mv, input)
+  let mut move_type = resolved_type
+  let move_power = resolved_power
   let is_physical = mv.category == @model.Physical
   let is_special = mv.category == @model.Special
   let weather = input.weather
@@ -228,24 +231,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // 3. Power calculation
-  let mut effective_power = move_power
-
-  // おはかまいり: 基礎威力50 + 味方瀕死回数×50（最大100回=5050）
-  if move_name == "おはかまいり" {
-    let count = if input.fainted_count > 100 { 100 } else { input.fainted_count }
-    effective_power = 50 + count * 50
-  }
-
-  // 体重参照技は固定威力を上書きする（後続のテクニシャン等の補正は通常通り乗る）。
-  if move_name == "けたぐり" || move_name == "くさむすび" {
-    let dw = effective_weight(dfn.weight, def_ability)
-    effective_power = weight_based_power(dw)
-  } else if move_name == "ヘビーボンバー" || move_name == "ヒートスタンプ" {
-    let aw = effective_weight(atk.weight, atk_ability)
-    let dw = effective_weight(dfn.weight, def_ability)
-    effective_power = weight_ratio_power(aw, dw)
-  }
-
+  // 威力可変技 (おはかまいり / 体重依存 / つけあがる / アシストパワー /
+  // やけっぱち / はたきおとす / たたりめ) は variable_power.mbt に集約。
+  let mut effective_power = resolve_variable_power(
+    move_power, mv, input, dfn, atk, atk_ability, def_ability,
+  )
   if atk_ability.length() > 0 {
     effective_power = apply_atk_ability_power(
       atk_ability, move_name, move_type, effective_power, weather,
@@ -387,6 +377,20 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       }
     }
 
+    // Walls (Reflect / Light Screen / Aurora Veil).
+    // Inserted between ability finals and Tinted Lens — matches the
+    // Showdown final-mod chain. Critical, screen_pierce (move-side bypass),
+    // and mold-breaker-family abilities each skip the multiplier
+    // independently.
+    let wall_ok = wall_applies(input.wall, is_physical) &&
+      not(input.critical) &&
+      not(input.screen_pierce) &&
+      not(is_wall_bypass_ability(atk_ability))
+    if wall_ok {
+      let wall_mod = if input.is_double { 2732 } else { 2048 }
+      dmg = round5(dmg, wall_mod)
+    }
+
     // Tinted Lens
     if atk_ability == "いろめがね" && is_not_very_effective {
       dmg = dmg * 2
@@ -417,6 +421,12 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
     damages[idx] = dmg
     percents[idx] = dmg.to_double() / def_hp.to_double() * 100.0
+  }
+
+  // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
+  // damages=[0;16] を返して呼び出し側 (skill / payoff) に HP 1/8 削りを委ねる。
+  if def_ability == "ばけのかわ" && input.disguise_active {
+    return disguise_blocked_result(def_hp)
   }
 
   // KO calculation
@@ -504,6 +514,25 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
     is_immune: true,
     disguise_blocked: false,
     hits_dealt: 1,
+  }
+}
+
+///|
+/// Disguise initial hit: no damage dealt; state transition (1/8 max HP chip)
+/// is the caller's responsibility.
+fn disguise_blocked_result(def_hp : Int) -> @model.DamageCalcResult {
+  @model.DamageCalcResult::{
+    damages: FixedArray::make(16, 0),
+    percents: FixedArray::make(16, 0.0),
+    min_damage: 0,
+    max_damage: 0,
+    min_percent: 0.0,
+    max_percent: 0.0,
+    ko_text: "けがわブロック",
+    defender_hp: def_hp,
+    is_immune: false,
+    disguise_blocked: true,
+    hits_dealt: 0,
   }
 }
 

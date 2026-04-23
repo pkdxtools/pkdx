@@ -75,6 +75,24 @@ pub fn inflict_status(kind : StatusKind) -> StatusCondition {
 /// Return `true` if a Pokemon with types `(type1, type2)` cannot be inflicted
 /// with `kind`. Ability-based immunity (じゅうなん, みずのベール, etc.) is
 /// deferred to a separate pass; this helper only covers type immunity.
+/// CLI parser that returns a ready-to-consume `StatusCondition` (not a
+/// `StatusKind`). BadPoison starts with counter 0 and Sleep with 2 remaining
+/// turns to match `inflict_status` semantics. Accepts both English and
+/// Japanese canonical spellings; unknown input is `None`.
+pub fn status_condition_from_cli_str(s : String) -> StatusCondition {
+  match s {
+    "" | "normal" | "none" => None
+    "paralyze" | "paralysis" | "paralysed" | "まひ" => Paralyze
+    "burn" | "burned" | "やけど" => Burn
+    "poison" | "poisoned" | "どく" => Poison
+    "badpoison" | "bad-poison" | "badly-poisoned" | "もうどく" => BadPoison(0)
+    "sleep" | "asleep" | "ねむり" => Sleep(2)
+    "drowsy" | "あくび" => Drowsy(1)
+    _ => None
+  }
+}
+
+///|
 pub fn immune_to_status(kind : StatusKind, type1 : String, type2 : String) -> Bool {
   match kind {
     ParalyzeKind => type1 == "でんき" || type2 == "でんき"

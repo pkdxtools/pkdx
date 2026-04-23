@@ -66,6 +66,49 @@ pub fn parse_int(s : String, default : Int) -> Int {
 }
 
 ///|
+/// Parse an HP ratio string into a (num, den) pair. Accepted forms:
+///   "50%" | "100%" → (n, 100)
+///   "1/2" | "3/4"  → explicit fraction
+///   ""             → (2, 2) (= full)
+/// Unparseable input falls back to (2, 2). Callers only need `num * 2 <= den`
+/// semantics, so the exact denominator doesn't matter beyond truthfulness.
+pub fn parse_hp_ratio(s : String) -> (Int, Int) {
+  if s.length() == 0 {
+    return (2, 2)
+  }
+  // "N%" form: drop the trailing '%' and parse as (N, 100).
+  let last = s[s.length() - 1]
+  if last == '%' {
+    let head = s.substring(start=0, end=s.length() - 1)
+    let n = parse_int_str(head, -1)
+    if n < 0 {
+      return (2, 2)
+    }
+    return (n, 100)
+  }
+  // "N/D" form.
+  let mut slash_idx = -1
+  for i = 0; i < s.length(); i = i + 1 {
+    if s[i] == '/' {
+      slash_idx = i
+      break
+    }
+  }
+  if slash_idx <= 0 {
+    return (2, 2)
+  }
+  let num_str = s.substring(start=0, end=slash_idx)
+  let den_str = s.substring(start=slash_idx + 1, end=s.length())
+  let num = parse_int_str(num_str, -1)
+  let den = parse_int_str(den_str, -1)
+  if num < 0 || den <= 0 {
+    (2, 2)
+  } else {
+    (num, den)
+  }
+}
+
+///|
 fn parse_int_str(s : String, default : Int) -> Int {
   let mut result = 0
   let mut i = 0

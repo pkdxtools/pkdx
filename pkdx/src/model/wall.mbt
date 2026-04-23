@@ -11,3 +11,17 @@ pub(all) enum Wall {
   LightScreen
   AuroraVeil
 } derive(Show, Eq)
+
+///|
+/// CLI parser. Accepts empty string or a handful of canonical spellings.
+/// Unknown values return NoWall (callers check before propagating to
+/// CacheKeyInput if strict validation is needed).
+pub fn wall_from_str(s : String) -> Wall {
+  match s {
+    "" | "none" | "no-wall" => NoWall
+    "reflect" | "リフレクター" => Reflect
+    "light-screen" | "light_screen" | "ひかりのかべ" => LightScreen
+    "aurora-veil" | "aurora_veil" | "オーロラベール" => AuroraVeil
+    _ => NoWall
+  }
+}

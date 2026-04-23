@@ -715,6 +715,54 @@ fn cmd_damage() -> @admiral.CommandDef {
         description="Optional note / commentary shown under the calc (with --attach-team)",
         default=Some(""),
       ),
+      // --- rev2 (walls / status / rank counts / HP ratio / multi-hit / disguise) ---
+      @admiral.string(
+        "wall",
+        description="Defender wall: reflect | light-screen | aurora-veil (or ja: リフレクター / ひかりのかべ / オーロラベール)",
+        default=Some(""),
+      ),
+      @admiral.bool(
+        "pierce-screen",
+        description="Move bypasses walls (e.g. かわらわり, サイコファング)",
+      ),
+      @admiral.string(
+        "atk-status",
+        description="Attacker status: paralyze | burn | poison | badpoison | sleep | drowsy (or ja: まひ/やけど/etc.)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "def-status",
+        description="Defender status (for たたりめ and similar)",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "atk-rank-up-count",
+        description="Total stat stages raised on attacker (for アシストパワー)",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "def-rank-up-count",
+        description="Total stat stages raised on defender (for つけあがる)",
+        default=Some(0),
+      ),
+      @admiral.string(
+        "atk-hp",
+        description="Attacker HP ratio, '1/2' or '50%' (for やけっぱち). Default = full.",
+        default=Some(""),
+      ),
+      @admiral.bool(
+        "def-item-removable",
+        description="Defender carries a removable item (for はたきおとす 1.5x)",
+      ),
+      @admiral.string(
+        "multi-hit",
+        description="Multi-hit mode: auto | 1..5. Auto resolves from move table.",
+        default=Some(""),
+      ),
+      @admiral.bool(
+        "disguise-active",
+        description="ばけのかわ still intact (initial hit → damages=0, disguise_blocked=true)",
+      ),
     ],
     positionals=[
       @admiral.positional("attacker", description="Attacker Pokemon name", required=true),
@@ -729,6 +777,30 @@ fn cmd_damage() -> @admiral.CommandDef {
       let field_str = ctx_str(ctx, "field")
       let weather = @model.weather_from_jp(weather_str)
       let field = @model.field_from_jp(field_str)
+      // rev2: parse the 10 new flags into a single bundle.
+      let wall_s = ctx_str(ctx, "wall")
+      let atk_status_s = ctx_str(ctx, "atk-status")
+      let def_status_s = ctx_str(ctx, "def-status")
+      let multi_hit_s = ctx_str(ctx, "multi-hit")
+      let atk_hp_s = ctx_str(ctx, "atk-hp")
+      let (atk_hp_num, atk_hp_den) = @cli.parse_hp_ratio(atk_hp_s)
+      let rev2 : DamageRev2Opts = {
+        wall: @model.wall_from_str(wall_s),
+        wall_str: wall_s,
+        screen_pierce: ctx.get_bool("pierce-screen"),
+        atk_status: @model.status_condition_from_cli_str(atk_status_s),
+        atk_status_str: atk_status_s,
+        def_status: @model.status_condition_from_cli_str(def_status_s),
+        def_status_str: def_status_s,
+        atk_rank_up_count: ctx_int(ctx, "atk-rank-up-count"),
+        def_rank_up_count: ctx_int(ctx, "def-rank-up-count"),
+        atk_hp_num,
+        atk_hp_den,
+        def_item_removable: ctx.get_bool("def-item-removable"),
+        multi_hit: @model.multi_hit_from_str(multi_hit_s),
+        multi_hit_str: multi_hit_s,
+        disguise_active: ctx.get_bool("disguise-active"),
+      }
       run_damage(
         ctx_str(ctx, "attacker"),
         ctx_str(ctx, "defender"),
@@ -758,6 +830,7 @@ fn cmd_damage() -> @admiral.CommandDef {
         ctx_str(ctx, "attach-team"),
         ctx_str(ctx, "attach-title"),
         ctx_str(ctx, "attach-note"),
+        rev2,
       )
     }),
   )
@@ -1154,6 +1227,30 @@ fn resolve_damage_cache_path() -> String {
 }
 
 ///|
+///|
+/// Rev2 CLI extensions bundled together so `run_damage`'s signature doesn't
+/// bloat. Each field is populated from the corresponding CLI flag in
+/// `cmd_damage`, with `*_str` variants kept alongside the parsed value for
+/// stable cache-key encoding.
+struct DamageRev2Opts {
+  wall : @model.Wall
+  wall_str : String
+  screen_pierce : Bool
+  atk_status : @model.StatusCondition
+  atk_status_str : String
+  def_status : @model.StatusCondition
+  def_status_str : String
+  atk_rank_up_count : Int
+  def_rank_up_count : Int
+  atk_hp_num : Int
+  atk_hp_den : Int
+  def_item_removable : Bool
+  multi_hit : @model.MultiHit
+  multi_hit_str : String
+  disguise_active : Bool
+}
+
+///|
 fn run_damage(
   attacker_name : String,
   defender_name : String,
@@ -1183,6 +1280,7 @@ fn run_damage(
   attach_team : String,
   attach_title : String,
   attach_note : String,
+  rev2 : DamageRev2Opts,
 ) -> Unit {
   if atk_rank < -6 || atk_rank > 6 {
     println("Error: --atk-rank must be in [-6, 6]")
@@ -1246,21 +1344,18 @@ fn run_damage(
       atk_rank,
       def_rank,
       fainted_count,
-      // rev2: CLI-layer extensions will populate these below after
-      // `--wall` / `--atk-status` / ... flags are wired up (PR-A task #8).
-      // For now the cache key records them as defaults so that existing
-      // cache entries stay reachable under the extended key format.
-      wall: "",
-      screen_pierce: false,
-      atk_status: "",
-      def_status: "",
-      atk_rank_up_count: 0,
-      def_rank_up_count: 0,
-      atk_hp_num: 0,
-      atk_hp_den: 0,
-      def_item_removable: false,
-      multi_hit_mode: "",
-      disguise_active: false,
+      // rev2: populated from parsed CLI flags.
+      wall: rev2.wall_str,
+      screen_pierce: rev2.screen_pierce,
+      atk_status: rev2.atk_status_str,
+      def_status: rev2.def_status_str,
+      atk_rank_up_count: rev2.atk_rank_up_count,
+      def_rank_up_count: rev2.def_rank_up_count,
+      atk_hp_num: rev2.atk_hp_num,
+      atk_hp_den: rev2.atk_hp_den,
+      def_item_removable: rev2.def_item_removable,
+      multi_hit_mode: rev2.multi_hit_str,
+      disguise_active: rev2.disguise_active,
     }
     match @damage_cache.build_cache_key(key_input) {
       Ok(k) => Some(k)
@@ -1364,17 +1459,18 @@ fn run_damage(
       } else {
         @model.Standard
       },
-      wall: @model.Wall::NoWall,
-      screen_pierce: false,
-      atk_status_condition: @model.StatusCondition::None,
-      def_status_condition: @model.StatusCondition::None,
-      atk_rank_up_count: 0,
-      def_rank_up_count: 0,
-      atk_hp_num: 2,
-      atk_hp_den: 2,
-      def_item_removable: false,
-      multi_hit_mode: @model.MultiHit::Auto,
-      disguise_active: false,
+      // rev2: driven by CLI flags, defaults fall back to legacy behavior.
+      wall: rev2.wall,
+      screen_pierce: rev2.screen_pierce,
+      atk_status_condition: rev2.atk_status,
+      def_status_condition: rev2.def_status,
+      atk_rank_up_count: rev2.atk_rank_up_count,
+      def_rank_up_count: rev2.def_rank_up_count,
+      atk_hp_num: rev2.atk_hp_num,
+      atk_hp_den: rev2.atk_hp_den,
+      def_item_removable: rev2.def_item_removable,
+      multi_hit_mode: rev2.multi_hit,
+      disguise_active: rev2.disguise_active,
     }
     let result = @damage.calc_damage(input)
     let output = @cli.format_damage(result, input, format)

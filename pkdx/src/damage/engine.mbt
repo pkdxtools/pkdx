@@ -424,28 +424,60 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
-  // damages=[0;16] を返して呼び出し側 (skill / payoff) に HP 1/8 削りを委ねる。
+  // State transition precedes any multi-hit expansion — disguise absorbs the
+  // full move regardless of how many hits it would have landed.
   if def_ability == "ばけのかわ" && input.disguise_active {
     return disguise_blocked_result(def_hp)
   }
 
-  // KO calculation
-  let min_d = damages[0]
-  let max_d = damages[15]
-  let ko_text = calc_ko_text(damages, def_hp)
+  // Multi-hit post-processing. Parental Bond adds a 25%-power second hit as
+  // an approximation — precise re-computation through the full modifier
+  // chain would require splitting calc_damage into a per-hit callable, which
+  // is future work.
+  let hit_plan = resolve_hit_plan(mv, atk_ability, input.multi_hit_mode)
+  let (final_damages, final_percents, hits_dealt) : (
+    FixedArray[Int],
+    FixedArray[Double],
+    Int,
+  ) = match hit_plan {
+    Single => (damages, percents, 1)
+    FixedHits(n) => {
+      let out : FixedArray[Int] = FixedArray::make(16, 0)
+      let pct : FixedArray[Double] = FixedArray::make(16, 0.0)
+      for i = 0; i < 16; i = i + 1 {
+        out[i] = damages[i] * n
+        pct[i] = out[i].to_double() / def_hp.to_double() * 100.0
+      }
+      (out, pct, n)
+    }
+    ParentalBond => {
+      let out : FixedArray[Int] = FixedArray::make(16, 0)
+      let pct : FixedArray[Double] = FixedArray::make(16, 0.0)
+      for i = 0; i < 16; i = i + 1 {
+        let d2 = round5(damages[i], 1024) // 25% modifier
+        out[i] = damages[i] + d2
+        pct[i] = out[i].to_double() / def_hp.to_double() * 100.0
+      }
+      (out, pct, 2)
+    }
+  }
 
+  // KO calculation (using final_damages so multi-hit totals count toward KOs).
+  let min_d = final_damages[0]
+  let max_d = final_damages[15]
+  let ko_text = calc_ko_text(final_damages, def_hp)
   @model.DamageCalcResult::{
-    damages,
-    percents,
+    damages: final_damages,
+    percents: final_percents,
     min_damage: min_d,
     max_damage: max_d,
-    min_percent: percents[0],
-    max_percent: percents[15],
+    min_percent: final_percents[0],
+    max_percent: final_percents[15],
     ko_text,
     defender_hp: def_hp,
     is_immune: false,
     disguise_blocked: false,
-    hits_dealt: 1,
+    hits_dealt,
   }
 }
 

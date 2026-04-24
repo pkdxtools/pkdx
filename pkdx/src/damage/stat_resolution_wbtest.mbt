@@ -345,6 +345,45 @@ test "stat_resolution: Psyshock × critical composes def_positive_mask" {
 }
 
 ///|
+test "stat_resolution: Shell Side Arm physical mode forces contact=true" {
+  // Physical route must mark the move as contact so downstream contact-based
+  // bonuses (rough skin, iron fist family, etc.) fire correctly.
+  let mv = sr_move("シェルアームズ", @model.Special, 90)
+  let sr = resolve_stat_resolution(
+    mv,
+    atk_atk=120, atk_spa=100, def_def=100, def_spd=120,
+    atk_ability="", def_ability="", critical=false,
+  )
+  inspect(sr.force_contact, content="Some(true)")
+}
+
+///|
+test "stat_resolution: Shell Side Arm special mode forces contact=false" {
+  // Special route must mark the move as non-contact regardless of any name
+  // table entry (Shell Side Arm's table entry targets the physical form).
+  let mv = sr_move("シェルアームズ", @model.Special, 90)
+  let sr = resolve_stat_resolution(
+    mv,
+    atk_atk=100, atk_spa=120, def_def=120, def_spd=120,
+    atk_ability="", def_ability="", critical=false,
+  )
+  inspect(sr.force_contact, content="Some(false)")
+}
+
+///|
+test "stat_resolution: non-Shell-Side-Arm keeps force_contact None" {
+  // Every other move leaves force_contact unset; downstream defers to the
+  // static is_contact_move table.
+  let mv = sr_move("ボディプレス", @model.Physical, 80)
+  let sr = resolve_stat_resolution(
+    mv,
+    atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
+    atk_ability="", def_ability="", critical=false,
+  )
+  inspect(sr.force_contact, content="None")
+}
+
+///|
 test "stat_resolution: Secret Sword × Body Press does not apply (mutually exclusive by name)" {
   // Secret Sword (せいなるつるぎ) is a named physical move distinct from
   // Body Press (ボディプレス). Only one name branch fires per call; this

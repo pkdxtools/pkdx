@@ -159,7 +159,7 @@ test "parental bond: skipped on multi-hit base moves" {
 test "multi-hit: fixed 2 returns hits_dealt=2 and doubled damage" {
   let atk = pb_pokemon("chop", "ノーマル")
   let dfn = pb_pokemon("target", "ノーマル")
-  let mv = pb_move("ダブルチョップ", "ドラゴン", 40)
+  let mv = pb_move("ドラゴンアロー", "ドラゴン", 50)
   // Force 1-hit and 2-hit on the SAME move so every modifier (STAB, type
   // effectiveness, abilities, items) is identical and only hits_dealt varies.
   let inp1 = pb_input(atk, dfn, mv, multi_hit_mode=Fixed(1))

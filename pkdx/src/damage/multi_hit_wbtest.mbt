@@ -35,11 +35,6 @@ test "resolve_auto_hits: にどげり returns FixedHit(2)" {
 }
 
 ///|
-test "resolve_auto_hits: ダブルチョップ returns FixedHit(2)" {
-  inspect(resolve_auto_hits("ダブルチョップ"), content="FixedHit(2)")
-}
-
-///|
 test "resolve_auto_hits: トリプルキック returns FixedHit(3)" {
   inspect(resolve_auto_hits("トリプルキック"), content="FixedHit(3)")
 }

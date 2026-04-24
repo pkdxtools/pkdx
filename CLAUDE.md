@@ -166,6 +166,7 @@ scripts/sync_version.sh
 - **`.claude/skills/team-builder/references/format_rules.md`** — メガ/ダイマ/Z/テラスタル等のメカニクス定義
 - **`.claude/skills/team-builder/references/stat_thresholds.md`** — 種族値ベンチマーク・素早さティア
 - **`.claude/skills/team-builder/references/items_abilities.md`** — 道具・特性の考察用データ
+- **`.claude/skills/calc/references/special_cases.md`** — ダメージ計算の特殊パターン網羅。おやこあい / ばけのかわ / てんねん / Psyshock 系 / シェルアームズ / ボディプレス / せいなるつるぎ / ウェザーボール / 可変威力技 / 壁 / 連続技 / 急所ランク無視 / JSON 出力フィールド。各項目に実装ファイル:行の根拠つき。`pkdx damage` のフラグが何をしているか迷ったらここを第一参照。
 - **`.claude/skills/nash/references/theory.md`** — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠。`pkdx nash solve` の正当性、数値安定性 (shift-and-normalize)、退化ケースの扱いに関する質問はここを第一参照。
 - **`.claude/skills/nash/references/exploitability.md`** — exploitability / NashConv / KL / L1 の定義と使い分け。Nash 判定基準 (≤ 1e-6)、メタ乖離分析の解釈に関する質問はここ。
 - **`.claude/skills/nash/references/payoff_semantics.md`** — `TeamPayoffModel` (SwitchingGame / ScreenedSwitchingGame) の仕様・計算量・選択基準。選出最適化のどのモデルを使うべきか、廃止済みの pairwise 系に関する履歴もここ。

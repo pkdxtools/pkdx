@@ -44,6 +44,9 @@ pub fn resolve_move_type_override(
 /// - やけっぱち: base × 2 when current HP ≤ max/2
 /// - はたきおとす: base × 3/2 when the target carries a removable item
 /// - たたりめ: base × 2 when the target is statused
+/// - からげんき: base × 2 when the attacker itself is statused
+///   (まひ / やけど / どく / もうどく のいずれか。ねむりは行動不能なので
+///   対象外 — Gen9 本家挙動に合わせる。あくびは発症前なのでこれも対象外)
 pub fn resolve_variable_power(
   base_power : Int,
   mv : @model.Move,
@@ -99,6 +102,16 @@ pub fn resolve_variable_power(
         base_power * 2
       } else {
         base_power
+      }
+    "からげんき" =>
+      // まひ / やけど / どく / もうどく のいずれかで 2x。ねむり・あくびは
+      // 行動/発症前なので対象外 (本家挙動)。BadPoison(n) のカウンタは無視。
+      match input.atk_status_condition {
+        @model.StatusCondition::Paralyze
+        | @model.StatusCondition::Burn
+        | @model.StatusCondition::Poison
+        | @model.StatusCondition::BadPoison(_) => base_power * 2
+        _ => base_power
       }
     _ => base_power
   }

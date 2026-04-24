@@ -64,6 +64,7 @@ fn vp_input(
   def_item_removable~ : Bool = false,
   def_item~ : String = "",
   def_status_condition~ : @model.StatusCondition = @model.StatusCondition::None,
+  atk_status_condition~ : @model.StatusCondition = @model.StatusCondition::None,
   fainted_count~ : Int = 0,
 ) -> @model.DamageCalcInput {
   {
@@ -90,7 +91,7 @@ fn vp_input(
     stat_system: @model.Standard,
     wall: @model.Wall::NoWall,
     screen_pierce: false,
-    atk_status_condition: @model.StatusCondition::None,
+    atk_status_condition,
     def_status_condition,
     atk_rank_up_count,
     def_rank_up_count,
@@ -276,6 +277,81 @@ test "hex: healthy defender keeps base 65" {
     mv.power, mv, inp, inp.defender, inp.attacker, "", "",
   )
   inspect(p, content="65")
+}
+
+///|
+test "facade: burn attacker doubles power to 140" {
+  // からげんき: 攻撃側のまひ / やけど / どく / もうどく で 2x。
+  let mv = vp_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp = vp_input(
+    mv, vp_pokemon("a"), vp_pokemon("b"), atk_status_condition=Burn,
+  )
+  let p = resolve_variable_power(
+    mv.power, mv, inp, inp.defender, inp.attacker, "", "",
+  )
+  inspect(p, content="140")
+}
+
+///|
+test "facade: poison attacker doubles power" {
+  let mv = vp_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp = vp_input(
+    mv, vp_pokemon("a"), vp_pokemon("b"), atk_status_condition=Poison,
+  )
+  let p = resolve_variable_power(
+    mv.power, mv, inp, inp.defender, inp.attacker, "", "",
+  )
+  inspect(p, content="140")
+}
+
+///|
+test "facade: badly poisoned attacker doubles power" {
+  let mv = vp_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp = vp_input(
+    mv,
+    vp_pokemon("a"),
+    vp_pokemon("b"),
+    atk_status_condition=BadPoison(0),
+  )
+  let p = resolve_variable_power(
+    mv.power, mv, inp, inp.defender, inp.attacker, "", "",
+  )
+  inspect(p, content="140")
+}
+
+///|
+test "facade: paralyzed attacker doubles power" {
+  let mv = vp_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp = vp_input(
+    mv, vp_pokemon("a"), vp_pokemon("b"), atk_status_condition=Paralyze,
+  )
+  let p = resolve_variable_power(
+    mv.power, mv, inp, inp.defender, inp.attacker, "", "",
+  )
+  inspect(p, content="140")
+}
+
+///|
+test "facade: sleep attacker keeps base power (can't act)" {
+  // ねむり中は行動不能なので発動前提を満たさず base のまま。
+  let mv = vp_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp = vp_input(
+    mv, vp_pokemon("a"), vp_pokemon("b"), atk_status_condition=Sleep(2),
+  )
+  let p = resolve_variable_power(
+    mv.power, mv, inp, inp.defender, inp.attacker, "", "",
+  )
+  inspect(p, content="70")
+}
+
+///|
+test "facade: healthy attacker keeps base power" {
+  let mv = vp_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp = vp_input(mv, vp_pokemon("a"), vp_pokemon("b"))
+  let p = resolve_variable_power(
+    mv.power, mv, inp, inp.defender, inp.attacker, "", "",
+  )
+  inspect(p, content="70")
 }
 
 ///|

@@ -100,13 +100,20 @@ pub fn get_def_type_resist(ability : String, move_type : String) -> Double {
 
 ///|
 /// Apply attacker ability power modifier. Returns modified power.
+/// `force_contact` がある場合は is_contact_move (name テーブル) より優先する。
+/// シェルアームズ 物理モード等、動的に接触扱いへ切り替わる技用。
 pub fn apply_atk_ability_power(
   ability : String,
   move_name : String,
   move_type : String,
   move_power : Int,
   weather : @model.Weather,
+  force_contact~ : Bool? = None,
 ) -> Int {
+  let is_contact = match force_contact {
+    Some(v) => v
+    None => is_contact_move(move_name)
+  }
   match ability {
     "テクニシャン" =>
       if move_power <= 60 {
@@ -162,7 +169,7 @@ pub fn apply_atk_ability_power(
         move_power
       }
     "かたいツメ" =>
-      if is_contact_move(move_name) {
+      if is_contact {
         move_power * 13 / 10
       } else {
         move_power
@@ -254,7 +261,12 @@ pub fn get_def_ability_final(
   move_type : String,
   is_super_effective : Bool,
   is_special : Bool,
+  force_contact~ : Bool? = None,
 ) -> Int {
+  let is_contact = match force_contact {
+    Some(v) => v
+    None => is_contact_move(move_name)
+  }
   match ability {
     "マルチスケイル" => 2048
     "フィルター" | "ハードロック" =>
@@ -265,7 +277,7 @@ pub fn get_def_ability_final(
       }
     "こおりのりんぷん" => if is_special { 2048 } else { 0 }
     "もふもふ" =>
-      if is_contact_move(move_name) && move_type != "ほのお" {
+      if is_contact && move_type != "ほのお" {
         2048
       } else {
         0

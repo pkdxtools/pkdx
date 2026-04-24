@@ -10,8 +10,6 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let (resolved_power, resolved_type) = resolve_move_type_override(mv, input)
   let mut move_type = resolved_type
   let move_power = resolved_power
-  let is_physical = mv.category == @model.Physical
-  let is_special = mv.category == @model.Special
   let weather = input.weather
   let field = input.field
   let tera_type = input.tera_type
@@ -55,6 +53,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     def_ability~,
     critical=input.critical,
   )
+  // シェルアームズ は mv.category=Special のままで物理経路を辿る必要がある。
+  // 下流の ability / item / wall / weather / ruin 分岐は必ず sr.effective_physical
+  // 由来のこのフラグを参照すること (mv.category を直接参照してはならない)。
+  let is_physical = sr.effective_physical
+  let is_special = not(sr.effective_physical)
   // ボディプレスは攻撃側のDefenseを攻撃値として使う物理技。
   // Attack系の補正（ちからもち・はりきり・ハチマキ等）は適用されず、
   // Defense系の補正（ファーコート・しんかのきせき等）が適用される。
@@ -239,6 +242,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   if atk_ability.length() > 0 {
     effective_power = apply_atk_ability_power(
       atk_ability, move_name, move_type, effective_power, weather,
+      force_contact=sr.force_contact,
     )
   }
   if atk_item.length() > 0 {
@@ -364,6 +368,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       if def_ability.length() > 0 {
         let d_mod = get_def_ability_final(
           def_ability, move_name, move_type, is_super_effective, is_special,
+          force_contact=sr.force_contact,
         )
         if d_mod > 0 {
           dmg = round5(dmg, d_mod)

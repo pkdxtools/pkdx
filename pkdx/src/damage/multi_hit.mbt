@@ -27,24 +27,26 @@ pub(all) enum HitPlan {
 
 ///|
 /// Moves that always hit exactly twice.
+/// 公式の 2-hit 技のみ。ゴッドバード (2-turn charge, 1-hit) / ダブルショック
+/// (1-hit で自身の でんき タイプを剥がす) は 1-hit なので含めない。
 let fixed_2_hit : Array[String] = [
   "にどげり",
   "ダブルチョップ",
   "ダブルアタック",
   "ダブルウイング",
   "ダブルニードル",
-  "ダブルパンツァー",
-  "ダブルショック",
-  "ゴッドバード",
+  "ドラゴンアロー",
+  "ツインビーム",
 ]
 
 ///|
 /// Moves that always hit exactly three times.
+/// トリプルアロー (Triple Arrows) は 1-hit 高命中技なので除外。
 let fixed_3_hit : Array[String] = [
   "トリプルキック",
-  "トリプルアロー",
+  "トリプルアクセル",
   "トリプルダイブ",
-  "サーフテール",
+  "すいりゅうれんだ",
 ]
 
 ///|
@@ -52,21 +54,22 @@ let fixed_3_hit : Array[String] = [
 /// (P(2)=P(3)=3/8, P(4)=P(5)=1/8 → E[n] = 19/6). Under Skill Link they are
 /// upgraded to fixed 5; otherwise `Auto` collapses them to the center value
 /// 3 for a readable single-roll output.
+/// れんぞくぎり (Fury Cutter) は 1-hit で連続使用時の威力倍増技なので除外。
+/// ビックリヘッド (Population Bomb) は 1-10hit の独自メカニクスなので除外。
 let random_2_5_hit : Array[String] = [
   "みだれひっかき",
   "みだれづき",
-  "れんぞくぎり",
   "れんぞくパンチ",
-  "スイープビンタ",
+  "おうふくビンタ",
   "ボーンラッシュ",
   "ロックブラスト",
   "タネマシンガン",
   "みずしゅりけん",
   "つららばり",
-  "トゲキャノン",
-  "ピンぷんく",
-  "だましゆき",
-  "ビックリヘッド",
+  "とげキャノン",
+  "ミサイルばり",
+  "つっぱり",
+  "スケイルショット",
 ]
 
 ///|

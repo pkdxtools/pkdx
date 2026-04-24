@@ -54,6 +54,39 @@ test "resolve_auto_hits: ロックブラスト returns Random2to5" {
   inspect(resolve_auto_hits("ロックブラスト"), content="Random2to5")
 }
 
+///|
+test "resolve_auto_hits: つっぱり returns Random2to5" {
+  inspect(resolve_auto_hits("つっぱり"), content="Random2to5")
+}
+
+///|
+test "resolve_auto_hits: スケイルショット returns Random2to5" {
+  inspect(resolve_auto_hits("スケイルショット"), content="Random2to5")
+}
+
+///|
+test "resolve_auto_hits: ドラゴンアロー returns FixedHit(2)" {
+  inspect(resolve_auto_hits("ドラゴンアロー"), content="FixedHit(2)")
+}
+
+///|
+test "resolve_auto_hits: トリプルアクセル returns FixedHit(3)" {
+  inspect(resolve_auto_hits("トリプルアクセル"), content="FixedHit(3)")
+}
+
+///|
+test "resolve_auto_hits: れんぞくぎり is SingleHit (not multi-hit)" {
+  // れんぞくぎり (Fury Cutter) は 1-hit で連続使用時に威力が倍増する技。
+  // 以前のテーブルに誤って含まれていた false positive の regression 防止。
+  inspect(resolve_auto_hits("れんぞくぎり"), content="SingleHit")
+}
+
+///|
+test "resolve_auto_hits: ゴッドバード is SingleHit (2-turn charge)" {
+  // ゴッドバード (Sky Attack) は 2 ターン溜め 1-hit の技。
+  inspect(resolve_auto_hits("ゴッドバード"), content="SingleHit")
+}
+
 // ---- resolve_hit_plan ----
 
 ///|

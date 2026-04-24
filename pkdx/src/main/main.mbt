@@ -782,6 +782,15 @@ fn cmd_damage() -> @admiral.CommandDef {
       let atk_status_s = ctx_str(ctx, "atk-status")
       let def_status_s = ctx_str(ctx, "def-status")
       let multi_hit_s = ctx_str(ctx, "multi-hit")
+      // `expected` は payoff レイヤ専用 (単発ダメージに 19/6 を掛けて伝播する
+      // 近似)。pkdx damage はエンジンで Expected を処理できないため CLI で
+      // はじく。ここで弾くことで engine の abort 経路をユーザーに晒さない。
+      if multi_hit_s == "expected" {
+        println(
+          "Error: --multi-hit expected is not supported by 'pkdx damage' (payoff-only approximation). Use 'auto' or 1..5.",
+        )
+        return
+      }
       let atk_hp_s = ctx_str(ctx, "atk-hp")
       let (atk_hp_num, atk_hp_den) = @cli.parse_hp_ratio(atk_hp_s)
       let rev2 : DamageRev2Opts = {

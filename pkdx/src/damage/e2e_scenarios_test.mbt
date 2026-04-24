@@ -133,6 +133,45 @@ test "e2e: disguise initial hit blocks all damage and flags disguise_blocked" {
 }
 
 ///|
+test "e2e: shell side arm physical mode is blocked by Reflect (not LightScreen)" {
+  // シェルアームズ は mv.category=Special のままで動的に物理判定される。
+  // engine は sr.effective_physical を参照するため、atk_atk*def_spd が
+  // atk_spa*def_def を上回る配分では物理経路に入り Reflect が halving する。
+  // 以前は mv.category から is_physical を引いており、物理優位でも
+  // LightScreen だけに当たる誤動作をしていた。
+  let atk = e2e_pokemon("ssa-atk", "どく", 100, 150, 100, 80, 100, 100)
+  let dfn = e2e_pokemon("ssa-dfn", "ノーマル", 100, 100, 120, 100, 120, 100)
+  let mv = mk_move("シェルアームズ", "どく", @model.Special, 90)
+  let inp_reflect = mk_damage_input(atk, dfn, mv, wall=@model.Wall::Reflect)
+  let inp_light = mk_damage_input(
+    atk, dfn, mv, wall=@model.Wall::LightScreen,
+  )
+  let inp_base = mk_damage_input(atk, dfn, mv)
+  let r_base = calc_damage(inp_base)
+  let r_reflect = calc_damage(inp_reflect)
+  let r_light = calc_damage(inp_light)
+  // Physical 経路: Reflect が効きダメージ半減、LightScreen は効かない (base と一致)。
+  assert_true(r_reflect.max_damage * 2 < r_base.max_damage + 4)
+  assert_true(r_light.max_damage == r_base.max_damage)
+}
+
+///|
+test "e2e: facade doubles when attacker is burned" {
+  // からげんき: 攻撃側がやけど / まひ / どく / もうどく のいずれかで威力 2x。
+  // --atk-status で atk_status_condition を渡す経路が活きていることを検証。
+  let atk = e2e_pokemon("fac-atk", "ノーマル", 100, 130, 80, 80, 80, 80)
+  let dfn = e2e_pokemon("fac-dfn", "ノーマル", 100, 80, 80, 80, 80, 80)
+  let mv = mk_move("からげんき", "ノーマル", @model.Physical, 70)
+  let inp_none = mk_damage_input(atk, dfn, mv)
+  let inp_burn = mk_damage_input(atk, dfn, mv, atk_status_condition=Burn)
+  let r_none = calc_damage(inp_none)
+  let r_burn = calc_damage(inp_burn)
+  // 威力 70 → 140 でほぼ倍増。整数丸めで ±5% 前後の揺れは許容。
+  assert_true(r_burn.max_damage * 100 >= r_none.max_damage * 195)
+  assert_true(r_burn.max_damage * 100 <= r_none.max_damage * 205)
+}
+
+///|
 test "e2e: hex doubles on statused defender" {
   let atk = e2e_pokemon("hex-atk", "ゴースト", 100, 80, 80, 120, 80, 80)
   let dfn = e2e_pokemon("hex-dfn", "ノーマル", 100, 80, 80, 80, 80, 80)

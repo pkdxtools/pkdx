@@ -237,7 +237,7 @@ Phase 1-Team-Vision で vision 抽出 + `pkdx stat-reverse` 検証済みの SP /
 
    **rev2 フラグ (威力可変 / 壁 / 連続技 / 状態)**: 以下は該当する技 / 状況でのみ追加する。指定しなければ既定値 (威力素点・壁なし・状態なし・連続技=auto) でそのまま計算される。
    - `--wall reflect|light-screen|aurora-veil` (または `リフレクター`/`ひかりのかべ`/`オーロラベール`) … 守り側の壁が場にある想定
-   - `--atk-status yakedo|mahi|doku|...` (または `やけど`/`まひ`/...) … やけっぱち の威力 2x 判定
+   - `--atk-status yakedo|mahi|doku|...` (または `やけど`/`まひ`/...) … からげんき の威力 2x 判定 (まひ/やけど/どく/もうどく で発動、ねむり/あくびは行動不能扱いで発動しない)
    - `--def-status ...` … たたりめ の威力 2x 判定
    - `--atk-rank-up-count N` … アシストパワー の威力 = 20 + 20N
    - `--def-rank-up-count N` … つけあがる の威力 = 20 + 20N

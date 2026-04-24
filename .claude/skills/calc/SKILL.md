@@ -131,7 +131,7 @@ $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
 |--------|------|-------------------------------|------|
 | `--wall <kind>` | 防御側の壁 | `reflect` / `リフレクター`, `light-screen` / `ひかりのかべ`, `aurora-veil` / `オーロラベール` | 壁込みダメ計 (0.5x / ダブルは 0.667x) |
 | `--pierce-screen` | 壁貫通 move | bool flag | かわらわり / サイコファング等 |
-| `--atk-status <name>` | 攻撃側状態異常 | `burn` / `やけど`, `paralyze` / `まひ`, `poison` / `どく`, `badpoison` / `もうどく`, `sleep` / `ねむり` | やけっぱち威力 2x 判定用 |
+| `--atk-status <name>` | 攻撃側状態異常 | `burn` / `やけど`, `paralyze` / `まひ`, `poison` / `どく`, `badpoison` / `もうどく`, `sleep` / `ねむり` | からげんき威力 2x 判定用 (まひ/やけど/どく/もうどく で発動) |
 | `--def-status <name>` | 防御側状態異常 | 同上 | たたりめ威力 2x 判定用 |
 | `--atk-rank-up-count <n>` | 攻撃側ランクアップ累積段数 | `0..6` | アシストパワー威力 = 20 + 20×n |
 | `--def-rank-up-count <n>` | 防御側ランクアップ累積段数 | `0..6` | つけあがる威力 = 20 + 20×n |
@@ -154,6 +154,9 @@ $PKDX damage "ミュウツー" "ハピナス" "アシストパワー" --atk-rank
 
 # やけっぱち (HP 半分以下で威力 2x)
 $PKDX damage "パチリス" "ガブリアス" "やけっぱち" --atk-hp 1/2 --format json
+
+# からげんき (攻撃側が状態異常で威力 2x)
+$PKDX damage "カビゴン" "ハピナス" "からげんき" --atk-status burn --format json
 
 # たたりめ (相手状態異常時 2x)
 $PKDX damage "ゲンガー" "トゲキッス" "たたりめ" --def-status paralyze --format json
@@ -312,7 +315,7 @@ pkdx が `Error:` で始まる出力を返した場合、またはJSON出力の 
 テラスタル（`--tera-type`）, 急所（`--critical`）, ランク補正（`--atk-rank`, `--def-rank`、-6〜+6、第3世代以降仕様。急所時は攻撃側の負ランク・防御側の正ランクを無視。`--atk-stat`/`--def-stat` の override は「rank 前の実数値」として扱われ、rank は常に乗る）, 性格（`--atk-nature`, `--def-nature`, ja名）, ひんし数（`--fainted-count`、0-5、そうだいしょう用）
 
 ### rev2 で追加された威力可変技 / 壁 / 連続技 / 状態
-- 威力可変技: ウェザーボール (天候自動判定), つけあがる (`--def-rank-up-count`), アシストパワー (`--atk-rank-up-count`), やけっぱち (`--atk-hp`), はたきおとす (`--def-item-removable`), たたりめ (`--def-status`)
+- 威力可変技: ウェザーボール (天候自動判定), つけあがる (`--def-rank-up-count`), アシストパワー (`--atk-rank-up-count`), やけっぱち (`--atk-hp`), はたきおとす (`--def-item-removable`), たたりめ (`--def-status`), からげんき (`--atk-status`)
 - カテゴリ / ランク override: サイコショック / サイコブレイク / しんぴのつるぎ (自動), シェルアームズ (自動), せいなるつるぎ (自動)
 - 特性: てんねん (atk/def_ability で自動), ばけのかわ (`--disguise-active`), おやこあい (atk_ability で自動, hits_dealt=2)
 - 壁: リフレクター / ひかりのかべ / オーロラベール (`--wall`), 貫通技 (`--pierce-screen`)

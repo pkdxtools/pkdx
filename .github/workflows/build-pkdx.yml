@@ -74,6 +74,12 @@ jobs:
         working-directory: pkdx
         env:
           MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
+          # Force a GCC-style driver on Windows so the GCC-style `-L/-l` link
+          # flags above are valid. Without this, MoonBit may pick `cl.exe`
+          # (MSVC) which would require `/link /LIBPATH:... openblas.lib`
+          # syntax instead. windows-2022 runners ship mingw-w64 GCC at
+          # `C:\msys64\mingw64\bin\gcc.exe`; CC=gcc relies on it being on PATH.
+          CC: ${{ runner.os == 'Windows' && 'gcc' || '' }}
         run: |
           moon update
           moon build --target native src/main
@@ -83,6 +89,7 @@ jobs:
         working-directory: pkdx
         env:
           MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
+          CC: ${{ runner.os == 'Windows' && 'gcc' || '' }}
         run: |
           moon test --target native
         shell: bash
@@ -104,9 +111,10 @@ jobs:
 
   release:
     needs: build
-    # Only publish a release on tag pushes; manual workflow_dispatch runs stop
-    # after build+test, so the Windows path can be validated without cutting a tag.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Only publish a release on tag pushes. Gate on event_name as well so a
+    # manual workflow_dispatch on a tag ref (e.g. re-running an old release)
+    # does not silently re-publish.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

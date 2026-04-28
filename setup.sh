@@ -122,8 +122,10 @@ case "$OS_TAG" in
     fi
     echo "  Required to override the macOS-only default for both 'moon build' and 'moon test':"
     echo "    export MOON_CC_LINK_FLAGS=\"-lopenblas -llapack -lm\""
-    echo "    ('moon build' itself does not call BLAS symbols, but the same value"
-    echo "     works for both and matches what CI uses.)"
+    echo "    The override value names BLAS libraries; both 'moon build' and"
+    echo "    'moon test' need the libraries to resolve at link time. The"
+    echo "    production binary itself does not call BLAS symbols, but the"
+    echo "    transitive nash/payoff packages still trigger the linker pass."
     ;;
   windows)
     echo "  Windows: required to override the macOS-only default for both"
@@ -133,10 +135,14 @@ case "$OS_TAG" in
     echo "    Then in this shell (Git Bash / MSYS), export link flags before"
     echo "    'moon build' or 'moon test':"
     echo "      export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-windows/lib -lopenblas\""
-    echo "    (also add C:/vcpkg/installed/x64-windows/bin to PATH for the DLL"
-    echo "     when running 'moon test'.)"
-    echo "    ('moon build' itself does not call BLAS symbols, but the same value"
-    echo "     works for both and matches what CI uses.)"
+    echo "    The -L/-l form is GCC-style; if MoonBit picks cl.exe (MSVC) it"
+    echo "    will not accept this syntax. Force the GCC driver to be safe:"
+    echo "      export CC=gcc"
+    echo "    Also add C:/vcpkg/installed/x64-windows/bin to PATH so the DLL"
+    echo "    resolves at runtime (used by 'moon test')."
+    echo "    Both 'moon build' and 'moon test' need OpenBLAS installed; the"
+    echo "    production binary does not call BLAS symbols itself but the"
+    echo "    transitive nash/payoff packages still trigger the linker pass."
     ;;
 esac
 

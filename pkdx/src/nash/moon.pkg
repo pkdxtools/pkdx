@@ -10,10 +10,11 @@ import {
 // BLAS is only needed transitively through numbt (test-only import). The
 // production binary built via `moon build --target native src/main` does not
 // link BLAS. For `moon test`, the test harness links the nash and mizchi/blas
-// stubs as dylibs and needs the BLAS symbols: on macOS the default below
-// satisfies that, and on Linux CI `MOON_CC_LINK_FLAGS=-lopenblas -llapack -lm`
-// overrides it. Windows is unsupported for the nash/select/meta-divergence
-// subcommands.
+// stubs as dylibs and needs the BLAS symbols. CI overrides this default on
+// each platform via MOON_CC_LINK_FLAGS:
+//   Linux:   -lopenblas -llapack -lm
+//   macOS:   -framework Accelerate (matches default below)
+//   Windows: -LC:/vcpkg/installed/x64-windows/lib -lopenblas (vcpkg-installed)
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
   "supported-targets": "native",

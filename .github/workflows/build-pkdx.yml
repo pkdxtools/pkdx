@@ -47,21 +47,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev liblapack-dev
 
+      - name: Cache vcpkg installed (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:/vcpkg/installed
+            C:/vcpkg/packages
+          key: vcpkg-openblas-x64-windows-v1
+          restore-keys: |
+            vcpkg-openblas-x64-windows-
+
+      - name: Install BLAS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          C:\vcpkg\vcpkg.exe install openblas:x64-windows
+          # Add OpenBLAS DLL dir to PATH for runtime resolution during moon test.
+          Add-Content $env:GITHUB_PATH "C:\vcpkg\installed\x64-windows\bin"
+
       - name: Build
         working-directory: pkdx
         env:
-          # The production binary does not link numbt/BLAS — nash/payoff import
-          # numbt `for test` only — so no BLAS link flag is strictly required
-          # here. We still export a platform-appropriate MOON_CC_LINK_FLAGS so
-          # that (a) any transitive dependency pulling BLAS is satisfied, and
-          # (b) `moon test` runs downstream of this step work without manual
-          # flag-setting. Windows is best-effort; the downstream feature-gate
-          # in `bin/pkdx.cmd` hides nash/select/meta-divergence on that
-          # platform.
-          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || '') }}
+          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
         run: |
           moon update
           moon build --target native src/main
+        shell: bash
+
+      - name: Test
+        working-directory: pkdx
+        env:
+          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
+        run: |
+          moon test --target native
         shell: bash
 
       - name: Copy binary (Unix)

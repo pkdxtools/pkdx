@@ -16,7 +16,8 @@ import {
 } for "test"
 
 // BLAS link is needed for `moon test` to link against nash + numbt stubs.
-// See nash/moon.pkg for the full rationale; CI overrides this flag on Linux.
+// See nash/moon.pkg for the full rationale; CI overrides this flag on
+// Linux/Windows (Windows uses vcpkg-installed OpenBLAS).
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
   "supported-targets": "native",

@@ -85,15 +85,18 @@ else
   echo "  Done."
 fi
 
-# --- Step 2.7: BLAS dependency (for nash / select / meta-divergence) ---
-# nash/select/meta-divergence 系サブコマンドは numbt / mizchi/blas 経由で BLAS
-# に依存する。OS 別に利用可否を案内し、必要な環境変数を echo する。
-echo "[2.7/5] BLAS dependency check..."
+# --- Step 2.7: BLAS dependency (for `moon test` only) ---
+# BLAS は numbt の test-only import 経由でしか参照されないため、
+# `moon build --target native src/main` で作る本体バイナリには不要。
+# `moon test` を走らせる場合のみ各 OS で BLAS が要る。詳細は
+# pkdx/src/nash/moon.pkg と pkdx/src/payoff/moon.pkg のコメント参照。
+echo "[2.7/5] BLAS dependency check (only required for 'moon test')..."
+echo "  Note: 'moon build --target native src/main' (production binary) does not link BLAS."
 case "$OS_TAG" in
   darwin)
     # macOS は Accelerate.framework が標準搭載。追加インストール不要。
     echo "  macOS: Accelerate.framework is built in."
-    echo "  When building tests locally, export the link flag:"
+    echo "  To run 'moon test' locally, export the link flag:"
     echo "    export MOON_CC_LINK_FLAGS=\"-framework Accelerate\""
     ;;
   linux)
@@ -103,24 +106,25 @@ case "$OS_TAG" in
     elif command -v rpm &>/dev/null && rpm -q openblas-devel &>/dev/null; then
       echo "  Linux: openblas-devel detected."
     else
-      echo "  Linux: BLAS/LAPACK not detected. Install one of:"
+      echo "  Linux: BLAS/LAPACK not detected. To run 'moon test', install one of:"
       echo "    Debian/Ubuntu: sudo apt-get install libopenblas-dev liblapack-dev"
       echo "    RHEL/Fedora:   sudo dnf install openblas-devel lapack-devel"
-      echo "    (nash / select / meta-divergence will fail to build without them.)"
+      echo "    (production 'moon build' still works without these.)"
     fi
-    echo "  When building locally, export the right link flags:"
+    echo "  To run 'moon test' locally, export the right link flags:"
     echo "    export MOON_CC_LINK_FLAGS=\"-lopenblas -llapack -lm\""
     ;;
   windows)
-    # 公式リリースは vcpkg の openblas:x64-windows をリンクしてビルドしているため
-    # nash / select / meta-divergence は Windows 配布バイナリでも利用可能。
-    # ローカルでビルドする場合は同等のツールチェーンが必要。
-    echo "  Windows: the official release binary is linked against OpenBLAS"
-    echo "    (vcpkg openblas:x64-windows), so nash / select / meta-divergence"
-    echo "    work out of the box."
-    echo "  When building locally, install vcpkg + OpenBLAS and export link flags:"
-    echo "    C:\\vcpkg\\vcpkg.exe install openblas:x64-windows"
-    echo "    export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-windows/lib -lopenblas\""
+    # `moon test` を Windows で走らせる場合のみ vcpkg + OpenBLAS が必要。
+    # 配布バイナリ (release) も `moon build --target native src/main` も BLAS を
+    # リンクしないので、pkdx を「使う」だけのユーザーには関係ない。
+    echo "  Windows: the production binary does NOT link BLAS, so the official"
+    echo "    release and a local 'moon build' both work without any toolchain."
+    echo "  To run 'moon test' locally, install vcpkg + OpenBLAS."
+    echo "    Run the install in PowerShell or cmd (NOT in bash; backslashes break):"
+    echo "      C:\\vcpkg\\vcpkg.exe install openblas:x64-windows"
+    echo "    Then in this shell (Git Bash / MSYS), export link flags before 'moon test':"
+    echo "      export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-windows/lib -lopenblas\""
     echo "    (also add C:/vcpkg/installed/x64-windows/bin to PATH for the DLL.)"
     ;;
 esac

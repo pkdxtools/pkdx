@@ -197,3 +197,23 @@ test "triple-axel hits[i] damage_per_roll is monotonic in damage" {
   assert_true(t1 <= t2)
   assert_true(t2 <= t3)
 }
+
+///|
+test "triple-axel: per-hit power ramps base × hit_index" {
+  // #100: hit 1 should use base_power × 1, hit 2 base_power × 2, hit 3 ×3.
+  // 1段目と2段目の damage_per_roll を比較すれば、2段目の方が大きいはず
+  // (hit 1 = 25 power, hit 2 = 50 power → モディファイア後ほぼ 2 倍)。
+  let atk = mhv_pokemon("attacker")
+  let dfn = mhv_pokemon("defender")
+  let mv = mhv_move("トリプルアクセル") // power=25 in mhv_move
+  let r = calc_damage(mhv_input(atk, dfn, mv))
+  // 3-hit variant の hits[0] / hits[1] / hits[2] を比較する。
+  let three = r.variants[2]
+  inspect(three.hits.length(), content="3")
+  let hit1 = three.hits[0].damage_per_roll[0]
+  let hit2 = three.hits[1].damage_per_roll[0]
+  let hit3 = three.hits[2].damage_per_roll[0]
+  // hit 2 must strictly exceed hit 1 (per-hit power ramp). 過去実装は同値。
+  assert_true(hit2 > hit1)
+  assert_true(hit3 > hit2)
+}

@@ -236,30 +236,31 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 3. Power calculation
   // 威力可変技 (おはかまいり / 体重依存 / つけあがる / アシストパワー /
   // やけっぱち / はたきおとす / たたりめ) は variable_power.mbt に集約。
-  let mut effective_power = resolve_variable_power(
+  // TripleVariant (トリプルキック / トリプルアクセル) は hit ごとに base_power
+  // が変わるので、ability/item/type-resist の最終チェインだけ closure 化して
+  // hit ごとに再適用する (variable_power はこれらの move では恒等関数なので
+  // 入口で 1 度だけ呼ぶ)。
+  let resolved_var_power = resolve_variable_power(
     move_power, mv, input, dfn, atk, atk_ability, def_ability,
   )
-  if atk_ability.length() > 0 {
-    effective_power = apply_atk_ability_power(
-      atk_ability, move_name, move_type, effective_power, weather,
-      force_contact=sr.force_contact,
-    )
-  }
-  if atk_item.length() > 0 {
-    effective_power = apply_type_boost_item(
-      atk_item, move_type, effective_power,
-    )
-  }
-  if type_resist_mult != 1.0 {
-    effective_power = {
-      let p = (effective_power.to_double() * type_resist_mult).to_int()
-      if p < 1 {
-        1
-      } else {
-        p
-      }
+  let apply_power_modifiers = fn(base : Int) -> Int {
+    let mut p = base
+    if atk_ability.length() > 0 {
+      p = apply_atk_ability_power(
+        atk_ability, move_name, move_type, p, weather,
+        force_contact=sr.force_contact,
+      )
     }
+    if atk_item.length() > 0 {
+      p = apply_type_boost_item(atk_item, move_type, p)
+    }
+    if type_resist_mult != 1.0 {
+      let q = (p.to_double() * type_resist_mult).to_int()
+      p = if q < 1 { 1 } else { q }
+    }
+    p
   }
+  let effective_power = apply_power_modifiers(resolved_var_power)
 
   // Type effectiveness (using x4 integer encoding)
   let atk_type_opt = @types.type_from_jp(move_type)
@@ -465,21 +466,22 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // Resolve the chance-node probability distribution. Random2to5 fans out
   // into 4 variants (without Skill Link), TripleVariant into 3 with the
   // mid-flight-miss weights, others stay deterministic with prob 1.0.
-  let auto_spec = resolve_auto_hits(move_name)
-  let plan_distribution : Array[(Int, Double)] = match hit_plan {
-    Single => [(1, 1.0)]
-    ParentalBond => [(2, 1.0)]
-    TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
-    FixedHits(n) =>
-      match auto_spec {
-        Random2to5 =>
-          if atk_ability == "スキルリンク" {
-            [(n, 1.0)]
-          } else {
-            expand_random_2_5_variants()
-          }
-        _ => [(n, 1.0)]
+  // multi_hit_mode が Auto のときは shared helper に委ねる; explicit
+  // Fixed(n) だけは hit_plan が `FixedHits(n)` を抱えているのでこちらで
+  // 単一エントリに畳む。
+  let plan_distribution : Array[(Int, Double)] = match input.multi_hit_mode {
+    @model.MultiHit::Auto => resolve_hit_distribution(mv, atk_ability)
+    @model.MultiHit::Fixed(_) =>
+      match hit_plan {
+        FixedHits(n) => [(n, 1.0)]
+        Single => [(1, 1.0)]
+        ParentalBond => [(2, 1.0)]
+        TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
       }
+    @model.MultiHit::Expected =>
+      abort(
+        "MultiHit::Expected is a payoff-only approximation; pkdx damage does not accept it",
+      )
   }
 
   // Pre-compute Parental Bond's second-hit damage outside the hit loop so
@@ -488,7 +490,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     ParentalBond => Some(compute_rolls(effective_power / 4, 0))
     _ => None
   }
-  let move_is_contact = is_contact_move(move_name)
+  // P1-A (#100): contact フラグは StatResolution.force_contact を優先する。
+  // シェルアームズ 物理モード等の動的接触判定が、HitStep.contact と payoff
+  // 側 contact-proc fanout から漏れないようにここで一本化する。
+  let move_is_contact = resolve_move_contact(mv, sr.force_contact)
   // P2-B (#92): defender's じきゅうりょく ramps Defense by +1 after each
   // landed hit (capped at +6 from entry stage). Build the per-hit
   // def_stage_offset / def_stage_after now so the variants loop can pass
@@ -519,6 +524,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       } else {
         def_stage
       }
+      // TripleVariant (トリプルキック / トリプルアクセル) は hit が当たる
+      // ごとに base_power が hit 番号ぶん上昇する: hit 1 = base、hit 2 =
+      // base*2、hit 3 = base*3。すいりゅうれんだ / トリプルダイブ は
+      // FixedHits(3) なのでこの分岐には落ちず、固定 base_power で 3 回殴る。
       let this_damages = match (hit_plan, h, pb_second_damages) {
         (ParentalBond, 1, Some(d2)) =>
           if stamina_active && this_offset != 0 {
@@ -526,6 +535,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
           } else {
             d2
           }
+        (TripleVariant(_), _, _) => {
+          let per_hit_pow = apply_power_modifiers(resolved_var_power * (h + 1))
+          compute_rolls(per_hit_pow, this_offset)
+        }
         _ =>
           if this_offset == 0 {
             damages

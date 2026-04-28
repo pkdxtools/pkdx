@@ -179,3 +179,37 @@ pub fn expand_variants(plan : HitPlan) -> Array[(Int, Double)] {
 pub fn expand_random_2_5_variants() -> Array[(Int, Double)] {
   [(2, 0.375), (3, 0.375), (4, 0.125), (5, 0.125)]
 }
+
+///|
+/// Full hit-count probability distribution for Auto-mode multi-hit
+/// resolution. Folds `expand_variants` and `expand_random_2_5_variants`
+/// behind a single entrypoint so callers (engine.mbt's variants loop and
+/// payoff/switching_game's contact-proc fanout) share the source of
+/// truth for "given this move + ability, how many landed hits should we
+/// expect with what probabilities".
+///
+/// Random2to5 is the only branch that needs the auto_spec lookup —
+/// HitPlan collapses it to `FixedHits(3)` when Auto fires, losing the
+/// 4-way distribution otherwise.
+pub fn resolve_hit_distribution(
+  mv : @model.Move,
+  atk_ability : String,
+) -> Array[(Int, Double)] {
+  let auto_spec = resolve_auto_hits(mv.name)
+  let plan = resolve_hit_plan(mv, atk_ability, @model.MultiHit::Auto)
+  match plan {
+    Single => [(1, 1.0)]
+    ParentalBond => [(2, 1.0)]
+    TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
+    FixedHits(n) =>
+      match auto_spec {
+        Random2to5 =>
+          if atk_ability == "スキルリンク" {
+            [(n, 1.0)]
+          } else {
+            expand_random_2_5_variants()
+          }
+        _ => [(n, 1.0)]
+      }
+  }
+}

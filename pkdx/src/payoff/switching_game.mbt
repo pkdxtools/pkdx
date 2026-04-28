@@ -270,6 +270,16 @@ pub fn maybe_apply_status_fanout(
 /// status lands on that side. `defender_team` is the side whose
 /// ability / item triggers, `attacker_team` is consulted for type
 /// immunity (electric immune to paralysis, fire immune to burn, etc).
+///
+/// 多段技 (#100): 各 contact 着弾は独立に proc 判定するため、ヒット数 n で
+/// proc 確率を `1 - (1 - p)^n` に集約する。multi_hit_variants からヒット数の
+/// 確率分布を取り、確率重み付きで no-proc 量を計算する。
+/// シェルアームズ 物理モード等の動的 contact (force_contact) も damage engine
+/// と同じ `resolve_stat_resolution` 経由で判定する。
+/// ほうし のように複数 status を吐く ability は (kind, chance) の配列を返すので、
+/// no-proc 残りを各 viable kind に chance 比で按分する近似モデルを使う
+/// (proc 全体の生起確率は per-hit `total_chance / 100` を 1 ステップとして扱い、
+///  per-hit で「どの kind が当たるか」は独立試行と仮定)。
 pub fn apply_contact_proc_fanout(
   state : SwitchingGameState,
   attacker_is_me : Bool,
@@ -279,21 +289,31 @@ pub fn apply_contact_proc_fanout(
   defender_team : Array[Combatant],
   mv : @model.Move,
 ) -> Array[(Double, SwitchingGameState)] {
-  if not(@damage.is_contact_move(mv.name)) {
+  let attacker = attacker_team[attacker_slot]
+  let defender = defender_team[defender_slot]
+  // 動的 contact (シェルアームズ) を engine と同じ判定で解決する。
+  let sr = @damage.resolve_stat_resolution(
+    mv,
+    atk_atk=attacker.pokemon.atk,
+    atk_spa=attacker.pokemon.spa,
+    def_def=defender.pokemon.def_,
+    def_spd=defender.pokemon.spd,
+    atk_ability=attacker.ability,
+    def_ability=defender.ability,
+    critical=false,
+  )
+  if not(@damage.resolve_move_contact(mv, sr.force_contact)) {
     return [(1.0, state)]
   }
-  let defender = defender_team[defender_slot]
   // Ability has priority over item; combining both into a chained fanout
   // is a future enhancement (rare combo in M-A).
-  let proc = match @damage.contact_proc_ability(defender.ability) {
-    Some(p) => Some(p)
-    None => @damage.contact_proc_item(defender.item)
+  let ability_procs = @damage.contact_proc_ability(defender.ability)
+  let procs = if ability_procs.length() > 0 {
+    ability_procs
+  } else {
+    @damage.contact_proc_item(defender.item)
   }
-  let (kind, chance) = match proc {
-    None => return [(1.0, state)]
-    Some(x) => x
-  }
-  if chance <= 0 {
+  if procs.length() == 0 {
     return [(1.0, state)]
   }
   let attacker_hps = if attacker_is_me { state.my_hps } else { state.opp_hps }
@@ -308,20 +328,73 @@ pub fn apply_contact_proc_fanout(
   if attacker_status[attacker_slot] != @model.None {
     return [(1.0, state)]
   }
-  let attacker = attacker_team[attacker_slot]
-  if @model.immune_to_status(
-    kind, attacker.pokemon.type1, attacker.pokemon.type2,
-  ) {
+  // viable kinds: 攻撃側がそのタイプに耐性を持たない proc のみ。タイプ耐性で
+  // fizzle した proc も per-hit の「proc が発火する確率」には参加するため、
+  // total_chance には immune エントリも含める (例: ほうし 11% どく vs どく
+  // タイプ攻撃側 → どくは無効化されるが、ねむり/まひの proc 確率は変わらない)。
+  let mut total_chance = 0
+  let mut viable_chance = 0
+  let viable_procs : Array[(@model.StatusKind, Int)] = []
+  for i = 0; i < procs.length(); i = i + 1 {
+    let (kind, chance) = procs[i]
+    if chance <= 0 {
+      continue
+    }
+    total_chance = total_chance + chance
+    if @model.immune_to_status(
+      kind, attacker.pokemon.type1, attacker.pokemon.type2,
+    ) {
+      continue
+    }
+    viable_chance = viable_chance + chance
+    viable_procs.push((kind, chance))
+  }
+  if total_chance <= 0 {
     return [(1.0, state)]
   }
-  let p = chance.to_double() / 100.0
-  if p >= 1.0 {
+  let p_per_hit = total_chance.to_double() / 100.0
+  // ヒット数分布に対して `1 - q^n` の期待値を取る。Skill Link 5-hit など
+  // 確定ヒット数は単一エントリ、Random2to5 / TripleVariant は分布で展開。
+  let hit_dist = @damage.resolve_hit_distribution(mv, attacker.ability)
+  let mut expected_no_proc = 0.0
+  for i = 0; i < hit_dist.length(); i = i + 1 {
+    let (n, prob) = hit_dist[i]
+    let q = 1.0 - p_per_hit
+    let mut qn = 1.0
+    for _k = 0; _k < n; _k = _k + 1 {
+      qn = qn * q
+    }
+    expected_no_proc = expected_no_proc + prob * qn
+  }
+  let p_any_proc = 1.0 - expected_no_proc
+  // viable kinds が 0 のときは fizzle で全部 no-status に帰着。
+  if viable_procs.length() == 0 || viable_chance <= 0 {
+    return [(1.0, state)]
+  }
+  // viable 比で按分。p_viable は「proc が発火し、かつ viable な kind が
+  // 当たる」確率、残りはタイプ耐性 fizzle ぶんとして no-status に戻す。
+  let p_viable = p_any_proc * viable_chance.to_double() /
+    total_chance.to_double()
+  let no_status_p = 1.0 - p_viable
+  if p_viable <= 0.0 {
+    return [(1.0, state)]
+  }
+  // Skill Link 100% proc + 単一 viable kind なら確定状態異常で 1 leaf。
+  if no_status_p <= 1.0e-12 && viable_procs.length() == 1 {
+    let (kind, _) = viable_procs[0]
     return [(1.0, with_status_set(state, attacker_is_me, attacker_slot, kind))]
   }
-  [
-    (1.0 - p, state),
-    (p, with_status_set(state, attacker_is_me, attacker_slot, kind)),
-  ]
+  let outcomes : Array[(Double, SwitchingGameState)] = []
+  outcomes.push((no_status_p, state))
+  for i = 0; i < viable_procs.length(); i = i + 1 {
+    let (kind, chance) = viable_procs[i]
+    let mass = p_viable * chance.to_double() / viable_chance.to_double()
+    outcomes.push((
+      mass,
+      with_status_set(state, attacker_is_me, attacker_slot, kind),
+    ))
+  }
+  outcomes
 }
 
 ///|

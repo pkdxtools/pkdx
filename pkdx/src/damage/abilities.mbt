@@ -343,25 +343,31 @@ pub fn triggers_stamina(mv : @model.Move) -> Bool {
 }
 
 ///|
-/// Contact-induced status proc on the attacker. Returns the (StatusKind,
-/// chance%) the defender's ability inflicts on the attacker when hit by
-/// a contact move; None for non-procking abilities.
+/// Contact-induced status procs on the attacker. Returns one or more
+/// `(StatusKind, chance%)` entries the defender's ability inflicts on
+/// the attacker when hit by a contact move; an empty array for
+/// non-procking abilities.
 ///
 /// Used by switching_game's `apply_contact_proc_fanout` to surface
 /// chance nodes for ほのおのからだ / せいでんき / どくしゅ / ほうし.
 /// てつのトゲ / さめはだ trigger recoil-style HP damage instead and are
 /// handled separately (deterministic, not a chance node).
+///
+/// ほうし は per-hit で 11% どく / 10% まひ / 9% ねむり (合計 30%、Gen9 仕様)。
+/// 単一エントリに畳むと「どく無効の攻撃側はすべての proc を回避」という
+/// 過剰な近似になるため、3 エントリへ分けて返す。
 pub fn contact_proc_ability(
   name : String,
-) -> (@model.StatusKind, Int)? {
+) -> Array[(@model.StatusKind, Int)] {
   match name {
-    "ほのおのからだ" => Some((@model.BurnKind, 30))
-    "せいでんき" => Some((@model.ParalyzeKind, 30))
-    "どくしゅ" => Some((@model.PoisonKind, 30))
-    "ほうし" =>
-      // ほうし inflicts one of poison/paralyze/sleep at 30%; payoff
-      // MVP collapses to poison so the chance node has a fixed kind.
-      Some((@model.PoisonKind, 30))
-    _ => None
+    "ほのおのからだ" => [(@model.BurnKind, 30)]
+    "せいでんき" => [(@model.ParalyzeKind, 30)]
+    "どくしゅ" => [(@model.PoisonKind, 30)]
+    "ほうし" => [
+      (@model.PoisonKind, 11),
+      (@model.ParalyzeKind, 10),
+      (@model.SleepKind, 9),
+    ]
+    _ => []
   }
 }

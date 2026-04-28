@@ -92,6 +92,21 @@ pub fn is_contact_move(name : String) -> Bool {
 }
 
 ///|
+/// Resolve the move's effective contact flag, honoring `force_contact` from
+/// `StatResolution` (シェルアームズ 物理モード等の動的接触判定) over the
+/// static `is_contact_move` table. Shared by the damage engine and the
+/// payoff layer's contact-proc fanout so they can never disagree.
+pub fn resolve_move_contact(
+  mv : @model.Move,
+  force_contact : Bool?,
+) -> Bool {
+  match force_contact {
+    Some(v) => v
+    None => is_contact_move(mv.name)
+  }
+}
+
+///|
 /// ダブルバトルで複数対象に当たる技（0.75倍補正対象）。
 /// 出典: https://latest.pokewiki.net/攻撃技の効果#multi_hit
 /// 前半は相手全員対象、後半（うたかたのアリア以降）は自分以外全体対象。

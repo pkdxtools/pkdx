@@ -7,13 +7,16 @@ import {
   "mizchi/numbt" @numbt,
 } for "test"
 
-// BLAS is only needed transitively through numbt (test-only import). The
-// production binary built via `moon build --target native src/main` does not
-// link BLAS. For `moon test`, the test harness links the nash and mizchi/blas
-// stubs as dylibs and needs the BLAS symbols. CI overrides this default on
-// each platform via MOON_CC_LINK_FLAGS:
+// BLAS *symbols* are only needed transitively through numbt (test-only import),
+// so `moon build --target native src/main` does not actually call BLAS. However
+// the cc-link-flags below are still passed to the linker for any build that
+// depends on this package (src/main does, via payoff -> nash). The default is
+// macOS-only, so Linux/Windows must override MOON_CC_LINK_FLAGS for *both*
+// `moon build` and `moon test` to keep the link step from rejecting the flag.
+// `moon test` additionally requires the override to provide real BLAS symbols.
+// CI exports the same value on both Build and Test steps:
 //   Linux:   -lopenblas -llapack -lm
-//   macOS:   -framework Accelerate (matches default below)
+//   macOS:   -framework Accelerate (matches default below; no override needed)
 //   Windows: -LC:/vcpkg/installed/x64-windows/lib -lopenblas (vcpkg-installed)
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },

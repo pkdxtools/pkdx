@@ -85,47 +85,58 @@ else
   echo "  Done."
 fi
 
-# --- Step 2.7: BLAS dependency (for `moon test` only) ---
-# BLAS は numbt の test-only import 経由でしか参照されないため、
-# `moon build --target native src/main` で作る本体バイナリには不要。
-# `moon test` を走らせる場合のみ各 OS で BLAS が要る。詳細は
-# pkdx/src/nash/moon.pkg と pkdx/src/payoff/moon.pkg のコメント参照。
-echo "[2.7/5] BLAS dependency check (only required for 'moon test')..."
-echo "  Note: 'moon build --target native src/main' (production binary) does not link BLAS."
+# --- Step 2.7: Link-flag / BLAS guidance for local moon build / moon test ---
+# pkdx/src/nash/moon.pkg と pkdx/src/payoff/moon.pkg は `cc-link-flags` の
+# 既定値として macOS 向け `-framework Accelerate` を埋め込んでいる。
+# `src/main` はこれらを推移的に依存するため、Linux/Windows で
+# `moon build --target native src/main` を実行する場合もリンク失敗を避ける
+# ため MOON_CC_LINK_FLAGS でこの既定を上書きする必要がある (= ツールチェーン
+# 側のリンカ固有のフラグ問題)。
+# 加えて `moon test` は numbt 経由で BLAS シンボル本体も要求するため、上書き
+# 値には実際の BLAS ライブラリを含める必要がある (= ライブラリ依存問題)。
+# 配布バイナリ (release) を「使うだけ」のユーザーには関係ない。
+echo "[2.7/5] Link-flag / BLAS guidance for local moon build/test..."
+echo "  Note: pre-built release binaries need no toolchain (no link step at install)."
+echo "  Note: package defaults to '-framework Accelerate' (macOS only)."
+echo "        Non-macOS local 'moon build' must override MOON_CC_LINK_FLAGS so the"
+echo "        linker accepts the flag at all; 'moon test' additionally needs real"
+echo "        BLAS symbols available."
 case "$OS_TAG" in
   darwin)
-    # macOS は Accelerate.framework が標準搭載。追加インストール不要。
-    echo "  macOS: Accelerate.framework is built in."
-    echo "  To run 'moon test' locally, export the link flag:"
-    echo "    export MOON_CC_LINK_FLAGS=\"-framework Accelerate\""
+    # macOS は Accelerate.framework が標準搭載。package 既定値と一致するため
+    # `moon build` は環境変数なしで通る。`moon test` も同じフラグでよい。
+    echo "  macOS: Accelerate.framework is built in; package defaults match."
+    echo "    'moon build' works with no env override."
+    echo "    'moon test' works with the same default (export if shell has cleared it):"
+    echo "      export MOON_CC_LINK_FLAGS=\"-framework Accelerate\""
     ;;
   linux)
-    # OpenBLAS + LAPACK が必要。MOON_CC_LINK_FLAGS で cc-link-flags を上書き。
     if command -v dpkg &>/dev/null && dpkg -s libopenblas-dev &>/dev/null && dpkg -s liblapack-dev &>/dev/null; then
       echo "  Linux: libopenblas-dev + liblapack-dev detected."
     elif command -v rpm &>/dev/null && rpm -q openblas-devel &>/dev/null; then
       echo "  Linux: openblas-devel detected."
     else
-      echo "  Linux: BLAS/LAPACK not detected. To run 'moon test', install one of:"
+      echo "  Linux: BLAS/LAPACK not detected. Required for 'moon test':"
       echo "    Debian/Ubuntu: sudo apt-get install libopenblas-dev liblapack-dev"
       echo "    RHEL/Fedora:   sudo dnf install openblas-devel lapack-devel"
-      echo "    (production 'moon build' still works without these.)"
     fi
-    echo "  To run 'moon test' locally, export the right link flags:"
+    echo "  Required to override the macOS-only default for both 'moon build' and 'moon test':"
     echo "    export MOON_CC_LINK_FLAGS=\"-lopenblas -llapack -lm\""
+    echo "    ('moon build' itself does not call BLAS symbols, but the same value"
+    echo "     works for both and matches what CI uses.)"
     ;;
   windows)
-    # `moon test` を Windows で走らせる場合のみ vcpkg + OpenBLAS が必要。
-    # 配布バイナリ (release) も `moon build --target native src/main` も BLAS を
-    # リンクしないので、pkdx を「使う」だけのユーザーには関係ない。
-    echo "  Windows: the production binary does NOT link BLAS, so the official"
-    echo "    release and a local 'moon build' both work without any toolchain."
-    echo "  To run 'moon test' locally, install vcpkg + OpenBLAS."
+    echo "  Windows: required to override the macOS-only default for both"
+    echo "    'moon build' and 'moon test'. Install vcpkg + OpenBLAS first."
     echo "    Run the install in PowerShell or cmd (NOT in bash; backslashes break):"
     echo "      C:\\vcpkg\\vcpkg.exe install openblas:x64-windows"
-    echo "    Then in this shell (Git Bash / MSYS), export link flags before 'moon test':"
+    echo "    Then in this shell (Git Bash / MSYS), export link flags before"
+    echo "    'moon build' or 'moon test':"
     echo "      export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-windows/lib -lopenblas\""
-    echo "    (also add C:/vcpkg/installed/x64-windows/bin to PATH for the DLL.)"
+    echo "    (also add C:/vcpkg/installed/x64-windows/bin to PATH for the DLL"
+    echo "     when running 'moon test'.)"
+    echo "    ('moon build' itself does not call BLAS symbols, but the same value"
+    echo "     works for both and matches what CI uses.)"
     ;;
 esac
 

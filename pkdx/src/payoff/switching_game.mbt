@@ -563,21 +563,37 @@ pub fn apply_item_pre_damage_proc_fanout(
   if consumed {
     return [(1.0, state)]
   }
-  let defender = defender_team[defender_slot]
+  // Resolve mega-aware combatants so post-mega ability/type/stats flow into
+  // berry consumption (#101). Without this, Mega Gardevoir / Mega Pinsir's
+  // フェアリースキン (Normal → Fairy rewrite) would halve damage in the
+  // engine but leave item_consumed unflipped here, so future hits keep
+  // getting halved. defender.pokemon.type1/type2 also moves to post-mega
+  // for the super-effective check.
+  let def_megaed = if defender_is_me {
+    state.my_megaed[defender_slot]
+  } else {
+    state.opp_megaed[defender_slot]
+  }
+  let defender = effective_combatant(
+    defender_team[defender_slot], def_megaed,
+  )
   let berry_type = @damage.get_resist_berry_type(defender.item)
   if berry_type.length() == 0 {
     return [(1.0, state)]
   }
-  // Mirror the engine's resolved move type so Skin abilities (フェアリースキン
-  // etc.) that rewrite a Normal move's type cause the same berry to fire here
-  // as in the engine. Without this the engine halves damage but the
-  // consumption flag never flips, so future hits keep getting halved.
   let attacker_active = if defender_is_me {
     state.opp_active
   } else {
     state.my_active
   }
-  let attacker = attacker_team[attacker_active]
+  let atk_megaed = if defender_is_me {
+    state.opp_megaed[attacker_active]
+  } else {
+    state.my_megaed[attacker_active]
+  }
+  let attacker = effective_combatant(
+    attacker_team[attacker_active], atk_megaed,
+  )
   let resolved_type = resolve_engine_move_type(mv, attacker.ability)
   if resolved_type != berry_type {
     return [(1.0, state)]
@@ -659,7 +675,17 @@ pub fn apply_item_post_damage_proc_fanout(
   if consumed {
     return [(1.0, state)]
   }
-  let defender = defender_team[defender_slot]
+  // Mega-aware (#101): post-mega ability決まる multi-hit が Sash gating に
+  // 効くようにする。Mega Kangaskhan (おやこあい) で raw ability="" のままだと
+  // Single 扱いされ Sash が誤発動、aggregate KO で 1 HP 残してしまう。
+  let def_megaed = if defender_is_me {
+    state.my_megaed[defender_slot]
+  } else {
+    state.opp_megaed[defender_slot]
+  }
+  let defender = effective_combatant(
+    defender_team[defender_slot], def_megaed,
+  )
   let max_hp = defender.pokemon.hp
   let post_hp = if defender_is_me {
     state.my_hps[defender_slot]
@@ -674,7 +700,14 @@ pub fn apply_item_post_damage_proc_fanout(
     } else {
       state.my_active
     }
-    let attacker = attacker_team[attacker_active]
+    let atk_megaed = if defender_is_me {
+      state.opp_megaed[attacker_active]
+    } else {
+      state.my_megaed[attacker_active]
+    }
+    let attacker = effective_combatant(
+      attacker_team[attacker_active], atk_megaed,
+    )
     let hit_plan = @damage.resolve_hit_plan(
       mv, attacker.ability, @model.MultiHit::Auto,
     )

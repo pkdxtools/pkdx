@@ -36,6 +36,7 @@ fn ic_combatant(
   pokemon : @model.Pokemon,
   ability~ : String = "",
   item~ : String = "",
+  mega_form~ : @model.MegaForm? = None,
 ) -> Combatant {
   {
     pokemon,
@@ -44,7 +45,7 @@ fn ic_combatant(
     item,
     tera_type: "",
     stat_system: @model.Standard,
-    mega_form: None,
+    mega_form,
     nature: None,
     stat_points: None,
     actual_stats: None,
@@ -417,5 +418,157 @@ test "resist_berry: ホズのみ triggers on neutral Normal hit" {
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
+  inspect(s.opp_item_consumed[0], content="true")
+}
+
+// ─── #101 fix-on-fix: mega-aware fanout regressions ────────────────────────
+
+///|
+test "resist_berry: mega-form フェアリースキン rewrites Normal → consumes ロゼルのみ" {
+  // #101: pre-mega ability="" でも mega 状態なら mega_form.ability=フェアリースキン
+  // が effective_combatant 経由で適用され、Normal技 が Fairy へ書き換わる。
+  // defender (かくとう) は Fairy SE なので ロゼルのみ が消費される。
+  // mega 反映前の旧実装は ability="" で resolve_engine_move_type が Normal の
+  // まま、berry_type=Fairy と一致せずに consume されなかった。
+  let mega_form : @model.MegaForm = {
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    type1: "フェアリー",
+    type2: "",
+    ability: "フェアリースキン",
+    name_ja: "メガサーナイト",
+  }
+  let attacker = ic_combatant(
+    ic_pokemon("a", "フェアリー", ""),
+    ability="",
+    mega_form=Some(mega_form),
+  )
+  let defender = ic_combatant(
+    ic_pokemon("d", "かくとう", ""), item="ロゼルのみ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mut state = ic_state(opp_hps=[150, 200, 200])
+  state = { ..state, my_megaed: [true, false, false] }
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_pre_damage_proc_fanout(
+    state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_item_consumed[0], content="true")
+}
+
+///|
+test "resist_berry: non-mega attacker w/ pre-mega Skin ability → no consume" {
+  // 同じ setup で mega フラグを立てない場合、pre-mega ability="" で技は Normal
+  // のまま、ロゼルのみ (Fairy berry) は trigger しないことを確認する。
+  let mega_form : @model.MegaForm = {
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    type1: "フェアリー",
+    type2: "",
+    ability: "フェアリースキン",
+    name_ja: "メガサーナイト",
+  }
+  let attacker = ic_combatant(
+    ic_pokemon("a", "フェアリー", ""),
+    ability="",
+    mega_form=Some(mega_form),
+  )
+  let defender = ic_combatant(
+    ic_pokemon("d", "かくとう", ""), item="ロゼルのみ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_pre_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+///|
+test "focus_sash: mega-form おやこあい → no rescue on aggregate KO" {
+  // #101: pre-mega ability="" で mega_form.ability=おやこあい を持つ攻撃側が
+  // mega 状態のとき、aggregate KO は Parental Bond の 2-hit によるもの。
+  // 旧実装は raw ability="" のまま Single 扱いで Sash を 1 HP に救ってしまい、
+  // mega Kangaskhan で誤救出が起きていた。
+  let mega_form : @model.MegaForm = {
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    type1: "ノーマル",
+    type2: "",
+    ability: "おやこあい",
+    name_ja: "メガガルーラ",
+  }
+  let attacker = ic_combatant(
+    ic_pokemon("a", "ノーマル", ""),
+    ability="",
+    mega_form=Some(mega_form),
+  )
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mut state = ic_state(opp_hps=[0, 200, 200])
+  state = { ..state, my_megaed: [true, false, false] }
+  let mv = ic_move("すてみタックル", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  // multi-hit と判定され Sash が gating されるので HP=0 のまま、consumed=false。
+  inspect(s.opp_hps[0], content="0")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+///|
+test "focus_sash: non-mega base ability single move → Sash rescues to 1 HP" {
+  // 同じ defender 設定で attacker が non-mega なら raw ability="" → Single 扱いで
+  // Sash が 1 HP 救出する正規動作を確認する。post-mega path との対比。
+  let mega_form : @model.MegaForm = {
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    type1: "ノーマル",
+    type2: "",
+    ability: "おやこあい",
+    name_ja: "メガガルーラ",
+  }
+  let attacker = ic_combatant(
+    ic_pokemon("a", "ノーマル", ""),
+    ability="",
+    mega_form=Some(mega_form),
+  )
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
+  let mv = ic_move("すてみタックル", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="1")
   inspect(s.opp_item_consumed[0], content="true")
 }

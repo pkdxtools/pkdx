@@ -136,8 +136,20 @@ case "$OS_TAG" in
     echo "    'moon build' or 'moon test':"
     echo "      export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-windows/lib -lopenblas\""
     echo "    The -L/-l form is GCC-style; if MoonBit picks cl.exe (MSVC) it"
-    echo "    will not accept this syntax. Force the GCC driver to be safe:"
-    echo "      export CC=gcc"
+    echo "    will not accept this syntax. Pin CC to a mingw-w64 GCC by"
+    echo "    absolute path so resolution does not silently fall back to"
+    echo "    PATH (and pick up a non-GCC compiler):"
+    if [ -x "/c/mingw64/bin/gcc.exe" ]; then
+      echo "      export CC=\"C:/mingw64/bin/gcc.exe\"     # detected"
+    elif [ -x "/c/msys64/mingw64/bin/gcc.exe" ]; then
+      echo "      export CC=\"C:/msys64/mingw64/bin/gcc.exe\"   # detected (MSYS2)"
+    else
+      echo "      export CC=\"C:/mingw64/bin/gcc.exe\"     # adjust if MinGW is elsewhere"
+      echo "    No mingw-w64 GCC detected at C:/mingw64 or C:/msys64/mingw64."
+      echo "    Install MSYS2 (https://www.msys2.org/) and 'pacman -S"
+      echo "    mingw-w64-x86_64-gcc', or use the niXman/mingw-builds-binaries"
+      echo "    release that the GitHub Actions windows-2022 image uses."
+    fi
     echo "    Also add C:/vcpkg/installed/x64-windows/bin to PATH so the DLL"
     echo "    resolves at runtime (used by 'moon test')."
     echo "    Both 'moon build' and 'moon test' need OpenBLAS installed; the"

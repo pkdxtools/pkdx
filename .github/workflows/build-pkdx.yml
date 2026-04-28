@@ -77,9 +77,12 @@ jobs:
           # Force a GCC-style driver on Windows so the GCC-style `-L/-l` link
           # flags above are valid. Without this, MoonBit may pick `cl.exe`
           # (MSVC) which would require `/link /LIBPATH:... openblas.lib`
-          # syntax instead. windows-2022 runners ship mingw-w64 GCC at
-          # `C:\msys64\mingw64\bin\gcc.exe`; CC=gcc relies on it being on PATH.
-          CC: ${{ runner.os == 'Windows' && 'gcc' || '' }}
+          # syntax instead. windows-2022 runners install mingw-w64 GCC at
+          # `C:\mingw64\bin\gcc.exe` (Install-Mingw64.ps1). Pin the absolute
+          # path so resolution does not depend on PATH state — Git Bash
+          # inherits the machine PATH but a future image change could move
+          # mingw under MSYS2 and silently break `CC=gcc`.
+          CC: ${{ runner.os == 'Windows' && 'C:/mingw64/bin/gcc.exe' || '' }}
         run: |
           moon update
           moon build --target native src/main
@@ -89,7 +92,7 @@ jobs:
         working-directory: pkdx
         env:
           MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
-          CC: ${{ runner.os == 'Windows' && 'gcc' || '' }}
+          CC: ${{ runner.os == 'Windows' && 'C:/mingw64/bin/gcc.exe' || '' }}
         run: |
           moon test --target native
         shell: bash

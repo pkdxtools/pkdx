@@ -431,6 +431,8 @@ fn mk_test_state(
     opp_status: opp_st,
     my_must_recharge: Array::make(team_size, false),
     opp_must_recharge: Array::make(team_size, false),
+    my_item_consumed: Array::make(team_size, false),
+    opp_item_consumed: Array::make(team_size, false),
     turn: 0,
   }
 }
@@ -674,6 +676,8 @@ fn mk_same_turn_state(
     opp_status: zero_status(1),
     my_must_recharge: [false],
     opp_must_recharge: [false],
+    my_item_consumed: [false],
+    opp_item_consumed: [false],
     turn: 0,
   }
 }
@@ -1066,6 +1070,8 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     opp_status: [@model.None],
     my_must_recharge: [false, false],
     opp_must_recharge: [false],
+    my_item_consumed: [false, false],
+    opp_item_consumed: [false],
     turn: 0,
   }
   let outs1 = attempt_turn_with_cache(

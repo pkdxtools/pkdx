@@ -56,6 +56,13 @@ pub(all) struct SwitchingGameState {
   // Reset on switch (fresh entrant never starts recharging).
   my_must_recharge : Array[Bool]
   opp_must_recharge : Array[Bool]
+  // P5 (#97): per-slot held-item consumption flag. Set to `true` once the
+  // slot's held item triggers (resist berry weakness reduction, きあいのタスキ
+  // KO survival, フィラのみ HP heal). Persists across switches — a consumed
+  // berry doesn't reappear when the holder switches back in. Length = team
+  // size; aligns with my_megaed / my_status indexing.
+  my_item_consumed : Array[Bool]
+  opp_item_consumed : Array[Bool]
   turn : Int
 } derive(Show, Eq, Hash)
 
@@ -498,6 +505,179 @@ pub fn apply_contact_proc_fanout(
 }
 
 ///|
+/// Resist-berry consumption tracker (#97 / P5). The engine's damage path
+/// (`damage/engine.mbt`) already applies the berry's 1/2 power_mod on
+/// super-effective hits when the defender's `item` is set, so this
+/// fanout does **not** alter HP. It only flips
+/// `(my|opp)_item_consumed[slot]` to `true` so the next attack on the
+/// same defender stops being halved.
+///
+/// Wiring `item_consumed` into the engine call (so it sees `item = ""`
+/// once the berry is consumed) lives in `damage_utils` (T7); until that
+/// lands, the consumption flag is set here but the engine still re-applies
+/// the resist berry on the second hit. Tests assert the flag transition;
+/// the second-hit double-halving bug is tracked as a P5 follow-up.
+///
+/// Trigger conditions:
+///   - defender's item is a resist berry (`get_resist_berry_type`)
+///   - move type matches the berry's resisted type
+///   - move is super-effective on the defender's typing
+///   - `(my|opp)_item_consumed[slot]` is `false`
+///   - the visible delta `pre_dmg_hp - post_hp` is positive (i.e. damage
+///     was actually dealt)
+///
+/// Single-leaf fanout (probability 1.0).
+pub fn apply_item_pre_damage_proc_fanout(
+  state : SwitchingGameState,
+  defender_is_me : Bool,
+  defender_slot : Int,
+  defender_team : Array[Combatant],
+  attacker_team : Array[Combatant],
+  pre_dmg_hp : Int,
+  mv : @model.Move,
+) -> Array[(Double, SwitchingGameState)] {
+  let _ = attacker_team
+  // Defensive: legacy test fixtures sometimes size *_item_consumed shorter
+  // than the corresponding team. Treat out-of-bounds slots as "no berry
+  // wired up at this index" — equivalent to a fresh, unconsumed state.
+  let consumed_arr = if defender_is_me {
+    state.my_item_consumed
+  } else {
+    state.opp_item_consumed
+  }
+  if defender_slot >= consumed_arr.length() {
+    return [(1.0, state)]
+  }
+  let consumed = consumed_arr[defender_slot]
+  if consumed {
+    return [(1.0, state)]
+  }
+  let defender = defender_team[defender_slot]
+  let berry_type = @damage.get_resist_berry_type(defender.item)
+  if berry_type.length() == 0 {
+    return [(1.0, state)]
+  }
+  if mv.type_ != berry_type {
+    return [(1.0, state)]
+  }
+  if not(
+      @damage.is_super_effective(
+        mv.type_, defender.pokemon.type1, defender.pokemon.type2,
+      ),
+    ) {
+    return [(1.0, state)]
+  }
+  let post_hp = if defender_is_me {
+    state.my_hps[defender_slot]
+  } else {
+    state.opp_hps[defender_slot]
+  }
+  let dealt = pre_dmg_hp - post_hp
+  if dealt <= 0 {
+    return [(1.0, state)]
+  }
+  // Mark consumed; HP is left at the engine-halved value already in `state`.
+  [
+    (
+      1.0,
+      with_hp_and_item_consumed(state, defender_is_me, defender_slot, post_hp),
+    ),
+  ]
+}
+
+///|
+/// Post-damage held-item chance node (#97 / P5). Handles items that fire
+/// *after* damage has been resolved on the defender's HP:
+///
+/// - **きあいのタスキ** (`consume_on_hit`): if the defender entered the
+///   hit at full HP and the hit would have left HP <= 0, the sash is
+///   consumed and HP is set to 1.
+/// - **フィラのみ** (`hp_threshold`): if the defender's post-hit HP is
+///   above 0 and at or below `max_hp / 2`, restore `max_hp / 3` (capped
+///   at `max_hp`) and consume the berry. Healing berries do not revive
+///   a fainted holder.
+///
+/// `pre_dmg_hp` is the defender's HP just before damage was applied at
+/// this attack site — the call sites of `compose_fanouts` capture it.
+/// `mv` is reserved for future move-class gating (e.g. `しおふき` should
+/// not trigger Cell Battery despite being water-type).
+///
+/// Single-leaf fanout (probability 1.0).
+pub fn apply_item_post_damage_proc_fanout(
+  state : SwitchingGameState,
+  defender_is_me : Bool,
+  defender_slot : Int,
+  defender_team : Array[Combatant],
+  pre_dmg_hp : Int,
+  mv : @model.Move,
+) -> Array[(Double, SwitchingGameState)] {
+  let _ = mv
+  // Defensive: see apply_item_pre_damage_proc_fanout for rationale.
+  let consumed_arr = if defender_is_me {
+    state.my_item_consumed
+  } else {
+    state.opp_item_consumed
+  }
+  if defender_slot >= consumed_arr.length() {
+    return [(1.0, state)]
+  }
+  let consumed = consumed_arr[defender_slot]
+  if consumed {
+    return [(1.0, state)]
+  }
+  let defender = defender_team[defender_slot]
+  let max_hp = defender.pokemon.hp
+  let post_hp = if defender_is_me {
+    state.my_hps[defender_slot]
+  } else {
+    state.opp_hps[defender_slot]
+  }
+  if defender.item == "きあいのタスキ" &&
+    pre_dmg_hp == max_hp &&
+    post_hp <= 0 {
+    return [
+      (1.0, with_hp_and_item_consumed(state, defender_is_me, defender_slot, 1)),
+    ]
+  }
+  if defender.item == "フィラのみ" && post_hp > 0 && post_hp * 2 <= max_hp {
+    let heal = max_hp / 3
+    let new_hp = post_hp + heal
+    let capped = if new_hp > max_hp { max_hp } else { new_hp }
+    return [
+      (
+        1.0,
+        with_hp_and_item_consumed(state, defender_is_me, defender_slot, capped),
+      ),
+    ]
+  }
+  [(1.0, state)]
+}
+
+///|
+/// Copy `state`, write `hp` to the chosen side's `slot`, and mark that
+/// slot's held item as consumed. Used by the P5 item-proc fanouts to
+/// produce a single composite mutation per trigger.
+fn with_hp_and_item_consumed(
+  state : SwitchingGameState,
+  side_is_me : Bool,
+  slot : Int,
+  hp : Int,
+) -> SwitchingGameState {
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  let my_item_consumed = state.my_item_consumed.copy()
+  let opp_item_consumed = state.opp_item_consumed.copy()
+  if side_is_me {
+    my_hps[slot] = hp
+    my_item_consumed[slot] = true
+  } else {
+    opp_hps[slot] = hp
+    opp_item_consumed[slot] = true
+  }
+  { ..state, my_hps, opp_hps, my_item_consumed, opp_item_consumed }
+}
+
+///|
 /// Copy `state` and set `target_slot`'s status on the chosen side to the
 /// freshly-inflicted `StatusCondition` for `kind` (via `inflict_status`).
 fn with_status_set(
@@ -532,6 +712,8 @@ fn with_status_set(
     opp_status,
     my_must_recharge: state.my_must_recharge.copy(),
     opp_must_recharge: state.opp_must_recharge.copy(),
+    my_item_consumed: state.my_item_consumed.copy(),
+    opp_item_consumed: state.opp_item_consumed.copy(),
     turn: state.turn,
   }
 }
@@ -618,6 +800,8 @@ pub fn apply_eot(
     opp_status,
     my_must_recharge: state.my_must_recharge.copy(),
     opp_must_recharge: state.opp_must_recharge.copy(),
+    my_item_consumed: state.my_item_consumed.copy(),
+    opp_item_consumed: state.opp_item_consumed.copy(),
     turn: state.turn,
   }
 }
@@ -974,6 +1158,12 @@ pub(all) struct DamageKey {
   // but including the flag for all categories keeps the cache key uniform; the
   // reducer silently no-ops for special / status moves.
   atk_burn : Bool
+  // P5 (#97): held-item consumption flags for both sides. When true the
+  // mean_damage_cached caller has detected a prior berry / sash trigger
+  // and the engine should see `item = ""` instead of the original held
+  // item, so resist berries don't double-halve the second hit.
+  atk_item_consumed : Bool
+  def_item_consumed : Bool
 } derive(Eq, Hash)
 
 ///|
@@ -1232,16 +1422,31 @@ pub fn mean_damage_cached(
   atk_mega~ : Bool = false,
   def_mega~ : Bool = false,
   atk_burn~ : Bool = false,
+  atk_item_consumed~ : Bool = false,
+  def_item_consumed~ : Bool = false,
 ) -> Int {
-  let raw_attacker = if my_attacker {
+  let raw_attacker_full = if my_attacker {
     my_team[atk_idx]
   } else {
     opp_team[atk_idx]
   }
-  let raw_defender = if my_attacker {
+  let raw_defender_full = if my_attacker {
     opp_team[def_idx]
   } else {
     my_team[def_idx]
+  }
+  // P5 (#97): swap to itemless combatant copies once a berry / sash has
+  // been consumed so the engine doesn't apply the item effect (resist
+  // berry halving, choice band Atk x1.5 etc.) a second time.
+  let raw_attacker = if atk_item_consumed {
+    { ..raw_attacker_full, item: "" }
+  } else {
+    raw_attacker_full
+  }
+  let raw_defender = if def_item_consumed {
+    { ..raw_defender_full, item: "" }
+  } else {
+    raw_defender_full
   }
   // Move list is identical across mega / base — read the move from the base
   // combatant so that the post-mega synthetic view (which reuses `moves`) is
@@ -1270,6 +1475,8 @@ pub fn mean_damage_cached(
     atk_mega,
     def_mega,
     atk_burn,
+    atk_item_consumed,
+    def_item_consumed,
   }
   match cache.data.get(key) {
     Some(v) => {
@@ -1467,6 +1674,8 @@ priv struct TurnWorkspace {
   opp_status : Array[@model.StatusCondition]
   my_must_recharge : Array[Bool]
   opp_must_recharge : Array[Bool]
+  my_item_consumed : Array[Bool]
+  opp_item_consumed : Array[Bool]
   turn : Int
 }
 
@@ -1487,6 +1696,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_status: state.opp_status.copy(),
     my_must_recharge: state.my_must_recharge.copy(),
     opp_must_recharge: state.opp_must_recharge.copy(),
+    my_item_consumed: state.my_item_consumed.copy(),
+    opp_item_consumed: state.opp_item_consumed.copy(),
     turn: state.turn,
   }
 }
@@ -1508,6 +1719,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_status: ws.opp_status.copy(),
     my_must_recharge: ws.my_must_recharge.copy(),
     opp_must_recharge: ws.opp_must_recharge.copy(),
+    my_item_consumed: ws.my_item_consumed.copy(),
+    opp_item_consumed: ws.opp_item_consumed.copy(),
     turn: if bump_turn { ws.turn + 1 } else { ws.turn },
   }
 }
@@ -1534,6 +1747,18 @@ fn resolve_attacker_leg(
   let attacker_ranks = if attacker_is_me { ws.my_ranks } else { ws.opp_ranks }
   let defender_ranks = if attacker_is_me { ws.opp_ranks } else { ws.my_ranks }
   let defender_hps = if attacker_is_me { ws.opp_hps } else { ws.my_hps }
+  let atk_consumed_arr = if attacker_is_me { ws.my_item_consumed } else { ws.opp_item_consumed }
+  let def_consumed_arr = if attacker_is_me { ws.opp_item_consumed } else { ws.my_item_consumed }
+  let atk_consumed = if attacker_active < atk_consumed_arr.length() {
+    atk_consumed_arr[attacker_active]
+  } else {
+    false
+  }
+  let def_consumed = if defender_active < def_consumed_arr.length() {
+    def_consumed_arr[defender_active]
+  } else {
+    false
+  }
   let dmg = mean_damage_cached(
     dmg_cache,
     attacker_is_me,
@@ -1547,7 +1772,13 @@ fn resolve_attacker_leg(
     atk_mega=attacker_mega_now,
     def_mega=defender_mega_now,
     atk_burn=attacker_burn,
+    atk_item_consumed=atk_consumed,
+    def_item_consumed=def_consumed,
   )
+  // P5 (#97): defender HP just before damage application; consumed by
+  // apply_item_pre/post_damage_proc_fanout to gate resist-berry refunds and
+  // きあいのタスキ / フィラのみ trigger conditions.
+  let pre_dmg_defender_hp = defender_hps[defender_active]
   defender_hps[defender_active] = clamp_zero(defender_hps[defender_active] - dmg)
   let attacker_hps = if attacker_is_me { ws.my_hps } else { ws.opp_hps }
   let attacker_must_recharge = if attacker_is_me {
@@ -1567,6 +1798,23 @@ fn resolve_attacker_leg(
   let attacker_team = if attacker_is_me { my_team } else { opp_team }
   let attacker_slot = target_active(post_damage_state, attacker_is_me)
   compose_fanouts(post_damage_state, [
+    // P5 (#97): resist berry refund (logically pre-damage, applied as a
+    // post-damage refund — see apply_item_pre_damage_proc_fanout doc).
+    // Runs first so a sash-class post-damage check sees a possibly-
+    // refunded HP and doesn't double-trigger.
+    fn(s) {
+      apply_item_pre_damage_proc_fanout(
+        s, target_is_me, target_slot, target_team, attacker_team,
+        pre_dmg_defender_hp, attacker_move,
+      )
+    },
+    // P5 (#97): consume_on_hit (きあいのタスキ) and hp_threshold (フィラのみ).
+    fn(s) {
+      apply_item_post_damage_proc_fanout(
+        s, target_is_me, target_slot, target_team, pre_dmg_defender_hp,
+        attacker_move,
+      )
+    },
     fn(s) {
       maybe_apply_status_fanout(
         s, target_is_me, target_slot, target_team, attacker_move,
@@ -1756,6 +2004,8 @@ fn bump_turn_only(state : SwitchingGameState) -> SwitchingGameState {
     opp_status: state.opp_status.copy(),
     my_must_recharge: state.my_must_recharge.copy(),
     opp_must_recharge: state.opp_must_recharge.copy(),
+    my_item_consumed: state.my_item_consumed.copy(),
+    opp_item_consumed: state.opp_item_consumed.copy(),
     turn: state.turn + 1,
   }
 }
@@ -1804,6 +2054,8 @@ pub fn transition_with_cache(
   let opp_status_new = state.opp_status.copy()
   let my_must_recharge_new = state.my_must_recharge.copy()
   let opp_must_recharge_new = state.opp_must_recharge.copy()
+  let my_item_consumed_new = state.my_item_consumed.copy()
+  let opp_item_consumed_new = state.opp_item_consumed.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
   }
@@ -1818,6 +2070,10 @@ pub fn transition_with_cache(
   // Set to `Some((attacker_is_me, target_slot, used_move))` in the two
   // Switch+UseMove arms; None for pure-Switch / pure-UseMove handled below.
   let mut attack_event : (Bool, Int, @model.Move)? = None
+  // P5 (#97): defender HP just before damage application — captured at the
+  // damage sites so apply_item_pre/post_damage_proc_fanout can reconstruct
+  // the dealt damage (= pre - post) and gate full-HP triggers (きあいのタスキ).
+  let mut pre_dmg_defender_hp : Int = 0
   match (my_core, opp_core) {
     (Switch(i), Switch(j)) => {
       my_active_new = i
@@ -1858,7 +2114,14 @@ pub fn transition_with_cache(
         atk_mega=opp_mega_now,
         def_mega=my_megaed_new[i],
         atk_burn=is_burned(state.opp_status[state.opp_active]),
+        atk_item_consumed=opp_item_consumed_new[state.opp_active],
+        def_item_consumed=if i < my_item_consumed_new.length() {
+          my_item_consumed_new[i]
+        } else {
+          false
+        },
       )
+      pre_dmg_defender_hp = my_hps_new[i]
       my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
       resolve_post_hit_effects(
         opp_hps_new, state.opp_active, opp_ranks_new,
@@ -1888,7 +2151,14 @@ pub fn transition_with_cache(
         atk_mega=my_mega_now,
         def_mega=opp_megaed_new[j],
         atk_burn=is_burned(state.my_status[state.my_active]),
+        atk_item_consumed=my_item_consumed_new[state.my_active],
+        def_item_consumed=if j < opp_item_consumed_new.length() {
+          opp_item_consumed_new[j]
+        } else {
+          false
+        },
       )
+      pre_dmg_defender_hp = opp_hps_new[j]
       opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
       resolve_post_hit_effects(
         my_hps_new, state.my_active, my_ranks_new,
@@ -1954,6 +2224,8 @@ pub fn transition_with_cache(
     opp_status: opp_status_new,
     my_must_recharge: my_must_recharge_new,
     opp_must_recharge: opp_must_recharge_new,
+    my_item_consumed: my_item_consumed_new,
+    opp_item_consumed: opp_item_consumed_new,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -1964,6 +2236,20 @@ pub fn transition_with_cache(
       let attacker_team = if attacker_is_me { my_team } else { opp_team }
       let attacker_slot = target_active(base_state, attacker_is_me)
       compose_fanouts(base_state, [
+        // P5 (#97): resist berry refund (logically pre-damage).
+        fn(s) {
+          apply_item_pre_damage_proc_fanout(
+            s, target_is_me, target_slot, target_team, attacker_team,
+            pre_dmg_defender_hp, used_move,
+          )
+        },
+        // P5 (#97): consume_on_hit / hp_threshold post-damage items.
+        fn(s) {
+          apply_item_post_damage_proc_fanout(
+            s, target_is_me, target_slot, target_team, pre_dmg_defender_hp,
+            used_move,
+          )
+        },
         fn(s) {
           maybe_apply_status_fanout(
             s, target_is_me, target_slot, target_team, used_move,
@@ -2069,6 +2355,8 @@ fn pass_turn_state(
     opp_status,
     my_must_recharge: state.my_must_recharge.copy(),
     opp_must_recharge: state.opp_must_recharge.copy(),
+    my_item_consumed: state.my_item_consumed.copy(),
+    opp_item_consumed: state.opp_item_consumed.copy(),
     turn: state.turn + 1,
   }
 }
@@ -2133,6 +2421,8 @@ pub fn attempt_turn_with_cache(
         ),
         my_must_recharge: state.my_must_recharge,
         opp_must_recharge: state.opp_must_recharge,
+        my_item_consumed: state.my_item_consumed,
+        opp_item_consumed: state.opp_item_consumed,
         turn: state.turn,
       }
       let branch_outs : Array[(Double, SwitchingGameState)] = match (
@@ -2200,11 +2490,15 @@ fn partial_act_outcomes(
   let opp_megaed = state.opp_megaed.copy()
   let my_must_recharge = state.my_must_recharge.copy()
   let opp_must_recharge = state.opp_must_recharge.copy()
+  let my_item_consumed = state.my_item_consumed.copy()
+  let opp_item_consumed = state.opp_item_consumed.copy()
   let mut my_active = state.my_active
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
   let mut opp_mega_used = state.opp_mega_used
   let mut attack_event : (Bool, Int, @model.Move)? = None
+  // P5 (#97): pre-damage defender HP — see transition_with_cache for rationale.
+  let mut pre_dmg_defender_hp : Int = 0
   match (me_is_actor, core) {
     (true, Switch(i)) => {
       my_active = i
@@ -2235,7 +2529,10 @@ fn partial_act_outcomes(
         dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
         mi, my_team, opp_team, atk_mega=mega_now, def_mega=opp_megaed[state.opp_active],
         atk_burn=burn,
+        atk_item_consumed=my_item_consumed[state.my_active],
+        def_item_consumed=opp_item_consumed[state.opp_active],
       )
+      pre_dmg_defender_hp = opp_hps[state.opp_active]
       opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg)
       resolve_post_hit_effects(
         my_hps, state.my_active, my_ranks,
@@ -2257,7 +2554,10 @@ fn partial_act_outcomes(
         dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
         mj, my_team, opp_team, atk_mega=mega_now, def_mega=my_megaed[state.my_active],
         atk_burn=burn,
+        atk_item_consumed=opp_item_consumed[state.opp_active],
+        def_item_consumed=my_item_consumed[state.my_active],
       )
+      pre_dmg_defender_hp = my_hps[state.my_active]
       my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg)
       resolve_post_hit_effects(
         opp_hps, state.opp_active, opp_ranks,
@@ -2285,6 +2585,8 @@ fn partial_act_outcomes(
     opp_status: opp_status_copy,
     my_must_recharge,
     opp_must_recharge,
+    my_item_consumed,
+    opp_item_consumed,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -2295,6 +2597,20 @@ fn partial_act_outcomes(
       let attacker_team = if attacker_is_me { my_team } else { opp_team }
       let attacker_slot = target_active(base_state, attacker_is_me)
       compose_fanouts(base_state, [
+        // P5 (#97): resist berry refund (logically pre-damage).
+        fn(s) {
+          apply_item_pre_damage_proc_fanout(
+            s, target_is_me, target_slot, target_team, attacker_team,
+            pre_dmg_defender_hp, used_move,
+          )
+        },
+        // P5 (#97): consume_on_hit / hp_threshold post-damage items.
+        fn(s) {
+          apply_item_post_damage_proc_fanout(
+            s, target_is_me, target_slot, target_team, pre_dmg_defender_hp,
+            used_move,
+          )
+        },
         fn(s) {
           maybe_apply_status_fanout(
             s, target_is_me, target_slot, target_team, used_move,
@@ -2552,6 +2868,8 @@ pub fn switching_game_winrate_stats(
     opp_status: zero_status(opp_team.length()),
     my_must_recharge: Array::make(my_team.length(), false),
     opp_must_recharge: Array::make(opp_team.length(), false),
+    my_item_consumed: Array::make(my_team.length(), false),
+    opp_item_consumed: Array::make(opp_team.length(), false),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()

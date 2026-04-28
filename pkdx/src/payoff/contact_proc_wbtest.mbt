@@ -71,6 +71,8 @@ fn cp_state() -> SwitchingGameState {
     opp_status: [@model.None, @model.None, @model.None],
     my_must_recharge: [false, false, false],
     opp_must_recharge: [false, false, false],
+    my_item_consumed: [false, false, false],
+    opp_item_consumed: [false, false, false],
     turn: 0,
   }
 }

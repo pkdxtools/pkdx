@@ -57,7 +57,9 @@ pub fn run_013(db : @db.Db, _repo_root : String) -> Result[String, String] {
   }
   // Idempotent reseed: clear the rows this migration owns so --resync
   // converges on the latest seed values.
-  let owned : Array[String] = ["こだわりハチマキ", "いのちのたま", "オッカのみ"]
+  let owned : Array[String] = [
+    "こだわりハチマキ", "いのちのたま", "オッカのみ", "きあいのタスキ", "フィラのみ",
+  ]
   for i = 0; i < owned.length(); i = i + 1 {
     let name = owned[i]
     match @db.exec_binds(
@@ -78,6 +80,8 @@ pub fn run_013(db : @db.Db, _repo_root : String) -> Result[String, String] {
     ("こだわりハチマキ", "Choice Band", "choice"),
     ("いのちのたま", "Life Orb", "misc"),
     ("オッカのみ", "Occa Berry", "berry"),
+    ("きあいのタスキ", "Focus Sash", "consume"),
+    ("フィラのみ", "Figy Berry", "berry"),
   ]
   for i = 0; i < items_seed.length(); i = i + 1 {
     let (ja, en, cat) = items_seed[i]
@@ -114,6 +118,28 @@ pub fn run_013(db : @db.Db, _repo_root : String) -> Result[String, String] {
       db,
       "INSERT INTO item_effect (item_name, effect_kind, apply_order, num, den, type_filter, pokemon_filter, is_physical, super_effective_only) VALUES (?, 'resist_berry', 0, 2048, 4096, ?, NULL, NULL, 1)",
       [@db.BindText("オッカのみ"), @db.BindText("ほのお")],
+    ) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
+  // きあいのタスキ → consume_on_hit (apply_order 4: post-damage)
+  // num/den unused for this kind — post-damage HP=1 is hard-coded.
+  match @db.exec_binds(
+      db,
+      "INSERT INTO item_effect (item_name, effect_kind, apply_order, num, den, type_filter, pokemon_filter, is_physical, super_effective_only) VALUES (?, 'consume_on_hit', 4, 0, 0, NULL, NULL, NULL, 0)",
+      [@db.BindText("きあいのタスキ")],
+    ) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
+  // フィラのみ → hp_threshold (apply_order 4: post-damage). num/den encode
+  // the HP threshold (post-damage HP <= max * num/den triggers heal). Heal
+  // fraction is hard-coded to max/3 in the engine — stays uniform across
+  // the four フィラ-class berries (ウタン / イア / マゴ / バンジ).
+  match @db.exec_binds(
+      db,
+      "INSERT INTO item_effect (item_name, effect_kind, apply_order, num, den, type_filter, pokemon_filter, is_physical, super_effective_only) VALUES (?, 'hp_threshold', 4, 1, 2, NULL, NULL, NULL, 0)",
+      [@db.BindText("フィラのみ")],
     ) {
     Err(e) => return Err(e)
     Ok(_) => ()

@@ -14,6 +14,14 @@ pub(all) enum ItemEffectKind {
   ResistBerry
   TypeBoost
   PowerMod
+  // P5 (#97): consume-on-hit triggered by a KO-level damage on a defender
+  // at full HP — sets defender HP to 1 and marks item consumed.
+  // Canonical exemplar: きあいのタスキ.
+  ConsumeOnHit
+  // P5 (#97): post-damage HP threshold heal — when post HP <= max * num/den,
+  // restore HP by 1/3 of max (still hard-coded; healing fraction is not yet
+  // surfaced through num/den because all four フィラ-class berries share +1/3).
+  HpThreshold
   Unknown(String)
 } derive(Show, Eq)
 
@@ -38,6 +46,8 @@ fn parse_effect_kind(s : String) -> ItemEffectKind {
     "resist_berry" => ResistBerry
     "type_boost" => TypeBoost
     "power_mod" => PowerMod
+    "consume_on_hit" => ConsumeOnHit
+    "hp_threshold" => HpThreshold
     _ => Unknown(s)
   }
 }

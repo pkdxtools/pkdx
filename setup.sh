@@ -112,10 +112,16 @@ case "$OS_TAG" in
     echo "    export MOON_CC_LINK_FLAGS=\"-lopenblas -llapack -lm\""
     ;;
   windows)
-    # 現在 nash 系統は Windows 非対応。ビルドは失敗する可能性があるため警告。
-    echo "  Windows: nash / select / meta-divergence subcommands are NOT supported"
-    echo "    on this platform. The pre-built Windows release binary omits them;"
-    echo "    local builds will fail at link time without a Windows BLAS toolchain."
+    # 公式リリースは vcpkg の openblas:x64-windows をリンクしてビルドしているため
+    # nash / select / meta-divergence は Windows 配布バイナリでも利用可能。
+    # ローカルでビルドする場合は同等のツールチェーンが必要。
+    echo "  Windows: the official release binary is linked against OpenBLAS"
+    echo "    (vcpkg openblas:x64-windows), so nash / select / meta-divergence"
+    echo "    work out of the box."
+    echo "  When building locally, install vcpkg + OpenBLAS and export link flags:"
+    echo "    C:\\vcpkg\\vcpkg.exe install openblas:x64-windows"
+    echo "    export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-windows/lib -lopenblas\""
+    echo "    (also add C:/vcpkg/installed/x64-windows/bin to PATH for the DLL.)"
     ;;
 esac
 

@@ -31,6 +31,57 @@ pub fn resolve_champions_db_path(repo_root : String) -> String {
 }
 
 ///|
+/// Resolve `champions.db` from a known `pokedex.db` location.
+///
+/// Precedence:
+///   1. `CHAMPIONS_DB` env var (used verbatim).
+///   2. If `pokedex_path` ends with `pokedex.db`, swap that suffix for
+///      `champions.db` so a sibling file is selected.
+///   3. Otherwise treat `pokedex_path` as a real file path and place
+///      `champions.db` next to it (parent directory + `/champions.db`).
+///
+/// This is the single source of truth for `pokedex.db` → `champions.db`
+/// pairing — `open_for`, `pkdx context`, `pkdx migrate`, and `with_db`
+/// all route through it so a custom `POKEDEX_DB` (or `CHAMPIONS_DB`)
+/// can never produce divergent attach targets.
+pub fn resolve_champions_db_path_from(pokedex_path : String) -> String {
+  match @sys.get_env_var(ENV_CHAMPIONS_DB) {
+    Some(p) => return p
+    None => ()
+  }
+  let suffix = "pokedex.db"
+  let suffix_len = suffix.length()
+  let len = pokedex_path.length()
+  if len >= suffix_len {
+    let mut tail_match = true
+    for i = 0; i < suffix_len; i = i + 1 {
+      if pokedex_path.unsafe_get(len - suffix_len + i) !=
+        suffix.unsafe_get(i) {
+        tail_match = false
+      }
+    }
+    if tail_match {
+      return pokedex_path[0:len - suffix_len].to_string() + "champions.db"
+    }
+  }
+  // Custom POKEDEX_DB path that doesn't end in `pokedex.db`. Place the
+  // sibling `champions.db` in the same parent directory rather than
+  // appending to the file name (which would produce `<file>.champions.db`).
+  let mut last_sep = -1
+  for i = 0; i < len; i = i + 1 {
+    let c = pokedex_path.unsafe_get(i).to_int()
+    if c == 0x2F || c == 0x5C {
+      last_sep = i
+    }
+  }
+  if last_sep < 0 {
+    "champions.db"
+  } else {
+    pokedex_path[0:last_sep + 1].to_string() + "champions.db"
+  }
+}
+
+///|
 /// `ATTACH DATABASE '<pokedex_path>' AS pokedex` on an open champions.db
 /// handle so cross-DB references (`pokedex.local_waza_language`,
 /// `pokedex.local_pokedex_type`, …) resolve in subsequent queries.
@@ -121,25 +172,7 @@ pub fn open_for(
     Err(e) => Err(e)
     Ok(db) =>
       if version == "champions" {
-        let suffix = "pokedex.db"
-        let suffix_len = suffix.length()
-        let len = pokedex_path.length()
-        let champions_path = if len >= suffix_len {
-          let mut tail_match = true
-          for i = 0; i < suffix_len; i = i + 1 {
-            if pokedex_path.unsafe_get(len - suffix_len + i) !=
-              suffix.unsafe_get(i) {
-              tail_match = false
-            }
-          }
-          if tail_match {
-            pokedex_path[0:len - suffix_len].to_string() + "champions.db"
-          } else {
-            pokedex_path + ".champions.db"
-          }
-        } else {
-          pokedex_path + ".champions.db"
-        }
+        let champions_path = resolve_champions_db_path_from(pokedex_path)
         if not(file_exists(champions_path)) {
           // Tolerate missing champions.db — caller (cmd_context) treats
           // an attach failure / missing tables as "0 items". Returns

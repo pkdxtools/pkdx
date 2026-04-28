@@ -50,6 +50,45 @@ test "resolve_champions_db_path falls back to repo_root/pokedex/champions.db" {
 }
 
 ///|
+test "resolve_champions_db_path_from swaps pokedex.db -> champions.db sibling" {
+  // env override must be cleared so we exercise the swap path.
+  let prev = @sys.get_env_var("CHAMPIONS_DB")
+  @sys.unset_env_var("CHAMPIONS_DB")
+  let p = resolve_champions_db_path_from("/srv/data/pokedex.db")
+  inspect(p, content="/srv/data/champions.db")
+  match prev {
+    Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
+    None => ()
+  }
+}
+
+///|
+test "resolve_champions_db_path_from puts champions.db next to a custom POKEDEX_DB filename" {
+  let prev = @sys.get_env_var("CHAMPIONS_DB")
+  @sys.unset_env_var("CHAMPIONS_DB")
+  // Custom POKEDEX_DB that doesn't end in `pokedex.db` must yield a
+  // SIBLING `champions.db`, not `<file>.champions.db`.
+  let p = resolve_champions_db_path_from("/srv/data/custom.db")
+  inspect(p, content="/srv/data/champions.db")
+  match prev {
+    Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
+    None => ()
+  }
+}
+
+///|
+test "resolve_champions_db_path_from honors CHAMPIONS_DB env override" {
+  let prev = @sys.get_env_var("CHAMPIONS_DB")
+  @sys.set_env_var("CHAMPIONS_DB", "/elsewhere/override.db")
+  let p = resolve_champions_db_path_from("/srv/data/pokedex.db")
+  inspect(p, content="/elsewhere/override.db")
+  match prev {
+    Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
+    None => @sys.unset_env_var("CHAMPIONS_DB")
+  }
+}
+
+///|
 test "open_champions_rw + validate_champions_schema succeed after setup" {
   // Smoke-test path: requires both pokedex.db and champions.db to exist on
   // disk (i.e. ./setup.sh has run with the new platform refactor). Skip

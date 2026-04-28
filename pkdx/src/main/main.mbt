@@ -98,16 +98,32 @@ pub(all) struct GameContext {
 
 ///|
 /// Build GameContext from CLI context. Validates that --regulation is only used with --version champions.
+///
+/// Precedence for `regulation`:
+///   1. Explicit `--regulation` flag value (treat as user override).
+///   2. Persisted `box/regulation.json` written by `pkdx regulation set`.
+///   3. Empty string (no regulation filter).
+///
+/// Persisted state is only consulted when version is `champions`; other
+/// versions never carry a regulation, so reading the file would be a
+/// no-op at best and a confusing default at worst.
 fn ctx_game(ctx : @admiral.Context) -> GameContext {
   let version = ctx_str(ctx, "version")
-  let regulation = ctx_str_opt(ctx, "regulation")
-  if regulation != "" && version != "champions" {
+  let cli_regulation = ctx_str_opt(ctx, "regulation")
+  if cli_regulation != "" && version != "champions" {
     pkdx_eprintln(
       @db.to_c_bytes(
         "Error: --regulation is only valid with --version champions",
       ),
     )
     pkdx_exit(1)
+  }
+  let regulation = if cli_regulation != "" {
+    cli_regulation
+  } else if version == "champions" {
+    read_box_regulation_or_default().regulation
+  } else {
+    ""
   }
   { version, regulation }
 }
@@ -173,23 +189,23 @@ fn cmd_regulation() -> @admiral.CommandDef {
         ],
         run=Some(fn(ctx) {
           let name = ctx_str(ctx, "name")
-          let known = @db.available_regulations()
-          let mut ok = false
-          for i = 0; i < known.length(); i = i + 1 {
-            if known[i] == name {
-              ok = true
+          // Accept any case (`m-a`, `M-A`, …) and persist the canonical
+          // form. Keeps the documented `pkdx regulation set m-a` flow
+          // working without surprising the rest of the codebase, which
+          // compares regulation names exactly (`is_available` etc.).
+          let canonical = match @db.canonicalize_regulation(name) {
+            Some(c) => c
+            None => {
+              exit_error(
+                "Unknown regulation '" +
+                name +
+                "'. Run 'pkdx regulation list' for available names.",
+              )
+              return
             }
           }
-          if not(ok) {
-            exit_error(
-              "Unknown regulation '" +
-              name +
-              "'. Run 'pkdx regulation list' for available names.",
-            )
-            return
-          }
-          match write_box_regulation(name) {
-            Ok(_) => println("regulation = " + name)
+          match write_box_regulation(canonical) {
+            Ok(_) => println("regulation = " + canonical)
             Err(e) => exit_error("Failed to write box/regulation.json: " + e)
           }
         }),
@@ -1374,33 +1390,12 @@ fn[T] with_db(f : (@db.Db) -> T, version~ : String = "") -> T {
 }
 
 ///|
-/// Derive the champions.db path from a resolved pokedex.db path so
-/// CHAMPIONS_DB env-var support flows through the same resolution
-/// pipeline as POKEDEX_DB. Falls back to swapping the trailing
-/// `pokedex.db` for `champions.db` on the same parent directory.
+/// Derive the champions.db path from a resolved pokedex.db path. Thin
+/// wrapper over `@db.resolve_champions_db_path_from` so all callers
+/// (`cmd_context`, `run_migrate`, `with_db`) share the same env-var
+/// override and sibling-fallback rules.
 fn resolve_champions_db_path_from(pokedex_path : String) -> String {
-  match @sys.get_env_var("CHAMPIONS_DB") {
-    Some(p) => return p
-    None => ()
-  }
-  let suffix = "pokedex.db"
-  let suffix_len = suffix.length()
-  let len = pokedex_path.length()
-  if len >= suffix_len {
-    let mut tail_match = true
-    for i = 0; i < suffix_len; i = i + 1 {
-      if pokedex_path.unsafe_get(len - suffix_len + i) !=
-        suffix.unsafe_get(i) {
-        tail_match = false
-      }
-    }
-    if tail_match {
-      return pokedex_path[0:len - suffix_len].to_string() + "champions.db"
-    }
-  }
-  // Fallback: pokedex_path doesn't end in pokedex.db (custom env var?).
-  // Treat its parent dir as the location and append champions.db.
-  pokedex_path + ".champions.db"
+  @db.resolve_champions_db_path_from(pokedex_path)
 }
 
 ///|

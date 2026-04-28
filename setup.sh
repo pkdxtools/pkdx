@@ -236,9 +236,16 @@ fi
 # 旧 Ruby 版 (pkdx_patch/apply.rb + sqlite3 gem) は pkdx バイナリ内蔵の
 # SQLite3 を使う MoonBit 実装に置き換え済み。コンテナで sqlite3 gem が
 # ビルドできない環境 (cc on the web 等) でも動作する。
+#
+# P1-B (#95) で `pkdx migrate` は内部で 2-stage に再構成され、
+# `pokedex.db` (shared upstream tables) と `champions.db` (Champions 専用
+# テーブル / #94 items の置き場所) の双方に対して migration を流す。
+# `champions.db` のファイル生成は `pkdx migrate` 内で必要に応じて行う
+# (open_or_create) ため、setup.sh から touch する必要はない。
 echo "[3.5/5] Applying pkdx patches..."
 if [ -f "$REPO_ROOT/pokedex/pokedex.db" ]; then
   export POKEDEX_DB="$REPO_ROOT/pokedex/pokedex.db"
+  export CHAMPIONS_DB="$REPO_ROOT/pokedex/champions.db"
   if "$REPO_ROOT/bin/pkdx" migrate --repo-root "$REPO_ROOT"; then
     :
   else

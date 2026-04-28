@@ -139,8 +139,248 @@ fn build_cli() -> @admiral.CliApp {
       cmd_cache_clear(),
       cmd_damage_bench(),
       cmd_convert(),
+      cmd_regulation(),
+      cmd_context(),
     ],
   )
+}
+
+///|
+/// `pkdx regulation get|set|list` — manage the user's current
+/// regulation choice, persisted to `box/regulation.json` so other
+/// pkdx commands and the SessionStart hook share a single source of
+/// truth (issue #96 / P3).
+fn cmd_regulation() -> @admiral.CommandDef {
+  @admiral.command(
+    name="regulation",
+    description="Get/set/list the active Champions regulation",
+    subcommands=[
+      @admiral.command(
+        name="get",
+        description="Print the active regulation (default M-A when unset)",
+        run=Some(fn(_ctx) {
+          let r = read_box_regulation_or_default()
+          println(r.regulation)
+        }),
+      ),
+      @admiral.command(
+        name="set",
+        description="Persist a new active regulation",
+        positionals=[
+          @admiral.positional(
+            "name", description="Regulation name (e.g. M-A)", required=true,
+          ),
+        ],
+        run=Some(fn(ctx) {
+          let name = ctx_str(ctx, "name")
+          let known = @db.available_regulations()
+          let mut ok = false
+          for i = 0; i < known.length(); i = i + 1 {
+            if known[i] == name {
+              ok = true
+            }
+          }
+          if not(ok) {
+            exit_error(
+              "Unknown regulation '" +
+              name +
+              "'. Run 'pkdx regulation list' for available names.",
+            )
+            return
+          }
+          match write_box_regulation(name) {
+            Ok(_) => println("regulation = " + name)
+            Err(e) => exit_error("Failed to write box/regulation.json: " + e)
+          }
+        }),
+      ),
+      @admiral.command(
+        name="list",
+        description="List the registered regulation names",
+        run=Some(fn(_ctx) {
+          let names = @db.available_regulations()
+          for i = 0; i < names.length(); i = i + 1 {
+            println(names[i])
+          }
+        }),
+      ),
+    ],
+  )
+}
+
+///|
+/// `pkdx context --json` — single-shot context emitter consumed by the
+/// Claude Code SessionStart hook. Returns a 1-line JSON capturing
+/// regulation, version, item / Champions Pokemon counts, and the
+/// migration heads. Designed to be cold-fast (< 500 ms) so the hook
+/// doesn't visibly stall startup.
+fn cmd_context() -> @admiral.CommandDef {
+  @admiral.command(
+    name="context",
+    description="Emit current Champions environment context as 1-line JSON (SessionStart hook)",
+    options=[
+      @admiral.bool("json", description="Emit JSON (default true; flag exists for future text mode)"),
+    ],
+    run=Some(fn(_ctx) {
+      let r = read_box_regulation_or_default()
+      let pokedex_head = @migrate.latest_migration_name_pokedex()
+      let champions_head = @migrate.latest_migration_name_champions()
+      // Item / Pokemon counts come from champions.db; resolve via with_db
+      // with version=champions so the attached schema is in scope.
+      let (items_count, mons_count) = count_champions_assets()
+      let json = "{\"version\":\"" +
+        r.version +
+        "\",\"regulation\":\"" +
+        r.regulation +
+        "\",\"pkdx_version\":\"" +
+        pkdx_version +
+        "\",\"items_count\":" +
+        items_count.to_string() +
+        ",\"champions_pokemon_count\":" +
+        mons_count.to_string() +
+        ",\"latest_migration_pokedex\":\"" +
+        pokedex_head +
+        "\",\"latest_migration_champions\":\"" +
+        champions_head +
+        "\"}"
+      println(json)
+    }),
+  )
+}
+
+///|
+/// Box regulation envelope — what gets serialised in
+/// `box/regulation.json`. Defaults (when the file is missing) match
+/// the bootstrap user that hasn't yet picked a regulation.
+struct BoxRegulation {
+  version : String
+  regulation : String
+} derive(Show)
+
+///|
+fn read_box_regulation_or_default() -> BoxRegulation {
+  let path = box_regulation_path()
+  if not(@db.file_exists(path)) {
+    return { version: "champions", regulation: "M-A" }
+  }
+  let raw = match @db.read_file(path) {
+    Some(s) => s
+    None => return { version: "champions", regulation: "M-A" }
+  }
+  let parsed = try? @json.parse(raw)
+  match parsed {
+    Err(_) => { version: "champions", regulation: "M-A" }
+    Ok(j) =>
+      match j {
+        Object(obj) => {
+          let version = match obj.get("version") {
+            Some(String(s)) => s
+            _ => "champions"
+          }
+          let regulation = match obj.get("regulation") {
+            Some(String(s)) => s
+            _ => "M-A"
+          }
+          { version, regulation }
+        }
+        _ => { version: "champions", regulation: "M-A" }
+      }
+  }
+}
+
+///|
+fn write_box_regulation(regulation : String) -> Result[Unit, String] {
+  let path = box_regulation_path()
+  let content = "{\"version\":\"champions\",\"regulation\":\"" +
+    regulation +
+    "\"}\n"
+  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(content))
+  if rc == 0 {
+    Ok(())
+  } else {
+    Err("write_file rc=" + rc.to_string())
+  }
+}
+
+///|
+fn box_regulation_path() -> String {
+  match @sys.get_env_var("PKDX_BOX_REGULATION") {
+    Some(p) => p
+    None => "box/regulation.json"
+  }
+}
+
+///|
+/// Count Champions items + Pokemon for `pkdx context`. Failures
+/// downgrade to 0 — the hook should never block on schema gaps.
+fn count_champions_assets() -> (Int, Int) {
+  let pokedex_path = match resolve_db_path() {
+    Ok(p) => p
+    Err(_) => return (0, 0)
+  }
+  let champions_path = resolve_champions_db_path_from(pokedex_path)
+  if not(@db.file_exists(champions_path)) {
+    return (0, 0)
+  }
+  let db = match @db.open_for(pokedex_path, "champions") {
+    Ok(d) => d
+    Err(_) => return (0, 0)
+  }
+  let items_count = match
+    @db.query_binds(db, "SELECT COUNT(*) FROM champions.items", []) {
+    Ok(rows) =>
+      if rows.length() == 0 {
+        0
+      } else {
+        match rows[0][0] {
+          Some(s) => parse_count_int(s)
+          None => 0
+        }
+      }
+    Err(_) => 0
+  }
+  // champions_pokemon table doesn't exist yet (#94 follow-up). Use the
+  // M-A count as a proxy until the dedicated table lands.
+  let mons_count = @db.available_regulations().length() // placeholder
+  let _ = mons_count
+  let real_mons = ma_pokemon_count()
+  @db.close(db)
+  (items_count, real_mons)
+}
+
+///|
+fn ma_pokemon_count() -> Int {
+  // Defer to the existing in-memory list until #95 follow-up replaces
+  // the hardcoded ma_global_nos with a champions.db-backed view.
+  let mut n = 0
+  let names : Array[String] = []
+  for r in @db.available_regulations() {
+    names.push(r)
+  }
+  // Resolve by re-running is_available against a synthetic full list —
+  // cheap because the M-A list is ~180 entries.
+  for i = 0; i < 1500; i = i + 1 {
+    let mut s = i.to_string()
+    while s.length() < 4 {
+      s = "0" + s
+    }
+    if @db.is_available(s, "M-A") {
+      n = n + 1
+    }
+  }
+  n
+}
+
+///|
+fn parse_count_int(s : String) -> Int {
+  let mut n = 0
+  for i = 0; i < s.length(); i = i + 1 {
+    let c = s.unsafe_get(i).to_int()
+    if c >= 0x30 && c <= 0x39 {
+      n = n * 10 + (c - 0x30)
+    }
+  }
+  n
 }
 
 ///|
@@ -184,7 +424,7 @@ fn run_damage_bench(
     @damage_cache.open_or_init(
       resolve_damage_cache_path(),
       pkdx_version,
-      @migrate.latest_migration_name(),
+      @migrate.combined_migration_fingerprint(),
     ) {
     Ok(c) => c
     Err(e) => {
@@ -408,7 +648,7 @@ fn run_cache_clear_damage() -> Unit {
     @damage_cache.open_or_init(
       resolve_damage_cache_path(),
       pkdx_version,
-      @migrate.latest_migration_name(),
+      @migrate.combined_migration_fingerprint(),
     ) {
     Ok(c) => c
     Err(e) => {
@@ -521,42 +761,77 @@ fn run_migrate(repo_root : String, resync : Bool) -> Unit {
     Some(p) => p
     None => repo_root + "/pokedex/pokedex.db"
   }
-  match @migrate.run(db_path, repo_root, resync~) {
-    Err(e) => exit_error(e)
-    Ok(report) => {
-      // Realign the damage cache's meta so subsequent `pkdx damage`
-      // invocations don't needlessly wipe their entries. Only sync when
-      // the cache file already exists — otherwise we'd create an empty
-      // SQLite DB purely as a side effect of running migrations.
-      let cache_path = resolve_damage_cache_path()
-      if @db.file_exists(cache_path) {
-        match
-          @damage_cache.sync_meta_after_migrate(
-            cache_path,
-            pkdx_version,
-            @migrate.latest_migration_name(),
-          ) {
-          Ok(_) => ()
-          Err(e) =>
-            pkdx_eprintln(
-              @db.to_c_bytes(
-                "damage_cache: meta sync failed (cache may be wiped on next damage run): " +
-                e,
-              ),
-            )
-        }
+  let champions_path = resolve_champions_db_path_from(db_path)
+  // Ensure champions.db exists — the runner refuses to open a missing
+  // file. Bootstrap it lazily so first-time installs and existing
+  // installs that pre-date the platform refactor both succeed.
+  if not(@db.file_exists(champions_path)) {
+    match @db.open_champions_rwc(champions_path) {
+      Err(e) => {
+        exit_error("failed to create champions.db at " + champions_path + ": " + e)
+        return
       }
-      println(
-        "pkdx_patch: " +
-        report.applied.to_string() +
-        " applied, " +
-        report.skipped.to_string() +
-        " already applied (" +
-        report.total.to_string() +
-        " total)",
-      )
+      Ok(db) => @db.close(db)
     }
   }
+  // Stage 1: pokedex.db migrations (001/002/003/005/006-012)
+  let pokedex_report = match
+    @migrate.run_for(
+      db_path, repo_root, migrations=@migrate.migrations_pokedex(), resync~,
+    ) {
+    Err(e) => {
+      exit_error("pokedex migrations: " + e)
+      return
+    }
+    Ok(r) => r
+  }
+  // Stage 2: champions.db migrations (004 today; #94 items lands here)
+  let champions_report = match
+    @migrate.run_for(
+      champions_path,
+      repo_root,
+      migrations=@migrate.migrations_champions(),
+      resync~,
+    ) {
+    Err(e) => {
+      exit_error("champions migrations: " + e)
+      return
+    }
+    Ok(r) => r
+  }
+  // Realign the damage cache's meta so subsequent `pkdx damage`
+  // invocations don't needlessly wipe their entries. Only sync when
+  // the cache file already exists — otherwise we'd create an empty
+  // SQLite DB purely as a side effect of running migrations.
+  let cache_path = resolve_damage_cache_path()
+  if @db.file_exists(cache_path) {
+    match
+      @damage_cache.sync_meta_after_migrate(
+        cache_path,
+        pkdx_version,
+        @migrate.combined_migration_fingerprint(),
+      ) {
+      Ok(_) => ()
+      Err(e) =>
+        pkdx_eprintln(
+          @db.to_c_bytes(
+            "damage_cache: meta sync failed (cache may be wiped on next damage run): " +
+            e,
+          ),
+        )
+    }
+  }
+  println(
+    "pkdx_patch: pokedex " +
+    pokedex_report.applied.to_string() +
+    " applied / " +
+    pokedex_report.skipped.to_string() +
+    " skipped, champions " +
+    champions_report.applied.to_string() +
+    " applied / " +
+    champions_report.skipped.to_string() +
+    " skipped",
+  )
 }
 
 ///|
@@ -1040,7 +1315,16 @@ fn cmd_hbd() -> @admiral.CommandDef {
 }
 
 ///|
-fn[T] with_db(f : (@db.Db) -> T) -> T {
+/// Open the production DB(s) and run `f` with a connection. When
+/// `version` is `"champions"`, champions.db is `ATTACH`ed as the alias
+/// `champions` so SQL referencing `champions.champions_learnset`
+/// resolves correctly. Other versions (and the legacy unversioned
+/// callers) get pokedex.db alone.
+///
+/// Errors during open / attach / schema validation are fatal — this
+/// helper exists to keep CLI command bodies short and they're the only
+/// callers that should panic.
+fn[T] with_db(f : (@db.Db) -> T, version~ : String = "") -> T {
   let db_path = match resolve_db_path() {
     Ok(p) => p
     Err(e) => {
@@ -1063,9 +1347,60 @@ fn[T] with_db(f : (@db.Db) -> T) -> T {
       panic()
     }
   }
+  if version == "champions" {
+    let champions_path = resolve_champions_db_path_from(db_path)
+    if @db.file_exists(champions_path) {
+      match @db.attach_champions(db, champions_path) {
+        Ok(_) => ()
+        Err(e) => {
+          println("Error: failed to attach champions.db: " + e)
+          @db.close(db)
+          panic()
+        }
+      }
+    } else {
+      println(
+        "Error: champions.db not found at " +
+        champions_path +
+        " — run ./setup.sh after the platform refactor lands.",
+      )
+      @db.close(db)
+      panic()
+    }
+  }
   let result = f(db)
   @db.close(db)
   result
+}
+
+///|
+/// Derive the champions.db path from a resolved pokedex.db path so
+/// CHAMPIONS_DB env-var support flows through the same resolution
+/// pipeline as POKEDEX_DB. Falls back to swapping the trailing
+/// `pokedex.db` for `champions.db` on the same parent directory.
+fn resolve_champions_db_path_from(pokedex_path : String) -> String {
+  match @sys.get_env_var("CHAMPIONS_DB") {
+    Some(p) => return p
+    None => ()
+  }
+  let suffix = "pokedex.db"
+  let suffix_len = suffix.length()
+  let len = pokedex_path.length()
+  if len >= suffix_len {
+    let mut tail_match = true
+    for i = 0; i < suffix_len; i = i + 1 {
+      if pokedex_path.unsafe_get(len - suffix_len + i) !=
+        suffix.unsafe_get(i) {
+        tail_match = false
+      }
+    }
+    if tail_match {
+      return pokedex_path[0:len - suffix_len].to_string() + "champions.db"
+    }
+  }
+  // Fallback: pokedex_path doesn't end in pokedex.db (custom env var?).
+  // Treat its parent dir as the location and append champions.db.
+  pokedex_path + ".champions.db"
 }
 
 ///|
@@ -1089,7 +1424,7 @@ fn run_moves(
   format : @cli.OutputFormat,
   include_inactive : Bool,
 ) -> Unit {
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     let global_no = if is_numeric(target) {
       @db.normalize_global_no(target)
     } else {
@@ -1174,7 +1509,7 @@ fn run_learners(
   format : @cli.OutputFormat,
   include_inactive : Bool,
 ) -> Unit {
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     let r = @db.query_learners(db, move_name, game.version, include_inactive~)
     match r {
       Ok(results) => {
@@ -1384,7 +1719,7 @@ fn run_damage(
         @damage_cache.open_or_init(
           resolve_damage_cache_path(),
           pkdx_version,
-          @migrate.latest_migration_name(),
+          @migrate.combined_migration_fingerprint(),
         ) {
         Ok(c) => Some(c)
         Err(e) => {
@@ -2299,7 +2634,7 @@ fn run_select_cmd() -> Unit {
     @damage_cache.open_or_init(
       resolve_damage_cache_path(),
       pkdx_version,
-      @migrate.latest_migration_name(),
+      @migrate.combined_migration_fingerprint(),
     ) {
     Ok(c) => Some(c)
     Err(e) => {

@@ -31,6 +31,21 @@ pub fn run(
   repo_root : String,
   resync~ : Bool = false,
 ) -> Result[Report, String] {
+  run_for(db_path, repo_root, migrations=migrations(), resync~)
+}
+
+///|
+/// Run a specific subset of migrations against `db_path`. Used by the
+/// post-#95 two-stage migrate flow: pokedex.db only sees
+/// `migrations_pokedex()` and champions.db only sees
+/// `migrations_champions()`, so migrations don't trip on tables that
+/// don't belong to the DB they're applied to.
+pub fn run_for(
+  db_path : String,
+  repo_root : String,
+  migrations~ : Array[Migration],
+  resync~ : Bool = false,
+) -> Result[Report, String] {
   if not(@db.file_exists(db_path)) {
     return Err(db_path + " not found. Run ./setup.sh first.")
   }
@@ -38,7 +53,7 @@ pub fn run(
     Ok(d) => d
     Err(e) => return Err(e)
   }
-  let result = run_with_db(db, repo_root, resync)
+  let result = run_with_db(db, repo_root, resync, migrations)
   @db.close(db)
   result
 }
@@ -48,6 +63,7 @@ fn run_with_db(
   db : @db.Db,
   repo_root : String,
   resync : Bool,
+  all : Array[Migration],
 ) -> Result[Report, String] {
   let create_sql = "CREATE TABLE IF NOT EXISTS pkdx_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))"
   match @db.exec(db, create_sql) {
@@ -71,7 +87,6 @@ fn run_with_db(
     }
     @db.println_progress("  Resync: cleared bookkeeping, re-applying all")
   }
-  let all = migrations()
   let mut applied = 0
   let mut skipped = 0
   for i = 0; i < all.length(); i = i + 1 {

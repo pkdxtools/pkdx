@@ -1,11 +1,8 @@
 import {
   "pkdxtools/pkdx/src/model",
   "moonbitlang/core/json" @json,
-}
-
-import {
   "moonbitlang/x/sys",
-} for "test"
+}
 
 options(
   "supported-targets": "native",

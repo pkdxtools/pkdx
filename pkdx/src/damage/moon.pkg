@@ -1,6 +1,7 @@
 import {
   "pkdxtools/pkdx/src/model",
   "pkdxtools/pkdx/src/types",
+  "pkdxtools/pkdx/src/db",
 }
 
 options(

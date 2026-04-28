@@ -29,6 +29,7 @@ fn cp_combatant(
   pokemon : @model.Pokemon,
   ability~ : String = "",
   item~ : String = "",
+  mega_form~ : @model.MegaForm? = None,
 ) -> Combatant {
   {
     pokemon,
@@ -37,12 +38,20 @@ fn cp_combatant(
     item,
     tera_type: "",
     stat_system: @model.Standard,
-    mega_form: None,
+    mega_form,
     nature: None,
     stat_points: None,
     actual_stats: None,
     ivs: None,
   }
+}
+
+///|
+/// `cp_state()` の megaed 配列に攻撃側 slot 0 だけ true を立てた版。
+/// mega-aware 経路 (#100) の regression test 用。
+fn cp_state_attacker_megaed() -> SwitchingGameState {
+  let s = cp_state()
+  { ..s, my_megaed: [true, false, false] }
 }
 
 ///|
@@ -274,7 +283,103 @@ test "contact_proc_fanout: ほうし vs poison-immune attacker keeps paralyze an
   }
   assert_true(approx_eq_cp(p_sum, 1.0))
   // viable_chance = 19 (10 まひ + 9 ねむり)、total_chance = 30
-  // p_any_proc = 0.30、 p_viable = 0.30 × 19/30 = 0.19
+  // 単発技なので per-hit `1 - q_viable = 0.19` がそのまま p_viable。
   // no-status = 1 - 0.19 = 0.81
   assert_true(approx_eq_cp(outcomes[0].0, 0.81))
+}
+
+///|
+test "contact_proc_fanout: ほうし × Skill-Link 5hit + poison-immune attacker → 1 - 0.81^5" {
+  // #100: 旧実装は (1 - q_total^n) × viable/total を返していたため、5-hit
+  // poison-immune 攻撃側で 0.526 になっていた (real: 1 - 0.81^5 = 0.6513…)。
+  // viable_chance ベースで畳む新モデルでは正しい値が返るはず。
+  let attacker = cp_combatant(
+    cp_pokemon("attacker", "どく", ""), ability="スキルリンク",
+  )
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""), ability="ほうし",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_multihit_move("みだれづき")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // poison fizzle で [no-status, paralyze, sleep] の 3 leaves。
+  inspect(outcomes.length(), content="3")
+  let mut p_sum = 0.0
+  for i = 0; i < outcomes.length(); i = i + 1 {
+    p_sum = p_sum + outcomes[i].0
+  }
+  assert_true(approx_eq_cp(p_sum, 1.0))
+  // viable_chance = 19、q_viable = 0.81、5 hit → expected_no_status = 0.81^5
+  let q5 = 0.81 * 0.81 * 0.81 * 0.81 * 0.81
+  assert_true(approx_eq_cp(outcomes[0].0, q5))
+  // p_viable = 1 - 0.81^5 ≈ 0.6513、まひ : ねむり = 10 : 9 で按分
+  let p_viable = 1.0 - q5
+  assert_true(approx_eq_cp(outcomes[1].0, p_viable * 10.0 / 19.0))
+  assert_true(approx_eq_cp(outcomes[2].0, p_viable * 9.0 / 19.0))
+}
+
+///|
+test "contact_proc_fanout: mega-form attacker uses post-mega ability (Skill Link)" {
+  // #100: raw ability は "" でも mega_form の ability=スキルリンク が
+  // mega 状態で適用され、みだれづき が 5-hit 化、ほのおのからだ proc は
+  // 1 - 0.7^5 になるはず。effective_combatant 経由で ability を取れていない
+  // と pre-mega の "" のまま 4-variant 分布で計算され、leaves 数も値もズレる。
+  let mega_form : @model.MegaForm = {
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    type1: "ノーマル",
+    type2: "",
+    ability: "スキルリンク",
+    name_ja: "メガ",
+  }
+  let attacker = cp_combatant(
+    cp_pokemon("attacker", "ノーマル", ""), ability="", mega_form=Some(mega_form),
+  )
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""), ability="ほのおのからだ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_multihit_move("みだれづき")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state_attacker_megaed(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // Skill Link 5-hit → 単一 viable kind なので [no-status, burn] の 2 leaves。
+  inspect(outcomes.length(), content="2")
+  let q5 = 0.7 * 0.7 * 0.7 * 0.7 * 0.7
+  assert_true(approx_eq_cp(outcomes[0].0, q5))
+  assert_true(approx_eq_cp(outcomes[1].0, 1.0 - q5))
+}
+
+///|
+test "contact_proc_fanout: non-mega attacker w/ pre-mega ability stays at base distribution" {
+  // mega flag が false のときは pre-mega ability を見るので、Random2to5 が
+  // FixedHits(3) ではなく分布展開されることを確認する (Skill Link 用 helper
+  // のリグレッション)。攻撃側 ability="" → no Skill Link → 0.375 P(2hit) +
+  // 0.375 P(3hit) + 0.125 P(4hit) + 0.125 P(5hit) で畳まれた no-proc が
+  // 0.7 単発を上回るはず。
+  let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""), ability="ほのおのからだ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_multihit_move("みだれづき")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  inspect(outcomes.length(), content="2")
+  // Σ_n prob(n) × 0.7^n = 0.375×0.49 + 0.375×0.343 + 0.125×0.2401 + 0.125×0.16807
+  //   ≈ 0.1838 + 0.1286 + 0.0300 + 0.0210 ≈ 0.3635
+  let exp_no = 0.375 * 0.49 +
+    0.375 * 0.343 +
+    0.125 * 0.2401 +
+    0.125 * 0.16807
+  assert_true(approx_eq_cp(outcomes[0].0, exp_no))
 }

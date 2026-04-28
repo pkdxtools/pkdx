@@ -4,27 +4,14 @@
 /// mean-damage reduction and the canonical `DamageCalcInput` builder.
 
 ///|
-/// Mean damage over the 16-roll table. Zero for immune matchups.
-///
-/// ばけのかわが剥がれる初撃は engine が `damages=0` + `disguise_blocked=true`
-/// を返す。このターン攻撃側は実ダメを 0 しか稼げないが、防御側は 1/8 の
-/// chip ダメージを払う (Gen7 以降仕様) ので、payoff 層で「このターンの相手
-/// への与ダメ期待値」を評価する上では 0 ではなく `max_hp / 8` 固定を加算
-/// する方が現実に近い。本関数ではこれを固定加算として織り込む。
+/// Mean damage for scalar payoff callers (`monte_carlo`, `team_monte_carlo`,
+/// `cli_nash.mean_damage_ratio`). Now delegates to `expected_damage` so that
+/// chance-node moves (Random2to5 / TripleVariant) report the probability-
+/// weighted mean over `variants[]` instead of the most-likely variant's
+/// central value. ばけのかわ chip add-on / immune zero are handled inside
+/// `expected_damage_variants`, so callers see a single coherent formula.
 fn avg_damage(r : @model.DamageCalcResult) -> Double {
-  if r.is_immune {
-    return 0.0
-  }
-  let mut s = 0
-  for i in 0..<16 {
-    s += r.damages[i]
-  }
-  let base = s.to_double() / 16.0
-  if r.disguise_blocked {
-    base + r.defender_hp.to_double() / 8.0
-  } else {
-    base
-  }
+  expected_damage(r)
 }
 
 ///|

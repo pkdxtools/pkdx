@@ -323,13 +323,32 @@ pub fn apply_contact_proc_fanout(
   if not(@damage.resolve_move_contact(mv, sr.force_contact)) {
     return [(1.0, state)]
   }
-  // Ability has priority over item; combining both into a chained fanout
-  // is a future enhancement (rare combo in M-A).
+  // Compose ability + item proc lists into a single chance-node table.
+  // Earlier code mutually-excluded them, which silently dropped a 100% item
+  // proc whenever the defender also had a procking ability (e.g. せいでんき
+  // + とびだすハバネロ). Duplicate StatusKinds are folded by summing the
+  // chances so the per-hit Bernoulli trial sees one entry per outcome; the
+  // existing `min(100, viable_chance)` cap absorbs overflow.
   let ability_procs = @damage.contact_proc_ability(defender.ability)
-  let procs = if ability_procs.length() > 0 {
-    ability_procs
-  } else {
-    @damage.contact_proc_item(defender.item)
+  let item_procs = @damage.contact_proc_item(defender.item)
+  let procs : Array[(@model.StatusKind, Int)] = []
+  for i = 0; i < ability_procs.length(); i = i + 1 {
+    procs.push(ability_procs[i])
+  }
+  for i = 0; i < item_procs.length(); i = i + 1 {
+    let (kind_i, chance_i) = item_procs[i]
+    let mut merged = false
+    for j = 0; j < procs.length(); j = j + 1 {
+      let (kind_j, chance_j) = procs[j]
+      if kind_j == kind_i {
+        procs[j] = (kind_j, chance_j + chance_i)
+        merged = true
+        break
+      }
+    }
+    if not(merged) {
+      procs.push((kind_i, chance_i))
+    }
   }
   if procs.length() == 0 {
     return [(1.0, state)]

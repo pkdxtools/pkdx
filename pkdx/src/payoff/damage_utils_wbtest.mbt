@@ -17,6 +17,17 @@ fn mk_result(
   for i = 0; i < 16; i = i + 1 {
     percents[i] = damages[i].to_double() / def_hp.to_double() * 100.0
   }
+  // Synthesize a single chance-node entry so `expected_damage_variants`
+  // (called by the new `avg_damage` delegate) sees the same 16-roll table.
+  let single_variant : @model.DamageVariant = {
+    probability: 1.0,
+    hits: [],
+    hits_count: if disguise_blocked { 0 } else { 1 },
+    total_damages: damages,
+    min: damages[0],
+    max: damages[15],
+    ko_text: "",
+  }
   {
     damages,
     percents,
@@ -29,7 +40,7 @@ fn mk_result(
     is_immune,
     disguise_blocked,
     hits_dealt: if disguise_blocked { 0 } else { 1 },
-    variants: [],
+    variants: [single_variant],
   }
 }
 

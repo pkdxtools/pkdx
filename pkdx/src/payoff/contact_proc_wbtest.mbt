@@ -383,3 +383,82 @@ test "contact_proc_fanout: non-mega attacker w/ pre-mega ability stays at base d
     0.125 * 0.16807
   assert_true(approx_eq_cp(outcomes[0].0, exp_no))
 }
+
+///|
+test "contact_proc_fanout: ability + item compose into combined chance node" {
+  // #100 review: with both せいでんき (paralyze 30%) and とびだすハバネロ
+  // (burn 100%), the older mutually-exclusive selection silently dropped the
+  // item — paralyze remained at 30% and burn was unreachable. Composition
+  // means viable_chance = 130 (capped at 100 for q_viable), so a single
+  // contact hit always procs and the mass splits proportionally between
+  // paralyze (30/130) and burn (100/130).
+  let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""),
+    ability="せいでんき",
+    item="とびだすハバネロ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_move("たいあたり")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // [no-status (mass 0), paralyze, burn] = 3 leaves.
+  inspect(outcomes.length(), content="3")
+  let mut p_sum = 0.0
+  for i = 0; i < outcomes.length(); i = i + 1 {
+    p_sum = p_sum + outcomes[i].0
+  }
+  assert_true(approx_eq_cp(p_sum, 1.0))
+  // cap=100 → q_viable=0 → no-status mass collapses to 0.
+  assert_true(approx_eq_cp(outcomes[0].0, 0.0))
+  // paralyze share = 30/130, burn share = 100/130.
+  assert_true(approx_eq_cp(outcomes[1].0, 30.0 / 130.0))
+  assert_true(approx_eq_cp(outcomes[2].0, 100.0 / 130.0))
+}
+
+///|
+test "contact_proc_fanout: ability + item with same kind collapse via summed chance" {
+  // #100 review: せいでんき (paralyze 30) + とびだすなかみ (paralyze 100) share
+  // the StatusKind, so the merged proc table holds a single Paralyze entry at
+  // chance 130. Capped to 100 → guaranteed proc, single-leaf paralyze.
+  let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""),
+    ability="せいでんき",
+    item="とびだすなかみ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_move("たいあたり")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // Single-kind 100% proc → fanout collapses to one leaf.
+  inspect(outcomes.length(), content="1")
+  assert_true(approx_eq_cp(outcomes[0].0, 1.0))
+}
+
+///|
+test "contact_proc_fanout: ability + item with attacker immune to one branch" {
+  // #100 review: でんきタイプ攻撃側はせいでんきに免疫だが、
+  // とびだすハバネロ (burn 100%) は通常通り発火する。
+  // 旧実装では ability_procs があれば item を捨てていたため、
+  // viable_procs が空になり no-fanout に縮退していた。
+  let attacker = cp_combatant(cp_pokemon("attacker", "でんき", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""),
+    ability="せいでんき",
+    item="とびだすハバネロ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_move("たいあたり")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // Single viable kind (burn @100%) → 1 leaf via the deterministic fast path.
+  inspect(outcomes.length(), content="1")
+  assert_true(approx_eq_cp(outcomes[0].0, 1.0))
+}

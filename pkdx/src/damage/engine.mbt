@@ -119,7 +119,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   } else {
     calc_def_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
   }
-  let mut def_stat = if input.stat_system == @model.Champions {
+  let raw_def_stat = if input.stat_system == @model.Champions {
     calc_def_stat_champions(
       def_base,
       nature_num=def_num,
@@ -152,9 +152,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     sr.def_rank_positive_mask,
     sr.def_rank_negative_mask,
   )
-  def_stat = apply_rank(def_stat, def_stage)
 
-  // 2b. Ability stat modifiers
+  // 2b-atk. Attacker-side ability stat modifier (independent of def_stage).
   if is_body_press {
     if atk_ability.length() > 0 {
       atk_stat = apply_def_ability_stat(atk_ability, true, atk_stat)
@@ -164,27 +163,19 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       atk_ability, is_physical, weather, field, atk_stat,
     )
   }
-  if def_ability.length() > 0 {
-    def_stat = apply_def_ability_stat(def_ability, is_physical, def_stat)
-  }
 
-  // 2b-2. Ruin ability cross-side stat modifiers
-  // ボディプレスの場合、攻撃値として使われるのは自身のDefenseなので
-  // わざわいのおふだ（相手の物理Atkを下げる）は影響しない。
-  // わざわいのつるぎ（相手の物理Defを下げる）は通常通り適用される。
-  if is_body_press {
-    if atk_ability == "わざわいのつるぎ" {
-      def_stat = def_stat * 3 / 4
+  // 2b-2-atk. Atk-side ruin (defender's ability lowers attacker's stat).
+  // ボディプレスは攻撃値として自分の Defense を使うため、わざわいのおふだ
+  // / うつわ の影響を受けない。
+  if not(is_body_press) {
+    match def_ability {
+      "わざわいのおふだ" => if is_physical { atk_stat = atk_stat * 3 / 4 }
+      "わざわいのうつわ" => if !is_physical { atk_stat = atk_stat * 3 / 4 }
+      _ => ()
     }
-  } else if atk_ability.length() > 0 || def_ability.length() > 0 {
-    let (new_atk, new_def) = apply_ruin_cross_stat(
-      atk_ability, def_ability, is_physical, atk_stat, def_stat,
-    )
-    atk_stat = new_atk
-    def_stat = new_def
   }
 
-  // 2c. Item stat modifiers
+  // 2c-atk. Attacker-side item stat modifier.
   if is_body_press {
     if atk_item.length() > 0 {
       atk_stat = apply_def_item_stat(atk_item, true, atk_stat)
@@ -197,29 +188,50 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       atk_stat,
     )
   }
-  if def_item.length() > 0 {
-    def_stat = apply_def_item_stat(def_item, is_physical, def_stat)
+
+  // 2d-atk. Body-press: atk_stat is a Defense value, so apply 雪×こおり Def boost.
+  if is_body_press && weather.is_active() {
+    atk_stat = apply_weather_def_mod(
+      weather,
+      (atk.type1, atk.type2),
+      true,
+      atk_stat,
+    )
   }
 
-  // 2d. Weather defense modifiers
-  if weather.is_active() {
-    def_stat = apply_weather_def_mod(
-      weather,
-      (dfn.type1, dfn.type2),
-      is_physical,
-      def_stat,
-    )
-    // ボディプレスは自身のDefenseが攻撃値なので、攻撃側にも雪×こおりの
-    // Def 1.5倍補正を適用する。
-    if is_body_press {
-      atk_stat = apply_weather_def_mod(
-        weather,
-        (atk.type1, atk.type2),
-        true,
-        atk_stat,
-      )
+  // Defense-side pipeline factored as a closure so multi-hit じきゅうりょく
+  // can recompute from raw_def_stat at any rank stage. Floor-sensitive
+  // modifiers (しんかのきせき / とつげきチョッキ / ファーコート / Sand SpD /
+  // Snow Def) must run AFTER the rank multiplier each time, otherwise
+  // ratio-scaling the post-modifier value drifts (e.g. Eviolite on base
+  // Def 101: stage 0 → floor(101*1.5)=151; stage +2 → floor(202*1.5)=303,
+  // not 151*2=302).
+  let compute_def_at_stage = fn(stage : Int) -> Int {
+    let mut s = apply_rank(raw_def_stat, stage)
+    if def_ability.length() > 0 {
+      s = apply_def_ability_stat(def_ability, is_physical, s)
     }
+    // 2b-2-def. Def-side ruin (attacker's ability lowers defender's stat).
+    if is_body_press {
+      if atk_ability == "わざわいのつるぎ" {
+        s = s * 3 / 4
+      }
+    } else {
+      match atk_ability {
+        "わざわいのつるぎ" => if is_physical { s = s * 3 / 4 }
+        "わざわいのたま" => if !is_physical { s = s * 3 / 4 }
+        _ => ()
+      }
+    }
+    if def_item.length() > 0 {
+      s = apply_def_item_stat(def_item, is_physical, s)
+    }
+    if weather.is_active() {
+      s = apply_weather_def_mod(weather, (dfn.type1, dfn.type2), is_physical, s)
+    }
+    s
   }
+  let def_stat = compute_def_at_stage(def_stage)
 
   // Immunity check
   if def_ability.length() > 0 && check_def_immunity(def_ability, move_type) {
@@ -313,29 +325,17 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // it at quarter power for the 2nd hit (Showdown-accurate per-hit pipeline).
   // All non-power state (stat, ability, item, wall, STAB, type effectiveness,
   // Tinted Lens) is closed over and shared between the two invocations.
-  // `def_stage_offset` is the #92 (じきゅうりょく) per-hit defense ramp;
-  // each call to compute_rolls inside the multi-hit loop passes the number
-  // of stamina-induced rank rises the defender has accrued so far. Rank is
-  // applied as a ratio on the existing post-modifier def_stat — recomputing
-  // the full ability/item/weather chain per hit would be Showdown-perfect
-  // but adds 5+ extra modifier passes; the ratio approach matches typical
-  // payoff fanout precision and leaves room for a follow-up to refine.
-  let compute_rolls = fn(eff_pow : Int, def_stage_offset : Int) -> FixedArray[
+  // `hit_def_stat` is the defender's Defense after the full ability/item/
+  // weather pipeline at this hit's rank stage. For じきゅうりょく the multi-
+  // hit loop recomputes via `compute_def_at_stage` so floor-sensitive
+  // modifiers (Eviolite / Assault Vest / Sand / Snow / Fur Coat) round at
+  // each stage rather than being ratio-scaled from a single anchor value.
+  let compute_rolls = fn(eff_pow : Int, hit_def_stat : Int) -> FixedArray[
     Int,
   ] {
     let safe_pow = if eff_pow < 1 { 1 } else { eff_pow }
-    let effective_def_stat = if def_stage_offset == 0 {
-      def_stat
-    } else {
-      let scaler_num = apply_rank(1000000, def_stage + def_stage_offset)
-      let scaler_den = apply_rank(1000000, def_stage)
-      if scaler_den == 0 {
-        def_stat
-      } else {
-        def_stat * scaler_num / scaler_den
-      }
-    }
-    let inner = 22 * safe_pow * atk_stat / effective_def_stat
+    let safe_def = if hit_def_stat < 1 { 1 } else { hit_def_stat }
+    let inner = 22 * safe_pow * atk_stat / safe_def
     let damage_base = inner / 50 + 2
     let out : FixedArray[Int] = FixedArray::make(16, 0)
     for idx = 0; idx < 16; idx = idx + 1 {
@@ -450,7 +450,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
     out
   }
-  let damages = compute_rolls(effective_power, 0)
+  let damages = compute_rolls(effective_power, def_stat)
 
   // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
   // State transition precedes any multi-hit expansion — disguise absorbs the
@@ -487,7 +487,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // Pre-compute Parental Bond's second-hit damage outside the hit loop so
   // each variant's hits[h] can pick it up cheaply.
   let pb_second_damages : FixedArray[Int]? = match hit_plan {
-    ParentalBond => Some(compute_rolls(effective_power / 4, 0))
+    ParentalBond => Some(compute_rolls(effective_power / 4, def_stat))
     _ => None
   }
   // P1-A (#100): contact フラグは StatResolution.force_contact を優先する。
@@ -495,10 +495,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 側 contact-proc fanout から漏れないようにここで一本化する。
   let move_is_contact = resolve_move_contact(mv, sr.force_contact)
   // P2-B (#92): defender's じきゅうりょく ramps Defense by +1 after each
-  // landed hit (capped at +6 from entry stage). Build the per-hit
-  // def_stage_offset / def_stage_after now so the variants loop can pass
-  // the offset to compute_rolls and surface the rise to consumers
-  // (#93/#97 fanout layers).
+  // landed hit (capped at +6 from entry stage). The variants loop passes
+  // the resulting `def_stage + offset` to `compute_def_at_stage` per hit
+  // and surfaces `def_stage_after` to downstream payoff fanout (#93/#97).
   let stamina_active = is_stamina_ability(def_ability) && triggers_stamina(mv)
 
   // Build the variants[] payload. Each variant carries one hits_count
@@ -528,22 +527,30 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       // ごとに base_power が hit 番号ぶん上昇する: hit 1 = base、hit 2 =
       // base*2、hit 3 = base*3。すいりゅうれんだ / トリプルダイブ は
       // FixedHits(3) なのでこの分岐には落ちず、固定 base_power で 3 回殴る。
+      // じきゅうりょく が active かつ stage が変わる hit では、防御側の
+      // ability/item/weather チェインを raw_def_stat から組み直して
+      // 床関数誤差を排除する (Eviolite / 突撃チョッキ 等)。
+      let hit_def_stat = if stamina_active && this_offset != 0 {
+        compute_def_at_stage(def_stage + this_offset)
+      } else {
+        def_stat
+      }
       let this_damages = match (hit_plan, h, pb_second_damages) {
         (ParentalBond, 1, Some(d2)) =>
           if stamina_active && this_offset != 0 {
-            compute_rolls(effective_power / 4, this_offset)
+            compute_rolls(effective_power / 4, hit_def_stat)
           } else {
             d2
           }
         (TripleVariant(_), _, _) => {
           let per_hit_pow = apply_power_modifiers(resolved_var_power * (h + 1))
-          compute_rolls(per_hit_pow, this_offset)
+          compute_rolls(per_hit_pow, hit_def_stat)
         }
         _ =>
           if this_offset == 0 {
             damages
           } else {
-            compute_rolls(effective_power, this_offset)
+            compute_rolls(effective_power, hit_def_stat)
           }
       }
       hits.push({

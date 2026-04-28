@@ -527,6 +527,18 @@ pub fn apply_contact_proc_fanout(
 ///     was actually dealt)
 ///
 /// Single-leaf fanout (probability 1.0).
+///
+/// Mirror the engine's move-type resolution chain (`resolve_move_type_override`
+/// + `get_skin_type`) to the extent payoff cares about. Payoff is weatherless,
+/// so Weather Ball never rewrites here; Skin abilities still need to be
+/// applied because they fire on the attacker independent of weather, and the
+/// engine's resist-berry branch keys off the post-Skin type.
+fn resolve_engine_move_type(mv : @model.Move, atk_ability : String) -> String {
+  let (skin_type, _) = @damage.get_skin_type(atk_ability, mv.type_)
+  skin_type
+}
+
+///|
 pub fn apply_item_pre_damage_proc_fanout(
   state : SwitchingGameState,
   defender_is_me : Bool,
@@ -536,7 +548,6 @@ pub fn apply_item_pre_damage_proc_fanout(
   pre_dmg_hp : Int,
   mv : @model.Move,
 ) -> Array[(Double, SwitchingGameState)] {
-  let _ = attacker_team
   // Defensive: legacy test fixtures sometimes size *_item_consumed shorter
   // than the corresponding team. Treat out-of-bounds slots as "no berry
   // wired up at this index" — equivalent to a fresh, unconsumed state.
@@ -557,12 +568,28 @@ pub fn apply_item_pre_damage_proc_fanout(
   if berry_type.length() == 0 {
     return [(1.0, state)]
   }
-  if mv.type_ != berry_type {
+  // Mirror the engine's resolved move type so Skin abilities (フェアリースキン
+  // etc.) that rewrite a Normal move's type cause the same berry to fire here
+  // as in the engine. Without this the engine halves damage but the
+  // consumption flag never flips, so future hits keep getting halved.
+  let attacker_active = if defender_is_me {
+    state.opp_active
+  } else {
+    state.my_active
+  }
+  let attacker = attacker_team[attacker_active]
+  let resolved_type = resolve_engine_move_type(mv, attacker.ability)
+  if resolved_type != berry_type {
     return [(1.0, state)]
   }
-  if not(
+  // ホズのみ triggers on any Normal-type hit (including neutral); other
+  // resist berries trigger only on super-effective hits. Mirrors the engine
+  // gate in `damage/engine.mbt`'s resist-berry block.
+  let triggers_on_neutral = defender.item == "ホズのみ"
+  if not(triggers_on_neutral) &&
+    not(
       @damage.is_super_effective(
-        mv.type_, defender.pokemon.type1, defender.pokemon.type2,
+        resolved_type, defender.pokemon.type1, defender.pokemon.type2,
       ),
     ) {
     return [(1.0, state)]
@@ -603,15 +630,22 @@ pub fn apply_item_pre_damage_proc_fanout(
 /// not trigger Cell Battery despite being water-type).
 ///
 /// Single-leaf fanout (probability 1.0).
+///
+/// `attacker_team` is consulted for the attacker's ability so the multi-hit
+/// detection picks up Parental Bond / Skill Link. きあいのタスキ is gated
+/// out of multi-hit attacks because the aggregate (pre, post) HP pair sees
+/// only the cumulative damage — saving the defender at 1 HP from a multi-hit
+/// KO would be mechanically wrong (Sash should only stop the first hit, and
+/// later hits should still KO).
 pub fn apply_item_post_damage_proc_fanout(
   state : SwitchingGameState,
   defender_is_me : Bool,
   defender_slot : Int,
   defender_team : Array[Combatant],
+  attacker_team : Array[Combatant],
   pre_dmg_hp : Int,
   mv : @model.Move,
 ) -> Array[(Double, SwitchingGameState)] {
-  let _ = mv
   // Defensive: see apply_item_pre_damage_proc_fanout for rationale.
   let consumed_arr = if defender_is_me {
     state.my_item_consumed
@@ -635,9 +669,30 @@ pub fn apply_item_post_damage_proc_fanout(
   if defender.item == "きあいのタスキ" &&
     pre_dmg_hp == max_hp &&
     post_hp <= 0 {
-    return [
-      (1.0, with_hp_and_item_consumed(state, defender_is_me, defender_slot, 1)),
-    ]
+    let attacker_active = if defender_is_me {
+      state.opp_active
+    } else {
+      state.my_active
+    }
+    let attacker = attacker_team[attacker_active]
+    let hit_plan = @damage.resolve_hit_plan(
+      mv, attacker.ability, @model.MultiHit::Auto,
+    )
+    let is_multi_hit = match hit_plan {
+      @damage.HitPlan::Single => false
+      _ => true
+    }
+    if not(is_multi_hit) {
+      return [
+        (
+          1.0,
+          with_hp_and_item_consumed(state, defender_is_me, defender_slot, 1),
+        ),
+      ]
+    }
+    // Multi-hit Sash needs hit-level damage threading to model the "save on
+    // hit 1, KO on hit 2+" mechanic. Until that lands, leave the aggregate
+    // KO untouched rather than incorrectly rescuing the defender.
   }
   if defender.item == "フィラのみ" && post_hp > 0 && post_hp * 2 <= max_hp {
     let heal = max_hp / 3
@@ -1811,8 +1866,8 @@ fn resolve_attacker_leg(
     // P5 (#97): consume_on_hit (きあいのタスキ) and hp_threshold (フィラのみ).
     fn(s) {
       apply_item_post_damage_proc_fanout(
-        s, target_is_me, target_slot, target_team, pre_dmg_defender_hp,
-        attacker_move,
+        s, target_is_me, target_slot, target_team, attacker_team,
+        pre_dmg_defender_hp, attacker_move,
       )
     },
     fn(s) {
@@ -2246,8 +2301,8 @@ pub fn transition_with_cache(
         // P5 (#97): consume_on_hit / hp_threshold post-damage items.
         fn(s) {
           apply_item_post_damage_proc_fanout(
-            s, target_is_me, target_slot, target_team, pre_dmg_defender_hp,
-            used_move,
+            s, target_is_me, target_slot, target_team, attacker_team,
+            pre_dmg_defender_hp, used_move,
           )
         },
         fn(s) {
@@ -2607,8 +2662,8 @@ fn partial_act_outcomes(
         // P5 (#97): consume_on_hit / hp_threshold post-damage items.
         fn(s) {
           apply_item_post_damage_proc_fanout(
-            s, target_is_me, target_slot, target_team, pre_dmg_defender_hp,
-            used_move,
+            s, target_is_me, target_slot, target_team, attacker_team,
+            pre_dmg_defender_hp, used_move,
           )
         },
         fn(s) {

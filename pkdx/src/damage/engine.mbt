@@ -330,9 +330,15 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // hit loop recomputes via `compute_def_at_stage` so floor-sensitive
   // modifiers (Eviolite / Assault Vest / Sand / Snow / Fur Coat) round at
   // each stage rather than being ratio-scaled from a single anchor value.
-  let compute_rolls = fn(eff_pow : Int, hit_def_stat : Int) -> FixedArray[
-    Int,
-  ] {
+  // `apply_resist_berry` gates the per-roll resist-berry power_mod. Multi-hit
+  // moves consume the berry on the first qualifying hit; subsequent hits
+  // must run without the halving even though the same `compute_rolls`
+  // closure is reused for them. Single-hit callers always pass `true`.
+  let compute_rolls = fn(
+    eff_pow : Int,
+    hit_def_stat : Int,
+    apply_resist_berry : Bool,
+  ) -> FixedArray[Int] {
     let safe_pow = if eff_pow < 1 { 1 } else { eff_pow }
     let safe_def = if hit_def_stat < 1 { 1 } else { hit_def_stat }
     let inner = 22 * safe_pow * atk_stat / safe_def
@@ -431,8 +437,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
         }
       }
 
-      // Resist berry
-      if def_item.length() > 0 {
+      // Resist berry. Skipped past the first hit of a multi-hit move so the
+      // berry doesn't halve every hit (it is consumed on the first qualifying
+      // hit and gone for the rest of the move).
+      if apply_resist_berry && def_item.length() > 0 {
         let berry_type = get_resist_berry_type(def_item)
         if berry_type.length() > 0 && berry_type == move_type {
           if def_item == "ホズのみ" || is_super_effective {
@@ -450,7 +458,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
     out
   }
-  let damages = compute_rolls(effective_power, def_stat)
+  let damages = compute_rolls(effective_power, def_stat, true)
 
   // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
   // State transition precedes any multi-hit expansion — disguise absorbs the
@@ -485,15 +493,29 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // Pre-compute Parental Bond's second-hit damage outside the hit loop so
-  // each variant's hits[h] can pick it up cheaply.
+  // each variant's hits[h] can pick it up cheaply. The 2nd hit never re-fires
+  // a resist berry — it was either consumed by the 1st hit or did not match.
   let pb_second_damages : FixedArray[Int]? = match hit_plan {
-    ParentalBond => Some(compute_rolls(effective_power / 4, def_stat))
+    ParentalBond => Some(compute_rolls(effective_power / 4, def_stat, false))
     _ => None
   }
   // P1-A (#100): contact フラグは StatResolution.force_contact を優先する。
   // シェルアームズ 物理モード等の動的接触判定が、HitStep.contact と payoff
   // 側 contact-proc fanout から漏れないようにここで一本化する。
   let move_is_contact = resolve_move_contact(mv, sr.force_contact)
+  // Pre-compute the no-berry damage table for hits past the first when the
+  // move is multi-hit. Single-hit moves never consult this. The branch
+  // bypasses re-running the closure when the per-hit defense stage is
+  // unchanged from entry.
+  let need_no_berry_table = match hit_plan {
+    Single => false
+    _ => true
+  }
+  let damages_no_berry : FixedArray[Int]? = if need_no_berry_table {
+    Some(compute_rolls(effective_power, def_stat, false))
+  } else {
+    None
+  }
   // P2-B (#92): defender's じきゅうりょく ramps Defense by +1 after each
   // landed hit (capped at +6 from entry stage). The variants loop passes
   // the resulting `def_stage + offset` to `compute_def_at_stage` per hit
@@ -535,22 +557,31 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       } else {
         def_stat
       }
+      // Resist berry は 1 hit 目だけ消費されるので apply_berry_here で gating する。
+      let apply_berry_here = h == 0
       let this_damages = match (hit_plan, h, pb_second_damages) {
         (ParentalBond, 1, Some(d2)) =>
           if stamina_active && this_offset != 0 {
-            compute_rolls(effective_power / 4, hit_def_stat)
+            compute_rolls(effective_power / 4, hit_def_stat, false)
           } else {
             d2
           }
         (TripleVariant(_), _, _) => {
           let per_hit_pow = apply_power_modifiers(resolved_var_power * (h + 1))
-          compute_rolls(per_hit_pow, hit_def_stat)
+          compute_rolls(per_hit_pow, hit_def_stat, apply_berry_here)
         }
         _ =>
           if this_offset == 0 {
-            damages
+            if apply_berry_here {
+              damages
+            } else {
+              match damages_no_berry {
+                Some(d) => d
+                None => damages
+              }
+            }
           } else {
-            compute_rolls(effective_power, hit_def_stat)
+            compute_rolls(effective_power, hit_def_stat, apply_berry_here)
           }
       }
       hits.push({

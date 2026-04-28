@@ -183,12 +183,14 @@ test "focus_sash: full HP → KO 級 → HP=1 + consume" {
   // Defender at full HP 200. OHKO-level hit reduces HP to 0.
   // Sash should kick in: HP=1, consumed.
   let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let pre_dmg_hp = 200
   let mv = ic_move("はかいこうせん", "ノーマル")
   let outcomes = apply_item_post_damage_proc_fanout(
-    post_dmg_state, false, 0, defender_team, pre_dmg_hp, mv,
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
@@ -200,12 +202,14 @@ test "focus_sash: full HP → KO 級 → HP=1 + consume" {
 test "focus_sash: not at full HP → no trigger (still KO)" {
   // Defender at 150/200. KO hit: no sash because pre_hit wasn't full.
   let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let pre_dmg_hp = 150
   let mv = ic_move("はかいこうせん", "ノーマル")
   let outcomes = apply_item_post_damage_proc_fanout(
-    post_dmg_state, false, 0, defender_team, pre_dmg_hp, mv,
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
@@ -216,12 +220,14 @@ test "focus_sash: not at full HP → no trigger (still KO)" {
 ///|
 test "focus_sash: already consumed → no trigger" {
   let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
   let mut state = ic_state(opp_hps=[0, 200, 200])
   state = { ..state, opp_item_consumed: [true, false, false] }
   let mv = ic_move("はかいこうせん", "ノーマル")
   let outcomes = apply_item_post_damage_proc_fanout(
-    state, false, 0, defender_team, 200, mv,
+    state, false, 0, defender_team, attacker_team, 200, mv,
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
@@ -235,12 +241,14 @@ test "fila_berry: post HP <= max/2 → +max/3 heal + consume" {
   // Defender max=200, pre=120 → post=80 (which is <= 100 = max/2).
   // Heal: 80 + 200/3 = 80 + 66 = 146.
   let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 120
   let mv = ic_move("たいあたり", "ノーマル")
   let outcomes = apply_item_post_damage_proc_fanout(
-    post_dmg_state, false, 0, defender_team, pre_dmg_hp, mv,
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
@@ -252,11 +260,13 @@ test "fila_berry: post HP <= max/2 → +max/3 heal + consume" {
 test "fila_berry: post HP > max/2 → no trigger" {
   // Defender max=200, post=120 (above 100 threshold). No heal.
   let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[120, 200, 200])
   let mv = ic_move("たいあたり", "ノーマル")
   let outcomes = apply_item_post_damage_proc_fanout(
-    post_dmg_state, false, 0, defender_team, 180, mv,
+    post_dmg_state, false, 0, defender_team, attacker_team, 180, mv,
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
@@ -268,11 +278,13 @@ test "fila_berry: post HP > max/2 → no trigger" {
 test "fila_berry: KO hit (HP=0) → no trigger" {
   // Healing berries don't revive. HP reaches 0 first → no heal.
   let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let mv = ic_move("はかいこうせん", "ノーマル")
   let outcomes = apply_item_post_damage_proc_fanout(
-    post_dmg_state, false, 0, defender_team, 200, mv,
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
@@ -302,7 +314,7 @@ test "probability mass: pre + post fanouts both sum to 1.0" {
   let pre_drift = if pre_sum > 1.0 { pre_sum - 1.0 } else { 1.0 - pre_sum }
   inspect(pre_drift < 1.0e-9, content="true")
   let post_outs = apply_item_post_damage_proc_fanout(
-    post_dmg_state, false, 0, defender_team, 200, mv,
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   let mut post_sum = 0.0
   for i = 0; i < post_outs.length(); i = i + 1 {
@@ -310,4 +322,100 @@ test "probability mass: pre + post fanouts both sum to 1.0" {
   }
   let post_drift = if post_sum > 1.0 { post_sum - 1.0 } else { 1.0 - post_sum }
   inspect(post_drift < 1.0e-9, content="true")
+}
+
+// ─── PR feedback regressions (multi-hit + skin/weather rewrite + sash) ───
+
+///|
+test "focus_sash: multi-hit KO does not save the defender" {
+  // にどげり is FixedHits(2). Aggregate (pre, post) HP can show a KO even
+  // though Sash should only block the first hit. The fanout must not flip
+  // HP to 1 here — this would be mechanically wrong because the second hit
+  // in real play would still KO the 1-HP defender.
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
+  let mv = ic_move("にどげり", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="0")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+///|
+test "focus_sash: ParentalBond multi-hit KO does not save the defender" {
+  // たいあたり + おやこあい becomes a 2-hit move. Same reasoning as the
+  // にどげり case: the engine returns aggregate damage that can KO at full
+  // HP, but Sash should only block the first hit.
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let attacker = ic_combatant(
+    ic_pokemon("a", "ノーマル", ""),
+    ability="おやこあい",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="0")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+///|
+test "resist_berry: フェアリースキン Normal move triggers ロゼルのみ consume" {
+  // Skin abilities rewrite a Normal move's type before the engine checks
+  // the resist berry. The fanout must mirror that resolution so the
+  // consumption flag flips — without it the engine halves damage but the
+  // berry stays "active" for the next hit, double-halving subsequent moves.
+  // Defender: かくとう type (フェアリー super-effective on かくとう).
+  let defender = ic_combatant(
+    ic_pokemon("d", "かくとう", ""),
+    item="ロゼルのみ",
+  )
+  let attacker = ic_combatant(
+    ic_pokemon("a", "ノーマル", ""),
+    ability="フェアリースキン",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_pre_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_item_consumed[0], content="true")
+}
+
+///|
+test "resist_berry: ホズのみ triggers on neutral Normal hit" {
+  // ホズのみ resists Normal regardless of type-effectiveness — distinct from
+  // every other resist berry, which only fires on super-effective hits. The
+  // engine reflects this; the fanout must too, otherwise the consumption
+  // flag never flips on a neutral hit and a follow-up keeps getting halved.
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="ホズのみ",
+  )
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_pre_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_item_consumed[0], content="true")
 }

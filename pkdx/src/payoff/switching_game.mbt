@@ -252,6 +252,79 @@ pub fn maybe_apply_status_fanout(
 }
 
 ///|
+/// Contact-proc chance node (#93 / P4): when the attacker hits the
+/// defender with a contact move, the defender's ability or held item
+/// can inflict a status on the attacker. Mirrors the
+/// `maybe_apply_status_fanout` shape so `compose_fanouts` can append
+/// it as another `Array[(prob, state)]` step.
+///
+/// MVP scope:
+///   - abilities: ほのおのからだ / せいでんき / どくしゅ / ほうし
+///     (status procs at 30%, see `damage.contact_proc_ability`)
+///   - items: とびだすハバネロ / とびだすなかみ (100% procs)
+///   - recoil-style abilities (てつのトゲ / さめはだ) are deterministic
+///     HP shaves, modelled in damage application rather than as a
+///     chance node, and stay out of this fanout.
+///
+/// `attacker_is_me` says which side just attacked; the inflicted
+/// status lands on that side. `defender_team` is the side whose
+/// ability / item triggers, `attacker_team` is consulted for type
+/// immunity (electric immune to paralysis, fire immune to burn, etc).
+pub fn apply_contact_proc_fanout(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  defender_slot : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+  mv : @model.Move,
+) -> Array[(Double, SwitchingGameState)] {
+  if not(@damage.is_contact_move(mv.name)) {
+    return [(1.0, state)]
+  }
+  let defender = defender_team[defender_slot]
+  // Ability has priority over item; combining both into a chained fanout
+  // is a future enhancement (rare combo in M-A).
+  let proc = match @damage.contact_proc_ability(defender.ability) {
+    Some(p) => Some(p)
+    None => @damage.contact_proc_item(defender.item)
+  }
+  let (kind, chance) = match proc {
+    None => return [(1.0, state)]
+    Some(x) => x
+  }
+  if chance <= 0 {
+    return [(1.0, state)]
+  }
+  let attacker_hps = if attacker_is_me { state.my_hps } else { state.opp_hps }
+  if attacker_hps[attacker_slot] <= 0 {
+    return [(1.0, state)]
+  }
+  let attacker_status = if attacker_is_me {
+    state.my_status
+  } else {
+    state.opp_status
+  }
+  if attacker_status[attacker_slot] != @model.None {
+    return [(1.0, state)]
+  }
+  let attacker = attacker_team[attacker_slot]
+  if @model.immune_to_status(
+    kind, attacker.pokemon.type1, attacker.pokemon.type2,
+  ) {
+    return [(1.0, state)]
+  }
+  let p = chance.to_double() / 100.0
+  if p >= 1.0 {
+    return [(1.0, with_status_set(state, attacker_is_me, attacker_slot, kind))]
+  }
+  [
+    (1.0 - p, state),
+    (p, with_status_set(state, attacker_is_me, attacker_slot, kind)),
+  ]
+}
+
+///|
 /// Copy `state` and set `target_slot`'s status on the chosen side to the
 /// freshly-inflicted `StatusCondition` for `kind` (via `inflict_status`).
 fn with_status_set(
@@ -1315,13 +1388,27 @@ fn resolve_attacker_leg(
     attacker_must_recharge, attacker_move, dmg,
   )
   let post_damage_state = ws_to_state(ws, bump_turn=false)
-  maybe_apply_status_fanout(
-    post_damage_state,
-    not(attacker_is_me),
-    target_active(post_damage_state, not(attacker_is_me)),
-    if attacker_is_me { opp_team } else { my_team },
-    attacker_move,
-  )
+  let target_is_me = not(attacker_is_me)
+  let target_slot = target_active(post_damage_state, target_is_me)
+  let target_team = if attacker_is_me { opp_team } else { my_team }
+  let attacker_team = if attacker_is_me { my_team } else { opp_team }
+  let attacker_slot = target_active(post_damage_state, attacker_is_me)
+  compose_fanouts(post_damage_state, [
+    fn(s) {
+      maybe_apply_status_fanout(
+        s, target_is_me, target_slot, target_team, attacker_move,
+      )
+    },
+    // P4 (#93): defender's contact-proc ability/item can inflict status
+    // on attacker. Step is no-op for non-contact moves and for
+    // defenders without proc ability/item.
+    fn(s) {
+      apply_contact_proc_fanout(
+        s, attacker_is_me, attacker_slot, target_slot, attacker_team,
+        target_team, attacker_move,
+      )
+    },
+  ])
 }
 
 ///|
@@ -1698,14 +1785,25 @@ pub fn transition_with_cache(
   }
   match attack_event {
     None => [(1.0, base_state)]
-    Some((attacker_is_me, target_slot, used_move)) =>
-      maybe_apply_status_fanout(
-        base_state,
-        not(attacker_is_me),
-        target_slot,
-        if attacker_is_me { opp_team } else { my_team },
-        used_move,
-      )
+    Some((attacker_is_me, target_slot, used_move)) => {
+      let target_is_me = not(attacker_is_me)
+      let target_team = if attacker_is_me { opp_team } else { my_team }
+      let attacker_team = if attacker_is_me { my_team } else { opp_team }
+      let attacker_slot = target_active(base_state, attacker_is_me)
+      compose_fanouts(base_state, [
+        fn(s) {
+          maybe_apply_status_fanout(
+            s, target_is_me, target_slot, target_team, used_move,
+          )
+        },
+        fn(s) {
+          apply_contact_proc_fanout(
+            s, attacker_is_me, attacker_slot, target_slot, attacker_team,
+            target_team, used_move,
+          )
+        },
+      ])
+    }
   }
 }
 
@@ -2018,14 +2116,25 @@ fn partial_act_outcomes(
   }
   match attack_event {
     None => [(1.0, base_state)]
-    Some((attacker_is_me, target_slot, used_move)) =>
-      maybe_apply_status_fanout(
-        base_state,
-        not(attacker_is_me),
-        target_slot,
-        if attacker_is_me { opp_team } else { my_team },
-        used_move,
-      )
+    Some((attacker_is_me, target_slot, used_move)) => {
+      let target_is_me = not(attacker_is_me)
+      let target_team = if attacker_is_me { opp_team } else { my_team }
+      let attacker_team = if attacker_is_me { my_team } else { opp_team }
+      let attacker_slot = target_active(base_state, attacker_is_me)
+      compose_fanouts(base_state, [
+        fn(s) {
+          maybe_apply_status_fanout(
+            s, target_is_me, target_slot, target_team, used_move,
+          )
+        },
+        fn(s) {
+          apply_contact_proc_fanout(
+            s, attacker_is_me, attacker_slot, target_slot, attacker_team,
+            target_team, used_move,
+          )
+        },
+      ])
+    }
   }
 }
 

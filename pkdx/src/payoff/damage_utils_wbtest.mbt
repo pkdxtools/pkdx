@@ -29,6 +29,7 @@ fn mk_result(
     is_immune,
     disguise_blocked,
     hits_dealt: if disguise_blocked { 0 } else { 1 },
+    variants: [],
   }
 }
 

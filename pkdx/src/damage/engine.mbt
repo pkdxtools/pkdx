@@ -312,9 +312,29 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // it at quarter power for the 2nd hit (Showdown-accurate per-hit pipeline).
   // All non-power state (stat, ability, item, wall, STAB, type effectiveness,
   // Tinted Lens) is closed over and shared between the two invocations.
-  let compute_rolls = fn(eff_pow : Int) -> FixedArray[Int] {
+  // `def_stage_offset` is the #92 (じきゅうりょく) per-hit defense ramp;
+  // each call to compute_rolls inside the multi-hit loop passes the number
+  // of stamina-induced rank rises the defender has accrued so far. Rank is
+  // applied as a ratio on the existing post-modifier def_stat — recomputing
+  // the full ability/item/weather chain per hit would be Showdown-perfect
+  // but adds 5+ extra modifier passes; the ratio approach matches typical
+  // payoff fanout precision and leaves room for a follow-up to refine.
+  let compute_rolls = fn(eff_pow : Int, def_stage_offset : Int) -> FixedArray[
+    Int,
+  ] {
     let safe_pow = if eff_pow < 1 { 1 } else { eff_pow }
-    let inner = 22 * safe_pow * atk_stat / def_stat
+    let effective_def_stat = if def_stage_offset == 0 {
+      def_stat
+    } else {
+      let scaler_num = apply_rank(1000000, def_stage + def_stage_offset)
+      let scaler_den = apply_rank(1000000, def_stage)
+      if scaler_den == 0 {
+        def_stat
+      } else {
+        def_stat * scaler_num / scaler_den
+      }
+    }
+    let inner = 22 * safe_pow * atk_stat / effective_def_stat
     let damage_base = inner / 50 + 2
     let out : FixedArray[Int] = FixedArray::make(16, 0)
     for idx = 0; idx < 16; idx = idx + 1 {
@@ -429,11 +449,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
     out
   }
-  let damages = compute_rolls(effective_power)
-  let percents : FixedArray[Double] = FixedArray::make(16, 0.0)
-  for i = 0; i < 16; i = i + 1 {
-    percents[i] = damages[i].to_double() / def_hp.to_double() * 100.0
-  }
+  let damages = compute_rolls(effective_power, 0)
 
   // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
   // State transition precedes any multi-hit expansion — disguise absorbs the
@@ -442,56 +458,140 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     return disguise_blocked_result(def_hp)
   }
 
-  // Multi-hit post-processing. Parental Bond's 2nd hit is now computed by
-  // re-running the full 16-roll pipeline at 1/4 base power (Gen7+ spec). This
-  // is Showdown-accurate: every modifier (STAB, Skin, type eff., abilities,
-  // walls, items, berries, min-1 floor) is applied independently to each hit.
+  // Multi-hit post-processing. Parental Bond's 2nd hit re-runs the full
+  // 16-roll pipeline at 1/4 base power (Gen7+ spec, Showdown-accurate).
   let hit_plan = resolve_hit_plan(mv, atk_ability, input.multi_hit_mode)
-  let (final_damages, final_percents, hits_dealt) : (
-    FixedArray[Int],
-    FixedArray[Double],
-    Int,
-  ) = match hit_plan {
-    Single => (damages, percents, 1)
-    FixedHits(n) => {
-      let out : FixedArray[Int] = FixedArray::make(16, 0)
-      let pct : FixedArray[Double] = FixedArray::make(16, 0.0)
-      for i = 0; i < 16; i = i + 1 {
-        out[i] = damages[i] * n
-        pct[i] = out[i].to_double() / def_hp.to_double() * 100.0
+
+  // Resolve the chance-node probability distribution. Random2to5 fans out
+  // into 4 variants (without Skill Link), TripleVariant into 3 with the
+  // mid-flight-miss weights, others stay deterministic with prob 1.0.
+  let auto_spec = resolve_auto_hits(move_name)
+  let plan_distribution : Array[(Int, Double)] = match hit_plan {
+    Single => [(1, 1.0)]
+    ParentalBond => [(2, 1.0)]
+    TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
+    FixedHits(n) =>
+      match auto_spec {
+        Random2to5 =>
+          if atk_ability == "スキルリンク" {
+            [(n, 1.0)]
+          } else {
+            expand_random_2_5_variants()
+          }
+        _ => [(n, 1.0)]
       }
-      (out, pct, n)
-    }
-    ParentalBond => {
-      // 2nd hit at 1/4 power, full pipeline.
-      let pow2 = effective_power / 4
-      let damages2 = compute_rolls(pow2)
-      let out : FixedArray[Int] = FixedArray::make(16, 0)
-      let pct : FixedArray[Double] = FixedArray::make(16, 0.0)
-      for i = 0; i < 16; i = i + 1 {
-        out[i] = damages[i] + damages2[i]
-        pct[i] = out[i].to_double() / def_hp.to_double() * 100.0
-      }
-      (out, pct, 2)
-    }
   }
 
-  // KO calculation (using final_damages so multi-hit totals count toward KOs).
-  let min_d = final_damages[0]
-  let max_d = final_damages[15]
-  let ko_text = calc_ko_text(final_damages, def_hp)
+  // Pre-compute Parental Bond's second-hit damage outside the hit loop so
+  // each variant's hits[h] can pick it up cheaply.
+  let pb_second_damages : FixedArray[Int]? = match hit_plan {
+    ParentalBond => Some(compute_rolls(effective_power / 4, 0))
+    _ => None
+  }
+  let move_is_contact = is_contact_move(move_name)
+  // P2-B (#92): defender's じきゅうりょく ramps Defense by +1 after each
+  // landed hit (capped at +6 from entry stage). Build the per-hit
+  // def_stage_offset / def_stage_after now so the variants loop can pass
+  // the offset to compute_rolls and surface the rise to consumers
+  // (#93/#97 fanout layers).
+  let stamina_active = is_stamina_ability(def_ability) && triggers_stamina(mv)
+
+  // Build the variants[] payload. Each variant carries one hits_count
+  // possibility and its probability mass.
+  let variants : Array[@model.DamageVariant] = []
+  for vi = 0; vi < plan_distribution.length(); vi = vi + 1 {
+    let (hits_count, prob) = plan_distribution[vi]
+    let hits : Array[@model.HitStep] = []
+    let cumulative : FixedArray[Int] = FixedArray::make(16, 0)
+    for h = 0; h < hits_count; h = h + 1 {
+      // Stage seen by hit h's damage roll: entry + h prior stamina procs,
+      // clamped at +6. Stage AFTER hit h = entry + (h + 1) clamped.
+      let this_offset = if stamina_active {
+        let target = def_stage + h
+        let clamped = if target > 6 { 6 } else { target }
+        clamped - def_stage
+      } else {
+        0
+      }
+      let after_stage = if stamina_active {
+        let next = def_stage + h + 1
+        if next > 6 { 6 } else { next }
+      } else {
+        def_stage
+      }
+      let this_damages = match (hit_plan, h, pb_second_damages) {
+        (ParentalBond, 1, Some(d2)) =>
+          if stamina_active && this_offset != 0 {
+            compute_rolls(effective_power / 4, this_offset)
+          } else {
+            d2
+          }
+        _ =>
+          if this_offset == 0 {
+            damages
+          } else {
+            compute_rolls(effective_power, this_offset)
+          }
+      }
+      hits.push({
+        damage_per_roll: this_damages,
+        def_stage_after: after_stage,
+        contact: move_is_contact,
+        event: None,
+      })
+      for j = 0; j < 16; j = j + 1 {
+        cumulative[j] = cumulative[j] + this_damages[j]
+      }
+    }
+    let v_min = cumulative[0]
+    let v_max = cumulative[15]
+    let v_ko = calc_ko_text(cumulative, def_hp)
+    variants.push({
+      probability: prob,
+      hits,
+      hits_count,
+      total_damages: cumulative,
+      min: v_min,
+      max: v_max,
+      ko_text: v_ko,
+    })
+  }
+
+  // Pick the most-likely variant for legacy field derivation. Ties on
+  // probability resolve to the higher hits_count to preserve old behavior
+  // — Random2to5 was previously collapsed to FixedHits(3), so the new
+  // most-likely on the 0.375/0.375 tie should keep hits=3 (not 2).
+  let mut best_idx = 0
+  for i = 1; i < variants.length(); i = i + 1 {
+    let cur = variants[i]
+    let best = variants[best_idx]
+    let strictly_better = cur.probability > best.probability
+    let tie_higher_hits = cur.probability == best.probability &&
+      cur.hits_count > best.hits_count
+    if strictly_better || tie_higher_hits {
+      best_idx = i
+    }
+  }
+  let chosen = variants[best_idx]
+  let final_damages = chosen.total_damages
+  let final_percents : FixedArray[Double] = FixedArray::make(16, 0.0)
+  for i = 0; i < 16; i = i + 1 {
+    final_percents[i] = final_damages[i].to_double() / def_hp.to_double() *
+      100.0
+  }
   @model.DamageCalcResult::{
     damages: final_damages,
     percents: final_percents,
-    min_damage: min_d,
-    max_damage: max_d,
+    min_damage: chosen.min,
+    max_damage: chosen.max,
     min_percent: final_percents[0],
     max_percent: final_percents[15],
-    ko_text,
+    ko_text: chosen.ko_text,
     defender_hp: def_hp,
     is_immune: false,
     disguise_blocked: false,
-    hits_dealt,
+    hits_dealt: chosen.hits_count,
+    variants,
   }
 }
 
@@ -548,8 +648,15 @@ fn weight_ratio_power(atk_weight : Double, def_weight : Double) -> Int {
 
 ///|
 fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
+  let zero_damages : FixedArray[Int] = FixedArray::make(16, 0)
+  let immune_step : @model.HitStep = {
+    damage_per_roll: zero_damages,
+    def_stage_after: 0,
+    contact: false,
+    event: None,
+  }
   @model.DamageCalcResult::{
-    damages: FixedArray::make(16, 0),
+    damages: zero_damages,
     percents: FixedArray::make(16, 0.0),
     min_damage: 0,
     max_damage: 0,
@@ -560,6 +667,19 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
     is_immune: true,
     disguise_blocked: false,
     hits_dealt: 1,
+    // Single-variant payload preserves the invariant
+    // `variants.length() >= 1` for downstream consumers.
+    variants: [
+      {
+        probability: 1.0,
+        hits: [immune_step],
+        hits_count: 1,
+        total_damages: zero_damages,
+        min: 0,
+        max: 0,
+        ko_text: "immune",
+      },
+    ],
   }
 }
 
@@ -567,8 +687,12 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
 /// Disguise initial hit: no damage dealt; state transition (1/8 max HP chip)
 /// is the caller's responsibility.
 fn disguise_blocked_result(def_hp : Int) -> @model.DamageCalcResult {
+  let zero_damages : FixedArray[Int] = FixedArray::make(16, 0)
+  // Disguise's intercepted hit deals no damage but the move did connect
+  // — represent it as a single variant with hits.length() == 0 to mark
+  // that no hit landed (hits_count == 0 also signals the absorbed hit).
   @model.DamageCalcResult::{
-    damages: FixedArray::make(16, 0),
+    damages: zero_damages,
     percents: FixedArray::make(16, 0.0),
     min_damage: 0,
     max_damage: 0,
@@ -579,6 +703,17 @@ fn disguise_blocked_result(def_hp : Int) -> @model.DamageCalcResult {
     is_immune: false,
     disguise_blocked: true,
     hits_dealt: 0,
+    variants: [
+      {
+        probability: 1.0,
+        hits: [],
+        hits_count: 0,
+        total_damages: zero_damages,
+        min: 0,
+        max: 0,
+        ko_text: "けがわブロック",
+      },
+    ],
   }
 }
 

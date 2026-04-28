@@ -331,18 +331,82 @@ pub fn format_damage(
 }
 
 ///|
+fn fixed_array_to_json(arr : FixedArray[Int]) -> String {
+  let mut s = "["
+  for i = 0; i < arr.length(); i = i + 1 {
+    if i > 0 {
+      s = s + ","
+    }
+    s = s + arr[i].to_string()
+  }
+  s + "]"
+}
+
+///|
+/// Format a probability with up to 4 decimal digits, dropping trailing zeros
+/// so 0.2 emits "0.2" (not "0.2000") and 0.375 stays "0.375".
+fn format_probability(p : Double) -> String {
+  let scaled = (p * 10000.0 + 0.5).to_int()
+  if scaled == 10000 {
+    return "1"
+  }
+  if scaled == 0 {
+    return "0"
+  }
+  let mut digits = scaled.to_string()
+  // Pad to 4 fractional digits ("75" → "0075", "375" → "0375").
+  while digits.length() < 4 {
+    digits = "0" + digits
+  }
+  // Strip trailing zeros but keep at least one digit after the decimal.
+  let mut end = digits.length()
+  while end > 1 && digits.unsafe_get(end - 1) == 0x30 {
+    end = end - 1
+  }
+  "0." + digits.substring(start=0, end~)
+}
+
+///|
+fn variant_to_json(v : @model.DamageVariant) -> String {
+  let mut hits_arr = "["
+  for h = 0; h < v.hits.length(); h = h + 1 {
+    if h > 0 {
+      hits_arr = hits_arr + ","
+    }
+    let step = v.hits[h]
+    hits_arr = hits_arr +
+      "{\"damage_per_roll\":" +
+      fixed_array_to_json(step.damage_per_roll) +
+      ",\"def_stage_after\":" +
+      step.def_stage_after.to_string() +
+      ",\"contact\":" +
+      (if step.contact { "true" } else { "false" }) +
+      "}"
+  }
+  hits_arr = hits_arr + "]"
+  "{\"probability\":" +
+  format_probability(v.probability) +
+  ",\"hits_count\":" +
+  v.hits_count.to_string() +
+  ",\"hits\":" +
+  hits_arr +
+  ",\"total_damages\":" +
+  fixed_array_to_json(v.total_damages) +
+  ",\"min\":" +
+  v.min.to_string() +
+  ",\"max\":" +
+  v.max.to_string() +
+  ",\"ko\":\"" +
+  v.ko_text +
+  "\"}"
+}
+
+///|
 fn damage_to_json(
   r : @model.DamageCalcResult,
   input : @model.DamageCalcInput,
 ) -> String {
-  let mut dmg_arr = "["
-  for i = 0; i < 16; i = i + 1 {
-    if i > 0 {
-      dmg_arr = dmg_arr + ","
-    }
-    dmg_arr = dmg_arr + r.damages[i].to_string()
-  }
-  dmg_arr = dmg_arr + "]"
+  let dmg_arr = fixed_array_to_json(r.damages)
   let mut pct_arr = "["
   for i = 0; i < 16; i = i + 1 {
     if i > 0 {
@@ -352,6 +416,14 @@ fn damage_to_json(
   }
   pct_arr = pct_arr + "]"
   let double_field = if input.is_double { ",\"double\":true" } else { "" }
+  let mut variants_arr = "["
+  for i = 0; i < r.variants.length(); i = i + 1 {
+    if i > 0 {
+      variants_arr = variants_arr + ","
+    }
+    variants_arr = variants_arr + variant_to_json(r.variants[i])
+  }
+  variants_arr = variants_arr + "]"
   "{\"attacker\":\"" +
   input.attacker.name_ja +
   "\",\"defender\":\"" +
@@ -368,10 +440,14 @@ fn damage_to_json(
   r.max_damage.to_string() +
   ",\"defender_hp\":" +
   r.defender_hp.to_string() +
+  ",\"hits_dealt\":" +
+  r.hits_dealt.to_string() +
   ",\"ko\":\"" +
   r.ko_text +
   "\"" +
   double_field +
+  ",\"variants\":" +
+  variants_arr +
   "}"
 }
 
@@ -413,6 +489,26 @@ fn damage_to_table(
   s = s + "Roll:   " + labels + "\n"
   s = s + "Damage: " + damages_str + "\n"
   s = s + "%:      " + pcts + "\n"
+  // Per-variant breakdown for probabilistic multi-hit moves (Random2to5,
+  // Triple Axel/Kick). Single-variant results skip this section.
+  if r.variants.length() > 1 {
+    s = s + "\nVariants:\n"
+    for vi = 0; vi < r.variants.length(); vi = vi + 1 {
+      let v = r.variants[vi]
+      s = s +
+        "  " +
+        v.hits_count.to_string() +
+        " hit (p=" +
+        format_probability(v.probability) +
+        "): " +
+        v.min.to_string() +
+        " ~ " +
+        v.max.to_string() +
+        " | " +
+        v.ko_text +
+        "\n"
+    }
+  }
   s
 }
 

@@ -28,6 +28,54 @@ fn avg_damage(r : @model.DamageCalcResult) -> Double {
 }
 
 ///|
+/// Per-variant mean damage paired with the variant's probability. The
+/// pair list sums to (probability, mean) over all chance-node outcomes
+/// surfaced by the engine's hit-by-hit `variants[]` payload.
+///
+/// Disguise / immune still collapse to a single zero entry — the
+/// special chip add-on for ばけのかわ stays where `avg_damage` puts it
+/// (in the legacy scalar path) so #91's incremental rollout doesn't
+/// have to retune those edge cases.
+fn expected_damage_variants(
+  r : @model.DamageCalcResult,
+) -> Array[(Double, Double)] {
+  if r.is_immune {
+    return [(1.0, 0.0)]
+  }
+  if r.disguise_blocked {
+    // Disguise's intercepted hit deals 0 + chip; keep the legacy single
+    // outcome so callers reading expected_damage match avg_damage.
+    return [(1.0, r.defender_hp.to_double() / 8.0)]
+  }
+  let out : Array[(Double, Double)] = []
+  for i = 0; i < r.variants.length(); i = i + 1 {
+    let v = r.variants[i]
+    let mut sum = 0
+    for j = 0; j < v.total_damages.length(); j = j + 1 {
+      sum = sum + v.total_damages[j]
+    }
+    let mean = sum.to_double() / v.total_damages.length().to_double()
+    out.push((v.probability, mean))
+  }
+  out
+}
+
+///|
+/// Probability-weighted expected damage. The single-turn payoff path
+/// (cli_select / team_payoff) uses this to compute scalar payoffs
+/// without expanding the game tree. Equal to avg_damage when there's
+/// only one variant; for multi-variant moves it's the chance-node mean.
+fn expected_damage(r : @model.DamageCalcResult) -> Double {
+  let pairs = expected_damage_variants(r)
+  let mut acc = 0.0
+  for i = 0; i < pairs.length(); i = i + 1 {
+    let (p, mean) = pairs[i]
+    acc = acc + p * mean
+  }
+  acc
+}
+
+///|
 /// Effective Lv50 max-HP realized from a combatant's base HP plus its
 /// `stat_system`. Payoff helpers that need a denominator for damage ratios
 /// (e.g. `pkdx nash graph` team-form fast path) go through here instead of

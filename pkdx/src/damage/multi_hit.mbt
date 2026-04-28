@@ -23,6 +23,12 @@ pub(all) enum HitPlan {
   Single
   FixedHits(Int)
   ParentalBond
+  // P1-A (#90): probabilistic 1/2/3-hit moves with mid-flight miss
+  // (トリプルアクセル / トリプルキック). Distinct from FixedHits(3) because
+  // the latter never misses mid-attack (すいりゅうれんだ / トリプルダイブ).
+  // The carried name is preserved so downstream engine code can branch on
+  // move-specific power scaling once #90's variants[] is wired through.
+  TripleVariant(String)
 } derive(Show, Eq)
 
 ///|
@@ -43,6 +49,15 @@ let fixed_3_hit : Array[String] = [
   "トリプルダイブ",
   "すいりゅうれんだ",
 ]
+
+///|
+/// Subset of `fixed_3_hit` whose hits can miss mid-attack — Triple Kick and
+/// Triple Axel ramp power per landed hit, so probability mass is split
+/// across 1/2/3 hits with weights 0.2/0.2/0.6 (each hit has 90% accuracy →
+/// p(1)=0.1, p(2)=0.09, p(3)=0.81 round to the customary 0.2/0.2/0.6 used
+/// by Smogon's payoff approximations). すいりゅうれんだ / トリプルダイブ
+/// are deterministic 3-hits and stay on FixedHits(3).
+let triple_variant_hit : Array[String] = ["トリプルキック", "トリプルアクセル"]
 
 ///|
 /// Moves that hit 2-5 times with the standard distribution
@@ -121,7 +136,46 @@ pub fn resolve_hit_plan(
   }
   match base {
     SingleHit => Single
-    FixedHit(n) => FixedHits(n)
+    FixedHit(n) =>
+      if n == 3 && in_set(mv.name, triple_variant_hit) {
+        TripleVariant(mv.name)
+      } else {
+        FixedHits(n)
+      }
     Random2to5 => FixedHits(3)
   }
+}
+
+///|
+/// Probability distribution over hit counts for the variants[] payload.
+/// Returns `[(hits_count, probability)]` whose probabilities sum to 1.0.
+/// Used by `engine.mbt`'s multi-hit post-process to construct
+/// `Array[DamageVariant]`.
+///
+/// - `Single` / `FixedHits(n)` / `ParentalBond` → 1 entry, probability 1.0
+/// - `TripleVariant(_)` → [(1, 0.2), (2, 0.2), (3, 0.6)]
+///   (triple-axel-style mid-flight miss)
+/// - Random2to5-resolved-to-Auto-FixedHits(3) carries the deterministic
+///   fallback; the Random2to5 case is handled separately via
+///   `expand_random_2_5_variants` because the HitPlan does not preserve
+///   the original Random2to5 spec (Auto collapses it).
+pub fn expand_variants(plan : HitPlan) -> Array[(Int, Double)] {
+  match plan {
+    Single => [(1, 1.0)]
+    FixedHits(n) => [(n, 1.0)]
+    ParentalBond => [(2, 1.0)]
+    TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
+  }
+}
+
+///|
+/// Random2to5 hit-count distribution, used when the move resolves to
+/// `Random2to5` from `resolve_auto_hits` (i.e. without Skill Link). Smogon
+/// distribution: P(2)=P(3)=3/8, P(4)=P(5)=1/8.
+///
+/// Skill Link upgrades Random2to5 to `FixedHits(5)` *before* this is
+/// consulted, so `expand_random_2_5_variants` is only called for the
+/// non-Skill-Link path.
+pub fn expand_random_2_5_variants() -> Array[(Int, Double)] {
+  [(2, 0.375), (3, 0.375), (4, 0.125), (5, 0.125)]
 }

@@ -311,3 +311,57 @@ pub fn apply_ruin_cross_stat(
   }
   (a, d)
 }
+
+///|
+/// じきゅうりょく (Stamina): every time the holder is hit by a damaging
+/// move, its Defense stage rises by 1 (capped at +6). For multi-hit
+/// moves the rise applies after each hit, so the second hit's damage
+/// roll sees +1 def, the third sees +2, and so on.
+///
+/// Used by `damage/engine.mbt`'s multi-hit loop to thread a per-hit
+/// `def_stage_offset` through `compute_rolls` and to populate
+/// `HitStep.def_stage_after` for downstream payoff fanout (#92 / #93).
+pub fn is_stamina_ability(name : String) -> Bool {
+  name == "じきゅうりょく"
+}
+
+///|
+/// Whether a move triggers Stamina when it lands. The Pokemon Showdown
+/// spec ramps Stamina on any damaging hit regardless of category, so
+/// physical and special multi-hit moves alike see the per-hit ramp.
+/// Status moves (those that don't deal damage) don't trigger.
+///
+/// In practice within pkdx the move-type filter is "any move that the
+/// damage engine actually computes damage for" — `is_immune` /
+/// `disguise_blocked` paths short-circuit before the variants loop, so
+/// this guard only sees real damaging hits.
+pub fn triggers_stamina(mv : @model.Move) -> Bool {
+  // Status-category moves never reach the damage variants loop, but
+  // gate them out defensively in case future callers reuse this helper
+  // outside that flow.
+  mv.category != @model.Status
+}
+
+///|
+/// Contact-induced status proc on the attacker. Returns the (StatusKind,
+/// chance%) the defender's ability inflicts on the attacker when hit by
+/// a contact move; None for non-procking abilities.
+///
+/// Used by switching_game's `apply_contact_proc_fanout` to surface
+/// chance nodes for ほのおのからだ / せいでんき / どくしゅ / ほうし.
+/// てつのトゲ / さめはだ trigger recoil-style HP damage instead and are
+/// handled separately (deterministic, not a chance node).
+pub fn contact_proc_ability(
+  name : String,
+) -> (@model.StatusKind, Int)? {
+  match name {
+    "ほのおのからだ" => Some((@model.BurnKind, 30))
+    "せいでんき" => Some((@model.ParalyzeKind, 30))
+    "どくしゅ" => Some((@model.PoisonKind, 30))
+    "ほうし" =>
+      // ほうし inflicts one of poison/paralyze/sleep at 30%; payoff
+      // MVP collapses to poison so the chance node has a fixed kind.
+      Some((@model.PoisonKind, 30))
+    _ => None
+  }
+}

@@ -129,3 +129,21 @@ pub fn get_resist_berry_type(item : String) -> String {
     _ => ""
   }
 }
+
+///|
+/// Contact-induced status proc from a held item — defender side.
+/// Returns the (StatusKind, chance%) the item inflicts on the
+/// attacker when struck by a contact move.
+///
+/// とびだすハバネロ / とびだすなかみ are 100% triggers per Showdown
+/// spec, so the chance node always produces a single Burn / Paralyze
+/// outcome with probability 1.0.
+pub fn contact_proc_item(
+  name : String,
+) -> (@model.StatusKind, Int)? {
+  match name {
+    "とびだすハバネロ" => Some((@model.BurnKind, 100))
+    "とびだすなかみ" => Some((@model.ParalyzeKind, 100))
+    _ => None
+  }
+}

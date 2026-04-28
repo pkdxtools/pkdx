@@ -204,6 +204,36 @@ pkdx damage "ニャース" "ハピナス" "みだれひっかき" --multi-hit 2
 - `damages[]` / `percents[]`: 合算済みの 16 段階値 (各回分を足したもの)
 - `ko` / `ko_text`: 合算ダメージから計算された確定数
 
+### `variants[]` (hit-by-hit chance-node 出力)
+
+P1-A (issue #90) で導入された **`variants[]` 配列**は連続技の確率分岐を hit 単位で表現する。各 variant は `probability`, `hits_count`, `hits[]` (各 hit のメタ) と派生キャッシュ (`total_damages` / `min` / `max` / `ko`) を持つ。`variants[].probability` の合計は **1.0 ± 1e-9** が保証される (chance-node soundness)。
+
+| 技分類 | variants 数 | 確率 |
+|---|---|---|
+| 単発技 / `FixedHits(n)` 固定 / ParentalBond / Skill Link 経由の `FixedHits(5)` | 1 | 1.0 |
+| `Random2to5` (Skill Link 無し) | 4 | 0.375 / 0.375 / 0.125 / 0.125 (hits=2/3/4/5) |
+| `TripleVariant` (トリプルアクセル / トリプルキック) | 3 | 0.2 / 0.2 / 0.6 (hits=1/2/3、途中外れ仕様) |
+
+各 `hits[i]` は `damage_per_roll` (この hit 単独の 16 段階) / `def_stage_after` (この hit 後の防御段階、#92 じきゅうりょくが mutate) / `contact` (`is_contact_move(name)`、#93 が参照) を持つ。`event` は将来 (#93/#97) 用の予約フィールドで現状は常に `None`。
+
+legacy `damages` / `hits_dealt` / `min` / `max` / `ko` フィールドは **最確 variant** から派生される。確率タイの場合は **大きい hits_count** が選ばれる (`Random2to5` の 0.375 タイ → hits=3 を採用、旧 `FixedHits(3)` 中央値挙動と整合)。
+
+```bash
+# トリプルアクセルの 3 variants を観測
+pkdx damage "ガラルニャース" "ハピナス" "トリプルアクセル" --format json \
+  | jq '.variants[] | {hits: .hits_count, p: .probability, total_min: .min}'
+
+# Random2to5 (みだれづき) の 4 variants
+pkdx damage "ニャース" "ハピナス" "みだれづき" --format json \
+  | jq '.variants[] | {hits: .hits_count, p: .probability}'
+
+# Skill Link で variants が 1 個に縮退
+pkdx damage "ドリュウズ" "ナットレイ" "ロックブラスト" \
+  --atk-ability スキルリンク --format json | jq '.variants | length'  # → 1
+```
+
+下流フェーズ (#91 leaf 分岐 / #92 じきゅうりょく / #97 resist berry) はこの中間表現を入力に取り、`Array[(probability, state_after)]` の chance-node fanout を構築する。
+
 ---
 
 ## 5. 状態異常 (Status Condition)

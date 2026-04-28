@@ -2,7 +2,12 @@
 /// Current schema version. Bump on breaking changes to the entries layout
 /// or meta columns; mismatch causes `open_or_init` to wipe the entries
 /// table.
-pub const SCHEMA_VERSION : Int = 1
+///
+/// v2 (issue #90): the JSON value now embeds `variants[]` (hit-by-hit
+/// chance-node payload). Old v1 entries lacked this field, so a forced
+/// wipe is needed to keep the L2 cache consistent with the new payoff
+/// fanout consumers (#91 / #92 / #93 / #97).
+pub const SCHEMA_VERSION : Int = 2
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

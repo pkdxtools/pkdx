@@ -115,6 +115,7 @@ fn mk_result_for_test(
     is_immune: false,
     disguise_blocked: false,
     hits_dealt: 1,
+    variants: [],
   }
 }
 

@@ -58,22 +58,31 @@ jobs:
           path: |
             C:/vcpkg/installed
             C:/vcpkg/packages
-          key: vcpkg-openblas-x64-windows-v1
+          key: vcpkg-openblas-x64-mingw-dynamic-v1
           restore-keys: |
-            vcpkg-openblas-x64-windows-
+            vcpkg-openblas-x64-mingw-dynamic-
 
       - name: Install BLAS (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          C:\vcpkg\vcpkg.exe install openblas:x64-windows
+          # Use the MinGW-targeted triplet so the produced libopenblas.dll.a /
+          # libopenblas.dll match the MinGW gcc.exe used in Build/Test below.
+          # `x64-windows` would be the MSVC `cl.exe` target — mixing it with
+          # MinGW gcc gives an unsupported ABI/import-lib mismatch (see
+          # https://learn.microsoft.com/en-us/vcpkg/users/platforms/mingw).
+          # vcpkg's MinGW triplet build needs gcc/g++ on PATH at install time
+          # (it autodetects the toolchain via PATH), so prepend the runner's
+          # mingw-w64 bin dir before invoking vcpkg.
+          $env:PATH = "C:\mingw64\bin;$env:PATH"
+          C:\vcpkg\vcpkg.exe install openblas:x64-mingw-dynamic
           # Add OpenBLAS DLL dir to PATH for runtime resolution during moon test.
-          Add-Content $env:GITHUB_PATH "C:\vcpkg\installed\x64-windows\bin"
+          Add-Content $env:GITHUB_PATH "C:\vcpkg\installed\x64-mingw-dynamic\bin"
 
       - name: Build
         working-directory: pkdx
         env:
-          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
+          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-mingw-dynamic/lib -lopenblas' || '')) }}
           # Force a GCC-style driver on Windows so the GCC-style `-L/-l` link
           # flags above are valid. Without this, MoonBit may pick `cl.exe`
           # (MSVC) which would require `/link /LIBPATH:... openblas.lib`
@@ -91,7 +100,7 @@ jobs:
       - name: Test
         working-directory: pkdx
         env:
-          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-windows/lib -lopenblas' || '')) }}
+          MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-mingw-dynamic/lib -lopenblas' || '')) }}
           CC: ${{ runner.os == 'Windows' && 'C:/mingw64/bin/gcc.exe' || '' }}
         run: |
           moon test --target native

@@ -145,15 +145,16 @@ case "$OS_TAG" in
     echo "    'moon build' or 'moon test':"
     echo "      export MOON_CC_LINK_FLAGS=\"-LC:/vcpkg/installed/x64-mingw-dynamic/lib -lopenblas\""
     echo "    The -L/-l form is GCC-style; if MoonBit picks cl.exe (MSVC) it"
-    echo "    will not accept this syntax. Pin CC to a mingw-w64 GCC by"
-    echo "    absolute path so resolution does not silently fall back to"
-    echo "    PATH (and pick up a non-GCC compiler):"
+    echo "    will not accept this syntax. MoonBit's native backend reads"
+    echo "    MOON_CC (NOT the conventional CC) for compiler override; pin"
+    echo "    MOON_CC to a mingw-w64 GCC by absolute path so resolution does"
+    echo "    not silently fall back to auto-detection (and pick up cl.exe):"
     if [ -x "/c/mingw64/bin/gcc.exe" ]; then
-      echo "      export CC=\"C:/mingw64/bin/gcc.exe\"     # detected"
+      echo "      export MOON_CC=\"C:/mingw64/bin/gcc.exe\"     # detected"
     elif [ -x "/c/msys64/mingw64/bin/gcc.exe" ]; then
-      echo "      export CC=\"C:/msys64/mingw64/bin/gcc.exe\"   # detected (MSYS2)"
+      echo "      export MOON_CC=\"C:/msys64/mingw64/bin/gcc.exe\"   # detected (MSYS2)"
     else
-      echo "      export CC=\"C:/mingw64/bin/gcc.exe\"     # adjust if MinGW is elsewhere"
+      echo "      export MOON_CC=\"C:/mingw64/bin/gcc.exe\"     # adjust if MinGW is elsewhere"
       echo "    No mingw-w64 GCC detected at C:/mingw64 or C:/msys64/mingw64."
       echo "    Install MSYS2 (https://www.msys2.org/) and 'pacman -S"
       echo "    mingw-w64-x86_64-gcc', or use the niXman/mingw-builds-binaries"

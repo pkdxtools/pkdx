@@ -17,9 +17,10 @@ import {
 // CI exports the same value on both Build and Test steps:
 //   Linux:   -lopenblas -llapack -lm
 //   macOS:   -framework Accelerate (matches default below; no override needed)
-//   Windows: -LC:/vcpkg/installed/x64-windows/lib -lopenblas (vcpkg-installed,
-//            requires the GCC driver — CI sets CC=gcc; cl.exe would need
-//            MSVC `/link /LIBPATH:... openblas.lib` syntax instead).
+//   Windows: -LC:/vcpkg/installed/x64-mingw-dynamic/lib -lopenblas (vcpkg-
+//            installed, requires the GCC driver — CI sets MOON_CC to a
+//            mingw-w64 gcc.exe; cl.exe would need MSVC
+//            `/link /LIBPATH:... openblas.lib` syntax instead).
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
   "supported-targets": "native",

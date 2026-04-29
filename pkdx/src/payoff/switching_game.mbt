@@ -333,10 +333,21 @@ pub fn apply_contact_proc_fanout(
   // engine 側の immunity 判定 (engine.mbt の check_def_immunity / 18x18 type
   // chart) と同じ条件をここでも踏み、payoff が虚偽の status branch で揺れる
   // のを防ぐ。
-  if @damage.check_def_immunity(defender.ability, mv.type_) {
+  // 動的タイプ書き換え (フェアリースキン等の Skin / Weather Ball) を engine と
+  // 同じ経路で解決する。raw `mv.type_` で immunity を判定すると、たとえば
+  // フェアリースキン + たいあたり (raw Normal, effective Fairy) を ゴースト
+  // 防御に当てたとき engine は damage を解決するのに fanout 側だけ Normal × Ghost
+  // で immune 扱いし burn branch を落としてしまう。逆に エレキスキン contact 技 →
+  // ひらいしん 防御は engine が ability immunity で 0 ダメージを返すのに、raw
+  // Normal では check_def_immunity が false を返すため、虚偽の proc branch が
+  // 出る。payoff の weather は build_input_with_ranks と同じく None 固定。
+  let resolved_move_type = @damage.resolve_effective_move_type(
+    mv, @model.Weather::None, attacker.ability,
+  )
+  if @damage.check_def_immunity(defender.ability, resolved_move_type) {
     return [(1.0, state)]
   }
-  match @types.type_from_jp(mv.type_) {
+  match @types.type_from_jp(resolved_move_type) {
     Some(at) =>
       match @types.type_from_jp(defender.pokemon.type1) {
         Some(d1) => {

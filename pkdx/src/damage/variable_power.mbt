@@ -14,16 +14,17 @@
 ///   (Technician / items / type resist) operate on.
 
 ///|
-/// Rewrite (power, move_type) for the handful of moves whose type depends on
-/// runtime state rather than the move's declared type. Only Weather Ball
-/// currently qualifies.
-pub fn resolve_move_type_override(
+/// Weather-only branch of the (power, type) override. Shared by
+/// `resolve_move_type_override` (engine entry point) and
+/// `resolve_effective_move_type` (payoff fanout) so both paths agree on
+/// Weather Ball's runtime type without going through `DamageCalcInput`.
+fn resolve_move_type_with_weather(
   mv : @model.Move,
-  input : @model.DamageCalcInput,
+  weather : @model.Weather,
 ) -> (Int, String) {
   match mv.name {
     "ウェザーボール" =>
-      match input.weather {
+      match weather {
         @model.Weather::Sun => (100, "ほのお")
         @model.Weather::Rain => (100, "みず")
         @model.Weather::Sand => (100, "いわ")
@@ -31,6 +32,44 @@ pub fn resolve_move_type_override(
         _ => (mv.power, mv.type_)
       }
     _ => (mv.power, mv.type_)
+  }
+}
+
+///|
+/// Rewrite (power, move_type) for the handful of moves whose type depends on
+/// runtime state rather than the move's declared type. Only Weather Ball
+/// currently qualifies.
+pub fn resolve_move_type_override(
+  mv : @model.Move,
+  input : @model.DamageCalcInput,
+) -> (Int, String) {
+  resolve_move_type_with_weather(mv, input.weather)
+}
+
+///|
+/// Compose the engine's pre-immunity move-type chain: Weather Ball weather
+/// override (`resolve_move_type_override`) → Skin abilities (`get_skin_type`).
+/// The engine's `check_def_immunity` and 18×18 type-chart checks read this
+/// resolved type, so any payoff-side immunity guard that wants to mirror
+/// `calc_damage`'s "did the hit land?" decision must use the same composition
+/// rather than raw `mv.type_`. Without this helper, contact-proc fanout
+/// for type-rewritten moves diverges from `calc_damage` — e.g.
+/// フェアリースキン + たいあたり (raw Normal, effective Fairy) into a Ghost
+/// ほのおのからだ defender deals damage in `calc_damage` but the raw-Normal
+/// guard would suppress the burn fanout, and エレキスキン contact moves
+/// into ひらいしん would miss the ability-immunity suppression and emit
+/// spurious proc branches.
+pub fn resolve_effective_move_type(
+  mv : @model.Move,
+  weather : @model.Weather,
+  atk_ability : String,
+) -> String {
+  let (_, base_type) = resolve_move_type_with_weather(mv, weather)
+  if atk_ability.length() > 0 {
+    let (new_type, _) = get_skin_type(atk_ability, base_type)
+    new_type
+  } else {
+    base_type
   }
 }
 

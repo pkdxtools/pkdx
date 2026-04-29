@@ -514,3 +514,53 @@ test "contact_proc_fanout: ability-immune contact move suppresses fanout" {
   inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
+
+///|
+test "contact_proc_fanout: フェアリースキン Normal contact vs Ghost still fans out" {
+  // #100 review iter3: フェアリースキン + たいあたり (raw Normal, effective
+  // Fairy) を ゴースト 防御 (ほのおのからだ) に当てると、engine は Fairy ×
+  // Ghost = 2× で damage を解決するので contact proc も発火する。raw mv.type_
+  // (ノーマル) で immunity を判定すると Normal × Ghost = 0 で fanout が抑制
+  // され、burn branch が落ちてしまう regression を防ぐ。
+  let attacker = cp_combatant(
+    cp_pokemon("attacker", "ノーマル", ""), ability="フェアリースキン",
+  )
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ゴースト", ""), ability="ほのおのからだ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_move("たいあたり")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // 30% burn × 1 hit → (0.7, no status) + (0.3, burn) の 2 leaves。
+  inspect(outcomes.length(), content="2")
+  assert_true(approx_eq_cp(outcomes[0].0, 0.7))
+  assert_true(approx_eq_cp(outcomes[1].0, 0.3))
+}
+
+///|
+test "contact_proc_fanout: エレキスキン Normal contact vs ひらいしん is suppressed" {
+  // #100 review iter3: エレキスキン + たいあたり (raw Normal, effective Electric)
+  // を ひらいしん 防御に当てると、engine は ability immunity で 0 ダメージを
+  // 返す。raw mv.type_ (ノーマル) で immunity を判定すると check_def_immunity が
+  // false を返し、虚偽の burn branch が出てしまう。resolved type を使って engine
+  // と一致させる regression test。
+  let attacker = cp_combatant(
+    cp_pokemon("attacker", "ノーマル", ""), ability="エレキスキン",
+  )
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""),
+    ability="ひらいしん",
+    item="とびだすハバネロ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_move("たいあたり")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  assert_true(approx_eq_cp(outcomes[0].0, 1.0))
+}

@@ -118,8 +118,24 @@ fn ctx_game(ctx : @admiral.Context) -> GameContext {
     )
     pkdx_exit(1)
   }
+  // Canonicalize the explicit `--regulation` value so case-insensitive input
+  // (e.g. `m-a`) resolves to the registered name (`M-A`). `is_available()`
+  // matches regulation strings exactly and silently allow-alls on unknown
+  // names, so passing the raw value here would let `--regulation m-a` disable
+  // Champions filtering instead of applying it. Reject unknown regulations
+  // explicitly rather than letting them no-op downstream.
   let regulation = if cli_regulation != "" {
-    cli_regulation
+    match @db.canonicalize_regulation(cli_regulation) {
+      Some(c) => c
+      None => {
+        exit_error(
+          "Unknown regulation '" +
+          cli_regulation +
+          "'. Run 'pkdx regulation list' for available names.",
+        )
+        ""
+      }
+    }
   } else if version == "champions" {
     read_box_regulation_or_default().regulation
   } else {

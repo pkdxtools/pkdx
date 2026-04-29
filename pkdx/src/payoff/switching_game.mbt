@@ -727,7 +727,14 @@ pub fn apply_item_post_damage_proc_fanout(
     // hit 1, KO on hit 2+" mechanic. Until that lands, leave the aggregate
     // KO untouched rather than incorrectly rescuing the defender.
   }
-  if defender.item == "フィラのみ" && post_hp > 0 && post_hp * 2 <= max_hp {
+  // フィラのみ requires the hit to *cross* the 1/2-HP threshold: the holder
+  // must have been above max/2 going in and at-or-below max/2 coming out.
+  // Without the `pre_dmg_hp` check, an immune / 0-damage hit on a holder
+  // already at low HP would heal+consume despite no damage having occurred.
+  if defender.item == "フィラのみ" &&
+    post_hp > 0 &&
+    pre_dmg_hp * 2 > max_hp &&
+    post_hp * 2 <= max_hp {
     let heal = max_hp / 3
     let new_hp = post_hp + heal
     let capped = if new_hp > max_hp { max_hp } else { new_hp }

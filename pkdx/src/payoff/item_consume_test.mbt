@@ -293,6 +293,48 @@ test "fila_berry: KO hit (HP=0) → no trigger" {
   inspect(s.opp_item_consumed[0], content="false")
 }
 
+///|
+test "fila_berry: zero-damage hit on already-low HP → no trigger" {
+  // Holder is already at 80/200 (< max/2 = 100). An immune / 0-damage hit
+  // leaves HP unchanged at 80. The berry must NOT heal+consume — without a
+  // pre_dmg_hp threshold check the post-only condition would fire incorrectly.
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
+  let pre_dmg_hp = 80
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="80")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+///|
+test "fila_berry: damage that does not cross threshold → no trigger" {
+  // Holder at 90/200 (already < max/2). A small 10-damage hit drops HP to 80.
+  // Both pre and post are below the threshold, so the berry must not fire —
+  // a real activation would have happened on the earlier crossing event.
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
+  let pre_dmg_hp = 90
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="80")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
 // ─── probability mass conservation ─────────────────────────────────────────
 
 ///|

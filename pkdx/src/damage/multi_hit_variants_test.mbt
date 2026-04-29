@@ -1,7 +1,8 @@
 ///|
 /// Variant-count and probability tests for hit-by-hit damage variants.
-/// Pinned values (0.2/0.2/0.6 for triple-axel, 0.375/0.375/0.125/0.125 for
-/// 2-5 hit) are the contract that #91 fanout layer depends on.
+/// Pinned values (0.10/0.09/0.81 for triple-axel — per-hit 90% accuracy
+/// conditioned on hit 1 landing — and 0.375/0.375/0.125/0.125 for 2-5
+/// hit) are the contract that #91 fanout layer depends on.
 
 ///|
 fn mhv_pokemon(name : String) -> @model.Pokemon {
@@ -96,16 +97,18 @@ fn approx_eq(a : Double, b : Double) -> Bool {
 }
 
 ///|
-test "triple-axel: 3 variants with probabilities 0.2 / 0.2 / 0.6" {
+test "triple-axel: 3 variants with probabilities 0.10 / 0.09 / 0.81" {
+  // 各 hit 命中率 90% を直に展開した landed-hit 分布 (move が連結した条件下)。
+  // p(1) = 0.10、p(2) = 0.90 × 0.10 = 0.09、p(3) = 0.90 × 0.90 = 0.81。
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("トリプルアクセル")
   let r = calc_damage(mhv_input(atk, dfn, mv))
   inspect(r.variants.length(), content="3")
   // 1 hit, 2 hit, 3 hit (in order) — 途中外れ仕様
-  assert_true(approx_eq(r.variants[0].probability, 0.2))
-  assert_true(approx_eq(r.variants[1].probability, 0.2))
-  assert_true(approx_eq(r.variants[2].probability, 0.6))
+  assert_true(approx_eq(r.variants[0].probability, 0.10))
+  assert_true(approx_eq(r.variants[1].probability, 0.09))
+  assert_true(approx_eq(r.variants[2].probability, 0.81))
   inspect(r.variants[0].hits.length(), content="1")
   inspect(r.variants[1].hits.length(), content="2")
   inspect(r.variants[2].hits.length(), content="3")

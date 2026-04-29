@@ -385,13 +385,16 @@ test "contact_proc_fanout: non-mega attacker w/ pre-mega ability stays at base d
 }
 
 ///|
-test "contact_proc_fanout: ability + item compose into combined chance node" {
-  // #100 review: with both せいでんき (paralyze 30%) and とびだすハバネロ
-  // (burn 100%), the older mutually-exclusive selection silently dropped the
-  // item — paralyze remained at 30% and burn was unreachable. Composition
-  // means viable_chance = 130 (capped at 100 for q_viable), so a single
-  // contact hit always procs and the mass splits proportionally between
-  // paralyze (30/130) and burn (100/130).
+test "contact_proc_fanout: ability + item resolve sequentially per hit" {
+  // #100 review: ability proc が先に解決し、status が乗らなかった場合だけ
+  // item proc が後追いで解決する。せいでんき (paralyze 30%) +
+  // とびだすハバネロ (burn 100%) では:
+  //   q_a = 0.7、q_i = 0 → q_total = 0 (single contact 必発)
+  //   per-hit set: paralyze = 0.30、burn = 0.7 × 1.0 = 0.70
+  //   denom = 1 - q_total = 1 → P(paralyze) = 0.30、P(burn) = 0.70。
+  // 旧実装は両 proc を 130% の categorical roll に畳み 30/130 vs 100/130 を
+  // 出していたが、これは ability 先行 (30/70) でも item 先行 (0/100) でも
+  // 再現不可能な合成分布。
   let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
   let defender = cp_combatant(
     cp_pokemon("defender", "ノーマル", ""),
@@ -411,18 +414,18 @@ test "contact_proc_fanout: ability + item compose into combined chance node" {
     p_sum = p_sum + outcomes[i].0
   }
   assert_true(approx_eq_cp(p_sum, 1.0))
-  // cap=100 → q_viable=0 → no-status mass collapses to 0.
+  // q_total = 0 → no-status mass collapses to 0.
   assert_true(approx_eq_cp(outcomes[0].0, 0.0))
-  // paralyze share = 30/130, burn share = 100/130.
-  assert_true(approx_eq_cp(outcomes[1].0, 30.0 / 130.0))
-  assert_true(approx_eq_cp(outcomes[2].0, 100.0 / 130.0))
+  // 逐次解決の per-hit 確率がそのまま 1 hit の終端確率になる。
+  assert_true(approx_eq_cp(outcomes[1].0, 0.30))
+  assert_true(approx_eq_cp(outcomes[2].0, 0.70))
 }
 
 ///|
-test "contact_proc_fanout: ability + item with same kind collapse via summed chance" {
-  // #100 review: せいでんき (paralyze 30) + とびだすなかみ (paralyze 100) share
-  // the StatusKind, so the merged proc table holds a single Paralyze entry at
-  // chance 130. Capped to 100 → guaranteed proc, single-leaf paralyze.
+test "contact_proc_fanout: ability + item with same kind collapse to one leaf" {
+  // #100 review: せいでんき (paralyze 30) + とびだすなかみ (paralyze 100) は同 kind。
+  //   q_a = 0.7、q_i = 0 → per-hit set(paralyze) = 0.30 + 0.7 × 1.0 = 1.0
+  //   q_total = 0 で expected_no_status = 0 → 単一 kind 100% で 1 leaf に縮退。
   let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
   let defender = cp_combatant(
     cp_pokemon("defender", "ノーマル", ""),
@@ -444,8 +447,8 @@ test "contact_proc_fanout: ability + item with same kind collapse via summed cha
 test "contact_proc_fanout: ability + item with attacker immune to one branch" {
   // #100 review: でんきタイプ攻撃側はせいでんきに免疫だが、
   // とびだすハバネロ (burn 100%) は通常通り発火する。
-  // 旧実装では ability_procs があれば item を捨てていたため、
-  // viable_procs が空になり no-fanout に縮退していた。
+  //   viable_ability = 0 → q_a = 1、viable_item = 100 → q_i = 0
+  //   per-hit set(burn) = 0 + 1.0 × 1.0 = 1.0、q_total = 0 で 1 leaf burn。
   let attacker = cp_combatant(cp_pokemon("attacker", "でんき", ""))
   let defender = cp_combatant(
     cp_pokemon("defender", "ノーマル", ""),

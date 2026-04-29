@@ -52,11 +52,10 @@ let fixed_3_hit : Array[String] = [
 
 ///|
 /// Subset of `fixed_3_hit` whose hits can miss mid-attack — Triple Kick and
-/// Triple Axel ramp power per landed hit, so probability mass is split
-/// across 1/2/3 hits with weights 0.2/0.2/0.6 (each hit has 90% accuracy →
-/// p(1)=0.1, p(2)=0.09, p(3)=0.81 round to the customary 0.2/0.2/0.6 used
-/// by Smogon's payoff approximations). すいりゅうれんだ / トリプルダイブ
-/// are deterministic 3-hits and stay on FixedHits(3).
+/// Triple Axel ramp power per landed hit. 各 hit 命中率 90% を直に展開する
+/// と、移動が成功した (= hit 1 が当たった) 条件下での landed-hit 分布は
+/// p(1)=0.10, p(2)=0.09, p(3)=0.81 になる。すいりゅうれんだ /
+/// トリプルダイブ are deterministic 3-hits and stay on FixedHits(3).
 let triple_variant_hit : Array[String] = ["トリプルキック", "トリプルアクセル"]
 
 ///|
@@ -153,8 +152,8 @@ pub fn resolve_hit_plan(
 /// `Array[DamageVariant]`.
 ///
 /// - `Single` / `FixedHits(n)` / `ParentalBond` → 1 entry, probability 1.0
-/// - `TripleVariant(_)` → [(1, 0.2), (2, 0.2), (3, 0.6)]
-///   (triple-axel-style mid-flight miss)
+/// - `TripleVariant(_)` → [(1, 0.10), (2, 0.09), (3, 0.81)]
+///   (per-hit 90% accuracy conditioned on the move connecting at all)
 /// - Random2to5-resolved-to-Auto-FixedHits(3) carries the deterministic
 ///   fallback; the Random2to5 case is handled separately via
 ///   `expand_random_2_5_variants` because the HitPlan does not preserve
@@ -164,7 +163,7 @@ pub fn expand_variants(plan : HitPlan) -> Array[(Int, Double)] {
     Single => [(1, 1.0)]
     FixedHits(n) => [(n, 1.0)]
     ParentalBond => [(2, 1.0)]
-    TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
+    TripleVariant(_) => [(1, 0.10), (2, 0.09), (3, 0.81)]
   }
 }
 
@@ -200,7 +199,7 @@ pub fn resolve_hit_distribution(
   match plan {
     Single => [(1, 1.0)]
     ParentalBond => [(2, 1.0)]
-    TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
+    TripleVariant(_) => [(1, 0.10), (2, 0.09), (3, 0.81)]
     FixedHits(n) =>
       match auto_spec {
         Random2to5 =>

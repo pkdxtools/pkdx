@@ -149,14 +149,14 @@ test "expected_damage: probability-weighted mean equals avg over single variant"
 }
 
 ///|
-test "expected_damage: triple-axel weighted mean uses 0.6 weight on hits=3" {
+test "expected_damage: triple-axel weighted mean uses 0.81 weight on hits=3" {
   let atk = dvt_pokemon("attacker")
   let dfn = dvt_pokemon("defender")
   let mv = dvt_move("トリプルアクセル")
   let r = @damage.calc_damage(dvt_input(atk, dfn, mv))
   let exp = expected_damage(r)
   let pairs = expected_damage_variants(r)
-  // Manual chance-node sum: 0.2*v[0].mean + 0.2*v[1].mean + 0.6*v[2].mean
+  // Manual chance-node sum: 0.10*v[0].mean + 0.09*v[1].mean + 0.81*v[2].mean
   let mut manual = 0.0
   for i = 0; i < pairs.length(); i = i + 1 {
     manual = manual + pairs[i].0 * pairs[i].1

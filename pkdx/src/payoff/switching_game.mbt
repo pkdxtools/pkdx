@@ -271,13 +271,16 @@ pub fn maybe_apply_status_fanout(
 /// ability / item triggers, `attacker_team` is consulted for type
 /// immunity (electric immune to paralysis, fire immune to burn, etc).
 ///
-/// 多段技 (#100): 各 contact 着弾は独立に proc 判定する。viable kind (攻撃側
-/// がタイプ耐性を持たない proc) のみで `1 - (1 - viable_chance/100)^n` を
-/// 集約し、各 viable kind には viable_chance 比で按分する。
-/// 過去実装は total_chance ベースで `(1 - q_total^n) × viable/total` を計算
-/// していたが、これは immune branch があると過小評価になる
-/// (例: poison attacker × ほうし × Skill-Link 5-hit は実際 1 - 0.81^5 =
-/// 0.6513… だが、旧実装は 0.5262… を返していた)。
+/// 多段技 (#100): 各 contact 着弾は独立に判定し、1 hit 内では ability proc →
+/// item proc の順に逐次解決する (Showdown / Gen9 仕様)。
+/// q_a = 1 - viable_ability_chance/100、q_i = 1 - viable_item_chance/100、
+/// 1 hit あたりの kind k 設定確率 p_set_k = a_k/100 + q_a × i_k/100。
+/// hit_dist で q_total^n = (q_a × q_i)^n を畳んで終端 no-status 確率を求める。
+/// ability + item を 1 つの categorical roll に flatten すると、せいでんき
+/// (paralyze 30%) + とびだすハバネロ (burn 100%) のような異 kind 合算で
+/// 30/130 vs 100/130 という、どちらの解決順でも再現できない不可能な分布が
+/// 出る (合算 130% を 100 に cap してしまうため)。逐次モデルでは ability 先行
+/// で 30% para + 70% burn が正しい。
 /// シェルアームズ 物理モード等の動的 contact (force_contact) も damage engine
 /// と同じ `resolve_stat_resolution` 経由で判定する。
 /// 加えて mega 後の ability/stats を反映する: `effective_combatant` を
@@ -323,34 +326,16 @@ pub fn apply_contact_proc_fanout(
   if not(@damage.resolve_move_contact(mv, sr.force_contact)) {
     return [(1.0, state)]
   }
-  // Compose ability + item proc lists into a single chance-node table.
-  // Earlier code mutually-excluded them, which silently dropped a 100% item
-  // proc whenever the defender also had a procking ability (e.g. せいでんき
-  // + とびだすハバネロ). Duplicate StatusKinds are folded by summing the
-  // chances so the per-hit Bernoulli trial sees one entry per outcome; the
-  // existing `min(100, viable_chance)` cap absorbs overflow.
+  // 各 hit 内で defender の ability proc → item proc の順に独立判定する
+  // (Showdown / Gen9 仕様)。両者を一つの categorical roll に畳むと
+  // mathematically invalid: せいでんき (paralyze 30%) + とびだすハバネロ
+  // (burn 100%) では能力先行で 30% para + 70% burn になるが、合算 130%
+  // モデルでは 30/130 vs 100/130 が出てしまい、どの順でも再現できない。
+  // q_a = 1 - viable_ability_chance/100、q_i = 1 - viable_item_chance/100。
+  // 1 hit あたりの kind k 設定確率 = a_k/100 + q_a × i_k/100。
   let ability_procs = @damage.contact_proc_ability(defender.ability)
   let item_procs = @damage.contact_proc_item(defender.item)
-  let procs : Array[(@model.StatusKind, Int)] = []
-  for i = 0; i < ability_procs.length(); i = i + 1 {
-    procs.push(ability_procs[i])
-  }
-  for i = 0; i < item_procs.length(); i = i + 1 {
-    let (kind_i, chance_i) = item_procs[i]
-    let mut merged = false
-    for j = 0; j < procs.length(); j = j + 1 {
-      let (kind_j, chance_j) = procs[j]
-      if kind_j == kind_i {
-        procs[j] = (kind_j, chance_j + chance_i)
-        merged = true
-        break
-      }
-    }
-    if not(merged) {
-      procs.push((kind_i, chance_i))
-    }
-  }
-  if procs.length() == 0 {
+  if ability_procs.length() == 0 && item_procs.length() == 0 {
     return [(1.0, state)]
   }
   let attacker_hps = if attacker_is_me { state.my_hps } else { state.opp_hps }
@@ -365,13 +350,12 @@ pub fn apply_contact_proc_fanout(
   if attacker_status[attacker_slot] != @model.None {
     return [(1.0, state)]
   }
-  // viable kinds: 攻撃側がそのタイプに耐性を持たない proc のみ。タイプ耐性で
-  // fizzle した proc は確率モデルから完全に除外する (各 hit で「viable kind
-  // が当たる」事象だけを試行とみなす)。
-  let viable_procs : Array[(@model.StatusKind, Int)] = []
-  let mut viable_chance = 0
-  for i = 0; i < procs.length(); i = i + 1 {
-    let (kind, chance) = procs[i]
+  // viable proc のみ採用 (タイプ耐性で fizzle した proc は status を残さない
+  // ので q への寄与もしない)。
+  let viable_ability : Array[(@model.StatusKind, Int)] = []
+  let mut viable_ability_chance = 0
+  for i = 0; i < ability_procs.length(); i = i + 1 {
+    let (kind, chance) = ability_procs[i]
     if chance <= 0 {
       continue
     }
@@ -380,43 +364,89 @@ pub fn apply_contact_proc_fanout(
     ) {
       continue
     }
-    viable_chance = viable_chance + chance
-    viable_procs.push((kind, chance))
+    viable_ability_chance = viable_ability_chance + chance
+    viable_ability.push((kind, chance))
   }
-  if viable_procs.length() == 0 || viable_chance <= 0 {
+  let viable_item : Array[(@model.StatusKind, Int)] = []
+  let mut viable_item_chance = 0
+  for i = 0; i < item_procs.length(); i = i + 1 {
+    let (kind, chance) = item_procs[i]
+    if chance <= 0 {
+      continue
+    }
+    if @model.immune_to_status(
+      kind, attacker.pokemon.type1, attacker.pokemon.type2,
+    ) {
+      continue
+    }
+    viable_item_chance = viable_item_chance + chance
+    viable_item.push((kind, chance))
+  }
+  if viable_ability.length() == 0 && viable_item.length() == 0 {
     return [(1.0, state)]
   }
-  // 正しい確率モデル (#100): per-hit で「viable kind が proc する」確率を
-  // p_viable_per_hit = viable_chance/100、その補数 q_viable で hit 分布を畳む。
-  // viable_chance は cap (>100) を踏まないが念のため min(100, ...) で抑える
-  // — current data では ほうし合計 30%、単独 ability/item は最大 100%。
-  let cap = if viable_chance > 100 { 100 } else { viable_chance }
-  let q_viable = 1.0 - cap.to_double() / 100.0
+  // 各 source は単発の roll なので 100% に cap。current data では既に <=100 だが、
+  // 将来データ拡張 (proc 同士の合算や cap 越え item 追加) で破綻しないよう保険。
+  let cap_a = if viable_ability_chance > 100 { 100 } else { viable_ability_chance }
+  let cap_i = if viable_item_chance > 100 { 100 } else { viable_item_chance }
+  let q_a = 1.0 - cap_a.to_double() / 100.0
+  let q_i = 1.0 - cap_i.to_double() / 100.0
+  let q_total = q_a * q_i
+  // kind ごとの per-hit 設定確率 = a_k/100 + q_a × i_k/100。
+  // ability エントリを先に積んでから item エントリを順次合流させ、ability 側の
+  // 既存 kind には q_a × i_k を加算、新規 kind は q_a × i_k で push。
+  // 同じ kind を持つ ability + item (せいでんき + とびだすなかみ) はここで
+  // 1 エントリに畳まれ、leaf 数増を防ぐ。
+  let combined : Array[(@model.StatusKind, Double)] = []
+  for i = 0; i < viable_ability.length(); i = i + 1 {
+    let (kind, chance) = viable_ability[i]
+    combined.push((kind, chance.to_double() / 100.0))
+  }
+  for i = 0; i < viable_item.length(); i = i + 1 {
+    let (kind, chance) = viable_item[i]
+    let item_contrib = q_a * chance.to_double() / 100.0
+    let mut merged = false
+    for j = 0; j < combined.length(); j = j + 1 {
+      let (kind_j, set_j) = combined[j]
+      if kind_j == kind {
+        combined[j] = (kind_j, set_j + item_contrib)
+        merged = true
+        break
+      }
+    }
+    if not(merged) {
+      combined.push((kind, item_contrib))
+    }
+  }
+  // hit_dist で q_total^n を畳んで no-status 確率を期待値で得る。
   let hit_dist = @damage.resolve_hit_distribution(mv, attacker.ability)
   let mut expected_no_status = 0.0
   for i = 0; i < hit_dist.length(); i = i + 1 {
     let (n, prob) = hit_dist[i]
     let mut qn = 1.0
     for _k = 0; _k < n; _k = _k + 1 {
-      qn = qn * q_viable
+      qn = qn * q_total
     }
     expected_no_status = expected_no_status + prob * qn
   }
-  let p_viable = 1.0 - expected_no_status
-  if p_viable <= 1.0e-12 {
+  let p_set = 1.0 - expected_no_status
+  if p_set <= 1.0e-12 {
     return [(1.0, state)]
   }
-  let no_status_p = expected_no_status
-  // 100% proc 確定 + 単一 viable kind なら確定状態異常で 1 leaf。
-  if no_status_p <= 1.0e-12 && viable_procs.length() == 1 {
-    let (kind, _) = viable_procs[0]
+  // 100% proc 確定 (per-hit q_total = 0 で 1 hit 以上) + 単一 viable kind なら 1 leaf。
+  if expected_no_status <= 1.0e-12 && combined.length() == 1 {
+    let (kind, _) = combined[0]
     return [(1.0, with_status_set(state, attacker_is_me, attacker_slot, kind))]
   }
+  // 各 kind の最終発火確率: p_set × per_hit_set_k / (1 - q_total)。
+  // per_hit_set の合計は 1 - q_total に等しいので、これは「proc が起きた」
+  // 条件下の kind 分布で按分しているのと同値 (Markov 終端分布)。
+  let denom = 1.0 - q_total
   let outcomes : Array[(Double, SwitchingGameState)] = []
-  outcomes.push((no_status_p, state))
-  for i = 0; i < viable_procs.length(); i = i + 1 {
-    let (kind, chance) = viable_procs[i]
-    let mass = p_viable * chance.to_double() / viable_chance.to_double()
+  outcomes.push((expected_no_status, state))
+  for i = 0; i < combined.length(); i = i + 1 {
+    let (kind, per_hit_set) = combined[i]
+    let mass = p_set * per_hit_set / denom
     outcomes.push((
       mass,
       with_status_set(state, attacker_is_me, attacker_slot, kind),

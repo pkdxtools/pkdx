@@ -23,7 +23,8 @@ pub(all) struct HitStep {
 /// this variant materialises (Σ over a result's variants is 1.0 ± 1e-9).
 /// `hits.length() == hits_count` is the number of hits that connected in
 /// this variant — Triple-axel emits variants with hits_count ∈ {1,2,3}
-/// and probabilities {0.2, 0.2, 0.6}; Random2to5 emits {2,3,4,5} with
+/// and probabilities {0.10, 0.09, 0.81} (per-hit 90% accuracy conditioned
+/// on hit 1 connecting); Random2to5 emits {2,3,4,5} with
 /// {0.375, 0.375, 0.125, 0.125}; deterministic moves emit one variant
 /// with probability 1.0.
 ///

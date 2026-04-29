@@ -476,7 +476,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
         FixedHits(n) => [(n, 1.0)]
         Single => [(1, 1.0)]
         ParentalBond => [(2, 1.0)]
-        TripleVariant(_) => [(1, 0.2), (2, 0.2), (3, 0.6)]
+        TripleVariant(_) => [(1, 0.10), (2, 0.09), (3, 0.81)]
       }
     @model.MultiHit::Expected =>
       abort(

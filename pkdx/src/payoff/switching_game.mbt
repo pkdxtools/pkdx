@@ -326,6 +326,37 @@ pub fn apply_contact_proc_fanout(
   if not(@damage.resolve_move_contact(mv, sr.force_contact)) {
     return [(1.0, state)]
   }
+  // move 自体が連結しないケース (type immunity / ability immunity) は
+  // contact proc を起こさない。Showdown / Gen9 では「damage が解決された hit」
+  // のみが contact proc trigger になるため、たいあたり (ノーマル) を ほのおの
+  // からだ 持ちゴーストに当てても やけど branch を生んではならない。damage
+  // engine 側の immunity 判定 (engine.mbt の check_def_immunity / 18x18 type
+  // chart) と同じ条件をここでも踏み、payoff が虚偽の status branch で揺れる
+  // のを防ぐ。
+  if @damage.check_def_immunity(defender.ability, mv.type_) {
+    return [(1.0, state)]
+  }
+  match @types.type_from_jp(mv.type_) {
+    Some(at) =>
+      match @types.type_from_jp(defender.pokemon.type1) {
+        Some(d1) => {
+          let e1 = @types.get_effectiveness_x4(at, d1)
+          let e2 = if defender.pokemon.type2.length() > 0 {
+            match @types.type_from_jp(defender.pokemon.type2) {
+              Some(d2) => @types.get_effectiveness_x4(at, d2)
+              None => 4
+            }
+          } else {
+            4
+          }
+          if e1 == 0 || e2 == 0 {
+            return [(1.0, state)]
+          }
+        }
+        None => ()
+      }
+    None => ()
+  }
   // 各 hit 内で defender の ability proc → item proc の順に独立判定する
   // (Showdown / Gen9 仕様)。両者を一つの categorical roll に畳むと
   // mathematically invalid: せいでんき (paralyze 30%) + とびだすハバネロ

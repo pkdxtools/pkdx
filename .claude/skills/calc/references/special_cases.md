@@ -212,7 +212,7 @@ P1-A (issue #90) で導入された **`variants[]` 配列**は連続技の確率
 |---|---|---|
 | 単発技 / `FixedHits(n)` 固定 / ParentalBond / Skill Link 経由の `FixedHits(5)` | 1 | 1.0 |
 | `Random2to5` (Skill Link 無し) | 4 | 0.375 / 0.375 / 0.125 / 0.125 (hits=2/3/4/5) |
-| `TripleVariant` (トリプルアクセル / トリプルキック) | 3 | 0.2 / 0.2 / 0.6 (hits=1/2/3、途中外れ仕様) |
+| `TripleVariant` (トリプルアクセル / トリプルキック) | 3 | 0.10 / 0.09 / 0.81 (hits=1/2/3、命中率 90% × 各回独立判定) |
 
 各 `hits[i]` は `damage_per_roll` (この hit 単独の 16 段階) / `def_stage_after` (この hit 後の防御段階、#92 じきゅうりょくが mutate) / `contact` (`is_contact_move(name)`、#93 が参照) を持つ。`event` は将来 (#93/#97) 用の予約フィールドで現状は常に `None`。
 

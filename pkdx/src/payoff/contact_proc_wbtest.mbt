@@ -465,3 +465,52 @@ test "contact_proc_fanout: ability + item with attacker immune to one branch" {
   inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
+
+///|
+test "contact_proc_fanout: type-immune contact move suppresses fanout" {
+  // #100 review iter2: たいあたり (ノーマル) は ゴースト 防御側に対して
+  // type immunity で 0 ダメージ。Showdown / Gen9 では「damage が解決された
+  // hit」のみが contact proc trigger になるため、ほのおのからだ 持ちゴースト
+  // でも やけど branch を生んではならない。
+  let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ゴースト", ""), ability="ほのおのからだ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = cp_move("たいあたり")
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  // 完全に immune なので fanout が起きず (1.0, state) の 1 leaf のみ。
+  inspect(outcomes.length(), content="1")
+  assert_true(approx_eq_cp(outcomes[0].0, 1.0))
+}
+
+///|
+test "contact_proc_fanout: ability-immune contact move suppresses fanout" {
+  // #100 review iter2: ふゆう defender (じめん 無効) に じしん などの じめん
+  // contact 技 (実際の DB に じめん contact 技は存在しないが、ダミーで
+  // 「じめんタイプ + makes_contact」move を組み立てる) が当たっても
+  // ability immunity で 0 ダメージ。contact proc は起きてはならない。
+  // ここでは「でんき contact 技」を使って ひらいしん defender に
+  // 当てるテストにする (でんき 無効 ability の代表例)。
+  let attacker = cp_combatant(cp_pokemon("attacker", "ノーマル", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ノーマル", ""),
+    ability="ひらいしん",
+    item="とびだすハバネロ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  // でんき + contact 技は通常 DB では存在しないが、本テストは
+  // apply_contact_proc_fanout の immunity 判定をピンポイントで確認するため
+  // type_ のみを差し替えた move を組む (resolve_move_contact は move name
+  // で contact 判定するので たいあたり の name を流用)。
+  let mv = { ..cp_move("たいあたり"), type_: "でんき" }
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(), true, 0, 0, attacker_team, defender_team, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  assert_true(approx_eq_cp(outcomes[0].0, 1.0))
+}

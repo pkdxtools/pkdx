@@ -5,6 +5,7 @@ import {
   "pkdxtools/pkdx/src/damage_cache" @damage_cache,
   "pkdxtools/pkdx/src/db" @db,
   "pkdxtools/pkdx/src/cli" @cli,
+  "pkdxtools/pkdx/src/types" @types,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/random" @random,
   "moonbitlang/core/strconv" @strconv,

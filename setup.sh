@@ -131,7 +131,7 @@ case "$OS_TAG" in
     echo "  Windows: required to override the macOS-only default for both"
     echo "    'moon build' and 'moon test'. Install vcpkg + OpenBLAS first."
     echo "    Use the MinGW-targeted triplet so the produced import library"
-    echo "    matches the MinGW gcc.exe pinned via CC below; vcpkg's"
+    echo "    matches the MinGW gcc.exe pinned via MOON_CC below; vcpkg's"
     echo "    'x64-windows' triplet targets MSVC cl.exe and would mix ABIs."
     echo "    vcpkg autodetects MinGW gcc/g++ via PATH at install time, so"
     echo "    run the install from a shell that has mingw-w64 on PATH (or"

@@ -79,21 +79,28 @@ jobs:
           # Add OpenBLAS DLL dir to PATH for runtime resolution during moon test.
           Add-Content $env:GITHUB_PATH "C:\vcpkg\installed\x64-mingw-dynamic\bin"
 
+      - name: Configure MoonBit compiler (Windows)
+        # MoonBit's native backend reads MOON_CC for compiler override (NOT the
+        # conventional CC); without it, auto-detection picks cl.exe (MSVC) on
+        # Windows, which would reject the GCC-style `-L/-l` link flags below.
+        # windows-2022 runners install mingw-w64 GCC at C:\mingw64\bin\gcc.exe
+        # (Install-Mingw64.ps1). Pin the absolute path so resolution does not
+        # depend on PATH state — Git Bash inherits the machine PATH but a
+        # future image change could move mingw under MSYS2 and silently break
+        # `MOON_CC=gcc`.
+        # Setting MOON_CC must be Windows-only: MoonBit treats any present
+        # MOON_CC as an explicit override and parses the value, so an empty
+        # string trips `failed to parse cc from env MOON_CC` on Linux/macOS.
+        # Writing to $GITHUB_ENV from a runner.os == 'Windows' step keeps the
+        # variable absent on the other matrix legs.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "MOON_CC=C:/mingw64/bin/gcc.exe" >> "$GITHUB_ENV"
+
       - name: Build
         working-directory: pkdx
         env:
           MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-mingw-dynamic/lib -lopenblas' || '')) }}
-          # Force a GCC-style driver on Windows so the GCC-style `-L/-l` link
-          # flags above are valid. MoonBit's native backend reads `MOON_CC`
-          # for compiler override (NOT the conventional `CC`); without it,
-          # auto-detection picks `cl.exe` (MSVC) on Windows, which would
-          # require `/link /LIBPATH:... openblas.lib` syntax instead.
-          # windows-2022 runners install mingw-w64 GCC at
-          # `C:\mingw64\bin\gcc.exe` (Install-Mingw64.ps1). Pin the absolute
-          # path so resolution does not depend on PATH state — Git Bash
-          # inherits the machine PATH but a future image change could move
-          # mingw under MSYS2 and silently break `MOON_CC=gcc`.
-          MOON_CC: ${{ runner.os == 'Windows' && 'C:/mingw64/bin/gcc.exe' || '' }}
         run: |
           moon update
           moon build --target native src/main
@@ -103,7 +110,6 @@ jobs:
         working-directory: pkdx
         env:
           MOON_CC_LINK_FLAGS: ${{ runner.os == 'Linux' && '-lopenblas -llapack -lm' || (runner.os == 'macOS' && '-framework Accelerate' || (runner.os == 'Windows' && '-LC:/vcpkg/installed/x64-mingw-dynamic/lib -lopenblas' || '')) }}
-          MOON_CC: ${{ runner.os == 'Windows' && 'C:/mingw64/bin/gcc.exe' || '' }}
         run: |
           moon test --target native
         shell: bash

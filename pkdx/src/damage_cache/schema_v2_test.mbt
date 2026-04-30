@@ -1,11 +1,13 @@
 ///|
-/// Tests for L2 damage cache schema v2 bump (issue #90).
-/// Step 0 (Red Phase): fails until SCHEMA_VERSION is bumped to 2 and
-/// parse_variants_from_json is implemented.
+/// Tests for L2 damage cache schema bump.
+/// v2 (issue #90): variants[] payload introduced.
+/// v3 (issue #91): payoff `compute_mean_damage` rerouted via variants[]
+/// instead of legacy `damages` field, requiring full cache invalidation
+/// on multi-hit moves.
 
 ///|
-test "SCHEMA_VERSION is 2 (bumped for variants[] payload)" {
-  inspect(SCHEMA_VERSION, content="2")
+test "SCHEMA_VERSION is 3 (bumped for #91 payoff variants[] reroute)" {
+  inspect(SCHEMA_VERSION, content="3")
 }
 
 ///|

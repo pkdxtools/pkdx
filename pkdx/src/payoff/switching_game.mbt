@@ -224,6 +224,7 @@ pub fn maybe_apply_status_fanout(
   target_slot : Int,
   target_team : Array[Combatant],
   mv : @model.Move,
+  hits_count~ : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
   let eff = match mv.status_effect {
     None => return [(1.0, state)]
@@ -248,9 +249,22 @@ pub fn maybe_apply_status_fanout(
   ) {
     return [(1.0, state)]
   }
-  let p = chance.to_double() / 100.0
+  // #91 Phase 2-C: per-hit independent secondary roll. p_per_hit = chance/100,
+  // p_set after `hits_count` hits = 1 - (1 - p_per_hit)^hits_count. hits_count
+  // defaults to 1 to preserve legacy single-hit semantics for callers that
+  // have not yet been migrated to pass the variant-specific count.
+  let p_per_hit = chance.to_double() / 100.0
+  let n = if hits_count < 1 { 1 } else { hits_count }
+  let mut q = 1.0
+  for _i = 0; _i < n; _i = _i + 1 {
+    q = q * (1.0 - p_per_hit)
+  }
+  let p = 1.0 - q
   if p >= 1.0 {
     return [(1.0, with_status_set(state, target_is_me, target_slot, kind))]
+  }
+  if p <= 0.0 {
+    return [(1.0, state)]
   }
   [
     (1.0 - p, state),
@@ -302,6 +316,7 @@ pub fn apply_contact_proc_fanout(
   attacker_team : Array[Combatant],
   defender_team : Array[Combatant],
   mv : @model.Move,
+  hits_count~ : Int? = None,
 ) -> Array[(Double, SwitchingGameState)] {
   // mega 後の ability/stats を damage 計算側と同じ経路で解決する。
   // raw team の ability を読むと Mega Kangaskhan の おやこあい や
@@ -467,16 +482,33 @@ pub fn apply_contact_proc_fanout(
       combined.push((kind, item_contrib))
     }
   }
-  // hit_dist で q_total^n を畳んで no-status 確率を期待値で得る。
-  let hit_dist = @damage.resolve_hit_distribution(mv, attacker.ability)
-  let mut expected_no_status = 0.0
-  for i = 0; i < hit_dist.length(); i = i + 1 {
-    let (n, prob) = hit_dist[i]
-    let mut qn = 1.0
-    for _k = 0; _k < n; _k = _k + 1 {
-      qn = qn * q_total
+  // #91 Phase 2-C: variant-specific hits_count を caller が渡してくれば、
+  // q_total^hits_count を直接適用する (compose_fanouts が既に variants ごとに
+  // この関数を呼ぶので fanout 側で hit 分布を fold するのは二重カウントになる
+  // — codex Critical 2)。caller が None を渡したらレガシー経路として
+  // resolve_hit_distribution で fold する (旧 callsite との後方互換)。
+  let expected_no_status = match hits_count {
+    Some(n) => {
+      let nn = if n < 0 { 0 } else { n }
+      let mut qn = 1.0
+      for _k = 0; _k < nn; _k = _k + 1 {
+        qn = qn * q_total
+      }
+      qn
     }
-    expected_no_status = expected_no_status + prob * qn
+    None => {
+      let hit_dist = @damage.resolve_hit_distribution(mv, attacker.ability)
+      let mut acc = 0.0
+      for i = 0; i < hit_dist.length(); i = i + 1 {
+        let (n, prob) = hit_dist[i]
+        let mut qn = 1.0
+        for _k = 0; _k < n; _k = _k + 1 {
+          qn = qn * q_total
+        }
+        acc = acc + prob * qn
+      }
+      acc
+    }
   }
   let p_set = 1.0 - expected_no_status
   if p_set <= 1.0e-12 {
@@ -547,7 +579,12 @@ pub fn apply_item_pre_damage_proc_fanout(
   attacker_team : Array[Combatant],
   pre_dmg_hp : Int,
   mv : @model.Move,
+  hits_count~ : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
+  // #91 Phase 2-C: hits_count 引数は将来の per-hit item proc 拡張用。現状は
+  // 1 hit しか反映しない resist berry / item consumption ロジックなので、
+  // hits_count 引数を受け取るだけで内部処理は不変 (single-shot consumption)。
+  let _ = hits_count
   // Defensive: legacy test fixtures sometimes size *_item_consumed shorter
   // than the corresponding team. Treat out-of-bounds slots as "no berry
   // wired up at this index" — equivalent to a fresh, unconsumed state.
@@ -661,7 +698,11 @@ pub fn apply_item_post_damage_proc_fanout(
   attacker_team : Array[Combatant],
   pre_dmg_hp : Int,
   mv : @model.Move,
+  hits_count~ : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
+  // #91 Phase 2-C: hits_count 引数は将来の per-hit item proc 拡張用。現状は
+  // single-shot consumption ロジックのみで内部不変。
+  let _ = hits_count
   // Defensive: see apply_item_pre_damage_proc_fanout for rationale.
   let consumed_arr = if defender_is_me {
     state.my_item_consumed
@@ -1209,6 +1250,12 @@ fn apply_burn_to_mean(
 /// tuple directly, without cache lookup. The numeric kernel underneath
 /// `mean_damage_cached` — call-sites should reach it via the cache wrapper
 /// so the 16-roll table is not recomputed on every state transition.
+///
+/// Phase 2-B (#91): now derives the scalar mean from `r.variants[]` so it
+/// matches `damage_variants_cached`'s probability-weighted aggregation.
+/// The legacy `r.damages` path used the most-likely variant's 16-roll
+/// average, which collapsed Triple Axel / Random2to5 / PopulationBomb
+/// into a single hits_count instead of weighting all hit-count branches.
 fn compute_mean_damage(
   attacker : Combatant,
   defender : Combatant,
@@ -1217,17 +1264,66 @@ fn compute_mean_damage(
   def_rank : Int,
   atk_burn~ : Bool = false,
 ) -> Int {
+  let outcomes = compute_damage_variants(
+    attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+  )
+  let mut acc = 0.0
+  for i = 0; i < outcomes.length(); i = i + 1 {
+    acc = acc + outcomes[i].probability * outcomes[i].mean_damage.to_double()
+  }
+  // Floor to Int — matches the legacy `s / 16` integer-division behaviour.
+  acc.to_int()
+}
+
+///|
+/// #91: Compute hit-count-fanned damage outcomes for the payoff layer.
+///
+/// Returns one `DamageOutcome` per chance-node leaf (1 entry for single
+/// hits / Skill Link, 3 for Triple Axel, 4 for Random2to5, 10 for
+/// PopulationBomb). `mean_damage` is the variant's 16-roll mean folded
+/// through `apply_burn_to_mean` so callers do not need to re-apply burn
+/// — matching the contract `compute_mean_damage` already exposes.
+///
+/// Immune matchups produce `[(1.0, 0, 0, [])]` so callers always have at
+/// least one outcome to fan out. `hits_count = 0` is *not* used to
+/// represent move miss — that is `per_side_attempt`'s job.
+fn compute_damage_variants(
+  attacker : Combatant,
+  defender : Combatant,
+  mv : @model.Move,
+  atk_rank : Int,
+  def_rank : Int,
+  atk_burn~ : Bool = false,
+) -> Array[@model.DamageOutcome] {
   let r = @damage.calc_damage(
     build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
   )
   if r.is_immune {
-    return 0
+    return [
+      {
+        probability: 1.0,
+        mean_damage: 0,
+        hits_count: 0,
+        hit_steps: [],
+      },
+    ]
   }
-  let mut s = 0
-  for i in 0..<16 {
-    s += r.damages[i]
+  let outcomes : Array[@model.DamageOutcome] = []
+  for i = 0; i < r.variants.length(); i = i + 1 {
+    let v = r.variants[i]
+    let mut s = 0
+    for j in 0..<16 {
+      s += v.total_damages[j]
+    }
+    let mean = apply_burn_to_mean(s / 16, mv.category, atk_burn)
+    outcomes.push({
+      probability: v.probability,
+      mean_damage: mean,
+      hits_count: v.hits_count,
+      hit_steps: v.hits,
+    })
   }
-  apply_burn_to_mean(s / 16, mv.category, atk_burn)
+  outcomes
 }
 
 ///|

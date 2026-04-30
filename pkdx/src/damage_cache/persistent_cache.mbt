@@ -7,7 +7,13 @@
 /// chance-node payload). Old v1 entries lacked this field, so a forced
 /// wipe is needed to keep the L2 cache consistent with the new payoff
 /// fanout consumers (#91 / #92 / #93 / #97).
-pub const SCHEMA_VERSION : Int = 2
+///
+/// v3 (issue #91): payoff `compute_mean_damage` now derives the scalar
+/// mean from `variants[]` directly (Σ probability * mean(total_damages))
+/// instead of the legacy most-likely-variant `damages` field. v2 cache
+/// entries computed under the legacy code path therefore disagree with
+/// v3 callers on multi-hit moves and must be recomputed.
+pub const SCHEMA_VERSION : Int = 3
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

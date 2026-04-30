@@ -16,6 +16,8 @@ pub(all) enum HitSpec {
   SingleHit
   FixedHit(Int)
   Random2to5
+  // #91: per-hit 90% continuation, 1..10 hits. ネズミざん (Population Bomb).
+  PopulationBomb
 } derive(Show, Eq)
 
 ///|
@@ -29,6 +31,12 @@ pub(all) enum HitPlan {
   // The carried name is preserved so downstream engine code can branch on
   // move-specific power scaling once #90's variants[] is wired through.
   TripleVariant(String)
+  // #91: 1..10 hits with per-hit 90% continuation probability. ネズミざん.
+  // Unlike TripleVariant, the move-level miss is handled separately by
+  // per_side_attempt — `expand_variants` returns the distribution
+  // conditioned on the move connecting at all. Hit count distribution:
+  // p(N) = 0.9^(N-1) * 0.1 for N=1..9, p(10) = 0.9^9. Σ = 1.0.
+  PopulationBomb(String)
 } derive(Show, Eq)
 
 ///|
@@ -76,6 +84,13 @@ let random_2_5_hit : Array[String] = [
 ]
 
 ///|
+/// #91: Population Bomb-class moves — 1..10 hits with per-hit 90%
+/// continuation probability. Listed separately from `random_2_5_hit`
+/// because the distribution is fundamentally different (geometric, not
+/// the standard 2-5 weighted).
+let population_bomb : Array[String] = ["ネズミざん"]
+
+///|
 fn in_set(s : String, set : Array[String]) -> Bool {
   for i = 0; i < set.length(); i = i + 1 {
     if set[i] == s {
@@ -94,6 +109,8 @@ pub fn resolve_auto_hits(name : String) -> HitSpec {
     FixedHit(3)
   } else if in_set(name, random_2_5_hit) {
     Random2to5
+  } else if in_set(name, population_bomb) {
+    PopulationBomb
   } else {
     SingleHit
   }
@@ -142,6 +159,7 @@ pub fn resolve_hit_plan(
         FixedHits(n)
       }
     Random2to5 => FixedHits(3)
+    PopulationBomb => HitPlan::PopulationBomb(mv.name)
   }
 }
 
@@ -164,7 +182,30 @@ pub fn expand_variants(plan : HitPlan) -> Array[(Int, Double)] {
     FixedHits(n) => [(n, 1.0)]
     ParentalBond => [(2, 1.0)]
     TripleVariant(_) => [(1, 0.10), (2, 0.09), (3, 0.81)]
+    HitPlan::PopulationBomb(_) => population_bomb_distribution()
   }
+}
+
+///|
+/// #91: Population Bomb hit-count distribution conditioned on the move
+/// connecting (move accuracy is handled by `per_side_attempt`).
+///
+/// Each successive hit lands with 90% continuation probability:
+/// - p(N) = 0.9^(N-1) * 0.1 for N=1..9 (the run terminates after hit N)
+/// - p(10) = 0.9^9 (all 10 hits landed)
+///
+/// Σ = 0.1 * (1 + 0.9 + ... + 0.9^8) + 0.9^9
+///   = 0.1 * (1 - 0.9^9) / (1 - 0.9) + 0.9^9
+///   = (1 - 0.9^9) + 0.9^9 = 1.0 (within FP rounding).
+fn population_bomb_distribution() -> Array[(Int, Double)] {
+  let arr : Array[(Int, Double)] = []
+  let mut acc = 1.0
+  for n = 1; n <= 9; n = n + 1 {
+    arr.push((n, acc * 0.1))
+    acc = acc * 0.9
+  }
+  arr.push((10, acc))
+  arr
 }
 
 ///|
@@ -200,6 +241,7 @@ pub fn resolve_hit_distribution(
     Single => [(1, 1.0)]
     ParentalBond => [(2, 1.0)]
     TripleVariant(_) => [(1, 0.10), (2, 0.09), (3, 0.81)]
+    HitPlan::PopulationBomb(_) => population_bomb_distribution()
     FixedHits(n) =>
       match auto_spec {
         Random2to5 =>

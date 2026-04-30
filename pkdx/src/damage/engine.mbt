@@ -488,6 +488,13 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
         Single => [(1, 1.0)]
         ParentalBond => [(2, 1.0)]
         TripleVariant(_) => [(1, 0.10), (2, 0.09), (3, 0.81)]
+        // #91: explicit MultiHit::Fixed(n) on a PopulationBomb move resolves
+        // to FixedHits(n) inside resolve_hit_plan (the population_bomb
+        // branch is only reachable through MultiHit::Auto). Keep the
+        // exhaustive-match contract by forwarding to the same distribution
+        // as Auto so downstream behavior is consistent if the path is ever
+        // reached via direct construction.
+        HitPlan::PopulationBomb(_) => population_bomb_distribution()
       }
     @model.MultiHit::Expected =>
       abort(

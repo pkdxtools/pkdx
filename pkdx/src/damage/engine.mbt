@@ -272,7 +272,15 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     }
     p
   }
-  let effective_power = apply_power_modifiers(resolved_var_power)
+  let mut effective_power = apply_power_modifiers(resolved_var_power)
+
+  // Skin abilities (フェアリースキン / スカイスキン / フリーズスキン / エレキスキン).
+  // Gen 7+ では技タイプ変換に加えて base power に 1.2x (4915/4096) を直接乗せる。
+  // Gen 6 仕様 (STAB 後の damage modifier として 1.3x) とは丸めの位置が異なるため、
+  // ここで power modifier として適用する必要がある。Showdown 準拠。
+  if skin_bonus {
+    effective_power = round5(effective_power, 4915)
+  }
 
   // Type effectiveness (using x4 integer encoding)
   let atk_type_opt = @types.type_from_jp(move_type)
@@ -380,11 +388,6 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       // STAB
       if has_stab {
         dmg = round5(dmg, stab_mult)
-      }
-
-      // Skin bonus
-      if skin_bonus {
-        dmg = round5(dmg, 4915)
       }
 
       // Type effectiveness (integer fraction)

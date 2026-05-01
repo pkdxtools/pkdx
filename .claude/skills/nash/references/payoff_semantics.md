@@ -326,8 +326,78 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 - 確率副次効果 (アイアンテール 10% B-1 等) ― `stat_effects` は常に 100% 発動前提
 - みがわり越しの opp-target stat drop 無効化
 - 特性免疫 (クリアボディ / せいしんりょく / ぼうじん等)
-- 連続技 / ミサイルばり系
 - ふきとばし / ほえる / どくどくのトゲ等の相手操作系
+
+## Multi-hit chance-node integration (Phase 2-D/2-E、#91)
+
+連続技 (`Random2to5` / `TripleVariant` / `PopulationBomb` / `ParentalBond`) と Skill Link で生まれる **per-hit hits_count 確率分布**を switching game の chance-node leaf 展開に統合する。
+
+### 中核 API
+
+```moonbit
+@model.DamageOutcome {
+  probability : Double           // この hits_count が realize される確率
+  mean_damage : Int              // 当該 hits_count での mean damage (16-roll の平均、burn 等の effect 折込済み)
+  hits_count : Int               // この outcome での実 hit 数
+  hit_steps : Array[HitStep]     // 各 hit のメタ (def_stage_after / contact 等)
+} derive(Show, Eq)
+
+compute_damage_variants(atk, dfn, mv, atk_rank, def_rank, ...)
+  -> Array[@model.DamageOutcome]                              // 純関数 (cache miss 時)
+
+damage_variants_cached(cache, my_attacker, atk_idx, atk_ranks, def_idx, def_ranks, mv_idx, ...)
+  -> Array[@model.DamageOutcome]                              // L1 (HashMap) + L2 (disk) 経由
+
+apply_damage_variants_fanout(state, outcomes, attacker_is_me~, attacker_active~, defender_active~, ...)
+  -> Array[(Double, SwitchingGameState)]                      // chance-node leaf 展開
+```
+
+### 5 つの attack site への統合
+
+`switching_game.mbt` 内で「単一 mean damage を defender HP から減らす」という旧経路を持っていた 5 箇所をすべて `damage_variants_cached → apply_damage_variants_fanout` に置換:
+
+1. `resolve_attacker_leg` (`UseMove vs UseMove` の attacker leg)
+2. `(Switch, UseMove)` arm (defender が交代 → 攻撃側のみ damage)
+3. `(UseMove, Switch)` arm (attacker が交代 → 防御側のみ damage)
+4. `partial_act_outcomes` の `(true/false, UseMove)` 部分実行 arm
+5. `Some(..)` 後段の post-hit fanout 共通 dispatch
+
+`SwitchingGameState` の cache key shape (HP / status / ranks / megaed / item_consumed / must_recharge / turn) は variants 統合後も不変。`hits_count` や `landed` は **leaf state に焼き込まれず**、各 leaf は通常の `SwitchingGameState` として memoize される。
+
+### `attack_event` payload の 4-tuple 化
+
+旧: `(Bool, Int, @model.Move)?`  → 新: `(Bool, Int, @model.Move, Int)?`
+
+4 番目に **`mv_idx`** を追加。`damage_variants_cached` が L1 cache key に `mv_idx` を必要とするため、`Some(..)` 後段の post-hit fanout 共通 dispatch で attack site から運ばれてくる。
+
+### per_side_attempt と variants の責務分担
+
+「accuracy / paralyze full / sleep / recharge / freeze 解除」 系の **行動が起きるか否か** の Bernoulli 試行は `per_side_attempt` が単独で担う。`apply_damage_variants_fanout` は「行動が起きた前提で hits_count がどう分岐するか」だけを扱う。
+
+| 副次効果 | 担当 fanout |
+|---|---|
+| accuracy (move-level miss) | `per_side_attempt` |
+| paralyze full / sleep / freeze 解除 / drowsy | `per_side_attempt` |
+| recharge (はかいこうせん 等) | `per_side_attempt` |
+| hits_count 分布 (Triple Axel / PopulationBomb / Random2to5) | `apply_damage_variants_fanout` |
+| contact-proc (ほのおのからだ 等、per-hit Bernoulli) | `apply_contact_proc_fanout` (variants に rank-up された後) |
+| secondary status (技 `status_effect` 30% paralyze 等、per-hit Bernoulli) | post-hit fanout の secondary 段 (variants の hits_count を引数化) |
+| post-hit side effects (recoil / self_ko / stat_effects) | `with_post_hit_effects` (per-variant immutable) |
+
+contact-proc と secondary status は **hits_count を渡されて per-hit Bernoulli compounding を行う** (例: ほのおのからだ × みだれづき hits=5 → P(burn) = 1 - 0.7^5 ≈ 0.832)。
+
+### L2 disk cache の注意点
+
+`damage_variants_cached` は cache miss 時に副作用として `mean_damage_via_disk` を呼んで scalar mean を温める。`@model.DamageOutcome` の variants payload 自体はまだ disk schema に永続化していない (将来 work)。同一プロセス内では L1 (HashMap) ヒットでフル variants を返せるが、プロセスを跨いだ復元では再計算が走る。Monte Carlo / select / nash CLI の cross-session L2 ヒット率は scalar mean のおかげで従来どおり保たれる。
+
+### 検証範囲
+
+- `damage_variants_cached_wbtest.mbt` — `compute_damage_variants` 単体 (variants 数 / 確率 / mean_damage)
+- `apply_damage_variants_fanout_wbtest.mbt` — fanout 単体 (HP per variant / per-hit Bernoulli)
+- `attack_site_variants_wbtest.mbt` — 5 attack site の `transition_with_cache` 出口
+- `switching_game_variants_wbtest.mbt` — 8 ケース parameterized matrix (じしん / ハイドロポンプ / Skill Link ロックブラスト / トリプルアクセル / ネズミざん / みだれづき / つららばり / ParentalBond)
+- `switching_game_variants_test.mbt` — black-box e2e (mirror match の anti-symmetry / 多重 fanout の per-hit compounding)
+- `branch_count_test.mbt` — 決定論的 cached_states 上限 (Triple Axel ≤ 800 / PopulationBomb ≤ 4500 / 多重 fanout ≤ 1000)
 
 ## 将来拡張
 

@@ -341,19 +341,25 @@ stateDiagram-v2
   note right of Trans
     UseMove x UseMove:
       turn_order_sign(優先度→effective_speed)
-      dmg = mean_damage_cached(DamageCache hit/miss++)
+      per_side_attempt: accuracy / paralyze full / sleep /
+        recharge の Bernoulli 試行 (行動可否のみ)
+      damage_variants_cached → DamageOutcome[]
+        (multi-hit hits_count 分布: 1 / 3 / 4 / 10 / ParentalBond)
+      apply_damage_variants_fanout: 各 variant ごとに
+        with_hp_damage → with_post_hit_effects (recoil /
+        self_ko / stat_effects) → contact-proc fanout
+        (per-hit Bernoulli 1-(1-p)^n) → secondary status
       先攻KO で後攻スキップ
-      stat_effects でランク更新 (clamp_rank)
     UseMove x Switch:
       交代側ランクリセット
-      残る攻撃は新 active に当たる
+      残る攻撃は新 active に当たる (variants fanout 適用)
     Switch x UseMove: 対称
     Switch x Switch:
       両者 active 更新 + 両ランクリセット
       damage なし
   end note
 
-  Trans --> Child: 子 state で value 再帰
+  Trans --> Child: 各 chance-node leaf で value 再帰
   Child --> Check: 再帰入る
 
   Loop --> Solve

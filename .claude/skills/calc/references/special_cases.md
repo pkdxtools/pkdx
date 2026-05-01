@@ -168,6 +168,7 @@ pkdx damage "ローブシン" "ハピナス" "かわらわり" \
 | `FixedHits(2)` | にどげり / ダブルアタック / ダブルウイング / ドラゴンアロー / ツインビーム | 2 固定 |
 | `FixedHits(3)` | トリプルキック / トリプルアクセル / トリプルダイブ / すいりゅうれんだ | 3 固定 |
 | `Random2to5` | みだれひっかき / みだれづき / ボーンラッシュ / ロックブラスト 等 10 種 | Auto 時 **中央値 3**、Skill Link で 5 |
+| `PopulationBomb` | ネズミざん | Auto 時 **幾何分布 1〜10** (各 hit 90% で次に進む)、Skill Link で 10 固定 |
 
 ### `--multi-hit` フラグ値域 (`damage/multi_hit.mbt:20-52`)
 
@@ -213,6 +214,7 @@ P1-A (issue #90) で導入された **`variants[]` 配列**は連続技の確率
 | 単発技 / `FixedHits(n)` 固定 / ParentalBond / Skill Link 経由の `FixedHits(5)` | 1 | 1.0 |
 | `Random2to5` (Skill Link 無し) | 4 | 0.375 / 0.375 / 0.125 / 0.125 (hits=2/3/4/5) |
 | `TripleVariant` (トリプルアクセル / トリプルキック) | 3 | 0.10 / 0.09 / 0.81 (hits=1/2/3、命中率 90% × 各回独立判定) |
+| `PopulationBomb` (ネズミざん) | 10 | 幾何分布 hits=N で `0.9^(N-1) * 0.1` (N=1..9)、hits=10 で `0.9^9 ≈ 0.3874` |
 
 各 `hits[i]` は `damage_per_roll` (この hit 単独の 16 段階) / `def_stage_after` (この hit 後の防御段階、#92 じきゅうりょくが mutate) / `contact` (`is_contact_move(name)`、#93 が参照) を持つ。`event` は将来 (#93/#97) 用の予約フィールドで現状は常に `None`。
 
@@ -230,6 +232,10 @@ pkdx damage "ニャース" "ハピナス" "みだれづき" --format json \
 # Skill Link で variants が 1 個に縮退
 pkdx damage "ドリュウズ" "ナットレイ" "ロックブラスト" \
   --atk-ability スキルリンク --format json | jq '.variants | length'  # → 1
+
+# PopulationBomb (ネズミざん) の 10 variants
+pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version scarlet_violet \
+  --format json | jq '.variants | length'  # → 10
 ```
 
 下流フェーズ (#91 leaf 分岐 / #92 じきゅうりょく / #97 resist berry) はこの中間表現を入力に取り、`Array[(probability, state_after)]` の chance-node fanout を構築する。

@@ -229,13 +229,13 @@ $REPO_ROOT/bin/pkdx version
 
 ### 2-4: DB resync
 
-upstream の data.json 変更（道具メタ、反動技、状態異常技 等）を既存 DB に反映する。`--resync` は `pkdx_migrations` bookkeeping をクリアして全マイグレーションを再適用するため、data.json が SSoT として機能する。全マイグレーションは冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されており、再適用しても DB は data.json の状態へ収束する。
+upstream の data.json 変更（道具メタ、反動技、状態異常技 等）と champout submodule pointer 移動の双方を既存 DB に反映する。**canonical な再同期は `./setup.sh`**。Step 1 で submodule を最新ポインタへ追従、Step 3.5 で `pkdx db init` が `pkdx_patch/{009..012}/data.json` を champout から再生成したのち `champions.db` を rm → `pkdx migrate` の順で流す。`pkdx migrate` は bookkeeping を持たない seed-script モデルで、全マイグレーションが冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されているため、再適用しても DB は data.json の状態へ収束する。
 
 ```bash
-cd $REPO_ROOT && bin/pkdx migrate --resync
+cd $REPO_ROOT && ./setup.sh
 ```
 
-スキップした場合（例: `pkdx tools` 更新を skip したケース）は、この step も実行不要。
+champout pointer が動いていない (pokedex.db や手書き data.json のみの更新) と確証できる場合は `bin/pkdx migrate` 単体でも済むが、判断に迷う場合は `setup.sh` で常に安全側に倒すこと。スキップした場合（例: `pkdx tools` 更新を skip したケース）は、この step も実行不要。
 
 ### 2-5: box meta.json 自動マイグレーション
 

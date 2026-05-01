@@ -16,47 +16,19 @@ pub fn query_moves(
 }
 
 ///|
+/// Champions のルートは新スキーマ (champions.db.learnset + move) を引く
+/// `query_champions_moves` に delegate する。caller は globalNo を渡し、
+/// ここで base 形態 (`<gno>000`) の id を組み立てる。Mega / 別フォームは
+/// 上位の caller が `query_champions_moves` を直接呼んで個別 id を渡す
+/// 想定 (現状は base のみ)。`include_inactive` は champout 由来 learnset に
+/// inactive 概念がないため無視する。
 fn query_moves_champions(
   db : Db,
   global_no : String,
-  include_inactive : Bool,
+  _include_inactive : Bool,
 ) -> Result[Array[@model.Move], String] {
-  let gno = normalize_global_no(global_no)
-  let state_filter = if include_inactive {
-    ""
-  } else {
-    " AND cl.state = 'active'"
-  }
-  // learn_method column returns 'active' or 'inactive' so callers/formatters
-  // can distinguish confiscated moves. For legacy versions this stays as
-  // 'basic' / 'TM' — a small but visible shift in semantics worth noting
-  // if you touch the formatter.
-  // LEFT JOIN move_meta (pkdx_patch/006_move_meta) so payoff metadata flows
-  // inline on the returned `@model.Move`. Missing rows default to priority=0
-  // and empty stat_effects via COALESCE.
-  let sql_head =
-    #|SELECT DISTINCT wl.name AS move_name, w.type, w.category,
-    #|       w.power, w.accuracy, w.pp, cl.state AS learn_method,
-    #|       COALESCE(mm.priority, 0) AS priority,
-    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
-    #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
-    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance,
-    #|       COALESCE(mm.recoil_num, 0) AS recoil_num,
-    #|       COALESCE(mm.recoil_den, 1) AS recoil_den,
-    #|       COALESCE(mm.self_ko, 0) AS self_ko,
-    #|       COALESCE(mm.recharge, 0) AS recharge
-    #|FROM champions_learnset cl
-    #|JOIN local_waza w ON cl.waza = w.waza AND w.version = 'Champions'
-    #|JOIN local_waza_language wl ON cl.waza = wl.waza
-    #|  AND wl.version = 'Champions' AND wl.language = 'jpn'
-    #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
-    #|WHERE cl.globalNo = ?
-    #|  AND COALESCE(cl.form, '') = '' AND COALESCE(cl.region, '') = ''
-    #|  AND COALESCE(cl.mega_evolution, '') = '' AND COALESCE(cl.gigantamax, '') = ''
-  let sql_tail =
-    #|ORDER BY power DESC
-  let sql = sql_head + state_filter + "\n" + sql_tail
-  collect_moves_rows(db, sql, [gno])
+  let id = normalize_global_no(global_no) + "000"
+  query_champions_moves(db, id)
 }
 
 ///|

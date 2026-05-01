@@ -14,37 +14,33 @@ pub(all) struct Migration {
 ///|
 pub(all) struct Report {
   applied : Int
-  skipped : Int
   total : Int
 }
 
 ///|
-/// Main entry point for `pkdx migrate`. Opens the DB in RW mode, creates
-/// the bookkeeping table if missing, then iterates `migrations()` in
-/// declaration order. Each pending migration runs inside a transaction;
-/// success records its name in `pkdx_migrations`, failure rolls back and
-/// propagates the error. When `resync` is true, all bookkeeping rows are
-/// cleared first so every migration re-applies — used to propagate data.json
-/// edits to installs that already applied the owning migration.
-pub fn run(
-  db_path : String,
-  repo_root : String,
-  resync~ : Bool = false,
-) -> Result[Report, String] {
-  run_for(db_path, repo_root, migrations=migrations(), resync~)
+/// Main entry point for `pkdx migrate`. Opens the DB in RW mode and runs
+/// every registered migration in declaration order, each inside its own
+/// transaction. Failure rolls back and propagates the error.
+///
+/// pokedex.db / champions.db のいずれもユーザーランタイムが書き込む
+/// データを持たない (damage cache は別ファイル `box/cache/damage_cache.sqlite`)。
+/// つまり migrate は常に「seed の再適用」であり、bookkeeping は不要。
+/// すべての migration は冪等 (DELETE → 再投入 / INSERT OR REPLACE /
+/// existence-check INSERT / ALTER TABLE は ensure_column) なので何度
+/// 流しても DB は data.json の現在状態へ収束する。
+pub fn run(db_path : String, repo_root : String) -> Result[Report, String] {
+  run_for(db_path, repo_root, migrations=migrations())
 }
 
 ///|
 /// Run a specific subset of migrations against `db_path`. Used by the
-/// post-#95 two-stage migrate flow: pokedex.db only sees
-/// `migrations_pokedex()` and champions.db only sees
-/// `migrations_champions()`, so migrations don't trip on tables that
-/// don't belong to the DB they're applied to.
+/// 2-stage migrate flow: pokedex.db only sees `migrations_pokedex()` and
+/// champions.db only sees `migrations_champions()`, so migrations don't
+/// trip on tables that don't belong to the DB they're applied to.
 pub fn run_for(
   db_path : String,
   repo_root : String,
   migrations~ : Array[Migration],
-  resync~ : Bool = false,
 ) -> Result[Report, String] {
   if not(@db.file_exists(db_path)) {
     return Err(db_path + " not found. Run ./setup.sh first.")
@@ -53,7 +49,7 @@ pub fn run_for(
     Ok(d) => d
     Err(e) => return Err(e)
   }
-  let result = run_with_db(db, repo_root, resync, migrations)
+  let result = run_with_db(db, repo_root, migrations)
   @db.close(db)
   result
 }
@@ -62,65 +58,23 @@ pub fn run_for(
 fn run_with_db(
   db : @db.Db,
   repo_root : String,
-  resync : Bool,
   all : Array[Migration],
 ) -> Result[Report, String] {
-  let create_sql = "CREATE TABLE IF NOT EXISTS pkdx_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))"
-  match @db.exec(db, create_sql) {
-    Err(e) => return Err(e)
-    Ok(_) => ()
-  }
-  if resync {
-    // 各 migration は冪等に実装されている:
-    //   - 001 / 007: UPDATE のみ / read-only 検証
-    //   - 002 / 003 / 004 / 005: 先頭で自身が書き込む Champions / 自己所有
-    //     テーブルを DELETE してから再投入し、UNIQUE 制約が無い表でも
-    //     重複を生まないようにしている
-    //   - 006 / 008 / 010: move_meta (name_ja PRIMARY KEY) に対する
-    //     INSERT OR REPLACE / UPDATE-first upsert
-    // この前提で bookkeeping を空にして全件再適用しても DB は data.json
-    // の現在状態に収束する。新しい migration を追加する際はこの不変条件
-    // (プレーン INSERT で table を育てない) を壊さないこと。
-    match @db.exec(db, "DELETE FROM pkdx_migrations") {
-      Err(e) => return Err(e)
-      Ok(_) => ()
-    }
-    @db.println_progress("  Resync: cleared bookkeeping, re-applying all")
-  }
   let mut applied = 0
-  let mut skipped = 0
   for i = 0; i < all.length(); i = i + 1 {
     let m = all[i]
-    match is_applied(db, m.name) {
-      Err(e) => return Err(e)
-      Ok(true) => skipped = skipped + 1
-      Ok(false) => {
-        @db.println_progress("  Applying " + m.name + "...")
-        match apply_one(db, m, repo_root) {
-          Err(e) => return Err("FAILED " + m.name + ": " + e)
-          Ok(summary) => {
-            if summary.length() > 0 {
-              @db.println_progress("    " + summary)
-            }
-            applied = applied + 1
-          }
+    @db.println_progress("  Applying " + m.name + "...")
+    match apply_one(db, m, repo_root) {
+      Err(e) => return Err("FAILED " + m.name + ": " + e)
+      Ok(summary) => {
+        if summary.length() > 0 {
+          @db.println_progress("    " + summary)
         }
+        applied = applied + 1
       }
     }
   }
-  Ok({ applied, skipped, total: all.length() })
-}
-
-///|
-fn is_applied(db : @db.Db, name : String) -> Result[Bool, String] {
-  match @db.query_binds(
-      db,
-      "SELECT 1 FROM pkdx_migrations WHERE name = ?",
-      [@db.BindText(name)],
-    ) {
-    Err(e) => Err(e)
-    Ok(rows) => Ok(rows.length() > 0)
-  }
+  Ok({ applied, total: all.length() })
 }
 
 ///|
@@ -139,20 +93,9 @@ fn apply_one(
       Err(e)
     }
     Ok(summary) =>
-      match @db.exec_binds(
-          db,
-          "INSERT INTO pkdx_migrations (name) VALUES (?)",
-          [@db.BindText(m.name)],
-        ) {
-        Err(e) => {
-          let _ = @db.exec(db, "ROLLBACK")
-          Err(e)
-        }
-        Ok(_) =>
-          match @db.exec(db, "COMMIT") {
-            Err(e) => Err(e)
-            Ok(_) => Ok(summary)
-          }
+      match @db.exec(db, "COMMIT") {
+        Err(e) => Err(e)
+        Ok(_) => Ok(summary)
       }
   }
 }

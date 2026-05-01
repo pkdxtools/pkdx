@@ -18,44 +18,26 @@ pub fn query_learners(
 }
 
 ///|
+/// champions.db (新スキーマ: learnset + pokemon + pokemon_name) を直接読む。
+/// `include_inactive` は champout 由来データに inactive 概念がないため
+/// 無視する。base form (pokemon.form='') のみを返す現行挙動を維持。
 fn query_learners_champions(
   db : Db,
   move_name : String,
-  include_inactive : Bool,
+  _include_inactive : Bool,
 ) -> Result[Array[SearchResult], String] {
-  let state_filter = if include_inactive {
-    ""
-  } else {
-    " AND cl.state = 'active'"
-  }
-  let sql_head =
-    #|WITH learners AS (
-    #|  SELECT cl.globalNo
-    #|  FROM local_waza_language wl
-    #|  JOIN champions_learnset cl ON wl.waza = cl.waza
-    #|  WHERE wl.language = 'jpn' AND wl.name = ? AND wl.version = 'Champions'
-    #|    AND COALESCE(cl.form, '') = '' AND COALESCE(cl.region, '') = ''
-    #|    AND COALESCE(cl.mega_evolution, '') = '' AND COALESCE(cl.gigantamax, '') = ''
-  let sql_tail =
-    #|)
-    #|SELECT l.globalNo, MIN(pn.name) AS name_ja,
-    #|       t.type1, t.type2,
-    #|       s.hp, s.attack, s.defense, s.special_attack, s.special_defense, s.speed,
-    #|       (s.hp + s.attack + s.defense + s.special_attack + s.special_defense + s.speed) AS bst
-    #|FROM learners l
-    #|JOIN pokedex p ON l.globalNo = p.globalNo
-    #|JOIN local_pokedex_type t ON p.globalNo = t.globalNo AND t.version = 'champions'
-    #|JOIN local_pokedex_status s ON p.globalNo = s.globalNo AND s.version = 'champions'
-    #|JOIN pokedex_name pn ON p.globalNo = pn.globalNo AND pn.language = 'jpn'
-    #|  AND COALESCE(pn.form, '') = '' AND COALESCE(pn.region, '') = ''
-    #|  AND COALESCE(pn.mega_evolution, '') = '' AND COALESCE(pn.gigantamax, '') = ''
-    #|WHERE COALESCE(p.form, '') = '' AND COALESCE(p.region, '') = ''
-    #|  AND COALESCE(p.mega_evolution, '') = '' AND COALESCE(p.gigantamax, '') = ''
-    #|GROUP BY l.globalNo
+  let sql =
+    #|SELECT p.global_no, MAX(pn.name) AS name_ja,
+    #|       p.type1, p.type2,
+    #|       p.hp, p.attack, p.defense, p.special_attack, p.special_defense, p.speed,
+    #|       (p.hp + p.attack + p.defense + p.special_attack + p.special_defense + p.speed) AS bst
+    #|FROM learnset l
+    #|JOIN pokemon p ON l.id = p.id
+    #|JOIN pokemon_name pn ON p.id = pn.id AND pn.language = 'jpn'
+    #|WHERE l.waza = ? AND p.form = ''
+    #|GROUP BY p.global_no
     #|ORDER BY bst DESC
-  let sql = sql_head + state_filter + "\n" + sql_tail
-  let binds = [move_name]
-  collect_learners_rows(db, sql, binds)
+  collect_learners_rows(db, sql, [move_name])
 }
 
 ///|

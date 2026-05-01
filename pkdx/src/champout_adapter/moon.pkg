@@ -1,6 +1,6 @@
 import {
+  "pkdxtools/pkdx/src/champions_schema",
   "pkdxtools/pkdx/src/db",
-  "pkdxtools/pkdx/src/champions_schema" @champions_schema,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/strconv" @strconv,
 }

@@ -8,6 +8,8 @@ import {
   "pkdxtools/pkdx/src/writer",
   "pkdxtools/pkdx/src/payoff",
   "pkdxtools/pkdx/src/migrate",
+  "pkdxtools/pkdx/src/champions_schema" @champions_schema,
+  "pkdxtools/pkdx/src/champout_adapter" @champout_adapter,
   "mizchi/markdown",
   "mizchi/admiral",
   "moonbitlang/core/json",

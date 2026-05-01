@@ -8,7 +8,7 @@
 - **特殊耐久 HD** = H × D
 - **総合耐久指数 HBD/(B+D)** = H·B·D / (B+D)
 
-HB/HD は片側の耐久を表す指標。総合耐久指数は物理・特殊両方の被ダメを同時に考慮した指標で、Yakkun を含む日本コミュニティで **「正統派総合耐久指数」** として広く使われる。
+HB/HD は片側の耐久を表す指標。総合耐久指数は物理・特殊両方の被ダメを同時に考慮した指標で、日本コミュニティで **「正統派総合耐久指数」** として広く使われる。
 
 ## 2. なぜ HBD/(B+D) が正統派なのか
 
@@ -129,7 +129,6 @@ bin/pkdx hbd ガブリアス --nature ようき --format json
 ## 10. 参考文献
 
 - [lacolaco/pokemon-tools optimizer.ts](https://github.com/lacolaco/pokemon-tools/blob/main/projects/stats/src/lib/calculator/optimizer.ts) — 本実装のベース
-- [Yakkun 耐久調整ツール](https://yakkun.com/tool/hbd.htm)
 - [migerug4「【ポケモン】11n調整の有用性」](https://migerug4.hatenablog.com/entry/2021/03/04/003027) — 11n調整の背景
 - [Smogon "How To Maximize Your Defenses"](https://www.smogon.com/dp/articles/maximizing_defenses) — 英語圏の同等議論（Overall Harm 指標）
 - tetspond「HBD/(B+D)ランキング」/ pokedesiaf「耐久調整の解説」 — HBD/(B+D) の語源と事例

@@ -171,6 +171,7 @@ fn build_cli() -> @admiral.CliApp {
       cmd_cache_clear(),
       cmd_damage_bench(),
       cmd_convert(),
+      cmd_db(),
       cmd_regulation(),
       cmd_context(),
     ],
@@ -243,9 +244,8 @@ fn cmd_regulation() -> @admiral.CommandDef {
 ///|
 /// `pkdx context --json` — single-shot context emitter consumed by the
 /// Claude Code SessionStart hook. Returns a 1-line JSON capturing
-/// regulation, version, item / Champions Pokemon counts, and the
-/// migration heads. Designed to be cold-fast (< 500 ms) so the hook
-/// doesn't visibly stall startup.
+/// regulation, version, and item / Champions Pokemon counts. Designed
+/// to be cold-fast (< 500 ms) so the hook doesn't visibly stall startup.
 fn cmd_context() -> @admiral.CommandDef {
   @admiral.command(
     name="context",
@@ -255,8 +255,6 @@ fn cmd_context() -> @admiral.CommandDef {
     ],
     run=Some(fn(_ctx) {
       let r = read_box_regulation_or_default()
-      let pokedex_head = @migrate.latest_migration_name_pokedex()
-      let champions_head = @migrate.latest_migration_name_champions()
       // Item / Pokemon counts come from champions.db; resolve via with_db
       // with version=champions so the attached schema is in scope.
       let (items_count, mons_count) = count_champions_assets()
@@ -270,11 +268,7 @@ fn cmd_context() -> @admiral.CommandDef {
         items_count.to_string() +
         ",\"champions_pokemon_count\":" +
         mons_count.to_string() +
-        ",\"latest_migration_pokedex\":\"" +
-        pokedex_head +
-        "\",\"latest_migration_champions\":\"" +
-        champions_head +
-        "\"}"
+        "}"
       println(json)
     }),
   )
@@ -358,8 +352,9 @@ fn count_champions_assets() -> (Int, Int) {
     Ok(d) => d
     Err(_) => return (0, 0)
   }
-  let items_count = match
-    @db.query_binds(db, "SELECT COUNT(*) FROM champions.items", []) {
+  // champions.db が main 接続なので prefix なしで `items` / `pokemon` を
+  // 直接参照する。
+  let items_count = match @db.query_binds(db, "SELECT COUNT(*) FROM items", []) {
     Ok(rows) =>
       if rows.length() == 0 {
         0
@@ -371,11 +366,18 @@ fn count_champions_assets() -> (Int, Int) {
       }
     Err(_) => 0
   }
-  // champions_pokemon table doesn't exist yet (#94 follow-up). Use the
-  // M-A count as a proxy until the dedicated table lands.
-  let mons_count = @db.available_regulations().length() // placeholder
-  let _ = mons_count
-  let real_mons = ma_pokemon_count()
+  let real_mons = match @db.query_binds(db, "SELECT COUNT(*) FROM pokemon", []) {
+    Ok(rows) =>
+      if rows.length() == 0 {
+        ma_pokemon_count()
+      } else {
+        match rows[0][0] {
+          Some(s) => parse_count_int(s)
+          None => ma_pokemon_count()
+        }
+      }
+    Err(_) => ma_pokemon_count()
+  }
   @db.close(db)
   (items_count, real_mons)
 }
@@ -453,11 +455,7 @@ fn run_damage_bench(
   version : String,
 ) -> Unit {
   let cache = match
-    @damage_cache.open_or_init(
-      resolve_damage_cache_path(),
-      pkdx_version,
-      @migrate.combined_migration_fingerprint(),
-    ) {
+    @damage_cache.open_or_init(resolve_damage_cache_path(), pkdx_version) {
     Ok(c) => c
     Err(e) => {
       exit_error("damage_cache open failed: " + e)
@@ -527,7 +525,7 @@ fn run_damage_bench(
       return
     }
   }
-  with_db(fn(db) {
+  with_db(version=version, fn(db) {
     let atk_p = match @db.query_pokemon(db, attacker_name, version) {
       Ok(p) => p
       Err(e) => {
@@ -673,15 +671,223 @@ fn cmd_convert() -> @admiral.CommandDef {
 }
 
 ///|
+/// `pkdx db init` — Champions マスターデータの中間 JSON を champout
+/// submodule から再生成する。実行は champout 更新時の開発者作業のみで、
+/// 通常のフォークユーザーが setup で走らせる必要はない。
+///
+/// 入力 (デフォルトパス):
+///   `<repo_root>/champout/{masterdata,rom-txt/jpn}/`
+/// 出力:
+///   `<repo_root>/pkdx_patch/{009_champions_pokemon, 010_champions_moves,
+///                            011_champions_learnset, 012_items}/data.json`
+fn cmd_db() -> @admiral.CommandDef {
+  @admiral.command(
+    name="db",
+    description="Champions DB build/init commands",
+    subcommands=[
+      @admiral.command(
+        name="init",
+        description="Regenerate intermediate JSON from champout submodule",
+        options=[
+          @admiral.string(
+            "champout",
+            description="Path to champout submodule (default: <repo_root>/champout)",
+            default=Some(""),
+          ),
+          @admiral.string(
+            "out",
+            description="Output root for intermediate JSON (default: <repo_root>/pkdx_patch)",
+            default=Some(""),
+          ),
+          @admiral.string(
+            "repo-root",
+            description="Project root used to resolve default paths",
+            default=Some("."),
+          ),
+        ],
+        run=Some(fn(ctx) {
+          let repo_root = ctx_str(ctx, "repo-root")
+          let champout_arg = ctx_str_opt(ctx, "champout")
+          let out_arg = ctx_str_opt(ctx, "out")
+          let champout_dir = if champout_arg.length() == 0 {
+            repo_root + "/champout"
+          } else {
+            champout_arg
+          }
+          let out_dir = if out_arg.length() == 0 {
+            repo_root + "/pkdx_patch"
+          } else {
+            out_arg
+          }
+          run_db_init(champout_dir, out_dir)
+        }),
+      ),
+    ],
+  )
+}
+
+///|
+fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
+  // 1. ラベルファイル一括ロード
+  let bundle = match @champout_adapter.load_label_bundle(champout_dir) {
+    Err(e) => {
+      exit_error("label bundle load failed: " + e)
+      return
+    }
+    Ok(b) => b
+  }
+  // 2. masterdata 4 ファイルをパース
+  let masterdata = champout_dir + "/masterdata"
+  let personal_json = match read_json(masterdata + "/personal.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  let waza_json = match read_json(masterdata + "/waza.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  let waza_learn_json = match read_json(masterdata + "/waza_learn.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  let item_json = match read_json(masterdata + "/item.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  // 3. mapper 実行
+  let pokemons = match @champout_adapter.map_pokemon_entries(
+      bundle, personal_json,
+    ) {
+    Err(e) => {
+      exit_error("pokemon mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  let moves = match @champout_adapter.map_move_entries(bundle, waza_json) {
+    Err(e) => {
+      exit_error("move mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  // valid_ids: pokemon_mapper の出力 id 集合 (= is_valid='1' で絞った後)
+  let valid_ids : Map[String, Bool] = Map::new()
+  for i = 0; i < pokemons.length(); i = i + 1 {
+    valid_ids[pokemons[i].id] = true
+  }
+  let learnsets = match @champout_adapter.map_learnset_entries(
+      bundle, waza_learn_json, valid_ids,
+    ) {
+    Err(e) => {
+      exit_error("learnset mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  let items = match @champout_adapter.map_item_entries(bundle, item_json) {
+    Err(e) => {
+      exit_error("item mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  // 4. シリアライズ + ファイル書き出し
+  let pokemon_path = out_dir + "/009_champions_pokemon/data.json"
+  let move_path = out_dir + "/010_champions_moves/data.json"
+  let learnset_path = out_dir + "/011_champions_learnset/data.json"
+  let item_path = out_dir + "/012_items/data.json"
+  match write_intermediate(
+      pokemon_path,
+      @champions_schema.serialize_pokemon_entries(pokemons),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  match write_intermediate(
+      move_path, @champions_schema.serialize_move_entries(moves),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  match write_intermediate(
+      learnset_path,
+      @champions_schema.serialize_learnset_entries(learnsets),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  match write_intermediate(
+      item_path, @champions_schema.serialize_item_entries(items),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  println(
+    "pkdx db init: wrote " +
+    pokemons.length().to_string() +
+    " pokemon, " +
+    moves.length().to_string() +
+    " moves, " +
+    learnsets.length().to_string() +
+    " learnset rows, " +
+    items.length().to_string() +
+    " items.",
+  )
+}
+
+///|
+fn read_json(path : String) -> Result[Json, String] {
+  let raw = match @db.read_file(path) {
+    None => return Err("file not found: " + path)
+    Some(s) => s
+  }
+  try Ok(@json.parse(raw)) catch {
+    e => Err("JSON parse failed at " + path + ": " + e.to_string())
+  }
+}
+
+///|
+fn write_intermediate(path : String, json : Json) -> Result[Unit, String] {
+  let content = json.stringify(indent=2) + "\n"
+  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(content))
+  if rc == 0 {
+    Ok(())
+  } else {
+    Err("write_file failed (rc=" + rc.to_string() + "): " + path)
+  }
+}
+
+///|
 fn run_cache_clear_damage() -> Unit {
   // open_or_init will create an empty DB if the file is missing, which
   // keeps the command idempotent.
   let cache = match
-    @damage_cache.open_or_init(
-      resolve_damage_cache_path(),
-      pkdx_version,
-      @migrate.combined_migration_fingerprint(),
-    ) {
+    @damage_cache.open_or_init(resolve_damage_cache_path(), pkdx_version) {
     Ok(c) => c
     Err(e) => {
       exit_error("damage_cache open failed: " + e)
@@ -764,16 +970,12 @@ fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Uni
 fn cmd_migrate() -> @admiral.CommandDef {
   @admiral.command(
     name="migrate",
-    description="Apply pkdx_patch migrations to pokedex.db (replaces apply.rb)",
+    description="Apply pkdx_patch migrations to pokedex.db / champions.db",
     options=[
       @admiral.string(
         "repo-root",
         description="Repo root (defaults to CWD)",
         default=Some(""),
-      ),
-      @admiral.bool(
-        "resync",
-        description="Clear bookkeeping and re-apply every migration; use after pulling data.json edits",
       ),
     ],
     run=Some(fn(ctx) {
@@ -781,14 +983,13 @@ fn cmd_migrate() -> @admiral.CommandDef {
         let r = ctx_str(ctx, "repo-root")
         if r.length() > 0 { r } else { "." }
       }
-      let resync = ctx.get_bool("resync")
-      run_migrate(repo_root, resync)
+      run_migrate(repo_root)
     }),
   )
 }
 
 ///|
-fn run_migrate(repo_root : String, resync : Bool) -> Unit {
+fn run_migrate(repo_root : String) -> Unit {
   let db_path = match @sys.get_env_var("POKEDEX_DB") {
     Some(p) => p
     None => repo_root + "/pokedex/pokedex.db"
@@ -806,10 +1007,10 @@ fn run_migrate(repo_root : String, resync : Bool) -> Unit {
       Ok(db) => @db.close(db)
     }
   }
-  // Stage 1: pokedex.db migrations (001/002/003/005/006-012)
+  // Stage 1: pokedex.db migrations
   let pokedex_report = match
     @migrate.run_for(
-      db_path, repo_root, migrations=@migrate.migrations_pokedex(), resync~,
+      db_path, repo_root, migrations=@migrate.migrations_pokedex(),
     ) {
     Err(e) => {
       exit_error("pokedex migrations: " + e)
@@ -817,13 +1018,12 @@ fn run_migrate(repo_root : String, resync : Bool) -> Unit {
     }
     Ok(r) => r
   }
-  // Stage 2: champions.db migrations (004 today; #94 items lands here)
+  // Stage 2: champions.db migrations
   let champions_report = match
     @migrate.run_for(
       champions_path,
       repo_root,
       migrations=@migrate.migrations_champions(),
-      resync~,
     ) {
     Err(e) => {
       exit_error("champions migrations: " + e)
@@ -837,12 +1037,7 @@ fn run_migrate(repo_root : String, resync : Bool) -> Unit {
   // SQLite DB purely as a side effect of running migrations.
   let cache_path = resolve_damage_cache_path()
   if @db.file_exists(cache_path) {
-    match
-      @damage_cache.sync_meta_after_migrate(
-        cache_path,
-        pkdx_version,
-        @migrate.combined_migration_fingerprint(),
-      ) {
+    match @damage_cache.sync_meta_after_migrate(cache_path, pkdx_version) {
       Ok(_) => ()
       Err(e) =>
         pkdx_eprintln(
@@ -856,13 +1051,9 @@ fn run_migrate(repo_root : String, resync : Bool) -> Unit {
   println(
     "pkdx_patch: pokedex " +
     pokedex_report.applied.to_string() +
-    " applied / " +
-    pokedex_report.skipped.to_string() +
-    " skipped, champions " +
+    " applied, champions " +
     champions_report.applied.to_string() +
-    " applied / " +
-    champions_report.skipped.to_string() +
-    " skipped",
+    " applied",
   )
 }
 
@@ -1364,41 +1555,44 @@ fn[T] with_db(f : (@db.Db) -> T, version~ : String = "") -> T {
       panic()
     }
   }
-  let db = match @db.open(db_path) {
-    Ok(d) => d
-    Err(e) => {
-      println("Error: " + e)
-      panic()
-    }
-  }
-  match @db.validate_schema(db) {
-    Ok(_) => ()
-    Err(e) => {
-      println("Error: " + e)
-      @db.close(db)
-      panic()
-    }
-  }
-  if version == "champions" {
+  // version="champions" は新スキーマ (champions.db を main、pokedex.db を
+  // attach AS pokedex) で開く。それ以外は従来通り pokedex.db のみ。
+  // `validate_schema` は pokedex.db のテーブルを前提とするため、Champions
+  // 経路では呼び出さない (pokedex 側のテーブルは pokedex.* でアクセス可能)。
+  let db = if version == "champions" {
     let champions_path = resolve_champions_db_path_from(db_path)
-    if @db.file_exists(champions_path) {
-      match @db.attach_champions(db, champions_path) {
-        Ok(_) => ()
-        Err(e) => {
-          println("Error: failed to attach champions.db: " + e)
-          @db.close(db)
-          panic()
-        }
-      }
-    } else {
+    if not(@db.file_exists(champions_path)) {
       println(
         "Error: champions.db not found at " +
         champions_path +
         " — run ./setup.sh after the platform refactor lands.",
       )
-      @db.close(db)
       panic()
     }
+    match @db.open_for(db_path, "champions") {
+      Ok(d) => d
+      Err(e) => {
+        println("Error: " + e)
+        panic()
+      }
+    }
+  } else {
+    let d = match @db.open(db_path) {
+      Ok(d) => d
+      Err(e) => {
+        println("Error: " + e)
+        panic()
+      }
+    }
+    match @db.validate_schema(d) {
+      Ok(_) => ()
+      Err(e) => {
+        println("Error: " + e)
+        @db.close(d)
+        panic()
+      }
+    }
+    d
   }
   let result = f(db)
   @db.close(db)
@@ -1420,7 +1614,7 @@ fn run_query(
   game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     match @db.query_pokemon(db, name, game.version) {
       Ok(p) => println(@cli.format_pokemon(p, format))
       Err(e) => println("Error: " + e)
@@ -1463,7 +1657,7 @@ fn run_search(
   game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     match @db.search_by_type(db, type1, type2, min_speed, game.version) {
       Ok(results) => {
         let filtered = if game.regulation != "" {
@@ -1727,11 +1921,7 @@ fn run_damage(
   let cache_opt : @damage_cache.DamageDiskCache? = match cache_key_opt {
     Some(_) =>
       match
-        @damage_cache.open_or_init(
-          resolve_damage_cache_path(),
-          pkdx_version,
-          @migrate.combined_migration_fingerprint(),
-        ) {
+        @damage_cache.open_or_init(resolve_damage_cache_path(), pkdx_version) {
         Ok(c) => Some(c)
         Err(e) => {
           pkdx_eprintln(
@@ -1754,7 +1944,7 @@ fn run_damage(
       }
     _ => ()
   }
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     let atk_pokemon = match @db.query_pokemon(db, attacker_name, game.version) {
       Ok(p) => p
       Err(e) => {
@@ -2276,7 +2466,7 @@ fn run_stat_calc(
       println("Error: Total SP must be ≤ 66, got " + total.to_string())
       return
     }
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let stats = @damage.calc_all_stats_champions(pokemon, sps, nature)
@@ -2292,7 +2482,7 @@ fn run_stat_calc(
   } else {
     let evs = @cli.parse_csv_ints(evs_str, 0, 6)
     let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let stats = @damage.calc_all_stats(pokemon, ivs, evs, nature)
@@ -2321,7 +2511,7 @@ fn run_stat_reverse(
   if stats_str.length() > 0 {
     // Pokemon mode
     let actual_stats = @cli.parse_csv_ints(stats_str, 0, 6)
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, target, game.version) {
         Ok(pokemon) => {
           if is_champ {
@@ -2451,7 +2641,7 @@ fn run_hbd(
       )
       return
     }
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let result = if top <= 1 {
@@ -2474,7 +2664,7 @@ fn run_hbd(
     })
   } else {
     let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let result = if top <= 1 {
@@ -2642,11 +2832,7 @@ fn run_select_cmd() -> Unit {
   // `run_select` can reuse 16-roll results from previous nash sessions.
   // Failure to open is non-fatal — we just fall back to L1-only behavior.
   let disk = match
-    @damage_cache.open_or_init(
-      resolve_damage_cache_path(),
-      pkdx_version,
-      @migrate.combined_migration_fingerprint(),
-    ) {
+    @damage_cache.open_or_init(resolve_damage_cache_path(), pkdx_version) {
     Ok(c) => Some(c)
     Err(e) => {
       pkdx_eprintln(

@@ -26,7 +26,7 @@ CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、
     - `イダイトウ（オス）` / `イダイトウ（メス）` (DB の正準形)
     - `Basculegion (Male)` / `Basculegion (Female)` (英名)
     - 性別未指定の `イダイトウ` は M base の値 (= ♂側) を返す。これに依存して F 側の値を出してはならない
-    - ユーザー入力が `イダイトウ♂` / `イダイトウ♀` (yakkun.com / ゲーム内表記) で来た場合は `♂ → （オス）` / `♀ → （メス）` に正規化してから `pkdx query` する。`♂` / `♀` 表記は DB に登録されていない
+    - ユーザー入力が `イダイトウ♂` / `イダイトウ♀` (ゲーム内表記) で来た場合は `♂ → （オス）` / `♀ → （メス）` に正規化してから `pkdx query` する。`♂` / `♀` 表記は DB に登録されていない
 
 ## Setup
 
@@ -88,11 +88,19 @@ pkdx/                     # MoonBit CLI ツール (native binary)
       screened_switching_game.mbt  # MC screening → SwitchingGame refine パイプライン
       team_payoff.mbt       # 選出 (k-combination) ディスパッチ
       cli_nash.mbt, cli_select.mbt, cli_meta.mbt  # JSON/DOT ハンドラ
-    migrate/               # pkdx_patch マイグレーションランナー
-      runner.mbt            # pkdx_migrations 管理 + トランザクション + 順次適用
-      migrations.mbt        # 登録配列 (001〜012)
+    migrate/               # pkdx_patch マイグレーションランナー (2-stage, bookkeeping なし)
+      runner.mbt            # トランザクション + 順次適用 (pokedex.db / champions.db 別々)
+      migrations.mbt        # 登録配列 (migrations_pokedex / migrations_champions / 互換用 migrations)
       json_util.mbt         # Json アクセサ
-      m001_mega_legendsza.mbt 〜 m012_gender_symbol_aliases.mbt
+      m001-m007             # pokedex.db ターゲット (mega_legendsza → move_meta → mega_forms → ailment → posthit → form_name_aliases → gender_symbol_aliases)
+      m008-m012             # champions.db ターゲット (init_schema → pokemon → moves → learnset → items)
+    champions_schema/      # champions.db のスキーマ宣言 (DDL / 型 / parse / serialize)
+      ddl.mbt, types.mbt, validate.mbt, serialize.mbt
+    champout_adapter/      # champout (= projectpokemon/champout submodule) → 中間 JSON アダプター
+      label_index.mbt       # rom-txt/jpn の OriginalText 解決 (typename / tokusei / monsname / wazaname / itemname / zkn_form)
+      resolve.mbt           # ID → 名前変換 (type の Index 9 欠番対応含む)
+      pokemon_mapper.mbt    # personal.json → PokemonEntry (fo='0' は base 形態として form='' に正規化)
+      move_mapper.mbt, learnset_mapper.mbt, item_mapper.mbt
 
 bin/
   pkdx                    # Unix用ラッパースクリプト (ローカルビルド優先)
@@ -128,21 +136,60 @@ box/                      # ユーザーデータ出力先（フォーク先でg
     SKILL.md              # site/配下のブログ情報を管理するスキル
 
 pokedex/                  # git submodule (towakey/pokedex)
-  pokedex.db              # SQLiteデータベース（生成が必要）
-  er.md                   # DB ER図
+  pokedex.db              # SQLiteデータベース (生成が必要、共有 upstream スキーマ)
+  champions.db            # Champions 専用 DB (sibling、`pkdx migrate` が自動生成)
+  er.md                   # pokedex.db の ER 図
+
+champout/                 # git submodule (projectpokemon/champout) — Champions 入力ソース。setup.sh が init
+  masterdata/             # personal.json / waza.json / waza_array.json / item.json
+  rom-txt/jpn/            # OriginalText ラベル (typename / tokusei / monsname / wazaname / itemname / zkn_form_syn)
+
 site/
   src/                    # GitHub PagesへデプロイされるAstro製のブログ
 ```
 
 ## Database Notes
 
-- `pokedex.db` のテーブル群は `globalNo` + フォーム識別カラム（`form`, `region`, `mega_evolution`, `gigantamax`）で結合する
+データは **2 つの SQLite ファイル** に分かれて格納される:
+
+- `pokedex/pokedex.db` — towakey/pokedex submodule 由来の **共有** DB。`scarlet_violet` 等のレギュレーションがここに入る
+- `pokedex/champions.db` — `champions` レギュレーション専用の **sibling** DB。`pkdx migrate` が自動生成し、`open_for(path, "champions")` が pokedex.db を ATTACH して open する
+
+### pokedex.db (共有スキーマ)
+
+- テーブル群は `globalNo` + フォーム識別カラム（`form`, `region`, `mega_evolution`, `gigantamax`）で結合する
 - 通常フォームの取得には `COALESCE(form, '') = ''` 等の条件が必要（NULL/空文字が混在）
 - `local_pokedex_*` テーブルの `version` は小文字スネーク（`scarlet_violet`）
 - `local_waza*` / `local_pokedex_waza*` テーブルの `version` は Mixed Case（`Scarlet_Violet`）— pkdx 内部で自動変換
 - タイプ名は日本語（`ほのお`, `みず` 等）
 - `globalNo` はゼロ埋め4桁（`0445`）— pkdx は入力を自動正規化
-- `pkdx_patch/NNN_name/data.json` にパッチデータを置き、マイグレーションロジックは `pkdx/src/migrate/mNNN_*.mbt` で実装する。`setup.sh` Step 3.5 が `pkdx migrate` を呼び出し、pokedex.db へ順次適用する。pkdx バイナリ内蔵 SQLite3 で完結するため Ruby / sqlite3 gem は不要（cc on the web 等のコンテナでも動作）。パッチは冪等（`pkdx_migrations` テーブルで適用済み管理）
+
+### champions.db (Champions 専用スキーマ)
+
+- 7 テーブル: `pokemon` / `pokemon_name` / `move` / `move_name` / `learnset` / `items` / `item_effect` (+ 3 index)
+- 主キー `pokemon.id` = `<globalNo:4><form:3>` の 7 桁文字列 (例: `0959000` = デカヌチャン base)
+- `region` / `mega_evolution` / `gigantamax` カラム廃止 → `form` 1 カラムに統合 (空文字 = base、それ以外は表示名 e.g. `メガリザードンＸ`)
+- 名前は `pokemon_name (id, language='jpn', name)` に分離 (現状 jpn のみ。別言語の追加は後続)
+- `learnset (id, conditions, waza)` は champout 由来のため経路情報を持たず、conditions は全て `'基本'`
+
+### マイグレーション
+
+- `pkdx_patch/NNN_name/data.json` に中間 JSON、ロジックは `pkdx/src/migrate/mNNN_*.mbt`
+- ランナーは **2-stage**: `migrations_pokedex()` が pokedex.db に、`migrations_champions()` が champions.db に対して順次適用する。`pkdx migrate` は両方を一度に流す
+- `setup.sh` Step 3.5 が `pkdx db init` で `pkdx_patch/{009..012}/data.json` を champout から再生成 → `champions.db` を rm → `pkdx migrate --repo-root` の順で実行する。毎回 fresh から再構築されるので、pokedex.db / champions.db にユーザーランタイムの書き込みは存在しない（damage cache は別ファイル `box/cache/damage_cache.sqlite`）。pokedex.db は upstream submodule 管理 — 完全に作り直したい場合は `rm pokedex/pokedex.db && ./setup.sh`
+- bookkeeping は廃止済み。各 migration は冪等（DELETE → 再投入 / INSERT OR REPLACE / existence-check / ALTER TABLE は ensure_column）として実装されており、何度流しても data.json の状態へ収束する
+
+### Champions 中間 JSON の生成
+
+`pkdx_patch/{009_champions_pokemon, 010_champions_moves, 011_champions_learnset, 012_items}/data.json` は **commit せず** (`.gitignore`)、`setup.sh` 実行時に毎回ローカル生成する。これでフォーク間で champout 由来のデータ (~9MB) が複製されず、repo size を抑えられる。エンドユーザーも champout submodule の init とローカル生成を行うため、ネットワーク前提の運用となる。
+
+手動で再生成したい場合 (champout を先頭に追従させた等):
+
+```bash
+git submodule update --remote champout
+bin/pkdx db init --champout ./champout --out ./pkdx_patch --repo-root .
+bin/pkdx migrate --repo-root .
+```
 
 ## Champions SP (Stat Points) システム
 

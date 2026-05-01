@@ -2,7 +2,7 @@
 /// move_meta に状態異常サポート列 (ailment_ja, ailment_chance) を
 /// 追加し、data.json のエントリで埋める。
 /// 冪等性: 既存カラムは PRAGMA table_info で検出してスキップ。
-pub fn run_008(db : @db.Db, repo_root : String) -> Result[String, String] {
+pub fn run_004(db : @db.Db, repo_root : String) -> Result[String, String] {
   match ensure_column(db, "move_meta", "ailment_ja",
       "ALTER TABLE move_meta ADD COLUMN ailment_ja TEXT NOT NULL DEFAULT ''") {
     Err(e) => return Err(e)
@@ -13,7 +13,7 @@ pub fn run_008(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
-  let path = repo_root + "/pkdx_patch/008_move_meta_ailment/data.json"
+  let path = repo_root + "/pkdx_patch/004_move_meta_ailment/data.json"
   let raw = match @db.read_file(path) {
     Some(s) => s
     None => return Err(path + " not found.")

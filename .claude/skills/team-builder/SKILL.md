@@ -332,10 +332,8 @@ $PKDX query "ピカチュウ" --format json >/dev/null 2>&1 && echo "OK" || echo
 
 NOT_FOUNDの場合、以下を案内して**スキルを終了**:
 ```
-pkdx CLIまたはpokedex DBが見つかりません。リポジトリルートで以下を実行してください:
-  git submodule update --init
-  cd pokedex && ruby tools/import_db.rb
-  cd pkdx && moon build --target native
+pkdx CLI または pokedex.db / champions.db が見つかりません。リポジトリルートで以下を実行してください:
+  ./setup.sh
 ```
 
 ### 0-2: 参照データ読み込み

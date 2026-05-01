@@ -3,7 +3,7 @@
 /// the type-changing skin (Pixilate / Aerilate / Refrigerate / Galvanize)
 /// applies 1.2x to base power BEFORE damage calculation, not as a
 /// post-STAB damage modifier. Reference values cross-checked against
-/// Pokemon Showdown / yakkun damage calculator.
+/// Pokemon Showdown.
 
 ///|
 test "ate skin: フェアリースキン on ハイパーボイス matches Showdown rolls" {

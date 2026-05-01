@@ -1,10 +1,17 @@
 ///|
 /// Query a Pokemon by name (Japanese or English).
+///
+/// version="champions" のときは新スキーマ (champions.db.pokemon /
+/// pokemon_name) ルートに delegate する。それ以外の version は従来の
+/// pokedex.db ベースの JOIN を使う。
 pub fn query_pokemon(
   db : Db,
   name : String,
   version : String,
 ) -> Result[@model.Pokemon, String] {
+  if version == "champions" {
+    return query_champions_pokemon(db, name)
+  }
   // pokedex_name には base 行に加えて、011_form_name_aliases / 012_gender_symbol_aliases
   // で生成されたフォーム/性別別名 (ウォッシュロトム / キュウコン（アローラ） /
   // イダイトウ（オス） / Basculegion (Male) 等) が入っている。alias 行は

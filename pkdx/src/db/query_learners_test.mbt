@@ -38,13 +38,9 @@ test "query_learners: じしん scarlet_violet" {
 ///|
 /// だいちのちから (champions) — パッチ適用済み環境で champions 版の技データが動作すること。
 test "query_learners: だいちのちから champions" {
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_learners(db, "だいちのちから", "champions")
   close(db)

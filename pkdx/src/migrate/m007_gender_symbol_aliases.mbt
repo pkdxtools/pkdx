@@ -29,7 +29,7 @@
 ///
 /// Resync 安全性: 先頭で `pokedex_name.name LIKE '%（オス）' OR LIKE '% (Male)'`
 /// を一括 DELETE する。これらの suffix は本 migration 以外で使われない。
-pub fn run_012(db : @db.Db, _repo_root : String) -> Result[String, String] {
+pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
   match @db.exec(
       db,
       "DELETE FROM pokedex_name WHERE name LIKE '%（オス）' OR name LIKE '% (Male)'",

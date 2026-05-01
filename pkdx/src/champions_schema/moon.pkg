@@ -1,0 +1,11 @@
+import {
+  "pkdxtools/pkdx/src/db",
+}
+
+import {
+  "moonbitlang/core/json",
+} for "test"
+
+options(
+  "supported-targets": "native",
+)

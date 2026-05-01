@@ -15,8 +15,8 @@ Claude Code / Codex と対話しながらチームを組んだり、ポケモン
 
 ## 対応バージョン
 
-ポケモンに関するデータは https://github.com/towakey/pokedex/ を用いています。
-一部チャンピオンズに対応するため徹底攻略データを追加しています(技、メガポケモン)
+- 共有データ (`scarlet_violet` など): https://github.com/towakey/pokedex/
+- Champions レギュレーション: https://github.com/projectpokemon/champout/ を入力ソースとして使用
 
 ## セットアップ
 

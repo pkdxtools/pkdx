@@ -148,10 +148,8 @@ $PKDX query "ピカチュウ" --format json >/dev/null 2>&1 && echo "OK" || echo
 
 NOT_FOUNDの場合、以下を案内して**スキルを終了**:
 ```
-pkdx CLIまたはpokedex DBが見つかりません。リポジトリルートで以下を実行してください:
-  git submodule update --init
-  cd pokedex && ruby tools/import_db.rb
-  cd pkdx && moon build --target native
+pkdx CLI または pokedex.db / champions.db が見つかりません。リポジトリルートで以下を実行してください:
+  ./setup.sh
 ```
 
 ### 0-2: バージョン選択
@@ -207,7 +205,7 @@ $PKDX query "<ポケモン名>" --version "<version>" --format json
 - 戦闘面で base と完全に同じフォーム (トリミアン毛型・ビビヨン模様・フラベベ花色・Unown 文字・マホイップ flavor 等) は `forms[]` に現れない。これらは原種として扱って問題ない
 - 該当 version にそのフォームが実在しない場合は `forms[]` からも除外される (例: Champions にはランドロス（れいじゅう）未収録)
 - メガシンカも form の一種として `forms[]` に含まれる (`メガガブリアス` 等)。メガ名で query するとメガ進化後の type/ability/stats が得られる
-- **性別でステータス・タイプ・特性が異なる種** (イダイトウ / イエッサン / パフュートン / ニャオニクス) は性別を明示する: jpn `イダイトウ（オス）` / `イダイトウ（メス）`、eng `Basculegion (Male)` / `Basculegion (Female)`。性別未指定の `イダイトウ` は M base を返すため、F 個体を育成する際は必ず `（メス）` 付きで照合する。ユーザー入力が `イダイトウ♂` / `イダイトウ♀` (yakkun.com / ゲーム内表記) で来た場合は `♂ → （オス）` / `♀ → （メス）` に正規化してから query する
+- **性別でステータス・タイプ・特性が異なる種** (イダイトウ / イエッサン / パフュートン / ニャオニクス) は性別を明示する: jpn `イダイトウ（オス）` / `イダイトウ（メス）`、eng `Basculegion (Male)` / `Basculegion (Female)`。性別未指定の `イダイトウ` は M base を返すため、F 個体を育成する際は必ず `（メス）` 付きで照合する。ユーザー入力が `イダイトウ♂` / `イダイトウ♀` (ゲーム内表記) で来た場合は `♂ → （オス）` / `♀ → （メス）` に正規化してから query する
 
 **結果が空の場合**:
 

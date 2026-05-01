@@ -35,8 +35,15 @@ pub(all) struct PokemonEntry {
 } derive(Show, Eq)
 
 ///|
-/// Champions 技エントリ。`003_champions_moves/data.json` の各要素。
+/// Champions 技エントリ。`010_champions_moves/data.json` の各要素。
 /// pp / power / accuracy が String なのは `"-"` (該当なし) を含むため。
+/// `direct` は接触フラグ (1 = 接触 / 0 = 非接触)。`target` は range enum
+/// (champout 由来の整数文字列):
+///   0  単体 / 1-2  味方単体 / 4  自分以外全体 / 5  相手全体 / 6  味方全体
+///   7  自分 / 8  全員 / 9  ランダム相手 / 10 フィールド全体
+///   11 敵側設置 / 12 味方側設置 / 13 カウンター系 / 14 隣接味方
+/// `direct` / `target` ともに champout `masterdata/waza.json` の同名
+/// フィールドをそのまま転記する。
 pub(all) struct MoveEntry {
   waza : String
   type_ : String
@@ -44,6 +51,8 @@ pub(all) struct MoveEntry {
   pp : String
   power : String
   accuracy : String
+  direct : String
+  target : String
 } derive(Show, Eq)
 
 ///|

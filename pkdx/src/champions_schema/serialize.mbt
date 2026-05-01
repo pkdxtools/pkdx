@@ -39,6 +39,8 @@ fn move_to_json(e : MoveEntry) -> Json {
     "pp": e.pp.to_json(),
     "power": e.power.to_json(),
     "accuracy": e.accuracy.to_json(),
+    "direct": e.direct.to_json(),
+    "target": e.target.to_json(),
   }
 }
 

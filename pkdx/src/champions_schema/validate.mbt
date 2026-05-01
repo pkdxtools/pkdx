@@ -187,9 +187,35 @@ pub fn parse_move_entries(json : Json) -> Result[Array[MoveEntry], String] {
       Err(e) => return Err(e)
       Ok(s) => s
     }
-    out.push({ waza, type_: ty, category, pp, power, accuracy })
+    // direct / target は champout 由来の追加フィールド。後方互換のため
+    // 欠落時は "0" にフォールバック (旧フォーマットの中間 JSON で読み戻し
+    // を壊さない)。
+    let direct = obj_str_with_default(m, "direct", "0")
+    let target = obj_str_with_default(m, "target", "0")
+    out.push({
+      waza,
+      type_: ty,
+      category,
+      pp,
+      power,
+      accuracy,
+      direct,
+      target,
+    })
   }
   Ok(out)
+}
+
+///|
+fn obj_str_with_default(
+  obj : Map[String, Json],
+  key : String,
+  default : String,
+) -> String {
+  match obj.get(key) {
+    Some(String(s)) => s
+    _ => default
+  }
 }
 
 ///|

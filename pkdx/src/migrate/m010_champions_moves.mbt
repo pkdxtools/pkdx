@@ -27,7 +27,7 @@ pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
     let e = entries[i]
     match @db.exec_binds(
         db,
-        "INSERT INTO move (waza, type, category, pp, power, accuracy) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO move (waza, type, category, pp, power, accuracy, direct, target) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
           @db.BindText(e.waza),
           @db.BindText(e.type_),
@@ -35,6 +35,8 @@ pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
           @db.BindText(e.pp),
           @db.BindText(e.power),
           @db.BindText(e.accuracy),
+          @db.BindText(e.direct),
+          @db.BindText(e.target),
         ],
       ) {
       Err(err) => return Err(err)

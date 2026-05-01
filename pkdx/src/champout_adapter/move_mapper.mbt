@@ -72,7 +72,24 @@ pub fn map_move_entries(
       _ => "0"
     }
     let accuracy = if accuracy_raw == "0" { "-" } else { accuracy_raw }
-    out.push({ waza, type_, category, pp, power, accuracy })
+    let direct = match m.get("direct") {
+      Some(String(s)) => s
+      _ => "0"
+    }
+    let target = match m.get("target") {
+      Some(String(s)) => s
+      _ => "0"
+    }
+    out.push({
+      waza,
+      type_,
+      category,
+      pp,
+      power,
+      accuracy,
+      direct,
+      target,
+    })
   }
   Ok(out)
 }

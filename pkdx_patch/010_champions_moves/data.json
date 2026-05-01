@@ -5,7 +5,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ほのおのパンチ",
@@ -13,7 +15,9 @@
     "category": "物理",
     "pp": "16",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "れいとうパンチ",
@@ -21,7 +25,9 @@
     "category": "物理",
     "pp": "16",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "かみなりパンチ",
@@ -29,7 +35,9 @@
     "category": "物理",
     "pp": "16",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ハサミギロチン",
@@ -37,7 +45,9 @@
     "category": "物理",
     "pp": "8",
     "power": "1",
-    "accuracy": "30"
+    "accuracy": "30",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "つるぎのまい",
@@ -45,7 +55,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ふきとばし",
@@ -53,7 +65,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "そらをとぶ",
@@ -61,7 +75,9 @@
     "category": "物理",
     "pp": "16",
     "power": "90",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "しめつける",
@@ -69,7 +85,9 @@
     "category": "物理",
     "pp": "20",
     "power": "15",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "メガトンキック",
@@ -77,7 +95,9 @@
     "category": "物理",
     "pp": "8",
     "power": "120",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "つのドリル",
@@ -85,7 +105,9 @@
     "category": "物理",
     "pp": "8",
     "power": "1",
-    "accuracy": "30"
+    "accuracy": "30",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "のしかかり",
@@ -93,7 +115,9 @@
     "category": "物理",
     "pp": "16",
     "power": "85",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "まきつく",
@@ -101,7 +125,9 @@
     "category": "物理",
     "pp": "20",
     "power": "15",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "あばれる",
@@ -109,7 +135,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "9"
   },
   {
     "waza": "すてみタックル",
@@ -117,7 +145,9 @@
     "category": "物理",
     "pp": "16",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ミサイルばり",
@@ -125,7 +155,9 @@
     "category": "物理",
     "pp": "20",
     "power": "25",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "かみつく",
@@ -133,7 +165,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ほえる",
@@ -141,7 +175,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "うたう",
@@ -149,7 +185,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "55"
+    "accuracy": "55",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "かなしばり",
@@ -157,7 +195,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "かえんほうしゃ",
@@ -165,7 +205,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ハイドロポンプ",
@@ -173,7 +215,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "110",
-    "accuracy": "80"
+    "accuracy": "80",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "なみのり",
@@ -181,7 +225,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "れいとうビーム",
@@ -189,7 +235,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ふぶき",
@@ -197,7 +245,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "110",
-    "accuracy": "70"
+    "accuracy": "70",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "はかいこうせん",
@@ -205,7 +255,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "150",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ドリルくちばし",
@@ -213,7 +265,9 @@
     "category": "物理",
     "pp": "20",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "けたぐり",
@@ -221,7 +275,9 @@
     "category": "物理",
     "pp": "20",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "カウンター",
@@ -229,7 +285,9 @@
     "category": "物理",
     "pp": "20",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "13"
   },
   {
     "waza": "ちきゅうなげ",
@@ -237,7 +295,9 @@
     "category": "物理",
     "pp": "20",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "やどりぎのタネ",
@@ -245,7 +305,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "せいちょう",
@@ -253,7 +315,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ソーラービーム",
@@ -261,7 +325,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "どくのこな",
@@ -269,7 +335,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "しびれごな",
@@ -277,7 +345,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ねむりごな",
@@ -285,7 +355,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はなびらのまい",
@@ -293,7 +365,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "9"
   },
   {
     "waza": "いとをはく",
@@ -301,7 +375,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "ほのおのうず",
@@ -309,7 +385,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "35",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "１０まんボルト",
@@ -317,7 +395,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "でんじは",
@@ -325,7 +405,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "かみなり",
@@ -333,7 +415,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "110",
-    "accuracy": "70"
+    "accuracy": "70",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "じしん",
@@ -341,7 +425,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "じわれ",
@@ -349,7 +435,9 @@
     "category": "物理",
     "pp": "8",
     "power": "1",
-    "accuracy": "30"
+    "accuracy": "30",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "あなをほる",
@@ -357,7 +445,9 @@
     "category": "物理",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "どくどく",
@@ -365,7 +455,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "サイコキネシス",
@@ -373,7 +465,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "さいみんじゅつ",
@@ -381,7 +475,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "60"
+    "accuracy": "60",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "こうそくいどう",
@@ -389,7 +485,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "でんこうせっか",
@@ -397,7 +495,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ナイトヘッド",
@@ -405,7 +505,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "いやなおと",
@@ -413,7 +515,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "かげぶんしん",
@@ -421,7 +525,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "じこさいせい",
@@ -429,7 +535,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ちいさくなる",
@@ -437,7 +545,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "あやしいひかり",
@@ -445,7 +555,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ひかりのかべ",
@@ -453,7 +565,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "くろいきり",
@@ -461,7 +575,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "リフレクター",
@@ -469,7 +585,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "きあいだめ",
@@ -477,7 +595,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "じばく",
@@ -485,7 +605,9 @@
     "category": "物理",
     "pp": "8",
     "power": "200",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "だいもんじ",
@@ -493,7 +615,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "110",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "たきのぼり",
@@ -501,7 +625,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ドわすれ",
@@ -509,7 +635,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "タマゴうみ",
@@ -517,7 +645,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "とびひざげり",
@@ -525,7 +655,9 @@
     "category": "物理",
     "pp": "12",
     "power": "130",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "へびにらみ",
@@ -533,7 +665,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "きゅうけつ",
@@ -541,7 +675,9 @@
     "category": "物理",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ゴッドバード",
@@ -549,7 +685,9 @@
     "category": "物理",
     "pp": "8",
     "power": "140",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "へんしん",
@@ -557,7 +695,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "キノコのほうし",
@@ -565,7 +705,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "とける",
@@ -573,7 +715,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "クラブハンマー",
@@ -581,7 +725,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "だいばくはつ",
@@ -589,7 +735,9 @@
     "category": "物理",
     "pp": "8",
     "power": "250",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "ねむる",
@@ -597,7 +745,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "いわなだれ",
@@ -605,7 +755,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "トライアタック",
@@ -613,7 +765,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "いかりのまえば",
@@ -621,7 +775,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "みがわり",
@@ -629,7 +785,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "わるあがき",
@@ -637,7 +795,9 @@
     "category": "物理",
     "pp": "1",
     "power": "50",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "1",
+    "target": "9"
   },
   {
     "waza": "どろぼう",
@@ -645,7 +805,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "いびき",
@@ -653,7 +815,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "のろい",
@@ -661,7 +825,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "13"
   },
   {
     "waza": "じたばた",
@@ -669,7 +835,9 @@
     "category": "物理",
     "pp": "16",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "わたほうし",
@@ -677,7 +845,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "きしかいせい",
@@ -685,7 +855,9 @@
     "category": "物理",
     "pp": "16",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "うらみ",
@@ -693,7 +865,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "まもる",
@@ -701,7 +875,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "マッハパンチ",
@@ -709,7 +885,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "こわいかお",
@@ -717,7 +895,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "てんしのキッス",
@@ -725,7 +905,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はらだいこ",
@@ -733,7 +915,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ヘドロばくだん",
@@ -741,7 +925,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "どろかけ",
@@ -749,7 +935,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "20",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "まきびし",
@@ -757,7 +945,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "11"
   },
   {
     "waza": "でんじほう",
@@ -765,7 +955,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "120",
-    "accuracy": "50"
+    "accuracy": "50",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "みちづれ",
@@ -773,7 +965,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ほろびのうた",
@@ -781,7 +975,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "8"
   },
   {
     "waza": "こごえるかぜ",
@@ -789,7 +985,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "55",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "みきり",
@@ -797,7 +995,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ボーンラッシュ",
@@ -805,7 +1005,9 @@
     "category": "物理",
     "pp": "12",
     "power": "30",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ロックオン",
@@ -813,7 +1015,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "げきりん",
@@ -821,7 +1025,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "9"
   },
   {
     "waza": "すなあらし",
@@ -829,7 +1035,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "ギガドレイン",
@@ -837,7 +1045,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "こらえる",
@@ -845,7 +1055,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "あまえる",
@@ -853,7 +1065,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "いばる",
@@ -861,7 +1075,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ミルクのみ",
@@ -869,7 +1085,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "はがねのつばさ",
@@ -877,7 +1095,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "くろいまなざし",
@@ -885,7 +1105,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "メロメロ",
@@ -893,7 +1115,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ねごと",
@@ -901,7 +1125,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "いやしのすず",
@@ -909,7 +1135,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "6"
   },
   {
     "waza": "しんぴのまもり",
@@ -917,7 +1145,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "いたみわけ",
@@ -925,7 +1155,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ばくれつパンチ",
@@ -933,7 +1165,9 @@
     "category": "物理",
     "pp": "8",
     "power": "100",
-    "accuracy": "50"
+    "accuracy": "50",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "メガホーン",
@@ -941,7 +1175,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "バトンタッチ",
@@ -949,7 +1185,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "アンコール",
@@ -957,7 +1195,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "こうそくスピン",
@@ -965,7 +1205,9 @@
     "category": "物理",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "あまいかおり",
@@ -973,7 +1215,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "アイアンテール",
@@ -981,7 +1225,9 @@
     "category": "物理",
     "pp": "16",
     "power": "100",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "あさのひざし",
@@ -989,7 +1235,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "こうごうせい",
@@ -997,7 +1245,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "つきのひかり",
@@ -1005,7 +1255,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "クロスチョップ",
@@ -1013,7 +1265,9 @@
     "category": "物理",
     "pp": "8",
     "power": "100",
-    "accuracy": "80"
+    "accuracy": "80",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "あまごい",
@@ -1021,7 +1275,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "にほんばれ",
@@ -1029,7 +1285,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "かみくだく",
@@ -1037,7 +1295,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ミラーコート",
@@ -1045,7 +1305,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "13"
   },
   {
     "waza": "じこあんじ",
@@ -1053,7 +1315,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "しんそく",
@@ -1061,7 +1325,9 @@
     "category": "物理",
     "pp": "8",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "げんしのちから",
@@ -1069,7 +1335,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "シャドーボール",
@@ -1077,7 +1345,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "みらいよち",
@@ -1085,7 +1355,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "うずしお",
@@ -1093,7 +1365,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "35",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ふくろだたき",
@@ -1101,7 +1375,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ねこだまし",
@@ -1109,7 +1385,9 @@
     "category": "物理",
     "pp": "12",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "さわぐ",
@@ -1117,7 +1395,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "9"
   },
   {
     "waza": "たくわえる",
@@ -1125,7 +1405,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "はきだす",
@@ -1133,7 +1415,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "のみこむ",
@@ -1141,7 +1425,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ねっぷう",
@@ -1149,7 +1435,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "95",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "いちゃもん",
@@ -1157,7 +1445,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "おだてる",
@@ -1165,7 +1455,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "おにび",
@@ -1173,7 +1465,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "おきみやげ",
@@ -1181,7 +1475,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "からげんき",
@@ -1189,7 +1485,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "きあいパンチ",
@@ -1197,7 +1495,9 @@
     "category": "物理",
     "pp": "20",
     "power": "150",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "このゆびとまれ",
@@ -1205,7 +1505,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "じゅうでん",
@@ -1213,7 +1515,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ちょうはつ",
@@ -1221,7 +1525,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "てだすけ",
@@ -1229,7 +1535,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "2"
   },
   {
     "waza": "トリック",
@@ -1237,7 +1545,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "なりきり",
@@ -1245,7 +1555,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ねがいごと",
@@ -1253,7 +1565,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ねをはる",
@@ -1261,7 +1575,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ばかぢから",
@@ -1269,7 +1585,9 @@
     "category": "物理",
     "pp": "8",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "リサイクル",
@@ -1277,7 +1595,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "かわらわり",
@@ -1285,7 +1605,9 @@
     "category": "物理",
     "pp": "16",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "あくび",
@@ -1293,7 +1615,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はたきおとす",
@@ -1301,7 +1625,9 @@
     "category": "物理",
     "pp": "20",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "がむしゃら",
@@ -1309,7 +1635,9 @@
     "category": "物理",
     "pp": "8",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ふんか",
@@ -1317,7 +1645,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "150",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "スキルスワップ",
@@ -1325,7 +1655,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ふういん",
@@ -1333,7 +1665,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ダイビング",
@@ -1341,7 +1675,9 @@
     "category": "物理",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "フェザーダンス",
@@ -1349,7 +1685,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "フラフラダンス",
@@ -1357,7 +1695,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "ブレイズキック",
@@ -1365,7 +1705,9 @@
     "category": "物理",
     "pp": "12",
     "power": "85",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "なまける",
@@ -1373,7 +1715,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ハイパーボイス",
@@ -1381,7 +1725,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "どくどくのキバ",
@@ -1389,7 +1735,9 @@
     "category": "物理",
     "pp": "16",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ブレイククロー",
@@ -1397,7 +1745,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ブラストバーン",
@@ -1405,7 +1755,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "150",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ハイドロカノン",
@@ -1413,7 +1765,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "150",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "コメットパンチ",
@@ -1421,7 +1775,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ウェザーボール",
@@ -1429,7 +1785,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "うそなき",
@@ -1437,7 +1795,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "エアカッター",
@@ -1445,7 +1805,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "60",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "オーバーヒート",
@@ -1453,7 +1815,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "130",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "がんせきふうじ",
@@ -1461,7 +1825,9 @@
     "category": "物理",
     "pp": "16",
     "power": "60",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "きんぞくおん",
@@ -1469,7 +1835,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "くすぐる",
@@ -1477,7 +1845,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "コスモパワー",
@@ -1485,7 +1855,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "しおふき",
@@ -1493,7 +1865,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "150",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "シャドーパンチ",
@@ -1501,7 +1875,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "じんつうりき",
@@ -1509,7 +1885,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "すなじごく",
@@ -1517,7 +1895,9 @@
     "category": "物理",
     "pp": "16",
     "power": "35",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ぜったいれいど",
@@ -1525,7 +1905,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "1",
-    "accuracy": "30"
+    "accuracy": "30",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "だくりゅう",
@@ -1533,7 +1915,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "タネマシンガン",
@@ -1541,7 +1925,9 @@
     "category": "物理",
     "pp": "20",
     "power": "25",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "つばめがえし",
@@ -1549,7 +1935,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "つららばり",
@@ -1557,7 +1945,9 @@
     "category": "物理",
     "pp": "20",
     "power": "25",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "てっぺき",
@@ -1565,7 +1955,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "とおせんぼう",
@@ -1573,7 +1965,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "とおぼえ",
@@ -1581,7 +1975,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "6"
   },
   {
     "waza": "ドラゴンクロー",
@@ -1589,7 +1985,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ハードプラント",
@@ -1597,7 +1995,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "150",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ビルドアップ",
@@ -1605,7 +2005,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "とびはねる",
@@ -1613,7 +2015,9 @@
     "category": "物理",
     "pp": "8",
     "power": "85",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "マッドショット",
@@ -1621,7 +2025,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "55",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ほしがる",
@@ -1629,7 +2035,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ボルテッカー",
@@ -1637,7 +2045,9 @@
     "category": "物理",
     "pp": "16",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "めいそう",
@@ -1645,7 +2055,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "リーフブレード",
@@ -1653,7 +2065,9 @@
     "category": "物理",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "りゅうのまい",
@@ -1661,7 +2075,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ロックブラスト",
@@ -1669,7 +2085,9 @@
     "category": "物理",
     "pp": "12",
     "power": "25",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "みずのはどう",
@@ -1677,7 +2095,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はねやすめ",
@@ -1685,7 +2105,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "じゅうりょく",
@@ -1693,7 +2115,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "アームハンマー",
@@ -1701,7 +2125,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ジャイロボール",
@@ -1709,7 +2135,9 @@
     "category": "物理",
     "pp": "8",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "いやしのねがい",
@@ -1717,7 +2145,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "フェイント",
@@ -1725,7 +2155,9 @@
     "category": "物理",
     "pp": "12",
     "power": "30",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ついばむ",
@@ -1733,7 +2165,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "おいかぜ",
@@ -1741,7 +2175,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "つぼをつく",
@@ -1749,7 +2185,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "1"
   },
   {
     "waza": "メタルバースト",
@@ -1757,7 +2195,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "13"
   },
   {
     "waza": "とんぼがえり",
@@ -1765,7 +2205,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "インファイト",
@@ -1773,7 +2215,9 @@
     "category": "物理",
     "pp": "8",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "しっぺがえし",
@@ -1781,7 +2225,9 @@
     "category": "物理",
     "pp": "12",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ダメおし",
@@ -1789,7 +2235,9 @@
     "category": "物理",
     "pp": "12",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "なげつける",
@@ -1797,7 +2245,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "パワートリック",
@@ -1805,7 +2255,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "いえき",
@@ -1813,7 +2265,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "まねっこ",
@@ -1821,7 +2275,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "パワースワップ",
@@ -1829,7 +2285,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ガードスワップ",
@@ -1837,7 +2295,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "とっておき",
@@ -1845,7 +2305,9 @@
     "category": "物理",
     "pp": "8",
     "power": "140",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "なやみのタネ",
@@ -1853,7 +2315,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ふいうち",
@@ -1861,7 +2325,9 @@
     "category": "物理",
     "pp": "8",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "どくびし",
@@ -1869,7 +2335,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "11"
   },
   {
     "waza": "アクアリング",
@@ -1877,7 +2345,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "でんじふゆう",
@@ -1885,7 +2355,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "フレアドライブ",
@@ -1893,7 +2365,9 @@
     "category": "物理",
     "pp": "16",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "はどうだん",
@@ -1901,7 +2375,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "80",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ロックカット",
@@ -1909,7 +2385,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "どくづき",
@@ -1917,7 +2395,9 @@
     "category": "物理",
     "pp": "20",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "あくのはどう",
@@ -1925,7 +2405,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "つじぎり",
@@ -1933,7 +2415,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "アクアテール",
@@ -1941,7 +2425,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "タネばくだん",
@@ -1949,7 +2435,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "エアスラッシュ",
@@ -1957,7 +2445,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "75",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "シザークロス",
@@ -1965,7 +2455,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "むしのさざめき",
@@ -1973,7 +2465,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "りゅうのはどう",
@@ -1981,7 +2475,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "85",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ドラゴンダイブ",
@@ -1989,7 +2485,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "75"
+    "accuracy": "75",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "パワージェム",
@@ -1997,7 +2495,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ドレインパンチ",
@@ -2005,7 +2505,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "しんくうは",
@@ -2013,7 +2515,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "きあいだま",
@@ -2021,7 +2525,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "120",
-    "accuracy": "70"
+    "accuracy": "70",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "エナジーボール",
@@ -2029,7 +2535,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ブレイブバード",
@@ -2037,7 +2545,9 @@
     "category": "物理",
     "pp": "16",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "だいちのちから",
@@ -2045,7 +2555,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "すりかえ",
@@ -2053,7 +2565,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ギガインパクト",
@@ -2061,7 +2575,9 @@
     "category": "物理",
     "pp": "8",
     "power": "150",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "わるだくみ",
@@ -2069,7 +2585,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "バレットパンチ",
@@ -2077,7 +2595,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ゆきなだれ",
@@ -2085,7 +2605,9 @@
     "category": "物理",
     "pp": "12",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "こおりのつぶて",
@@ -2093,7 +2615,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "シャドークロー",
@@ -2101,7 +2625,9 @@
     "category": "物理",
     "pp": "16",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "かみなりのキバ",
@@ -2109,7 +2635,9 @@
     "category": "物理",
     "pp": "16",
     "power": "65",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "こおりのキバ",
@@ -2117,7 +2645,9 @@
     "category": "物理",
     "pp": "16",
     "power": "65",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ほのおのキバ",
@@ -2125,7 +2655,9 @@
     "category": "物理",
     "pp": "16",
     "power": "65",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "かげうち",
@@ -2133,7 +2665,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "サイコカッター",
@@ -2141,7 +2675,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "しねんのずつき",
@@ -2149,7 +2685,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ラスターカノン",
@@ -2157,7 +2695,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "きりばらい",
@@ -2165,7 +2705,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "トリックルーム",
@@ -2173,7 +2715,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "りゅうせいぐん",
@@ -2181,7 +2725,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "130",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ほうでん",
@@ -2189,7 +2735,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "ふんえん",
@@ -2197,7 +2745,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "リーフストーム",
@@ -2205,7 +2755,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "130",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "パワーウィップ",
@@ -2213,7 +2765,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "がんせきほう",
@@ -2221,7 +2775,9 @@
     "category": "物理",
     "pp": "8",
     "power": "150",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "クロスポイズン",
@@ -2229,7 +2785,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ダストシュート",
@@ -2237,7 +2795,9 @@
     "category": "物理",
     "pp": "8",
     "power": "120",
-    "accuracy": "80"
+    "accuracy": "80",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "アイアンヘッド",
@@ -2245,7 +2805,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ストーンエッジ",
@@ -2253,7 +2815,9 @@
     "category": "物理",
     "pp": "8",
     "power": "100",
-    "accuracy": "80"
+    "accuracy": "80",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ステルスロック",
@@ -2261,7 +2825,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "11"
   },
   {
     "waza": "くさむすび",
@@ -2269,7 +2835,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "むしくい",
@@ -2277,7 +2845,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "チャージビーム",
@@ -2285,7 +2855,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "50",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ウッドハンマー",
@@ -2293,7 +2865,9 @@
     "category": "物理",
     "pp": "16",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "アクアジェット",
@@ -2301,7 +2875,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "もろはのずつき",
@@ -2309,7 +2885,9 @@
     "category": "物理",
     "pp": "8",
     "power": "150",
-    "accuracy": "80"
+    "accuracy": "80",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ダブルアタック",
@@ -2317,7 +2895,9 @@
     "category": "物理",
     "pp": "12",
     "power": "35",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ワイドガード",
@@ -2325,7 +2905,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "ガードシェア",
@@ -2333,7 +2915,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "パワーシェア",
@@ -2341,7 +2925,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ワンダールーム",
@@ -2349,7 +2935,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "サイコショック",
@@ -2357,7 +2945,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ベノムショック",
@@ -2365,7 +2955,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "いかりのこな",
@@ -2373,7 +2965,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "マジックルーム",
@@ -2381,7 +2975,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "うちおとす",
@@ -2389,7 +2985,9 @@
     "category": "物理",
     "pp": "16",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "やまあらし",
@@ -2397,7 +2995,9 @@
     "category": "物理",
     "pp": "12",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ヘドロウェーブ",
@@ -2405,7 +3005,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "95",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "ちょうのまい",
@@ -2413,7 +3015,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ヘビーボンバー",
@@ -2421,7 +3025,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "エレキボール",
@@ -2429,7 +3035,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "みずびたし",
@@ -2437,7 +3045,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ニトロチャージ",
@@ -2445,7 +3055,9 @@
     "category": "物理",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "とぐろをまく",
@@ -2453,7 +3065,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ローキック",
@@ -2461,7 +3075,9 @@
     "category": "物理",
     "pp": "20",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "アシッドボム",
@@ -2469,7 +3085,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "イカサマ",
@@ -2477,7 +3095,9 @@
     "category": "物理",
     "pp": "16",
     "power": "95",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "シンプルビーム",
@@ -2485,7 +3105,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "なかまづくり",
@@ -2493,7 +3115,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "おさきにどうぞ",
@@ -2501,7 +3125,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "りんしょう",
@@ -2509,7 +3135,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "クリアスモッグ",
@@ -2517,7 +3145,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "50",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "アシストパワー",
@@ -2525,7 +3155,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "20",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ファストガード",
@@ -2533,7 +3165,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "サイドチェンジ",
@@ -2541,7 +3175,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ねっとう",
@@ -2549,7 +3185,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "からをやぶる",
@@ -2557,7 +3195,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "いやしのはどう",
@@ -2565,7 +3205,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "たたりめ",
@@ -2573,7 +3215,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ともえなげ",
@@ -2581,7 +3225,9 @@
     "category": "物理",
     "pp": "12",
     "power": "60",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "さきおくり",
@@ -2589,7 +3235,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "アクロバット",
@@ -2597,7 +3245,9 @@
     "category": "物理",
     "pp": "16",
     "power": "55",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ミラータイプ",
@@ -2605,7 +3255,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "いのちがけ",
@@ -2613,7 +3265,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "れんごく",
@@ -2621,7 +3275,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "100",
-    "accuracy": "50"
+    "accuracy": "50",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ボルトチェンジ",
@@ -2629,7 +3285,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "むしのていこう",
@@ -2637,7 +3295,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "じならし",
@@ -2645,7 +3305,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "こおりのいぶき",
@@ -2653,7 +3315,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "60",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ドラゴンテール",
@@ -2661,7 +3325,9 @@
     "category": "物理",
     "pp": "12",
     "power": "60",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "エレキネット",
@@ -2669,7 +3335,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "55",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "ワイルドボルト",
@@ -2677,7 +3345,9 @@
     "category": "物理",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ドリルライナー",
@@ -2685,7 +3355,9 @@
     "category": "物理",
     "pp": "12",
     "power": "80",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ウッドホーン",
@@ -2693,7 +3365,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "せいなるつるぎ",
@@ -2701,7 +3375,9 @@
     "category": "物理",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "シェルブレード",
@@ -2709,7 +3385,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ヒートスタンプ",
@@ -2717,7 +3395,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "コットンガード",
@@ -2725,7 +3405,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ナイトバースト",
@@ -2733,7 +3415,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "スイープビンタ",
@@ -2741,7 +3425,9 @@
     "category": "物理",
     "pp": "12",
     "power": "25",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ぼうふう",
@@ -2749,7 +3435,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "110",
-    "accuracy": "70"
+    "accuracy": "70",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ほのおのまい",
@@ -2757,7 +3445,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "バークアウト",
@@ -2765,7 +3455,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "55",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "つららおとし",
@@ -2773,7 +3465,9 @@
     "category": "物理",
     "pp": "12",
     "power": "85",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "フライングプレス",
@@ -2781,7 +3475,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ゲップ",
@@ -2789,7 +3485,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "120",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ねばねばネット",
@@ -2797,7 +3495,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "11"
   },
   {
     "waza": "とどめばり",
@@ -2805,7 +3505,9 @@
     "category": "物理",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ゴーストダイブ",
@@ -2813,7 +3515,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ハロウィン",
@@ -2821,7 +3525,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "おたけび",
@@ -2829,7 +3535,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "パラボラチャージ",
@@ -2837,7 +3545,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "もりののろい",
@@ -2845,7 +3555,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はなふぶき",
@@ -2853,7 +3565,9 @@
     "category": "物理",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "フリーズドライ",
@@ -2861,7 +3575,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "すてゼリフ",
@@ -2869,7 +3585,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ドレインキッス",
@@ -2877,7 +3595,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "グラスフィールド",
@@ -2885,7 +3605,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "ミストフィールド",
@@ -2893,7 +3615,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "そうでん",
@@ -2901,7 +3625,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "じゃれつく",
@@ -2909,7 +3635,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ムーンフォース",
@@ -2917,7 +3645,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "95",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ばくおんぱ",
@@ -2925,7 +3655,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "140",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "フェアリーロック",
@@ -2933,7 +3665,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "キングシールド",
@@ -2941,7 +3675,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "みずしゅりけん",
@@ -2949,7 +3685,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "15",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "マジカルフレイム",
@@ -2957,7 +3695,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ニードルガード",
@@ -2965,7 +3705,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "アロマミスト",
@@ -2973,7 +3715,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "2"
   },
   {
     "waza": "かいでんぱ",
@@ -2981,7 +3725,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "じばそうさ",
@@ -2989,7 +3735,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "6"
   },
   {
     "waza": "エレキフィールド",
@@ -2997,7 +3745,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "マジカルシャイン",
@@ -3005,7 +3755,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "つぶらなひとみ",
@@ -3013,7 +3765,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ほっぺすりすり",
@@ -3021,7 +3775,9 @@
     "category": "物理",
     "pp": "20",
     "power": "20",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "まとわりつく",
@@ -3029,7 +3785,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "20",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "はめつのひかり",
@@ -3037,7 +3795,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "140",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "であいがしら",
@@ -3045,7 +3805,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "トーチカ",
@@ -3053,7 +3815,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "かげぬい",
@@ -3061,7 +3825,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ＤＤラリアット",
@@ -3069,7 +3835,9 @@
     "category": "物理",
     "pp": "12",
     "power": "85",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "うたかたのアリア",
@@ -3077,7 +3845,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "アイスハンマー",
@@ -3085,7 +3855,9 @@
     "category": "物理",
     "pp": "12",
     "power": "100",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "１０まんばりき",
@@ -3093,7 +3865,9 @@
     "category": "物理",
     "pp": "12",
     "power": "95",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ちからをすいとる",
@@ -3101,7 +3875,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ソーラーブレード",
@@ -3109,7 +3885,9 @@
     "category": "物理",
     "pp": "12",
     "power": "125",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "どくのいと",
@@ -3117,7 +3895,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "じごくづき",
@@ -3125,7 +3905,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "かふんだんご",
@@ -3133,7 +3915,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "サイコフィールド",
@@ -3141,7 +3925,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "とびかかる",
@@ -3149,7 +3935,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ほのおのムチ",
@@ -3157,7 +3945,9 @@
     "category": "物理",
     "pp": "16",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "つけあがる",
@@ -3165,7 +3955,9 @@
     "category": "物理",
     "pp": "12",
     "power": "20",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "もえつきる",
@@ -3173,7 +3965,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "130",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "スピードスワップ",
@@ -3181,7 +3975,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "スマートホーン",
@@ -3189,7 +3985,9 @@
     "category": "物理",
     "pp": "12",
     "power": "70",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "トロピカルキック",
@@ -3197,7 +3995,9 @@
     "category": "物理",
     "pp": "16",
     "power": "85",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "さいはい",
@@ -3205,7 +4005,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "くちばしキャノン",
@@ -3213,7 +4015,9 @@
     "category": "物理",
     "pp": "8",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "スケイルノイズ",
@@ -3221,7 +4025,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "110",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "ぶんまわす",
@@ -3229,7 +4035,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "4"
   },
   {
     "waza": "オーロラベール",
@@ -3237,7 +4045,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "12"
   },
   {
     "waza": "サイコファング",
@@ -3245,7 +4055,9 @@
     "category": "物理",
     "pp": "12",
     "power": "85",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "じだんだ",
@@ -3253,7 +4065,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "アクセルロック",
@@ -3261,7 +4075,9 @@
     "category": "物理",
     "pp": "20",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "アクアブレイク",
@@ -3269,7 +4085,9 @@
     "category": "物理",
     "pp": "12",
     "power": "85",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "なみだめ",
@@ -3277,7 +4095,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ほおばる",
@@ -3285,7 +4105,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "まほうのこな",
@@ -3293,7 +4115,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ドラゴンアロー",
@@ -3301,7 +4125,9 @@
     "category": "物理",
     "pp": "12",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "おちゃかい",
@@ -3309,7 +4135,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "8"
   },
   {
     "waza": "ソウルビート",
@@ -3317,7 +4145,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ボディプレス",
@@ -3325,7 +4155,9 @@
     "category": "物理",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "デコレーション",
@@ -3333,7 +4165,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "トラバサミ",
@@ -3341,7 +4175,9 @@
     "category": "物理",
     "pp": "16",
     "power": "35",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "オーラぐるま",
@@ -3349,7 +4185,9 @@
     "category": "物理",
     "pp": "12",
     "power": "110",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ワイドブレイカー",
@@ -3357,7 +4195,9 @@
     "category": "物理",
     "pp": "16",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "5"
   },
   {
     "waza": "りんごさん",
@@ -3365,7 +4205,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "Ｇのちから",
@@ -3373,7 +4215,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "いのちのしずく",
@@ -3381,7 +4225,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "6"
   },
   {
     "waza": "てっていこうせん",
@@ -3389,7 +4235,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "140",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ワイドフォース",
@@ -3397,7 +4245,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "アイアンローラー",
@@ -3405,7 +4255,9 @@
     "category": "物理",
     "pp": "8",
     "power": "130",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "スケイルショット",
@@ -3413,7 +4265,9 @@
     "category": "物理",
     "pp": "20",
     "power": "25",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "メテオビーム",
@@ -3421,7 +4275,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "120",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "シェルアームズ",
@@ -3429,7 +4285,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ミストバースト",
@@ -3437,7 +4295,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "100",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "グラススライダー",
@@ -3445,7 +4305,9 @@
     "category": "物理",
     "pp": "20",
     "power": "55",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ライジングボルト",
@@ -3453,7 +4315,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "だいちのはどう",
@@ -3461,7 +4325,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はいよるいちげき",
@@ -3469,7 +4335,9 @@
     "category": "物理",
     "pp": "12",
     "power": "70",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "しっとのほのお",
@@ -3477,7 +4345,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "うっぷんばらし",
@@ -3485,7 +4355,9 @@
     "category": "物理",
     "pp": "8",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ポルターガイスト",
@@ -3493,7 +4365,9 @@
     "category": "物理",
     "pp": "8",
     "power": "110",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ふしょくガス",
@@ -3501,7 +4375,9 @@
     "category": "変化",
     "pp": "20",
     "power": "-",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "4"
   },
   {
     "waza": "コーチング",
@@ -3509,7 +4385,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "14"
   },
   {
     "waza": "クイックターン",
@@ -3517,7 +4395,9 @@
     "category": "物理",
     "pp": "20",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "トリプルアクセル",
@@ -3525,7 +4405,9 @@
     "category": "物理",
     "pp": "12",
     "power": "20",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ダブルウイング",
@@ -3533,7 +4415,9 @@
     "category": "物理",
     "pp": "12",
     "power": "40",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ねっさのだいち",
@@ -3541,7 +4425,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ぶきみなじゅもん",
@@ -3549,7 +4435,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "フェイタルクロー",
@@ -3557,7 +4445,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "バリアーラッシュ",
@@ -3565,7 +4455,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "パワーシフト",
@@ -3573,7 +4465,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "がんせきアックス",
@@ -3581,7 +4475,9 @@
     "category": "物理",
     "pp": "16",
     "power": "65",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "だいふんげき",
@@ -3589,7 +4485,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "9"
   },
   {
     "waza": "ウェーブタックル",
@@ -3597,7 +4495,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ひょうざんおろし",
@@ -3605,7 +4505,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "85"
+    "accuracy": "85",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ぶちかまし",
@@ -3613,7 +4515,9 @@
     "category": "物理",
     "pp": "8",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "うらみつらみ",
@@ -3621,7 +4525,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "たてこもる",
@@ -3629,7 +4535,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "３ぼんのや",
@@ -3637,7 +4545,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ひゃっきやこう",
@@ -3645,7 +4555,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ひけん・ちえなみ",
@@ -3653,7 +4565,9 @@
     "category": "物理",
     "pp": "16",
     "power": "65",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "かかとおとし",
@@ -3661,7 +4575,9 @@
     "category": "物理",
     "pp": "12",
     "power": "120",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "おはかまいり",
@@ -3669,7 +4585,9 @@
     "category": "物理",
     "pp": "12",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ルミナコリジョン",
@@ -3677,7 +4595,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ジェットパンチ",
@@ -3685,7 +4605,9 @@
     "category": "物理",
     "pp": "16",
     "power": "60",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ハバネロエキス",
@@ -3693,7 +4615,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ネズミざん",
@@ -3701,7 +4625,9 @@
     "category": "物理",
     "pp": "12",
     "power": "20",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "アイススピナー",
@@ -3709,7 +4635,9 @@
     "category": "物理",
     "pp": "16",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "しおづけ",
@@ -3717,7 +4645,9 @@
     "category": "物理",
     "pp": "16",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "キラースピン",
@@ -3725,7 +4655,9 @@
     "category": "物理",
     "pp": "16",
     "power": "30",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "5"
   },
   {
     "waza": "ドゲザン",
@@ -3733,7 +4665,9 @@
     "category": "物理",
     "pp": "12",
     "power": "85",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "トリックフラワー",
@@ -3741,7 +4675,9 @@
     "category": "物理",
     "pp": "12",
     "power": "70",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "フレアソング",
@@ -3749,7 +4685,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "アクアステップ",
@@ -3757,7 +4695,9 @@
     "category": "物理",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "レイジングブル",
@@ -3765,7 +4705,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "しっぽきり",
@@ -3773,7 +4715,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "さむいギャグ",
@@ -3781,7 +4725,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "おかたづけ",
@@ -3789,7 +4735,9 @@
     "category": "変化",
     "pp": "12",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "7"
   },
   {
     "waza": "ゆきげしき",
@@ -3797,7 +4745,9 @@
     "category": "変化",
     "pp": "8",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "10"
   },
   {
     "waza": "とびつく",
@@ -3805,7 +4755,9 @@
     "category": "物理",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "くさわけ",
@@ -3813,7 +4765,9 @@
     "category": "物理",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ひやみず",
@@ -3821,7 +4775,9 @@
     "category": "特殊",
     "pp": "20",
     "power": "50",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ツインビーム",
@@ -3829,7 +4785,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "40",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "アーマーキャノン",
@@ -3837,7 +4795,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "120",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "むねんのつるぎ",
@@ -3845,7 +4805,9 @@
     "category": "物理",
     "pp": "12",
     "power": "90",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "デカハンマー",
@@ -3853,7 +4815,9 @@
     "category": "物理",
     "pp": "8",
     "power": "160",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ほうふく",
@@ -3861,7 +4825,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "13"
   },
   {
     "waza": "アクアカッター",
@@ -3869,7 +4835,9 @@
     "category": "物理",
     "pp": "20",
     "power": "70",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "シャカシャカほう",
@@ -3877,7 +4845,9 @@
     "category": "特殊",
     "pp": "16",
     "power": "80",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "5"
   },
   {
     "waza": "みずあめボム",
@@ -3885,7 +4855,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "60",
-    "accuracy": "90"
+    "accuracy": "90",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "エレクトロビーム",
@@ -3893,7 +4865,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "130",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "きまぐレーザー",
@@ -3901,7 +4875,9 @@
     "category": "特殊",
     "pp": "8",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "ハードプレス",
@@ -3909,7 +4885,9 @@
     "category": "物理",
     "pp": "12",
     "power": "1",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "ドラゴンエール",
@@ -3917,7 +4895,9 @@
     "category": "変化",
     "pp": "16",
     "power": "-",
-    "accuracy": "101"
+    "accuracy": "101",
+    "direct": "0",
+    "target": "14"
   },
   {
     "waza": "みわくのボイス",
@@ -3925,7 +4905,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "80",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "やけっぱち",
@@ -3933,7 +4915,9 @@
     "category": "物理",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "サンダーダイブ",
@@ -3941,7 +4925,9 @@
     "category": "物理",
     "pp": "16",
     "power": "100",
-    "accuracy": "95"
+    "accuracy": "95",
+    "direct": "1",
+    "target": "0"
   },
   {
     "waza": "サイコノイズ",
@@ -3949,7 +4935,9 @@
     "category": "特殊",
     "pp": "12",
     "power": "75",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "0",
+    "target": "0"
   },
   {
     "waza": "はやてがえし",
@@ -3957,6 +4945,8 @@
     "category": "物理",
     "pp": "16",
     "power": "65",
-    "accuracy": "100"
+    "accuracy": "100",
+    "direct": "1",
+    "target": "0"
   }
 ]

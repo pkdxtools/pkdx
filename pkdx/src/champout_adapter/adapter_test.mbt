@@ -130,14 +130,14 @@ test "map_pokemon_entries skips is_valid != 1" {
 }
 
 ///|
-test "map_move_entries normalizes power/accuracy zero to dash" {
+test "map_move_entries normalizes power/accuracy zero to dash and copies direct/target" {
   let raw =
     #|[
     #|  {"id": "1", "type": "0", "category": "0", "target": "0",
-    #|   "power": "40", "accuracy": "100", "pp": "20",
+    #|   "power": "40", "accuracy": "100", "pp": "20", "direct": "1",
     #|   "available": "1", "ms_lbl": "WAZANAME_001"},
-    #|  {"id": "14", "type": "0", "category": "2", "target": "0",
-    #|   "power": "0", "accuracy": "0", "pp": "20",
+    #|  {"id": "14", "type": "0", "category": "2", "target": "7",
+    #|   "power": "0", "accuracy": "0", "pp": "20", "direct": "0",
     #|   "available": "1", "ms_lbl": "WAZANAME_014"}
     #|]
   let json = try @json.parse(raw) catch {
@@ -153,10 +153,14 @@ test "map_move_entries normalizes power/accuracy zero to dash" {
       inspect(entries[0].waza, content="はたく")
       inspect(entries[0].power, content="40")
       inspect(entries[0].category, content="物理")
+      inspect(entries[0].direct, content="1")
+      inspect(entries[0].target, content="0")
       inspect(entries[1].waza, content="つるぎのまい")
       inspect(entries[1].power, content="-")
       inspect(entries[1].accuracy, content="-")
       inspect(entries[1].category, content="変化")
+      inspect(entries[1].direct, content="0")
+      inspect(entries[1].target, content="7")
     }
   }
 }

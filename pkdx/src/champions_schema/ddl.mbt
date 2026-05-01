@@ -53,13 +53,17 @@ pub fn champions_ddl() -> Array[String] {
     "PRIMARY KEY (id, language, name)" +
     ")",
     "CREATE INDEX IF NOT EXISTS idx_pokemon_name_name ON pokemon_name(name)",
+    // direct / target は champout 由来。direct=1 が接触、target は range
+    // enum (詳細は champions_schema/types.mbt の MoveEntry コメント参照)。
     "CREATE TABLE IF NOT EXISTS move (" +
     "waza TEXT PRIMARY KEY, " +
     "type TEXT NOT NULL, " +
     "category TEXT NOT NULL, " +
     "pp TEXT NOT NULL, " +
     "power TEXT NOT NULL, " +
-    "accuracy TEXT NOT NULL" +
+    "accuracy TEXT NOT NULL, " +
+    "direct INTEGER NOT NULL DEFAULT 0, " +
+    "target INTEGER NOT NULL DEFAULT 0" +
     ")",
     "CREATE TABLE IF NOT EXISTS move_name (" +
     "waza TEXT NOT NULL, " +

@@ -40,6 +40,27 @@ fn find_test_db() -> String? {
 }
 
 ///|
+/// champions.db を開いて pokedex.db を attach した Db ハンドルを返す。
+/// `CHAMPIONS_DB` env を最優先 (`open_for` 内 `resolve_champions_db_path_from`
+/// 経由)。env なしの環境では `pokedex/champions.db` 等の sibling を探す。
+/// champions.db が存在しないインストールでは silent skip する (本ファイルの
+/// 他テスト同様、`fail` ではなく `None` を返して呼び出し側で `return`)。
+fn open_test_champions_db() -> Db? {
+  let pokedex_path = match find_test_db() {
+    Some(p) => p
+    None => return None
+  }
+  let champions_path = resolve_champions_db_path_from(pokedex_path)
+  if not(file_exists(champions_path)) {
+    return None
+  }
+  match open_for(pokedex_path, "champions") {
+    Ok(db) => Some(db)
+    Err(_) => None
+  }
+}
+
+///|
 /// 以前の `(rs - 8)` 書き込みバグでは、legendsza の カイリュー で
 /// HP が 91 → 81、type1 が ひこう → ぱこう に破壊されていた。
 /// external_object 化した後はすべて正しい値が返る。
@@ -99,15 +120,9 @@ test "query_pokemon: リザードン scarlet_violet" {
 ///|
 /// champions (デフォルトversion) でメガポケモンが正しくクエリできること。
 test "query_pokemon: メガピクシー champions" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "メガピクシー", "champions")
   close(db)
@@ -132,15 +147,9 @@ test "query_pokemon: メガピクシー champions" {
 ///|
 /// champions で通常ポケモンのクエリとステータスが正しいこと。
 test "query_pokemon: ガブリアス champions stats" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "ガブリアス", "champions")
   close(db)
@@ -162,21 +171,14 @@ test "query_pokemon: ガブリアス champions stats" {
 ///|
 /// champions で技クエリが正しく動作すること。
 test "query_moves: ガブリアス champions" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_moves(db, "0445", "champions")
   close(db)
   match result {
     Ok(moves) => {
-      // ガブリアスは champions で97技を覚える
       assert_true(moves.length() > 0)
       // じしんが含まれていること
       let mut found_eq = false
@@ -193,23 +195,17 @@ test "query_moves: ガブリアス champions" {
 }
 
 ///|
-/// yakkun番号とglobalNoが異なるGen9ポケモンが正しいglobalNoで登録されていること。
+/// 外部番号体系と globalNo が異なる Gen9 ポケモンが正しい globalNo で登録されていること。
 test "query_pokemon: スコヴィラン champions globalNo" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "スコヴィラン", "champions")
   close(db)
   match result {
     Ok(p) => {
-      // yakkun n939 だが正しい globalNo は 0952
+      // 外部番号 939 と混同されがちだが正しい globalNo は 0952
       inspect(p.global_no, content="0952")
       inspect(p.name_ja, content="スコヴィラン")
     }
@@ -252,15 +248,9 @@ test "query_pokemon: ガブリアス scarlet_violet stats" {
 /// Rotom 系は pokedex_form.form が原種名を含む (ウォッシュロトム ⊃ ロトム)
 /// ため、合成せず verbatim で検索できる。フォーム直引きなので forms は空。
 test "query_pokemon: ウォッシュロトム champions (direct form alias)" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "ウォッシュロトム", "champions")
   close(db)
@@ -268,8 +258,8 @@ test "query_pokemon: ウォッシュロトム champions (direct form alias)" {
     Ok(p) => {
       inspect(p.global_no, content="0479")
       inspect(p.name_ja, content="ウォッシュロトム")
-      // pne 自己結合が form/region で一致するため英語も form 特化になる
-      inspect(p.name_en, content="Wash Rotom")
+      // champions.db (champout SSoT) には英語名行を持たない。多言語対応は後続。
+      inspect(p.name_en, content="")
       inspect(p.type1, content="でんき")
       inspect(p.type2, content="みず")
       inspect(p.spa, content="105")
@@ -311,15 +301,9 @@ test "query_pokemon: キュウコン（アローラ） scarlet_violet (composed 
 /// 原種 (base) 引きでは forms[] に該当 version で実在するフォームが列挙される。
 /// Discoverability の核: ユーザーがここから候補を選んで再 query する。
 test "query_pokemon: ロトム champions + forms list (discoverability)" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "ロトム", "champions")
   close(db)
@@ -382,18 +366,16 @@ test "query_pokemon: キュウコン scarlet_violet + forms list (regional)" {
 }
 
 ///|
-/// 戦闘面で差異のないフォーム (トリミアン毛型・ビビヨン模様) は migration で
-/// 除外されるので forms[] に列挙されない (ノイズ防止)。
-test "query_pokemon: トリミアン champions (cosmetic forms excluded)" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
-  return
-  let db_path = match find_test_db() {
-    Some(p) => p
+/// champout SSoT では 9 種類の毛型 (ハートカット〜キングダムカット) も別
+/// pokemon 行として登録されるため、原種引きの forms[] にそのまま列挙される。
+/// 戦闘面では同一 stats / type / ability なので "cosmetic" 扱いだが、
+/// migration での除外は champions.db では行わない (Phase 9 の品質改善で
+/// 検討)。ここでは「基本値が species 名で取れる」ことと「form 数が一致する」
+/// ことのみ検証する。
+test "query_pokemon: トリミアン champions (cosmetic forms listed)" {
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "トリミアン", "champions")
   close(db)
@@ -401,8 +383,7 @@ test "query_pokemon: トリミアン champions (cosmetic forms excluded)" {
     Ok(p) => {
       inspect(p.global_no, content="0676")
       inspect(p.name_ja, content="トリミアン")
-      // 10 種類の毛型があるが battle 面で同一なので全て skip
-      inspect(p.forms.length(), content="0")
+      inspect(p.forms.length(), content="9")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -553,16 +534,16 @@ test "query_pokemon: ニャオニクス（オス） scarlet_violet (gender alias
 ///|
 /// gender alias は scarlet_violet だけでなく Champions でも引けること。
 /// version 横断で同一 alias が機能することを保証する。
+///
+/// 現状 champions.db (champout SSoT) は性別別 alias 行 (`イダイトウ（オス）`
+/// / `イダイトウ（メス）`) を pokemon_name に投入していないため skip 中。
+/// Champions 側で gender alias を作る後続マイグレーションが入った時点で
+/// 復活させる。
 test "query_pokemon: イダイトウ（オス） champions (gender alias version cross)" {
-  // Phase 8: rebuild against new champions.db schema (champout-derived).
   return
-  let db_path = match find_test_db() {
-    Some(p) => p
+  let db = match open_test_champions_db() {
+    Some(d) => d
     None => return
-  }
-  let db = match open(db_path) {
-    Ok(d) => d
-    Err(e) => fail("failed to open test db: " + e)
   }
   let result = query_pokemon(db, "イダイトウ（オス）", "champions")
   close(db)

@@ -71,18 +71,28 @@ pub fn map_pokemon_entries(
     let no_int = to_int_or_zero(no_raw)
     let global_no = pad4(no_int)
     let no = global_no
-    // form 表示名: ms_form_lbl から zkn_form_syn を引く
+    // form 表示名: ms_form_lbl から zkn_form_syn を引く。
+    //
+    // fo='0' は base form として扱い form='' へ正規化する。champout 側は
+    // 「複数フォームがある globalNo」の form 0 にも識別ラベル
+    // (例: ZKN_FORM_479_000 → "ロトムのすがた") を付けてくるが、pkdx の
+    // discoverability (原種引き → forms[] 列挙) は form='' を base として
+    // 仮定するので、ここで揃える。
+    let fo = match m.get("fo") {
+      Some(String(s)) => s
+      _ => "0"
+    }
     let form_lbl = match m.get("ms_form_lbl") {
       Some(String(s)) => s
       _ => ""
     }
-    let form = match bundle.zkn_form.get(form_lbl) {
+    let form_label = match bundle.zkn_form.get(form_lbl) {
       Some(s) => s
       None => ""
     }
-    // 表示名: 通常フォームは base name (リザードン)、Mega/別フォームは form
-    // 文字列 (メガリザードンX) をそのまま表示名にする。pokedex_name 系の
-    // 多言語対応は Phase 6 以降で eng を追加する想定。
+    let form = if fo == "0" { "" } else { form_label }
+    // 表示名: base form は species 名 (ロトム)、別フォームは form 文字列
+    // (ヒートロトム / メガリザードンＸ) をそのまま使う。
     let base_name = resolve_monsname(bundle, no_raw)
     let name_jpn = if form.length() == 0 { base_name } else { form }
     // タイプ

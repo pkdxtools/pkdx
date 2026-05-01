@@ -94,7 +94,6 @@ pkdx/                     # MoonBit CLI ツール (native binary)
       json_util.mbt         # Json アクセサ
       m001 / m006-m008 / m010-m012   # pokedex.db ターゲット (mega legends-za, move_meta, mega_forms, ailment, posthit, form_name_aliases, gender_symbol_aliases)
       m014-m018             # champions.db ターゲット (init_schema → pokemon → moves → learnset → items)
-      m019                  # pokedex.db から旧 Champions 行を purge
     champions_schema/      # champions.db のスキーマ宣言 (DDL / 型 / parse / serialize)
       ddl.mbt, types.mbt, validate.mbt, serialize.mbt
     champout_adapter/      # champout (= projectpokemon/champout submodule) → 中間 JSON アダプター

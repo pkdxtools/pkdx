@@ -32,7 +32,7 @@ test "migrations() is the chronological merge of pokedex + champions by name" {
   }
   inspect(
     names,
-    content="[\"001_mega_legendsza\", \"006_move_meta\", \"007_mega_forms\", \"008_move_meta_ailment\", \"010_move_meta_posthit\", \"011_form_name_aliases\", \"012_gender_symbol_aliases\", \"014_champions_init_schema\", \"015_champions_pokemon\", \"016_champions_moves\", \"017_champions_learnset\", \"018_champions_items\", \"019_pokedex_purge_champions\"]",
+    content="[\"001_mega_legendsza\", \"006_move_meta\", \"007_mega_forms\", \"008_move_meta_ailment\", \"010_move_meta_posthit\", \"011_form_name_aliases\", \"012_gender_symbol_aliases\", \"014_champions_init_schema\", \"015_champions_pokemon\", \"016_champions_moves\", \"017_champions_learnset\", \"018_champions_items\"]",
   )
 }
 
@@ -59,13 +59,12 @@ test "migrations_champions hosts the new champions.db lineup" {
 }
 
 ///|
-test "migrations_pokedex hosts the live pokedex-side entries plus the purge migration" {
+test "migrations_pokedex hosts the live pokedex-side entries" {
   let pdx = migrations_pokedex()
   let expected = [
     "001_mega_legendsza", "006_move_meta", "007_mega_forms",
     "008_move_meta_ailment", "010_move_meta_posthit",
     "011_form_name_aliases", "012_gender_symbol_aliases",
-    "019_pokedex_purge_champions",
   ]
   inspect(pdx.length() == expected.length(), content="true")
   for i = 0; i < expected.length(); i = i + 1 {

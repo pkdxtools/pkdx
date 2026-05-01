@@ -1327,6 +1327,152 @@ fn compute_damage_variants(
 }
 
 ///|
+/// Phase 2-D (#91): expand a single attack-resolution into chance-node leaves
+/// fanning out across hit-count variants.
+///
+/// For each `DamageOutcome` returned by `compute_damage_variants` (1 entry for
+/// Single / Skill Link, 3 for Triple Axel, 4 for Random2to5, 10 for
+/// PopulationBomb), the variant-specific `mean_damage` is applied to defender
+/// HP and the resulting per-variant state is threaded through the four
+/// post-hit fanouts with `hits_count` fixed to that variant's count. The four
+/// fanouts were extended in Phase 2-C to accept `hits_count` so per-hit
+/// secondaries (status secondary, contact proc) compound across the variant's
+/// hits without double-counting through the legacy `resolve_hit_distribution`
+/// fold.
+///
+/// Returns leaves with `outcome.probability * sub_leaf_probability` so summing
+/// over all leaves equals 1.0 within float drift bounds.
+fn apply_damage_variants_fanout(
+  state : SwitchingGameState,
+  attacker_is_me~ : Bool,
+  attacker_active~ : Int,
+  attacker_ranks~ : Array[Int],
+  defender_active~ : Int,
+  defender_ranks~ : Array[Int],
+  attacker_move~ : @model.Move,
+  attacker_team~ : Array[Combatant],
+  defender_team~ : Array[Combatant],
+  pre_dmg_defender_hp~ : Int,
+  attacker_mega~ : Bool = false,
+  defender_mega~ : Bool = false,
+  attacker_burn~ : Bool = false,
+  atk_item_consumed~ : Bool = false,
+  def_item_consumed~ : Bool = false,
+) -> Array[(Double, SwitchingGameState)] {
+  // Itemless swap mirrors mean_damage_cached so a consumed berry / sash isn't
+  // re-applied by the engine on this attack.
+  let raw_attacker_full = attacker_team[attacker_active]
+  let raw_defender_full = defender_team[defender_active]
+  let raw_attacker = if atk_item_consumed {
+    { ..raw_attacker_full, item: "" }
+  } else {
+    raw_attacker_full
+  }
+  let raw_defender = if def_item_consumed {
+    { ..raw_defender_full, item: "" }
+  } else {
+    raw_defender_full
+  }
+  let attacker = effective_combatant(raw_attacker, attacker_mega)
+  let defender = effective_combatant(raw_defender, defender_mega)
+  let atk_rank = match attacker_move.category {
+    @model.Physical => attacker_ranks[0]
+    @model.Special => attacker_ranks[2]
+    @model.Status => 0
+  }
+  let def_rank = match attacker_move.category {
+    @model.Physical => defender_ranks[1]
+    @model.Special => defender_ranks[3]
+    @model.Status => 0
+  }
+  let outcomes = compute_damage_variants(
+    attacker, defender, attacker_move, atk_rank, def_rank,
+    atk_burn=attacker_burn,
+  )
+  let target_is_me = not(attacker_is_me)
+  let target_slot = defender_active
+  let attacker_slot = attacker_active
+  let leaves : Array[(Double, SwitchingGameState)] = []
+  for i = 0; i < outcomes.length(); i = i + 1 {
+    let outcome = outcomes[i]
+    let state_v = with_hp_damage(state, target_is_me, target_slot, outcome.mean_damage)
+    let sub = compose_fanouts(state_v, [
+      fn(s) {
+        apply_item_pre_damage_proc_fanout(
+          s,
+          target_is_me,
+          target_slot,
+          defender_team,
+          attacker_team,
+          pre_dmg_defender_hp,
+          attacker_move,
+          hits_count=outcome.hits_count,
+        )
+      },
+      fn(s) {
+        apply_item_post_damage_proc_fanout(
+          s,
+          target_is_me,
+          target_slot,
+          defender_team,
+          attacker_team,
+          pre_dmg_defender_hp,
+          attacker_move,
+          hits_count=outcome.hits_count,
+        )
+      },
+      fn(s) {
+        maybe_apply_status_fanout(
+          s,
+          target_is_me,
+          target_slot,
+          defender_team,
+          attacker_move,
+          hits_count=outcome.hits_count,
+        )
+      },
+      fn(s) {
+        apply_contact_proc_fanout(
+          s,
+          attacker_is_me,
+          attacker_slot,
+          target_slot,
+          attacker_team,
+          defender_team,
+          attacker_move,
+          hits_count=Some(outcome.hits_count),
+        )
+      },
+    ])
+    for j = 0; j < sub.length(); j = j + 1 {
+      let (p, s) = sub[j]
+      leaves.push((outcome.probability * p, s))
+    }
+  }
+  leaves
+}
+
+///|
+/// Phase 2-D (#91): copy `state` and subtract `damage` from the defender HP
+/// at `target_slot`, clamped to 0. Other arrays are spread-shared from the
+/// input state (post-hit fanouts return fresh states rather than mutating).
+fn with_hp_damage(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  damage : Int,
+) -> SwitchingGameState {
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  if target_is_me {
+    my_hps[target_slot] = clamp_zero(my_hps[target_slot] - damage)
+  } else {
+    opp_hps[target_slot] = clamp_zero(opp_hps[target_slot] - damage)
+  }
+  { ..state, my_hps, opp_hps }
+}
+
+///|
 /// Cache key for memoized mean damage. `my_attacker` distinguishes which
 /// side's team the attacker/defender indices reference — without it my_team[0]
 /// and opp_team[0] would collide. Ranks are stored pre-resolved (already

@@ -359,8 +359,9 @@ fn count_champions_assets() -> (Int, Int) {
     Ok(d) => d
     Err(_) => return (0, 0)
   }
-  let items_count = match
-    @db.query_binds(db, "SELECT COUNT(*) FROM champions.items", []) {
+  // champions.db が main 接続なので prefix なしで `items` / `pokemon` を
+  // 直接参照する。
+  let items_count = match @db.query_binds(db, "SELECT COUNT(*) FROM items", []) {
     Ok(rows) =>
       if rows.length() == 0 {
         0
@@ -372,11 +373,18 @@ fn count_champions_assets() -> (Int, Int) {
       }
     Err(_) => 0
   }
-  // champions_pokemon table doesn't exist yet (#94 follow-up). Use the
-  // M-A count as a proxy until the dedicated table lands.
-  let mons_count = @db.available_regulations().length() // placeholder
-  let _ = mons_count
-  let real_mons = ma_pokemon_count()
+  let real_mons = match @db.query_binds(db, "SELECT COUNT(*) FROM pokemon", []) {
+    Ok(rows) =>
+      if rows.length() == 0 {
+        ma_pokemon_count()
+      } else {
+        match rows[0][0] {
+          Some(s) => parse_count_int(s)
+          None => ma_pokemon_count()
+        }
+      }
+    Err(_) => ma_pokemon_count()
+  }
   @db.close(db)
   (items_count, real_mons)
 }
@@ -528,7 +536,7 @@ fn run_damage_bench(
       return
     }
   }
-  with_db(fn(db) {
+  with_db(version=version, fn(db) {
     let atk_p = match @db.query_pokemon(db, attacker_name, version) {
       Ok(p) => p
       Err(e) => {
@@ -1577,41 +1585,44 @@ fn[T] with_db(f : (@db.Db) -> T, version~ : String = "") -> T {
       panic()
     }
   }
-  let db = match @db.open(db_path) {
-    Ok(d) => d
-    Err(e) => {
-      println("Error: " + e)
-      panic()
-    }
-  }
-  match @db.validate_schema(db) {
-    Ok(_) => ()
-    Err(e) => {
-      println("Error: " + e)
-      @db.close(db)
-      panic()
-    }
-  }
-  if version == "champions" {
+  // version="champions" は新スキーマ (champions.db を main、pokedex.db を
+  // attach AS pokedex) で開く。それ以外は従来通り pokedex.db のみ。
+  // `validate_schema` は pokedex.db のテーブルを前提とするため、Champions
+  // 経路では呼び出さない (pokedex 側のテーブルは pokedex.* でアクセス可能)。
+  let db = if version == "champions" {
     let champions_path = resolve_champions_db_path_from(db_path)
-    if @db.file_exists(champions_path) {
-      match @db.attach_champions(db, champions_path) {
-        Ok(_) => ()
-        Err(e) => {
-          println("Error: failed to attach champions.db: " + e)
-          @db.close(db)
-          panic()
-        }
-      }
-    } else {
+    if not(@db.file_exists(champions_path)) {
       println(
         "Error: champions.db not found at " +
         champions_path +
         " — run ./setup.sh after the platform refactor lands.",
       )
-      @db.close(db)
       panic()
     }
+    match @db.open_for(db_path, "champions") {
+      Ok(d) => d
+      Err(e) => {
+        println("Error: " + e)
+        panic()
+      }
+    }
+  } else {
+    let d = match @db.open(db_path) {
+      Ok(d) => d
+      Err(e) => {
+        println("Error: " + e)
+        panic()
+      }
+    }
+    match @db.validate_schema(d) {
+      Ok(_) => ()
+      Err(e) => {
+        println("Error: " + e)
+        @db.close(d)
+        panic()
+      }
+    }
+    d
   }
   let result = f(db)
   @db.close(db)
@@ -1633,7 +1644,7 @@ fn run_query(
   game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     match @db.query_pokemon(db, name, game.version) {
       Ok(p) => println(@cli.format_pokemon(p, format))
       Err(e) => println("Error: " + e)
@@ -1676,7 +1687,7 @@ fn run_search(
   game : GameContext,
   format : @cli.OutputFormat,
 ) -> Unit {
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     match @db.search_by_type(db, type1, type2, min_speed, game.version) {
       Ok(results) => {
         let filtered = if game.regulation != "" {
@@ -1967,7 +1978,7 @@ fn run_damage(
       }
     _ => ()
   }
-  with_db(fn(db) {
+  with_db(version=game.version, fn(db) {
     let atk_pokemon = match @db.query_pokemon(db, attacker_name, game.version) {
       Ok(p) => p
       Err(e) => {
@@ -2489,7 +2500,7 @@ fn run_stat_calc(
       println("Error: Total SP must be ≤ 66, got " + total.to_string())
       return
     }
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let stats = @damage.calc_all_stats_champions(pokemon, sps, nature)
@@ -2505,7 +2516,7 @@ fn run_stat_calc(
   } else {
     let evs = @cli.parse_csv_ints(evs_str, 0, 6)
     let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let stats = @damage.calc_all_stats(pokemon, ivs, evs, nature)
@@ -2534,7 +2545,7 @@ fn run_stat_reverse(
   if stats_str.length() > 0 {
     // Pokemon mode
     let actual_stats = @cli.parse_csv_ints(stats_str, 0, 6)
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, target, game.version) {
         Ok(pokemon) => {
           if is_champ {
@@ -2664,7 +2675,7 @@ fn run_hbd(
       )
       return
     }
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let result = if top <= 1 {
@@ -2687,7 +2698,7 @@ fn run_hbd(
     })
   } else {
     let ivs = @cli.parse_csv_ints(ivs_str, 31, 6)
-    with_db(fn(db) {
+    with_db(version=game.version, fn(db) {
       match @db.query_pokemon(db, name, game.version) {
         Ok(pokemon) => {
           let result = if top <= 1 {

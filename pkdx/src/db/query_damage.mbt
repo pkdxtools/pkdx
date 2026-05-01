@@ -1,10 +1,15 @@
 ///|
 /// Look up a move by name (Japanese).
+///
+/// version="champions" は champions.db (新スキーマ) ルートに delegate する。
 pub fn query_move(
   db : Db,
   move_name : String,
   version : String,
 ) -> Result[@model.Move, String] {
+  if version == "champions" {
+    return query_champions_move(db, move_name)
+  }
   let waza_ver = to_waza_version(version)
   let sql =
     #|SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,

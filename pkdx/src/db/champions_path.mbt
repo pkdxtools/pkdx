@@ -159,37 +159,43 @@ pub fn open_champions_rwc(champions_path : String) -> Result[Db, String] {
 }
 
 ///|
-/// `open_for(pokedex_path, version)` — version-aware DB open. For
-/// `version == "champions"` opens pokedex.db (read-only) and attaches
-/// champions.db as `champions` so cross-DB JOINs resolve. Other
-/// versions get pokedex.db alone. Used by `pkdx context` and other CLI
-/// readers that need a single Db handle without owning the routing.
+/// `open_for(pokedex_path, version)` — version-aware DB open.
+///
+/// `version == "champions"` opens **champions.db** (the new SSoT schema:
+/// `pokemon` / `pokemon_name` / `move` / `move_name` / `learnset` /
+/// `items` / `item_effect`) and attaches pokedex.db as `pokedex` so
+/// cross-DB lookups against shared tables (`move_meta` / `pokedex_name`
+/// for upstream pokedex 系メタ) still resolve. Champions data itself
+/// resides on the main connection so the SQL doesn't need a `champions.`
+/// prefix. champions.db が存在しないインストールでは pokedex.db を
+/// fallback に開く (cmd_context が "0 items" 表示で追従)。
+///
+/// 他の version は pokedex.db を main で開いて attach は行わない (旧挙動)。
 pub fn open_for(
   pokedex_path : String,
   version : String,
 ) -> Result[Db, String] {
-  match open(pokedex_path) {
-    Err(e) => Err(e)
-    Ok(db) =>
-      if version == "champions" {
-        let champions_path = resolve_champions_db_path_from(pokedex_path)
-        if not(file_exists(champions_path)) {
-          // Tolerate missing champions.db — caller (cmd_context) treats
-          // an attach failure / missing tables as "0 items". Returns
-          // pokedex-only handle so existing queries still work.
-          Ok(db)
-        } else {
-          match attach_champions(db, champions_path) {
+  if version == "champions" {
+    let champions_path = resolve_champions_db_path_from(pokedex_path)
+    if not(file_exists(champions_path)) {
+      // champions.db 未生成 (setup.sh 未実行 / 旧 install): pokedex.db
+      // のみ open。Champions レギュレーションのクエリは空結果になる。
+      open(pokedex_path)
+    } else {
+      match open(champions_path) {
+        Err(e) => Err(e)
+        Ok(db) =>
+          match attach_pokedex(db, pokedex_path) {
             Err(e) => {
               close(db)
               Err(e)
             }
             Ok(_) => Ok(db)
           }
-        }
-      } else {
-        Ok(db)
       }
+    }
+  } else {
+    open(pokedex_path)
   }
 }
 

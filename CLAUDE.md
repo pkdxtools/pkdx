@@ -140,8 +140,8 @@ pokedex/                  # git submodule (towakey/pokedex)
   champions.db            # Champions 専用 DB (sibling、`pkdx migrate` が自動生成)
   er.md                   # pokedex.db の ER 図
 
-champout/                 # git submodule (projectpokemon/champout, dev-only)
-  masterdata/             # personal.json / waza.json / waza_array.json
+champout/                 # git submodule (projectpokemon/champout) — Champions 入力ソース。setup.sh が init
+  masterdata/             # personal.json / waza.json / waza_array.json / item.json
   rom-txt/jpn/            # OriginalText ラベル (typename / tokusei / monsname / wazaname / itemname / zkn_form_syn)
 
 site/
@@ -176,18 +176,20 @@ site/
 
 - `pkdx_patch/NNN_name/data.json` に中間 JSON、ロジックは `pkdx/src/migrate/mNNN_*.mbt`
 - ランナーは **2-stage**: `migrations_pokedex()` が pokedex.db に、`migrations_champions()` が champions.db に対して順次適用する。`pkdx migrate` は両方を一度に流す
-- `setup.sh` Step 3.5 が `champions.db` を rm してから `pkdx migrate --repo-root` を呼び出すので、毎回 fresh から再構築される。pokedex.db / champions.db にユーザーランタイムの書き込みは存在しない（damage cache は別ファイル `box/cache/damage_cache.sqlite`）ため再生成しても何も失われない。pokedex.db は upstream submodule 管理 — 完全に作り直したい場合は `rm pokedex/pokedex.db && ./setup.sh`
+- `setup.sh` Step 3.5 が `pkdx db init` で `pkdx_patch/{009..012}/data.json` を champout から再生成 → `champions.db` を rm → `pkdx migrate --repo-root` の順で実行する。毎回 fresh から再構築されるので、pokedex.db / champions.db にユーザーランタイムの書き込みは存在しない（damage cache は別ファイル `box/cache/damage_cache.sqlite`）。pokedex.db は upstream submodule 管理 — 完全に作り直したい場合は `rm pokedex/pokedex.db && ./setup.sh`
 - bookkeeping は廃止済み。各 migration は冪等（DELETE → 再投入 / INSERT OR REPLACE / existence-check / ALTER TABLE は ensure_column）として実装されており、何度流しても data.json の状態へ収束する
 
-### Champions 中間 JSON の再生成 (dev のみ)
+### Champions 中間 JSON の生成
 
-champout submodule を初期化 (`git submodule update --init champout`) した上で:
+`pkdx_patch/{009_champions_pokemon, 010_champions_moves, 011_champions_learnset, 012_items}/data.json` は **commit せず** (`.gitignore`)、`setup.sh` 実行時に毎回ローカル生成する。これでフォーク間で champout 由来のデータ (~9MB) が複製されず、repo size を抑えられる。エンドユーザーも champout submodule の init とローカル生成を行うため、ネットワーク前提の運用となる。
+
+手動で再生成したい場合 (champout を先頭に追従させた等):
 
 ```bash
+git submodule update --remote champout
 bin/pkdx db init --champout ./champout --out ./pkdx_patch --repo-root .
+bin/pkdx migrate --repo-root .
 ```
-
-これで `pkdx_patch/{009_champions_pokemon, 010_champions_moves, 011_champions_learnset, 012_items}/data.json` が更新される。エンドユーザーは `pkdx db init` を走らせる必要はなく、commit 済みの中間 JSON を `pkdx migrate` が読むだけで champions.db が再構築される。
 
 ## Champions SP (Stat Points) システム
 

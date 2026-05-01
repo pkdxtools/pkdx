@@ -1,14 +1,10 @@
 ///|
-/// Migrations that target `pokedex.db`. Today this is every existing
-/// migration: even the Champions-flavoured ones (002, 003, 004, 005)
-/// flow data into shared upstream tables (`pokedex` / `pokedex_name` /
-/// `local_pokedex_waza` / `local_waza`) and then derive
-/// `champions_learnset` from those rows. Splitting them out would
-/// require either a cross-DB read in m005 or an upstream cleanup that's
-/// out of scope here.
+/// Migrations that target `pokedex.db`.
 ///
-/// The split exists so future Champions-only tables (#94 items) can be
-/// targeted at champions.db without touching pokedex.db at all.
+/// Champions マスターデータ (002〜005) と m013_items はかつて pokedex.db に
+/// 書き込んでいたが、champout を SSoT に切り替えた段階で champions.db 側の
+/// 新 migration (m014〜m018) に役割を譲り、ここでは履歴維持のため no-op
+/// として残してある。pokedex.db に残った旧データは m019 が一括で掃除する。
 pub fn migrations_pokedex() -> Array[Migration] {
   [
     { name: "001_mega_legendsza", run: run_001 },
@@ -22,31 +18,35 @@ pub fn migrations_pokedex() -> Array[Migration] {
     { name: "010_move_meta_posthit", run: run_010 },
     { name: "011_form_name_aliases", run: run_011 },
     { name: "012_gender_symbol_aliases", run: run_012 },
+    { name: "013_items", run: run_013 },
+    { name: "019_pokedex_purge_champions", run: run_019 },
   ]
 }
 
 ///|
-/// Migrations that target `champions.db`. P2-C (#94) ships
-/// `013_items` here — the items / item_effect schema. Future
-/// Champions-only tables append below.
+/// Migrations that target `champions.db`. m014 が DDL を流し、m015〜m018 が
+/// pkdx_patch 配下の中間 JSON (champout adapter 出力) を投入する。
 pub fn migrations_champions() -> Array[Migration] {
-  [{ name: "013_items", run: run_013 }]
+  [
+    { name: "014_champions_init_schema", run: run_014 },
+    { name: "015_champions_pokemon", run: run_015 },
+    { name: "016_champions_moves", run: run_016 },
+    { name: "017_champions_learnset", run: run_017 },
+    { name: "018_champions_items", run: run_018 },
+  ]
 }
 
 ///|
 /// Combined migration list for legacy callers / tests that need a single
-/// stream. The order matches the historical 001 → 013 chronology so
-/// already-patched installs see the same sequence and `pkdx_migrations`
-/// bookkeeping rows remain compatible.
+/// stream. The order matches the historical chronology so already-patched
+/// installs see the same sequence and `pkdx_migrations` bookkeeping rows
+/// remain compatible.
 ///
 /// New code should prefer `migrations_pokedex()` / `migrations_champions()`
 /// directly so each DB only sees the migrations that target it.
 pub fn migrations() -> Array[Migration] {
   let pdx = migrations_pokedex()
   let cmp = migrations_champions()
-  // Concatenate then sort by name. The split lists each grow in
-  // chronological order so a simple stable sort by `name` reconstructs
-  // the original 001 → 013 sequence used by legacy bookkeeping.
   let combined : Array[Migration] = []
   for i = 0; i < pdx.length(); i = i + 1 {
     combined.push(pdx[i])
@@ -54,7 +54,7 @@ pub fn migrations() -> Array[Migration] {
   for i = 0; i < cmp.length(); i = i + 1 {
     combined.push(cmp[i])
   }
-  // Insertion sort: stable, plenty fast for ≤ 20 items.
+  // Insertion sort: stable, plenty fast for ≤ 30 items.
   for i = 1; i < combined.length(); i = i + 1 {
     let cur = combined[i]
     let mut j = i
@@ -131,10 +131,7 @@ pub fn latest_migration_name_champions() -> String {
 /// entries when *either* DB advances. Format is
 /// `<pokedex_latest>:<champions_latest>` — string equality on this
 /// blob is enough for the existing `validate_and_sync_meta` flow, no
-/// schema change in `damage_cache_meta` required. Empty
-/// `champions_latest` (P1-B baseline, before #94 ships) still produces
-/// a stable string, so opening a cache against an installation that
-/// has only run pokedex migrations works without a forced wipe.
+/// schema change in `damage_cache_meta` required.
 pub fn combined_migration_fingerprint() -> String {
   latest_migration_name_pokedex() + ":" + latest_migration_name_champions()
 }

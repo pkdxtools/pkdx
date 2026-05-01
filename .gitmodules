@@ -1,3 +1,6 @@
 [submodule "pokedex"]
 	path = pokedex
 	url = https://github.com/towakey/pokedex.git
+[submodule "champout"]
+	path = champout
+	url = https://github.com/projectpokemon/champout.git

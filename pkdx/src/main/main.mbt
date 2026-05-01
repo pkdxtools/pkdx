@@ -171,6 +171,7 @@ fn build_cli() -> @admiral.CliApp {
       cmd_cache_clear(),
       cmd_damage_bench(),
       cmd_convert(),
+      cmd_db(),
       cmd_regulation(),
       cmd_context(),
     ],
@@ -670,6 +671,218 @@ fn cmd_convert() -> @admiral.CommandDef {
       ),
     ],
   )
+}
+
+///|
+/// `pkdx db init` — Champions マスターデータの中間 JSON を champout
+/// submodule から再生成する。実行は champout 更新時の開発者作業のみで、
+/// 通常のフォークユーザーが setup で走らせる必要はない。
+///
+/// 入力 (デフォルトパス):
+///   `<repo_root>/champout/{masterdata,rom-txt/jpn}/`
+/// 出力:
+///   `<repo_root>/pkdx_patch/{002_champions_pokemon, 003_champions_moves,
+///                            004_champions_learnset, 013_items}/data.json`
+fn cmd_db() -> @admiral.CommandDef {
+  @admiral.command(
+    name="db",
+    description="Champions DB build/init commands",
+    subcommands=[
+      @admiral.command(
+        name="init",
+        description="Regenerate intermediate JSON from champout submodule",
+        options=[
+          @admiral.string(
+            "champout",
+            description="Path to champout submodule (default: <repo_root>/champout)",
+            default=Some(""),
+          ),
+          @admiral.string(
+            "out",
+            description="Output root for intermediate JSON (default: <repo_root>/pkdx_patch)",
+            default=Some(""),
+          ),
+          @admiral.string(
+            "repo-root",
+            description="Project root used to resolve default paths",
+            default=Some("."),
+          ),
+        ],
+        run=Some(fn(ctx) {
+          let repo_root = ctx_str(ctx, "repo-root")
+          let champout_arg = ctx_str_opt(ctx, "champout")
+          let out_arg = ctx_str_opt(ctx, "out")
+          let champout_dir = if champout_arg.length() == 0 {
+            repo_root + "/champout"
+          } else {
+            champout_arg
+          }
+          let out_dir = if out_arg.length() == 0 {
+            repo_root + "/pkdx_patch"
+          } else {
+            out_arg
+          }
+          run_db_init(champout_dir, out_dir)
+        }),
+      ),
+    ],
+  )
+}
+
+///|
+fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
+  // 1. ラベルファイル一括ロード
+  let bundle = match @champout_adapter.load_label_bundle(champout_dir) {
+    Err(e) => {
+      exit_error("label bundle load failed: " + e)
+      return
+    }
+    Ok(b) => b
+  }
+  // 2. masterdata 4 ファイルをパース
+  let masterdata = champout_dir + "/masterdata"
+  let personal_json = match read_json(masterdata + "/personal.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  let waza_json = match read_json(masterdata + "/waza.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  let waza_learn_json = match read_json(masterdata + "/waza_learn.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  let item_json = match read_json(masterdata + "/item.json") {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(j) => j
+  }
+  // 3. mapper 実行
+  let pokemons = match @champout_adapter.map_pokemon_entries(
+      bundle, personal_json,
+    ) {
+    Err(e) => {
+      exit_error("pokemon mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  let moves = match @champout_adapter.map_move_entries(bundle, waza_json) {
+    Err(e) => {
+      exit_error("move mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  // valid_ids: pokemon_mapper の出力 id 集合 (= is_valid='1' で絞った後)
+  let valid_ids : Map[String, Bool] = Map::new()
+  for i = 0; i < pokemons.length(); i = i + 1 {
+    valid_ids[pokemons[i].id] = true
+  }
+  let learnsets = match @champout_adapter.map_learnset_entries(
+      bundle, waza_learn_json, valid_ids,
+    ) {
+    Err(e) => {
+      exit_error("learnset mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  let items = match @champout_adapter.map_item_entries(bundle, item_json) {
+    Err(e) => {
+      exit_error("item mapping failed: " + e)
+      return
+    }
+    Ok(v) => v
+  }
+  // 4. シリアライズ + ファイル書き出し
+  let pokemon_path = out_dir + "/002_champions_pokemon/data.json"
+  let move_path = out_dir + "/003_champions_moves/data.json"
+  let learnset_path = out_dir + "/004_champions_learnset/data.json"
+  let item_path = out_dir + "/013_items/data.json"
+  match write_intermediate(
+      pokemon_path,
+      @champions_schema.serialize_pokemon_entries(pokemons),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  match write_intermediate(
+      move_path, @champions_schema.serialize_move_entries(moves),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  match write_intermediate(
+      learnset_path,
+      @champions_schema.serialize_learnset_entries(learnsets),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  match write_intermediate(
+      item_path, @champions_schema.serialize_item_entries(items),
+    ) {
+    Err(e) => {
+      exit_error(e)
+      return
+    }
+    Ok(_) => ()
+  }
+  println(
+    "pkdx db init: wrote " +
+    pokemons.length().to_string() +
+    " pokemon, " +
+    moves.length().to_string() +
+    " moves, " +
+    learnsets.length().to_string() +
+    " learnset rows, " +
+    items.length().to_string() +
+    " items.",
+  )
+}
+
+///|
+fn read_json(path : String) -> Result[Json, String] {
+  let raw = match @db.read_file(path) {
+    None => return Err("file not found: " + path)
+    Some(s) => s
+  }
+  try Ok(@json.parse(raw)) catch {
+    e => Err("JSON parse failed at " + path + ": " + e.to_string())
+  }
+}
+
+///|
+fn write_intermediate(path : String, json : Json) -> Result[Unit, String] {
+  let content = json.stringify(indent=2) + "\n"
+  let rc = pkdx_write_file(@db.to_c_bytes(path), @db.to_c_bytes(content))
+  if rc == 0 {
+    Ok(())
+  } else {
+    Err("write_file failed (rc=" + rc.to_string() + "): " + path)
+  }
 }
 
 ///|

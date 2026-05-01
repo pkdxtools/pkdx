@@ -63,9 +63,12 @@ fi
 echo ""
 
 # --- Step 1: pokedex submodule ---
+# champout submodule (Champions マスターデータの SSoT) はここでは init しない。
+# `pkdx db init` を走らせる開発者だけが必要とするため、フォークユーザーや
+# 配布バイナリを使うだけのユーザーには無関係。明示的に pokedex のみを指定する。
 echo "[1/5] Initializing pokedex submodule..."
 if [ ! -d "$REPO_ROOT/pokedex/.git" ] && [ ! -f "$REPO_ROOT/pokedex/.git" ]; then
-  git -C "$REPO_ROOT" submodule update --init
+  git -C "$REPO_ROOT" submodule update --init pokedex
   echo "  Done."
 else
   echo "  Already initialized."

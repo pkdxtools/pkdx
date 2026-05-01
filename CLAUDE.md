@@ -88,12 +88,12 @@ pkdx/                     # MoonBit CLI ツール (native binary)
       screened_switching_game.mbt  # MC screening → SwitchingGame refine パイプライン
       team_payoff.mbt       # 選出 (k-combination) ディスパッチ
       cli_nash.mbt, cli_select.mbt, cli_meta.mbt  # JSON/DOT ハンドラ
-    migrate/               # pkdx_patch マイグレーションランナー (2-stage)
-      runner.mbt            # pkdx_migrations 管理 + トランザクション + 順次適用 (pokedex.db / champions.db 別々)
+    migrate/               # pkdx_patch マイグレーションランナー (2-stage, bookkeeping なし)
+      runner.mbt            # トランザクション + 順次適用 (pokedex.db / champions.db 別々)
       migrations.mbt        # 登録配列 (migrations_pokedex / migrations_champions / 互換用 migrations)
       json_util.mbt         # Json アクセサ
-      m001 / m006-m008 / m010-m012   # pokedex.db ターゲット (mega legends-za, move_meta, mega_forms, ailment, posthit, form_name_aliases, gender_symbol_aliases)
-      m014-m018             # champions.db ターゲット (init_schema → pokemon → moves → learnset → items)
+      m001-m007             # pokedex.db ターゲット (mega_legendsza → move_meta → mega_forms → ailment → posthit → form_name_aliases → gender_symbol_aliases)
+      m008-m012             # champions.db ターゲット (init_schema → pokemon → moves → learnset → items)
     champions_schema/      # champions.db のスキーマ宣言 (DDL / 型 / parse / serialize)
       ddl.mbt, types.mbt, validate.mbt, serialize.mbt
     champout_adapter/      # champout (= projectpokemon/champout submodule) → 中間 JSON アダプター
@@ -176,8 +176,8 @@ site/
 
 - `pkdx_patch/NNN_name/data.json` に中間 JSON、ロジックは `pkdx/src/migrate/mNNN_*.mbt`
 - ランナーは **2-stage**: `migrations_pokedex()` が pokedex.db に、`migrations_champions()` が champions.db に対して順次適用する。`pkdx migrate` は両方を一度に流す
-- `setup.sh` Step 3.5 が `pkdx migrate --repo-root` を呼び出して **両 DB を同時に最新化**。pkdx バイナリ内蔵 SQLite3 で完結するため Ruby / sqlite3 gem は不要（cc on the web 等のコンテナでも動作）
-- パッチは冪等。各 DB に専用の `pkdx_migrations` テーブルが立ち、適用済み migration を記録する
+- `setup.sh` Step 3.5 が `champions.db` を rm してから `pkdx migrate --repo-root` を呼び出すので、毎回 fresh から再構築される。pokedex.db / champions.db にユーザーランタイムの書き込みは存在しない（damage cache は別ファイル `box/cache/damage_cache.sqlite`）ため再生成しても何も失われない。pokedex.db は upstream submodule 管理 — 完全に作り直したい場合は `rm pokedex/pokedex.db && ./setup.sh`
+- bookkeeping は廃止済み。各 migration は冪等（DELETE → 再投入 / INSERT OR REPLACE / existence-check / ALTER TABLE は ensure_column）として実装されており、何度流しても data.json の状態へ収束する
 
 ### Champions 中間 JSON の再生成 (dev のみ)
 
@@ -187,7 +187,7 @@ champout submodule を初期化 (`git submodule update --init champout`) した�
 bin/pkdx db init --champout ./champout --out ./pkdx_patch --repo-root .
 ```
 
-これで `pkdx_patch/{002_champions_pokemon, 003_champions_moves, 004_champions_learnset, 013_items}/data.json` が更新される。エンドユーザーは `pkdx db init` を走らせる必要はなく、commit 済みの中間 JSON を `pkdx migrate` が読むだけで champions.db が再構築される。
+これで `pkdx_patch/{009_champions_pokemon, 010_champions_moves, 011_champions_learnset, 012_items}/data.json` が更新される。エンドユーザーは `pkdx db init` を走らせる必要はなく、commit 済みの中間 JSON を `pkdx migrate` が読むだけで champions.db が再構築される。
 
 ## Champions SP (Stat Points) システム
 

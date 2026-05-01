@@ -60,7 +60,7 @@ active 自身が HP=0 の場合は forced switch のみ。
 
 ### 積み技 (ランク補正)
 
-`move.stat_effects` が `[(stat_idx, delta), ...]` の形で載っている技 (DB の `move_meta` テーブルから populate) は、使用者のランクベクトルを `clamp_rank` (`[-2, +2]`) しながら更新する。`pkdx_patch/006_move_meta/data.json` に収録済みの主要な積み技: `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし — 追加は `data.json` に行を 1 つ足して `./setup.sh` を走らせれば反映される。
+`move.stat_effects` が `[(stat_idx, delta), ...]` の形で載っている技 (DB の `move_meta` テーブルから populate) は、使用者のランクベクトルを `clamp_rank` (`[-2, +2]`) しながら更新する。`pkdx_patch/002_move_meta/data.json` に収録済みの主要な積み技: `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし — 追加は `data.json` に行を 1 つ足して `./setup.sh` を走らせれば反映される。
 
 ### Terminal value
 
@@ -122,7 +122,7 @@ value(state, ..., cache, stats):
 
 ### 技メタ (`priority` / `stat_effects`)
 
-技の `priority` と自己ランク補正 (`stat_effects`) は `@model.Move` 構造体に載っていて、`pkdx moves` / `pkdx damage` のクエリ時に `local_waza` と `pkdx_patch/006_move_meta` の `move_meta` テーブルを LEFT JOIN して自動的に populate される (未登録技はデフォルト `priority=0` / `stat_effects=[]`)。
+技の `priority` と自己ランク補正 (`stat_effects`) は `@model.Move` 構造体に載っていて、`pkdx moves` / `pkdx damage` のクエリ時に `local_waza` と `pkdx_patch/002_move_meta` の `move_meta` テーブルを LEFT JOIN して自動的に populate される (未登録技はデフォルト `priority=0` / `stat_effects=[]`)。
 
 ```moonbit
 // @model.Move (抜粋)
@@ -133,7 +133,7 @@ pub(all) struct Move {
 
 payoff 層 (`SwitchingGame` / `MonteCarloSim`) は再帰 / rollout 内で `move.priority` / `move.stat_effects` を直接参照するだけ。別キャッシュや lookup 関数は不要。
 
-スキル側は `pkdx moves` 出力 (priority / stat_effects 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。新技を追加するときは `pkdx_patch/006_move_meta/data.json` に行を追加するだけ — コード変更は不要。
+スキル側は `pkdx moves` 出力 (priority / stat_effects 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。新技を追加するときは `pkdx_patch/002_move_meta/data.json` に行を追加するだけ — コード変更は不要。
 
 ### `ValueStats` / `DamageCache` (memoization 観測)
 
@@ -333,7 +333,7 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 
 - `SwitchingGame` / `ScreenedSwitchingGame` の Double format 対応 (現在 Single 専用)
 - 状態異常 / 天候 / フィールドのモデル化
-- 変化技の効果拡充 — 上記 Post-hit 節 参照。`pkdx_patch/010_move_meta_posthit/data.json` に行を足すだけで追加可能。確率副次効果・特性免疫を扱う場合は `move_meta` テーブルのスキーマと `@model.Move` 側のフィールド追加が必要
+- 変化技の効果拡充 — 上記 Post-hit 節 参照。`pkdx_patch/005_move_meta_posthit/data.json` に行を足すだけで追加可能。確率副次効果・特性免疫を扱う場合は `move_meta` テーブルのスキーマと `@model.Move` 側のフィールド追加が必要
 - `team_rollout` の ε-greedy から局所 Nash LP への切替 (rollout の変化技評価を精緻化)
 - Aggressive αβ-pruning (child alpha/beta propagation) — 現状の node-level 保守的実装は子を常に `(-1, +1)` で呼ぶため bit-exact だが、速度は saddle skip に依存する
 - Iterative deepening + transposition-table による action reordering — αβ の β-cutoff ヒット率を上げる

@@ -2,8 +2,8 @@
 /// `pkdx_patch/004_champions_learnset/data.json` を champions.db.learnset
 /// に投入する。`(id, waza)` の複合 PK で冪等。conditions は champout 由来
 /// データ全行 "基本" として入る (champout は経路情報を持たないため)。
-pub fn run_017(db : @db.Db, repo_root : String) -> Result[String, String] {
-  let path = repo_root + "/pkdx_patch/004_champions_learnset/data.json"
+pub fn run_011(db : @db.Db, repo_root : String) -> Result[String, String] {
+  let path = repo_root + "/pkdx_patch/011_champions_learnset/data.json"
   let raw = match @db.read_file(path) {
     None => return Err(path + " not found.")
     Some(s) => s

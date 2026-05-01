@@ -16,9 +16,6 @@ const META_KEY_SCHEMA : String = "schema_version"
 const META_KEY_PKDX_VERSION : String = "pkdx_version"
 
 ///|
-const META_KEY_MIGRATION : String = "migration_head"
-
-///|
 /// On-disk SQLite-backed damage cache.
 ///
 /// Entries and meta live in the same database file so a single transaction
@@ -86,11 +83,13 @@ fn write_meta(
 
 ///|
 /// Compare stored meta against current values; wipe entries and rewrite
-/// meta if any are missing or mismatched.
+/// meta if any are missing or mismatched. Cache invalidation is keyed on
+/// `pkdx_version` alone — bundled migration data ships in lockstep with
+/// the binary, so version equality is enough to guarantee the seed used
+/// for cached values still matches what fresh damage queries would see.
 fn validate_and_sync_meta(
   cache_db : @db.Db,
   current_version : String,
-  current_head : String,
 ) -> Result[Unit, String] {
   let schema_v = match read_meta(cache_db, META_KEY_SCHEMA) {
     Err(e) => return Err(e)
@@ -100,14 +99,9 @@ fn validate_and_sync_meta(
     Err(e) => return Err(e)
     Ok(v) => v
   }
-  let migration_h = match read_meta(cache_db, META_KEY_MIGRATION) {
-    Err(e) => return Err(e)
-    Ok(v) => v
-  }
   let expected_schema = SCHEMA_VERSION.to_string()
-  let mismatch = match (schema_v, pkdx_v, migration_h) {
-    (Some(s), Some(p), Some(m)) =>
-      s != expected_schema || p != current_version || m != current_head
+  let mismatch = match (schema_v, pkdx_v) {
+    (Some(s), Some(p)) => s != expected_schema || p != current_version
     _ => true
   }
   if mismatch {
@@ -123,10 +117,6 @@ fn validate_and_sync_meta(
       Err(e) => return Err(e)
       Ok(_) => ()
     }
-    match write_meta(cache_db, META_KEY_MIGRATION, current_head) {
-      Err(e) => return Err(e)
-      Ok(_) => ()
-    }
   }
   Ok(())
 }
@@ -137,7 +127,6 @@ fn validate_and_sync_meta(
 fn try_open_and_init(
   path : String,
   current_version : String,
-  current_head : String,
 ) -> Result[DamageDiskCache, String] {
   match @db.open_rwc(path) {
     Err(e) => Err(e)
@@ -148,7 +137,7 @@ fn try_open_and_init(
           Err(e)
         }
         Ok(_) =>
-          match validate_and_sync_meta(cache_db, current_version, current_head) {
+          match validate_and_sync_meta(cache_db, current_version) {
             Err(e) => {
               @db.close(cache_db)
               Err(e)
@@ -182,18 +171,14 @@ fn looks_like_corruption(err : String) -> Bool {
 pub fn open_or_init(
   path : String,
   current_pkdx_version : String,
-  current_migration_head : String,
 ) -> Result[DamageDiskCache, String] {
-  match try_open_and_init(path, current_pkdx_version, current_migration_head) {
+  match try_open_and_init(path, current_pkdx_version) {
     Ok(cache) => Ok(cache)
     Err(first_err) =>
       if looks_like_corruption(first_err) {
         match @db.unlink_file(path) {
           Err(u) => Err("open failed: " + first_err + "; unlink failed: " + u)
-          Ok(_) =>
-            try_open_and_init(
-              path, current_pkdx_version, current_migration_head,
-            )
+          Ok(_) => try_open_and_init(path, current_pkdx_version)
         }
       } else {
         Err(first_err)
@@ -250,14 +235,12 @@ pub fn close(cache : DamageDiskCache) -> Unit {
 }
 
 ///|
-/// Update the cache's meta rows to match the current pkdx version and
-/// migration head without touching entries. Called at the tail of
-/// `pkdx migrate` so subsequent `pkdx damage` invocations don't wipe
-/// their cache.
+/// Update the cache's meta rows to match the current pkdx version
+/// without touching entries. Called at the tail of `pkdx migrate` so
+/// subsequent `pkdx damage` invocations don't wipe their cache.
 pub fn sync_meta_after_migrate(
   path : String,
   pkdx_version : String,
-  migration_head : String,
 ) -> Result[Unit, String] {
   match @db.open_rwc(path) {
     Err(e) => Err(e)
@@ -273,13 +256,11 @@ pub fn sync_meta_after_migrate(
       let expected_schema = SCHEMA_VERSION.to_string()
       let r1 = write_meta(cache_db, META_KEY_SCHEMA, expected_schema)
       let r2 = write_meta(cache_db, META_KEY_PKDX_VERSION, pkdx_version)
-      let r3 = write_meta(cache_db, META_KEY_MIGRATION, migration_head)
       @db.close(cache_db)
-      match (r1, r2, r3) {
-        (Ok(_), Ok(_), Ok(_)) => Ok(())
-        (Err(e), _, _) => Err(e)
-        (_, Err(e), _) => Err(e)
-        (_, _, Err(e)) => Err(e)
+      match (r1, r2) {
+        (Ok(_), Ok(_)) => Ok(())
+        (Err(e), _) => Err(e)
+        (_, Err(e)) => Err(e)
       }
     }
   }

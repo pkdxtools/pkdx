@@ -6,7 +6,7 @@
 /// 旧スキーマでは Champions メガも pokedex.db に住んでいたため検証対象に
 /// 含めていたが、Champions マスターデータは champions.db 側へ完全に移った。
 /// Champions の整合性は champions.db (m015) の責任なので本検証からは外す。
-pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
+pub fn run_003(db : @db.Db, _repo_root : String) -> Result[String, String] {
   let expected = [("legendsza", 60)]
   let report_parts : Array[String] = []
   let missing : Array[String] = []

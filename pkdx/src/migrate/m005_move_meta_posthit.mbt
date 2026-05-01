@@ -3,7 +3,7 @@
 /// (recoil_num, recoil_den, self_ko, recharge) を move_meta に追加し、
 /// data.json のエントリを upsert する。stat_effects_json の構造
 /// (2 要素 → 3 要素拡張) は JSON シリアライズがそのまま通る。
-pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
+pub fn run_005(db : @db.Db, repo_root : String) -> Result[String, String] {
   let alters = [
     (
       "recoil_num",
@@ -29,7 +29,7 @@ pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
       Ok(_) => ()
     }
   }
-  let path = repo_root + "/pkdx_patch/010_move_meta_posthit/data.json"
+  let path = repo_root + "/pkdx_patch/005_move_meta_posthit/data.json"
   let raw = match @db.read_file(path) {
     Some(s) => s
     None => return Err(path + " not found.")

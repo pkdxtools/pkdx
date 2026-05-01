@@ -69,13 +69,13 @@ test "integration: build_cache_key + persistent_cache round-trip" {
   }
   let sample_json = "{\"attacker\":\"ガブリアス\",\"defender\":\"カイリュー\",\"move\":\"じしん\",\"damages\":[100,101,102],\"percents\":[50.0,51.0,52.0],\"min\":100,\"max\":102,\"defender_hp\":200,\"ko\":\"確定2発\"}"
   guard
-    open_or_init(path, "0.4.10", "010_move_meta_posthit") is Ok(cache) else {
+    open_or_init(path, "0.4.10") is Ok(cache) else {
     fail("open_or_init failed")
   }
   guard put(cache, key, sample_json) is Ok(_) else { fail("put failed") }
   close(cache)
   guard
-    open_or_init(path, "0.4.10", "010_move_meta_posthit") is Ok(cache2) else {
+    open_or_init(path, "0.4.10") is Ok(cache2) else {
     fail("reopen failed")
   }
   let got = get(cache2, key)
@@ -97,7 +97,7 @@ test "integration: two distinct inputs produce two distinct cache entries" {
   guard build_cache_key(b) is Ok(kb) else { fail("key b failed") }
   assert_true(ka != kb)
   guard
-    open_or_init(path, "0.4.10", "010_move_meta_posthit") is Ok(cache) else {
+    open_or_init(path, "0.4.10") is Ok(cache) else {
     fail("open failed")
   }
   guard put(cache, ka, "{\"rank\":0}") is Ok(_) else { fail("put a failed") }

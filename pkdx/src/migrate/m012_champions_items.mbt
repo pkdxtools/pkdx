@@ -11,8 +11,8 @@
 /// 旧 m013 が seed していた こだわりハチマキ / いのちのたま / フィラのみ は
 /// Champions マスターに存在しないため除外。将来 Champions ゲームが SV 互換
 /// アイテムを追加した時点で本 migration に追記して seed を増やす。
-pub fn run_018(db : @db.Db, repo_root : String) -> Result[String, String] {
-  let path = repo_root + "/pkdx_patch/013_items/data.json"
+pub fn run_012(db : @db.Db, repo_root : String) -> Result[String, String] {
+  let path = repo_root + "/pkdx_patch/012_items/data.json"
   let raw = match @db.read_file(path) {
     None => return Err(path + " not found.")
     Some(s) => s

@@ -229,13 +229,13 @@ $REPO_ROOT/bin/pkdx version
 
 ### 2-4: DB resync
 
-upstream の data.json 変更（道具メタ、反動技、状態異常技 等）を既存 DB に反映する。`--resync` は `pkdx_migrations` bookkeeping をクリアして全マイグレーションを再適用するため、data.json が SSoT として機能する。全マイグレーションは冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されており、再適用しても DB は data.json の状態へ収束する。
+upstream の data.json 変更（道具メタ、反動技、状態異常技 等）を既存 DB に反映する。`pkdx migrate` は bookkeeping を持たない seed-script モデルなので、毎回全マイグレーションを順次再適用する。全マイグレーションは冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されており、再適用しても DB は data.json の状態へ収束する。
 
 ```bash
-cd $REPO_ROOT && bin/pkdx migrate --resync
+cd $REPO_ROOT && bin/pkdx migrate
 ```
 
-スキップした場合（例: `pkdx tools` 更新を skip したケース）は、この step も実行不要。
+champions.db を完全に作り直したい場合は `./setup.sh` を走らせる（Step 3.5 が事前に `rm pokedex/champions.db` してから migrate を流す）。スキップした場合（例: `pkdx tools` 更新を skip したケース）は、この step も実行不要。
 
 ### 2-5: box meta.json 自動マイグレーション
 

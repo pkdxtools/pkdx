@@ -22,7 +22,7 @@
 ///     (language 非依存なので jpn/eng 両行で揃い、query_pokemon の pne 自己結合
 ///     が成立する。query_search / query_learners の `COALESCE(pn.form,'')=''`
 ///     フィルタが初めて機能するようになる)
-pub fn run_011(db : @db.Db, _repo_root : String) -> Result[String, String] {
+pub fn run_006(db : @db.Db, _repo_root : String) -> Result[String, String] {
   let langs = ["jpn", "eng"]
   let mut inserted = 0
   let mut updated = 0

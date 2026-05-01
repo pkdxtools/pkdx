@@ -380,7 +380,7 @@ stateDiagram-v2
 flowchart LR
   subgraph DB_LAYER[DB layer]
     W[local_waza] --> JW["wl.name, w.type, w.category,\npower, accuracy, pp"]
-    MM[move_meta\npkdx_patch/006] --> JMM[name_ja, priority, stat_effects_json]
+    MM[move_meta\npkdx_patch/002] --> JMM[name_ja, priority, stat_effects_json]
     W -.LEFT JOIN.-> MM
   end
 

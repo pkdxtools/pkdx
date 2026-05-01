@@ -3,7 +3,7 @@
 /// move_meta テーブルを初期化し、data.json からエントリを入れる。
 /// stat_effects は配列配列の JSON としてそのまま格納する (後続パッチ
 /// 010 が 2 要素→3 要素の拡張互換を維持する)。
-pub fn run_006(db : @db.Db, repo_root : String) -> Result[String, String] {
+pub fn run_002(db : @db.Db, repo_root : String) -> Result[String, String] {
   match @db.exec(
       db,
       "CREATE TABLE IF NOT EXISTS move_meta (name_ja TEXT PRIMARY KEY, priority INTEGER NOT NULL DEFAULT 0, stat_effects_json TEXT NOT NULL DEFAULT '[]')",
@@ -11,7 +11,7 @@ pub fn run_006(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
-  let path = repo_root + "/pkdx_patch/006_move_meta/data.json"
+  let path = repo_root + "/pkdx_patch/002_move_meta/data.json"
   let raw = match @db.read_file(path) {
     Some(s) => s
     None => return Err(path + " not found.")

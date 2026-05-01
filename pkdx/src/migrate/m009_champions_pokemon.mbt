@@ -3,8 +3,8 @@
 /// champions.db.pokemon_name に投入する。`pokemon` テーブルは PRIMARY KEY
 /// (`id`) を持つので INSERT OR REPLACE で冪等に上書きできる。
 /// `pokemon_name` も (id, language) の複合 PK で同様。
-pub fn run_015(db : @db.Db, repo_root : String) -> Result[String, String] {
-  let path = repo_root + "/pkdx_patch/002_champions_pokemon/data.json"
+pub fn run_009(db : @db.Db, repo_root : String) -> Result[String, String] {
+  let path = repo_root + "/pkdx_patch/009_champions_pokemon/data.json"
   let raw = match @db.read_file(path) {
     None => return Err(path + " not found.")
     Some(s) => s

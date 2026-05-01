@@ -2,8 +2,8 @@
 /// `pkdx_patch/003_champions_moves/data.json` を champions.db.move と
 /// champions.db.move_name に投入する。`waza` 列が PK なので INSERT OR
 /// REPLACE で冪等。技名は jpn のみ最初から登録 (eng は将来追加)。
-pub fn run_016(db : @db.Db, repo_root : String) -> Result[String, String] {
-  let path = repo_root + "/pkdx_patch/003_champions_moves/data.json"
+pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
+  let path = repo_root + "/pkdx_patch/010_champions_moves/data.json"
   let raw = match @db.read_file(path) {
     None => return Err(path + " not found.")
     Some(s) => s

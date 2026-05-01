@@ -77,22 +77,44 @@ pub fn query_champions_pokemon(
 ///|
 /// 同 globalNo の別フォームを表示名で返す。base 行 (form='') を引いた
 /// ときに「Mega や別フォームへ移動するためのキー」として使う。
+///
+/// pokemon_name は (id, language, name) 複合 PK で、合成 alias
+/// (`イダイトウ（メス）`) と form 名そのまま (`メスのすがた`) を 1 つの id
+/// に対して両方持ちうる。forms[] に出すのは globalNo を跨いで一意に
+/// 引ける合成 alias を優先したいので、id ごとに「`（` を含む alias」を
+/// 採用し、なければ form 名 (任意の 1 行) にフォールバックする。
 fn query_champions_forms(
   db : Db,
   global_no : String,
   self_id : String,
 ) -> Array[String] {
   let sql =
-    #|SELECT pn.name
+    #|SELECT
+    #|  COALESCE(
+    #|    (SELECT pn.name FROM pokemon_name pn
+    #|     WHERE pn.id = p.id AND pn.language = 'jpn' AND pn.name LIKE '%（%'
+    #|     LIMIT 1),
+    #|    (SELECT pn.name FROM pokemon_name pn
+    #|     WHERE pn.id = p.id AND pn.language = 'jpn'
+    #|     LIMIT 1)
+    #|  ) AS display_name
     #|FROM pokemon p
-    #|JOIN pokemon_name pn ON p.id = pn.id AND pn.language = 'jpn'
     #|WHERE p.global_no = ? AND p.id != ?
     #|ORDER BY p.id
   match query(db, sql, [global_no, self_id]) {
     Ok(rows) => {
       let out : Array[String] = []
+      let seen : Map[String, Bool] = Map::new()
       for i = 0; i < rows.length(); i = i + 1 {
-        out.push(rows[i][0])
+        let name = rows[i][0]
+        if name.length() == 0 {
+          continue
+        }
+        if seen.contains(name) {
+          continue
+        }
+        seen[name] = true
+        out.push(name)
       }
       out
     }

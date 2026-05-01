@@ -21,7 +21,8 @@ pub fn migrations_pokedex() -> Array[Migration] {
 
 ///|
 /// Migrations that target `champions.db`. m008 が DDL を流し、m009〜m012 が
-/// pkdx_patch 配下の中間 JSON (champout adapter 出力) を投入する。
+/// pkdx_patch 配下の中間 JSON (champout adapter 出力) を投入し、m013 が
+/// form / gender 合成 alias を pokemon_name に投入する。
 pub fn migrations_champions() -> Array[Migration] {
   [
     { name: "008_champions_init_schema", run: run_008 },
@@ -29,6 +30,7 @@ pub fn migrations_champions() -> Array[Migration] {
     { name: "010_champions_moves", run: run_010 },
     { name: "011_champions_learnset", run: run_011 },
     { name: "012_champions_items", run: run_012 },
+    { name: "013_champions_form_aliases", run: run_013 },
   ]
 }
 

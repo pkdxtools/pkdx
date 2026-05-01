@@ -533,14 +533,10 @@ test "query_pokemon: ニャオニクス（オス） scarlet_violet (gender alias
 
 ///|
 /// gender alias は scarlet_violet だけでなく Champions でも引けること。
-/// version 横断で同一 alias が機能することを保証する。
-///
-/// 現状 champions.db (champout SSoT) は性別別 alias 行 (`イダイトウ（オス）`
-/// / `イダイトウ（メス）`) を pokemon_name に投入していないため skip 中。
-/// Champions 側で gender alias を作る後続マイグレーションが入った時点で
-/// 復活させる。
+/// version 横断で同一 alias が機能することを保証する。`イダイトウ（オス）`
+/// は M base 行 (form='') の合成 alias なので、引いた結果 forms[] には
+/// F の合成 alias (`イダイトウ（メス）`) が 1 件出る。
 test "query_pokemon: イダイトウ（オス） champions (gender alias version cross)" {
-  return
   let db = match open_test_champions_db() {
     Some(d) => d
     None => return
@@ -553,7 +549,8 @@ test "query_pokemon: イダイトウ（オス） champions (gender alias version
       inspect(p.name_ja, content="イダイトウ（オス）")
       inspect(p.atk, content="112")
       inspect(p.spa, content="80")
-      inspect(p.forms.length(), content="0")
+      inspect(p.forms.length(), content="1")
+      inspect(p.forms[0], content="イダイトウ（メス）")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }

@@ -41,11 +41,16 @@ pub fn champions_ddl() -> Array[String] {
     "dream_ability TEXT NOT NULL DEFAULT ''" +
     ")",
     "CREATE INDEX IF NOT EXISTS idx_pokemon_global_no ON pokemon(global_no)",
+    // PK が (id, language, name) なのは alias を持たせるため。一つの id /
+    // language に対して複数の表示名 (例: M base 行に "イダイトウ" と
+    // "イダイトウ（オス）" の 2 行) を許す構造。query は `WHERE name = ?`
+    // で照合し、forms[] 列挙時は per-id で合成 alias を優先する SELECT
+    // (query_champions_forms) で 1 行に絞る。
     "CREATE TABLE IF NOT EXISTS pokemon_name (" +
     "id TEXT NOT NULL, " +
     "language TEXT NOT NULL, " +
     "name TEXT NOT NULL, " +
-    "PRIMARY KEY (id, language)" +
+    "PRIMARY KEY (id, language, name)" +
     ")",
     "CREATE INDEX IF NOT EXISTS idx_pokemon_name_name ON pokemon_name(name)",
     "CREATE TABLE IF NOT EXISTS move (" +

@@ -1295,6 +1295,15 @@ fn compute_damage_variants(
   def_rank : Int,
   atk_burn~ : Bool = false,
 ) -> Array[@model.DamageOutcome] {
+  // Status moves and zero-power moves never deal damage. Mirror the early
+  // return in `mean_damage_cached` so the variants pipeline does not invent
+  // a stray damage point from the engine's variant table for moves whose
+  // power was clamped to 0 upstream.
+  if mv.power <= 0 {
+    return [
+      { probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] },
+    ]
+  }
   let r = @damage.calc_damage(
     build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
   )
@@ -1344,58 +1353,38 @@ fn compute_damage_variants(
 /// over all leaves equals 1.0 within float drift bounds.
 fn apply_damage_variants_fanout(
   state : SwitchingGameState,
+  outcomes : Array[@model.DamageOutcome],
   attacker_is_me~ : Bool,
   attacker_active~ : Int,
-  attacker_ranks~ : Array[Int],
   defender_active~ : Int,
-  defender_ranks~ : Array[Int],
   attacker_move~ : @model.Move,
   attacker_team~ : Array[Combatant],
   defender_team~ : Array[Combatant],
   pre_dmg_defender_hp~ : Int,
-  attacker_mega~ : Bool = false,
-  defender_mega~ : Bool = false,
-  attacker_burn~ : Bool = false,
-  atk_item_consumed~ : Bool = false,
-  def_item_consumed~ : Bool = false,
 ) -> Array[(Double, SwitchingGameState)] {
-  // Itemless swap mirrors mean_damage_cached so a consumed berry / sash isn't
-  // re-applied by the engine on this attack.
-  let raw_attacker_full = attacker_team[attacker_active]
-  let raw_defender_full = defender_team[defender_active]
-  let raw_attacker = if atk_item_consumed {
-    { ..raw_attacker_full, item: "" }
-  } else {
-    raw_attacker_full
-  }
-  let raw_defender = if def_item_consumed {
-    { ..raw_defender_full, item: "" }
-  } else {
-    raw_defender_full
-  }
-  let attacker = effective_combatant(raw_attacker, attacker_mega)
-  let defender = effective_combatant(raw_defender, defender_mega)
-  let atk_rank = match attacker_move.category {
-    @model.Physical => attacker_ranks[0]
-    @model.Special => attacker_ranks[2]
-    @model.Status => 0
-  }
-  let def_rank = match attacker_move.category {
-    @model.Physical => defender_ranks[1]
-    @model.Special => defender_ranks[3]
-    @model.Status => 0
-  }
-  let outcomes = compute_damage_variants(
-    attacker, defender, attacker_move, atk_rank, def_rank,
-    atk_burn=attacker_burn,
-  )
+  // Phase 2-E (#91): outcomes are resolved by the caller via
+  // `damage_variants_cached` so that the engine's variant table is
+  // memoised across recursion. Inside this helper we own the per-variant
+  // state mutation and the four post-hit fanouts only.
   let target_is_me = not(attacker_is_me)
   let target_slot = defender_active
   let attacker_slot = attacker_active
   let leaves : Array[(Double, SwitchingGameState)] = []
   for i = 0; i < outcomes.length(); i = i + 1 {
     let outcome = outcomes[i]
-    let state_v = with_hp_damage(state, target_is_me, target_slot, outcome.mean_damage)
+    let state_dmg = with_hp_damage(state, target_is_me, target_slot, outcome.mean_damage)
+    // Phase 2-E (#91): per-variant post-hit state effects so recoil /
+    // self_ko / recharge / stat_effects compound on the variant-specific
+    // damage rather than a single mean. State remains immutable; with_-
+    // post_hit_effects produces a fresh copy with updated arrays.
+    let state_v = with_post_hit_effects(
+      state_dmg,
+      attacker_is_me,
+      attacker_slot,
+      target_slot,
+      attacker_move,
+      outcome.mean_damage,
+    )
     let sub = compose_fanouts(state_v, [
       fn(s) {
         apply_item_pre_damage_proc_fanout(
@@ -1473,6 +1462,58 @@ fn with_hp_damage(
 }
 
 ///|
+/// Phase 2-E (#91): immutable counterpart of `resolve_post_hit_effects`.
+///
+/// Applies the same fixed-order post-hit side effects (stat_effects on
+/// attacker / defender, recoil to attacker, self_ko, recharge) but
+/// returns a fresh state instead of mutating workspace arrays. Used by
+/// `apply_damage_variants_fanout` so each chance-node leaf gets its own
+/// per-variant recoil / self_ko / recharge bookkeeping based on the
+/// variant's `mean_damage`.
+fn with_post_hit_effects(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_active : Int,
+  defender_active : Int,
+  mv : @model.Move,
+  dmg : Int,
+) -> SwitchingGameState {
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  let my_ranks = state.my_ranks.copy()
+  let opp_ranks = state.opp_ranks.copy()
+  let my_must_recharge = state.my_must_recharge.copy()
+  let opp_must_recharge = state.opp_must_recharge.copy()
+  let attacker_hps = if attacker_is_me { my_hps } else { opp_hps }
+  let attacker_ranks = if attacker_is_me { my_ranks } else { opp_ranks }
+  let defender_hps = if attacker_is_me { opp_hps } else { my_hps }
+  let defender_ranks = if attacker_is_me { opp_ranks } else { my_ranks }
+  let attacker_must_recharge = if attacker_is_me {
+    my_must_recharge
+  } else {
+    opp_must_recharge
+  }
+  let opp_alive = defender_hps[defender_active] > 0
+  apply_stat_effects(attacker_ranks, defender_ranks, opp_alive, mv)
+  apply_recoil(attacker_hps, attacker_active, mv, dmg)
+  if mv.self_ko {
+    attacker_hps[attacker_active] = 0
+  }
+  if mv.recharge && attacker_hps[attacker_active] > 0 {
+    attacker_must_recharge[attacker_active] = true
+  }
+  {
+    ..state,
+    my_hps,
+    opp_hps,
+    my_ranks,
+    opp_ranks,
+    my_must_recharge,
+    opp_must_recharge,
+  }
+}
+
+///|
 /// Cache key for memoized mean damage. `my_attacker` distinguishes which
 /// side's team the attacker/defender indices reference — without it my_team[0]
 /// and opp_team[0] would collide. Ranks are stored pre-resolved (already
@@ -1514,6 +1555,14 @@ pub(all) struct DamageKey {
 /// would be unsound (indices rebind).
 pub(all) struct DamageCache {
   data : @hashmap.HashMap[DamageKey, Int]
+  // Phase 2-E (#91): variants table cache. Mirrors `data` keyed by the same
+  // `DamageKey` shape, but stores the per-variant `DamageOutcome` list so
+  // `apply_damage_variants_fanout` can replay the chance-node leaf expansion
+  // without re-invoking `@damage.calc_damage`. Decoupled from `data` so the
+  // scalar `mean_damage_cached` path (used by Monte Carlo / select / nash
+  // graph CLIs) keeps the smaller Int payload while only the in-game tree
+  // search pays the larger payload cost.
+  variants_data : @hashmap.HashMap[DamageKey, Array[@model.DamageOutcome]]
   // Optional L2 layer backed by SQLite. Populated across sessions — a
   // previous nash solve's 16-roll tables are reused on L1 miss so a
   // slightly-perturbed team doesn't re-pay the damage-engine cost for
@@ -1536,6 +1585,7 @@ pub fn new_damage_cache(
 ) -> DamageCache {
   {
     data: @hashmap.HashMap::new(),
+    variants_data: @hashmap.HashMap::new(),
     disk,
     hits: 0,
     misses: 0,
@@ -1844,6 +1894,116 @@ pub fn mean_damage_cached(
 }
 
 ///|
+/// Phase 2-E (#91): variants-table cache wrapper, mirroring
+/// `mean_damage_cached`'s key shape. Returns the per-variant
+/// `Array[DamageOutcome]` for the resolved matchup. Used by attack sites
+/// (resolve_attacker_leg / transition_with_cache attack arms /
+/// partial_act_outcomes) so the chance-node leaf expansion done by
+/// `apply_damage_variants_fanout` reuses the engine's variant table
+/// rather than recomputing it every recursion.
+///
+/// Key shape is identical to `mean_damage_cached` so the two caches stay
+/// in lockstep — the same `DamageKey` resolves to a scalar mean in
+/// `cache.data` and a variants list in `cache.variants_data`. Hit/miss
+/// counters share with the scalar cache (the call site is unique per
+/// (matchup, mv_idx, ranks, mega, burn, item_consumed) tuple).
+fn damage_variants_cached(
+  cache : DamageCache,
+  my_attacker : Bool,
+  atk_idx : Int,
+  atk_ranks : Array[Int],
+  def_idx : Int,
+  def_ranks : Array[Int],
+  mv_idx : Int,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  atk_mega~ : Bool = false,
+  def_mega~ : Bool = false,
+  atk_burn~ : Bool = false,
+  atk_item_consumed~ : Bool = false,
+  def_item_consumed~ : Bool = false,
+) -> Array[@model.DamageOutcome] {
+  let raw_attacker_full = if my_attacker {
+    my_team[atk_idx]
+  } else {
+    opp_team[atk_idx]
+  }
+  let raw_defender_full = if my_attacker {
+    opp_team[def_idx]
+  } else {
+    my_team[def_idx]
+  }
+  let raw_attacker = if atk_item_consumed {
+    { ..raw_attacker_full, item: "" }
+  } else {
+    raw_attacker_full
+  }
+  let raw_defender = if def_item_consumed {
+    { ..raw_defender_full, item: "" }
+  } else {
+    raw_defender_full
+  }
+  let mv = raw_attacker.moves[mv_idx]
+  if mv.power <= 0 {
+    return [
+      { probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] },
+    ]
+  }
+  let atk_rank = match mv.category {
+    @model.Physical => atk_ranks[0]
+    @model.Special => atk_ranks[2]
+    @model.Status => 0
+  }
+  let def_rank = match mv.category {
+    @model.Physical => def_ranks[1]
+    @model.Special => def_ranks[3]
+    @model.Status => 0
+  }
+  let key : DamageKey = {
+    my_attacker,
+    atk_idx,
+    def_idx,
+    mv_idx,
+    atk_rank,
+    def_rank,
+    atk_mega,
+    def_mega,
+    atk_burn,
+    atk_item_consumed,
+    def_item_consumed,
+  }
+  match cache.variants_data.get(key) {
+    Some(v) => {
+      cache.hits = cache.hits + 1
+      v
+    }
+    None => {
+      cache.misses = cache.misses + 1
+      let attacker = effective_combatant(raw_attacker, atk_mega)
+      let defender = effective_combatant(raw_defender, def_mega)
+      let v = compute_damage_variants(
+        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+      )
+      cache.variants_data[key] = v
+      // Phase 2-E (#91): touch the L2 disk cache so cross-session damage
+      // entries stay populated. The disk payload is the engine's pre-burn
+      // 16-roll table (scalar), reused by `mean_damage_cached` callers
+      // (Monte Carlo / select / nash graph). Variants serialisation to
+      // disk is deferred — see open question on hit_steps fallback.
+      match cache.disk {
+        Some(_) => {
+          let _ = mean_damage_via_disk(
+            cache, attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+          )
+        }
+        None => ()
+      }
+      v
+    }
+  }
+}
+
+///|
 fn clamp_zero(x : Int) -> Int {
   if x > 0 {
     x
@@ -1904,21 +2064,20 @@ fn apply_recoil(
 }
 
 ///|
-/// Post-hit side effects in a single fixed-order pass. Must be invoked at the
-/// end of every attacker leg that actually used a `UseMove` (not a pure
-/// Switch). Damage is assumed already applied to `defender_hps` and `dmg`
-/// is the confirmed amount inflicted this hit.
+/// Workspace-mutating post-hit side effects (legacy attack-site helper).
+///
+/// As of Phase 2-E (#91) the production attack sites use `with_post_hit_-
+/// effects` (immutable, per-variant) — but white-box tests and Monte Carlo
+/// helpers still call this entry point directly to verify the underlying
+/// recoil / self_ko / recharge / stat_effects ordering against a workspace
+/// mutation. Keeping it preserves the semantic contract for both layers.
 ///
 /// Order (deliberate — changing it alters observable behaviour):
-///   1. opp-target `stat_effects` (Phase 3 implements; Phase 2 is self-only
-///      via `apply_stat_boost` so this step has no effect in Phase 2)
+///   1. opp-target `stat_effects` (gated on opp_alive)
 ///   2. self-target `stat_effects`
-///   3. recoil (attacker HP loss)
+///   3. recoil (attacker HP loss; minimum 1 HP for any landed recoil hit)
 ///   4. self_ko (attacker HP forced to 0, regardless of `dmg`)
-///   5. recharge (set only if attacker is still alive after 3 & 4 — a
-///      faint-from-recoil Pokémon cannot later attempt a recharge turn)
-///
-/// `attacker_must_recharge` is mutated in place.
+///   5. recharge (set only if attacker is still alive after 3 & 4)
 fn resolve_post_hit_effects(
   attacker_hps : Array[Int],
   attacker_active : Int,
@@ -2079,6 +2238,10 @@ fn resolve_attacker_leg(
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
 ) -> Array[(Double, SwitchingGameState)] {
+  // Phase 2-E (#91): damage application + post-hit effects + 4 fanout は
+  // apply_damage_variants_fanout に統合され、variant ごとに chance-node leaf
+  // を生成する。workspace は damage 適用前の状態で state にスナップショット
+  // する (apply_damage_variants_fanout が per-variant に HP/recoil を扱う)。
   let attacker_active = if attacker_is_me { ws.my_active } else { ws.opp_active }
   let defender_active = if attacker_is_me { ws.opp_active } else { ws.my_active }
   let attacker_ranks = if attacker_is_me { ws.my_ranks } else { ws.opp_ranks }
@@ -2096,7 +2259,11 @@ fn resolve_attacker_leg(
   } else {
     false
   }
-  let dmg = mean_damage_cached(
+  let pre_dmg_defender_hp = defender_hps[defender_active]
+  let pre_damage_state = ws_to_state(ws, bump_turn=false)
+  let attacker_team = if attacker_is_me { my_team } else { opp_team }
+  let defender_team_eff = if attacker_is_me { opp_team } else { my_team }
+  let outcomes = damage_variants_cached(
     dmg_cache,
     attacker_is_me,
     attacker_active,
@@ -2112,61 +2279,17 @@ fn resolve_attacker_leg(
     atk_item_consumed=atk_consumed,
     def_item_consumed=def_consumed,
   )
-  // P5 (#97): defender HP just before damage application; consumed by
-  // apply_item_pre/post_damage_proc_fanout to gate resist-berry refunds and
-  // きあいのタスキ / フィラのみ trigger conditions.
-  let pre_dmg_defender_hp = defender_hps[defender_active]
-  defender_hps[defender_active] = clamp_zero(defender_hps[defender_active] - dmg)
-  let attacker_hps = if attacker_is_me { ws.my_hps } else { ws.opp_hps }
-  let attacker_must_recharge = if attacker_is_me {
-    ws.my_must_recharge
-  } else {
-    ws.opp_must_recharge
-  }
-  resolve_post_hit_effects(
-    attacker_hps, attacker_active, attacker_ranks,
-    defender_hps, defender_active, defender_ranks,
-    attacker_must_recharge, attacker_move, dmg,
+  apply_damage_variants_fanout(
+    pre_damage_state,
+    outcomes,
+    attacker_is_me=attacker_is_me,
+    attacker_active=attacker_active,
+    defender_active=defender_active,
+    attacker_move=attacker_move,
+    attacker_team=attacker_team,
+    defender_team=defender_team_eff,
+    pre_dmg_defender_hp=pre_dmg_defender_hp,
   )
-  let post_damage_state = ws_to_state(ws, bump_turn=false)
-  let target_is_me = not(attacker_is_me)
-  let target_slot = target_active(post_damage_state, target_is_me)
-  let target_team = if attacker_is_me { opp_team } else { my_team }
-  let attacker_team = if attacker_is_me { my_team } else { opp_team }
-  let attacker_slot = target_active(post_damage_state, attacker_is_me)
-  compose_fanouts(post_damage_state, [
-    // P5 (#97): resist berry refund (logically pre-damage, applied as a
-    // post-damage refund — see apply_item_pre_damage_proc_fanout doc).
-    // Runs first so a sash-class post-damage check sees a possibly-
-    // refunded HP and doesn't double-trigger.
-    fn(s) {
-      apply_item_pre_damage_proc_fanout(
-        s, target_is_me, target_slot, target_team, attacker_team,
-        pre_dmg_defender_hp, attacker_move,
-      )
-    },
-    // P5 (#97): consume_on_hit (きあいのタスキ) and hp_threshold (フィラのみ).
-    fn(s) {
-      apply_item_post_damage_proc_fanout(
-        s, target_is_me, target_slot, target_team, attacker_team,
-        pre_dmg_defender_hp, attacker_move,
-      )
-    },
-    fn(s) {
-      maybe_apply_status_fanout(
-        s, target_is_me, target_slot, target_team, attacker_move,
-      )
-    },
-    // P4 (#93): defender's contact-proc ability/item can inflict status
-    // on attacker. Step is no-op for non-contact moves and for
-    // defenders without proc ability/item.
-    fn(s) {
-      apply_contact_proc_fanout(
-        s, attacker_is_me, attacker_slot, target_slot, attacker_team,
-        target_team, attacker_move,
-      )
-    },
-  ])
 }
 
 ///|
@@ -2406,7 +2529,10 @@ pub fn transition_with_cache(
   // Track a single attack event for status fan-out after the state is built.
   // Set to `Some((attacker_is_me, target_slot, used_move))` in the two
   // Switch+UseMove arms; None for pure-Switch / pure-UseMove handled below.
-  let mut attack_event : (Bool, Int, @model.Move)? = None
+  // Phase 2-E (#91): payload extended to (attacker_is_me, target_slot,
+  // used_move, mv_idx) so the Some(...) arm can call damage_variants_cached
+  // with the attacker move's index.
+  let mut attack_event : (Bool, Int, @model.Move, Int)? = None
   // P5 (#97): defender HP just before damage application — captured at the
   // damage sites so apply_item_pre/post_damage_proc_fanout can reconstruct
   // the dealt damage (= pre - post) and gate full-HP triggers (きあいのタスキ).
@@ -2435,37 +2561,13 @@ pub fn transition_with_cache(
       my_status_new[state.my_active] = reset_toxic_counter_on_switch(
         my_status_new[state.my_active],
       )
-      // Opponent attacks the freshly switched-in target. The target's mega
-      // flag comes from its slot-level `my_megaed_new[i]` (rather than from
-      // the out-going active's mega state).
-      let dmg = mean_damage_cached(
-        dmg_cache,
-        false,
-        state.opp_active,
-        opp_ranks_new,
-        i,
-        my_ranks_new,
-        mj,
-        my_team,
-        opp_team,
-        atk_mega=opp_mega_now,
-        def_mega=my_megaed_new[i],
-        atk_burn=is_burned(state.opp_status[state.opp_active]),
-        atk_item_consumed=opp_item_consumed_new[state.opp_active],
-        def_item_consumed=if i < my_item_consumed_new.length() {
-          my_item_consumed_new[i]
-        } else {
-          false
-        },
-      )
+      // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
+      // are deferred to apply_damage_variants_fanout in the Some(...) arm
+      // below, which fans the chance-node leaves across hit-count variants.
+      // Only the pre-damage HP snapshot survives in the local mut so the
+      // post-hit fanouts can gate full-HP triggers (resist berry / sash).
       pre_dmg_defender_hp = my_hps_new[i]
-      my_hps_new[i] = clamp_zero(my_hps_new[i] - dmg)
-      resolve_post_hit_effects(
-        opp_hps_new, state.opp_active, opp_ranks_new,
-        my_hps_new, i, my_ranks_new,
-        opp_must_recharge_new, opp_team[state.opp_active].moves[mj], dmg,
-      )
-      attack_event = Some((false, i, opp_team[state.opp_active].moves[mj]))
+      attack_event = Some((false, i, opp_team[state.opp_active].moves[mj], mj))
     }
     (UseMove(mi), Switch(j)) => {
       opp_active_new = j
@@ -2475,34 +2577,10 @@ pub fn transition_with_cache(
       opp_status_new[state.opp_active] = reset_toxic_counter_on_switch(
         opp_status_new[state.opp_active],
       )
-      let dmg = mean_damage_cached(
-        dmg_cache,
-        true,
-        state.my_active,
-        my_ranks_new,
-        j,
-        opp_ranks_new,
-        mi,
-        my_team,
-        opp_team,
-        atk_mega=my_mega_now,
-        def_mega=opp_megaed_new[j],
-        atk_burn=is_burned(state.my_status[state.my_active]),
-        atk_item_consumed=my_item_consumed_new[state.my_active],
-        def_item_consumed=if j < opp_item_consumed_new.length() {
-          opp_item_consumed_new[j]
-        } else {
-          false
-        },
-      )
+      // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
+      // post-hit effects are handled per-variant in the Some(...) arm.
       pre_dmg_defender_hp = opp_hps_new[j]
-      opp_hps_new[j] = clamp_zero(opp_hps_new[j] - dmg)
-      resolve_post_hit_effects(
-        my_hps_new, state.my_active, my_ranks_new,
-        opp_hps_new, j, opp_ranks_new,
-        my_must_recharge_new, my_team[state.my_active].moves[mi], dmg,
-      )
-      attack_event = Some((true, j, my_team[state.my_active].moves[mi]))
+      attack_event = Some((true, j, my_team[state.my_active].moves[mi], mi))
     }
     (UseMove(mi), UseMove(mj)) => {
       let me = my_team[state.my_active]
@@ -2567,38 +2645,74 @@ pub fn transition_with_cache(
   }
   match attack_event {
     None => [(1.0, base_state)]
-    Some((attacker_is_me, target_slot, used_move)) => {
-      let target_is_me = not(attacker_is_me)
-      let target_team = if attacker_is_me { opp_team } else { my_team }
-      let attacker_team = if attacker_is_me { my_team } else { opp_team }
+    Some((attacker_is_me, target_slot, used_move, mv_idx)) => {
       let attacker_slot = target_active(base_state, attacker_is_me)
-      compose_fanouts(base_state, [
-        // P5 (#97): resist berry refund (logically pre-damage).
-        fn(s) {
-          apply_item_pre_damage_proc_fanout(
-            s, target_is_me, target_slot, target_team, attacker_team,
-            pre_dmg_defender_hp, used_move,
-          )
-        },
-        // P5 (#97): consume_on_hit / hp_threshold post-damage items.
-        fn(s) {
-          apply_item_post_damage_proc_fanout(
-            s, target_is_me, target_slot, target_team, attacker_team,
-            pre_dmg_defender_hp, used_move,
-          )
-        },
-        fn(s) {
-          maybe_apply_status_fanout(
-            s, target_is_me, target_slot, target_team, used_move,
-          )
-        },
-        fn(s) {
-          apply_contact_proc_fanout(
-            s, attacker_is_me, attacker_slot, target_slot, attacker_team,
-            target_team, used_move,
-          )
-        },
-      ])
+      let attacker_ranks = if attacker_is_me {
+        base_state.my_ranks
+      } else {
+        base_state.opp_ranks
+      }
+      let defender_ranks = if attacker_is_me {
+        base_state.opp_ranks
+      } else {
+        base_state.my_ranks
+      }
+      let attacker_team = if attacker_is_me { my_team } else { opp_team }
+      let defender_team_eff = if attacker_is_me { opp_team } else { my_team }
+      let attacker_mega = if attacker_is_me { my_mega_now } else { opp_mega_now }
+      let defender_mega = if attacker_is_me {
+        base_state.opp_megaed[target_slot]
+      } else {
+        base_state.my_megaed[target_slot]
+      }
+      let attacker_burn = if attacker_is_me {
+        is_burned(state.my_status[state.my_active])
+      } else {
+        is_burned(state.opp_status[state.opp_active])
+      }
+      let atk_item_consumed = if attacker_is_me {
+        base_state.my_item_consumed[state.my_active]
+      } else {
+        base_state.opp_item_consumed[state.opp_active]
+      }
+      let def_item_consumed = if attacker_is_me {
+        if target_slot < base_state.opp_item_consumed.length() {
+          base_state.opp_item_consumed[target_slot]
+        } else {
+          false
+        }
+      } else if target_slot < base_state.my_item_consumed.length() {
+        base_state.my_item_consumed[target_slot]
+      } else {
+        false
+      }
+      let outcomes = damage_variants_cached(
+        dmg_cache,
+        attacker_is_me,
+        attacker_slot,
+        attacker_ranks,
+        target_slot,
+        defender_ranks,
+        mv_idx,
+        my_team,
+        opp_team,
+        atk_mega=attacker_mega,
+        def_mega=defender_mega,
+        atk_burn=attacker_burn,
+        atk_item_consumed=atk_item_consumed,
+        def_item_consumed=def_item_consumed,
+      )
+      apply_damage_variants_fanout(
+        base_state,
+        outcomes,
+        attacker_is_me=attacker_is_me,
+        attacker_active=attacker_slot,
+        defender_active=target_slot,
+        attacker_move=used_move,
+        attacker_team=attacker_team,
+        defender_team=defender_team_eff,
+        pre_dmg_defender_hp=pre_dmg_defender_hp,
+      )
     }
   }
 }
@@ -2833,7 +2947,10 @@ fn partial_act_outcomes(
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
   let mut opp_mega_used = state.opp_mega_used
-  let mut attack_event : (Bool, Int, @model.Move)? = None
+  // Phase 2-E (#91): payload extended to (attacker_is_me, target_slot,
+  // used_move, mv_idx) so the Some(...) arm can call damage_variants_cached
+  // with the attacker move's index.
+  let mut attack_event : (Bool, Int, @model.Move, Int)? = None
   // P5 (#97): pre-damage defender HP — see transition_with_cache for rationale.
   let mut pre_dmg_defender_hp : Int = 0
   match (me_is_actor, core) {
@@ -2860,24 +2977,13 @@ fn partial_act_outcomes(
         my_megaed[state.my_active] = true
         my_mega_used = true
       }
-      let mega_now = my_megaed[state.my_active] || mega_trigger
-      let burn = is_burned(state.my_status[state.my_active])
-      let dmg = mean_damage_cached(
-        dmg_cache, true, state.my_active, my_ranks, state.opp_active, opp_ranks,
-        mi, my_team, opp_team, atk_mega=mega_now, def_mega=opp_megaed[state.opp_active],
-        atk_burn=burn,
-        atk_item_consumed=my_item_consumed[state.my_active],
-        def_item_consumed=opp_item_consumed[state.opp_active],
-      )
+      // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
+      // are handled per-variant in the Some(...) arm via
+      // apply_damage_variants_fanout. Pre-damage HP is captured here so
+      // resist-berry / sash gating can compare against full HP.
       pre_dmg_defender_hp = opp_hps[state.opp_active]
-      opp_hps[state.opp_active] = clamp_zero(opp_hps[state.opp_active] - dmg)
-      resolve_post_hit_effects(
-        my_hps, state.my_active, my_ranks,
-        opp_hps, state.opp_active, opp_ranks,
-        my_must_recharge, my_team[state.my_active].moves[mi], dmg,
-      )
       attack_event = Some(
-        (true, state.opp_active, my_team[state.my_active].moves[mi]),
+        (true, state.opp_active, my_team[state.my_active].moves[mi], mi),
       )
     }
     (false, UseMove(mj)) => {
@@ -2885,24 +2991,10 @@ fn partial_act_outcomes(
         opp_megaed[state.opp_active] = true
         opp_mega_used = true
       }
-      let mega_now = opp_megaed[state.opp_active] || mega_trigger
-      let burn = is_burned(state.opp_status[state.opp_active])
-      let dmg = mean_damage_cached(
-        dmg_cache, false, state.opp_active, opp_ranks, state.my_active, my_ranks,
-        mj, my_team, opp_team, atk_mega=mega_now, def_mega=my_megaed[state.my_active],
-        atk_burn=burn,
-        atk_item_consumed=opp_item_consumed[state.opp_active],
-        def_item_consumed=my_item_consumed[state.my_active],
-      )
+      // Phase 2-E (#91): see (true, UseMove) for rationale.
       pre_dmg_defender_hp = my_hps[state.my_active]
-      my_hps[state.my_active] = clamp_zero(my_hps[state.my_active] - dmg)
-      resolve_post_hit_effects(
-        opp_hps, state.opp_active, opp_ranks,
-        my_hps, state.my_active, my_ranks,
-        opp_must_recharge, opp_team[state.opp_active].moves[mj], dmg,
-      )
       attack_event = Some(
-        (false, state.my_active, opp_team[state.opp_active].moves[mj]),
+        (false, state.my_active, opp_team[state.opp_active].moves[mj], mj),
       )
     }
     (_, _) => ()
@@ -2928,38 +3020,78 @@ fn partial_act_outcomes(
   }
   match attack_event {
     None => [(1.0, base_state)]
-    Some((attacker_is_me, target_slot, used_move)) => {
-      let target_is_me = not(attacker_is_me)
-      let target_team = if attacker_is_me { opp_team } else { my_team }
-      let attacker_team = if attacker_is_me { my_team } else { opp_team }
+    Some((attacker_is_me, target_slot, used_move, mv_idx)) => {
       let attacker_slot = target_active(base_state, attacker_is_me)
-      compose_fanouts(base_state, [
-        // P5 (#97): resist berry refund (logically pre-damage).
-        fn(s) {
-          apply_item_pre_damage_proc_fanout(
-            s, target_is_me, target_slot, target_team, attacker_team,
-            pre_dmg_defender_hp, used_move,
-          )
-        },
-        // P5 (#97): consume_on_hit / hp_threshold post-damage items.
-        fn(s) {
-          apply_item_post_damage_proc_fanout(
-            s, target_is_me, target_slot, target_team, attacker_team,
-            pre_dmg_defender_hp, used_move,
-          )
-        },
-        fn(s) {
-          maybe_apply_status_fanout(
-            s, target_is_me, target_slot, target_team, used_move,
-          )
-        },
-        fn(s) {
-          apply_contact_proc_fanout(
-            s, attacker_is_me, attacker_slot, target_slot, attacker_team,
-            target_team, used_move,
-          )
-        },
-      ])
+      let attacker_ranks = if attacker_is_me {
+        base_state.my_ranks
+      } else {
+        base_state.opp_ranks
+      }
+      let defender_ranks = if attacker_is_me {
+        base_state.opp_ranks
+      } else {
+        base_state.my_ranks
+      }
+      let attacker_team = if attacker_is_me { my_team } else { opp_team }
+      let defender_team_eff = if attacker_is_me { opp_team } else { my_team }
+      let attacker_mega = if attacker_is_me {
+        base_state.my_megaed[state.my_active]
+      } else {
+        base_state.opp_megaed[state.opp_active]
+      }
+      let defender_mega = if attacker_is_me {
+        base_state.opp_megaed[target_slot]
+      } else {
+        base_state.my_megaed[target_slot]
+      }
+      let attacker_burn = if attacker_is_me {
+        is_burned(state.my_status[state.my_active])
+      } else {
+        is_burned(state.opp_status[state.opp_active])
+      }
+      let atk_item_consumed = if attacker_is_me {
+        base_state.my_item_consumed[state.my_active]
+      } else {
+        base_state.opp_item_consumed[state.opp_active]
+      }
+      let def_item_consumed = if attacker_is_me {
+        if target_slot < base_state.opp_item_consumed.length() {
+          base_state.opp_item_consumed[target_slot]
+        } else {
+          false
+        }
+      } else if target_slot < base_state.my_item_consumed.length() {
+        base_state.my_item_consumed[target_slot]
+      } else {
+        false
+      }
+      let outcomes = damage_variants_cached(
+        dmg_cache,
+        attacker_is_me,
+        attacker_slot,
+        attacker_ranks,
+        target_slot,
+        defender_ranks,
+        mv_idx,
+        my_team,
+        opp_team,
+        atk_mega=attacker_mega,
+        def_mega=defender_mega,
+        atk_burn=attacker_burn,
+        atk_item_consumed=atk_item_consumed,
+        def_item_consumed=def_item_consumed,
+      )
+      apply_damage_variants_fanout(
+        base_state,
+        outcomes,
+        attacker_is_me=attacker_is_me,
+        attacker_active=attacker_slot,
+        defender_active=target_slot,
+        attacker_move=used_move,
+        attacker_team=attacker_team,
+        defender_team=defender_team_eff,
+        pre_dmg_defender_hp=pre_dmg_defender_hp,
+      )
     }
   }
 }

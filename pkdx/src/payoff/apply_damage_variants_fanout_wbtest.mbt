@@ -133,13 +133,13 @@ test "Phase 2-D-1: Skill Link rocket blast → leaf 数 1 (variants 縮退 dispa
   let attacker = advf_combatant("attacker", mv, ability="スキルリンク")
   let defender = advf_combatant("defender", mv)
   let state = advf_state(200, 200)
+  let outcomes = compute_damage_variants(attacker, defender, mv, 0, 0)
   let leaves = apply_damage_variants_fanout(
     state,
+    outcomes,
     attacker_is_me=true,
     attacker_active=0,
-    attacker_ranks=state.my_ranks,
     defender_active=0,
-    defender_ranks=state.opp_ranks,
     attacker_move=mv,
     attacker_team=[attacker],
     defender_team=[defender],
@@ -157,13 +157,13 @@ test "Phase 2-D-2: Triple Axel → leaf 数 3 (TripleVariant dispatch)" {
   let attacker = advf_combatant("attacker", mv)
   let defender = advf_combatant("defender", mv)
   let state = advf_state(200, 200)
+  let outcomes = compute_damage_variants(attacker, defender, mv, 0, 0)
   let leaves = apply_damage_variants_fanout(
     state,
+    outcomes,
     attacker_is_me=true,
     attacker_active=0,
-    attacker_ranks=state.my_ranks,
     defender_active=0,
-    defender_ranks=state.opp_ranks,
     attacker_move=mv,
     attacker_team=[attacker],
     defender_team=[defender],
@@ -182,13 +182,13 @@ test "Phase 2-D-3: PopulationBomb → leaf 数 10 (PopulationBomb dispatch)" {
   let attacker = advf_combatant("attacker", mv)
   let defender = advf_combatant("defender", mv)
   let state = advf_state(2000, 2000) // KO 防止のため十分な HP
+  let outcomes = compute_damage_variants(attacker, defender, mv, 0, 0)
   let leaves = apply_damage_variants_fanout(
     state,
+    outcomes,
     attacker_is_me=true,
     attacker_active=0,
-    attacker_ranks=state.my_ranks,
     defender_active=0,
-    defender_ranks=state.opp_ranks,
     attacker_move=mv,
     attacker_team=[attacker],
     defender_team=[defender],
@@ -208,13 +208,13 @@ test "Phase 2-D-4: variant ごとに defender HP が hits_count に応じて減�
   let attacker = advf_combatant("attacker", mv)
   let defender = advf_combatant("defender", mv)
   let state = advf_state(2000, 2000)
+  let outcomes = compute_damage_variants(attacker, defender, mv, 0, 0)
   let leaves = apply_damage_variants_fanout(
     state,
+    outcomes,
     attacker_is_me=true,
     attacker_active=0,
-    attacker_ranks=state.my_ranks,
     defender_active=0,
-    defender_ranks=state.opp_ranks,
     attacker_move=mv,
     attacker_team=[attacker],
     defender_team=[defender],
@@ -249,13 +249,13 @@ test "Phase 2-D-5: post-hit fanout 副作用が variant 間で独立 (per-hit se
   // でんき タイプ defender は麻痺 immune なので避ける。ノーマル defender。
   let defender = advf_combatant("defender", mv)
   let state = advf_state(2000, 2000)
+  let outcomes = compute_damage_variants(attacker, defender, mv, 0, 0)
   let leaves = apply_damage_variants_fanout(
     state,
+    outcomes,
     attacker_is_me=true,
     attacker_active=0,
-    attacker_ranks=state.my_ranks,
     defender_active=0,
-    defender_ranks=state.opp_ranks,
     attacker_move=mv,
     attacker_team=[attacker],
     defender_team=[defender],

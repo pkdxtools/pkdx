@@ -23,11 +23,13 @@ flowchart LR
 
   subgraph CLI_LAYER[pkdx CLI]
     CLI[main.mbt dispatch] --> WithDB{DB要る?}
-    WithDB -->|Yes| DB[(pokedex.db + pkdx_patch)]
+    WithDB -->|version=champions| CDB[(champions.db<br/>+ ATTACH pokedex)]
+    WithDB -->|other version| PDB[(pokedex.db)]
     WithDB -->|No| STDIN[stdin JSON]
   end
 
-  DB --> CLI
+  CDB --> CLI
+  PDB --> CLI
   STDIN --> CLI
   CLI --> Stdout[stdout JSON/table/MD]
 
@@ -256,14 +258,18 @@ flowchart TD
   Cmd --> MD[meta-divergence]
 
   Q --> T1[pokedex_name + local_pokedex_*]
+  Q --> CT1[champions.pokemon + pokemon_name]
   MV --> T2[local_waza + local_waza_language]
-  MV --> T3[champions_learnset]
+  MV --> CT2[champions.move + learnset]
   MV --> TMM[move_meta LEFT JOIN]
   SR --> T1
+  SR --> CT1
   DMG --> T2
+  DMG --> CT2
   DMG --> TMM
   LR --> T1
   LR --> T2
+  LR --> CT2
   TC -.-> Static[[types/chart.mbt 静的テーブル]]
   CV -.-> Static
   SC -.-> Static
@@ -278,10 +284,12 @@ flowchart TD
 
   STDIN_JSON --> PayoffLayer[payoff/ module]
 
-  T1 --> DB[(pokedex.db)]
-  T2 --> DB
-  T3 --> DB
-  TMM --> DB
+  T1 --> PDB[(pokedex.db)]
+  T2 --> PDB
+  TMM --> PDB
+  CT1 --> CDB[(champions.db)]
+  CT2 --> CDB
+  CDB -.ATTACH AS pokedex.-> PDB
 ```
 
 ## 6. payoff 内部フロー (pkdx select の内側)

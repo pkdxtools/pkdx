@@ -1,24 +1,20 @@
 ///|
 /// Migrations that target `pokedex.db`.
 ///
-/// Champions マスターデータ (002〜005) と m013_items はかつて pokedex.db に
-/// 書き込んでいたが、champout を SSoT に切り替えた段階で champions.db 側の
-/// 新 migration (m014〜m018) に役割を譲り、ここでは履歴維持のため no-op
-/// として残してある。pokedex.db に残った旧データは m019 が一括で掃除する。
+/// 過去に Champions マスターデータを pokedex.db へ書いていた移行 (002〜005,
+/// 013) は champout を SSoT に切り替えた段階で全て削除済み。pokedex.db に
+/// 残っている旧 Champions 行と専用テーブルは m019 が一括で掃除する。
+/// 既存インストールの `pkdx_migrations` には削除済み行の記録が残るが、
+/// `run_for` は登録から外れた名前を無視するので副作用はない。
 pub fn migrations_pokedex() -> Array[Migration] {
   [
     { name: "001_mega_legendsza", run: run_001 },
-    { name: "002_champions_pokemon", run: run_002 },
-    { name: "003_champions_moves", run: run_003 },
-    { name: "004_champions_learnset", run: run_004 },
-    { name: "005_champions_learnset_normalize", run: run_005 },
     { name: "006_move_meta", run: run_006 },
     { name: "007_mega_forms", run: run_007 },
     { name: "008_move_meta_ailment", run: run_008 },
     { name: "010_move_meta_posthit", run: run_010 },
     { name: "011_form_name_aliases", run: run_011 },
     { name: "012_gender_symbol_aliases", run: run_012 },
-    { name: "013_items", run: run_013 },
     { name: "019_pokedex_purge_champions", run: run_019 },
   ]
 }

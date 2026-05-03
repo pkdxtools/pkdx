@@ -1703,6 +1703,15 @@ fn combatant_to_cache_key_input(
 /// identical. The L2 stored value remains the raw pre-burn 16-roll table,
 /// so one disk entry still serves both burn and non-burn callers.
 ///
+/// #91: must read `variants[]` (not the legacy top-level `damages` field)
+/// so the disk-backed scalar matches `compute_mean_damage`'s probability-
+/// weighted mean for multi-hit moves. The top-level `damages` is the
+/// most-likely variant's roll table — using it would silently regress
+/// Triple Axel / Random2to5 / PopulationBomb on every L2 hit. v3 schema
+/// already invalidates older rows, so any row reaching this code embeds
+/// `variants[]`; absence triggers a recompute rather than a silent
+/// fallback to the legacy field.
+///
 /// Never raises: key-build errors, JSON parse failures, and `put` errors
 /// all fall back to a direct compute so an unusable L2 never blocks the
 /// actual calculation.
@@ -1734,15 +1743,14 @@ fn mean_damage_via_disk(
   }
   match @damage_cache.get(disk, key) {
     Some(json) =>
-      match @damage_cache.parse_damages_from_json(json) {
-        Some(damages) => {
+      match @damage_cache.parse_variants_from_json(json) {
+        Some(variants) => {
           cache.disk_hits = cache.disk_hits + 1
-          apply_burn_to_mean(
-            @damage_cache.mean_of_damages(damages), mv.category, atk_burn,
-          )
+          mean_damage_from_parsed_variants(variants, mv.category, atk_burn)
         }
         None => {
-          // Parse failed → recompute and overwrite.
+          // No variants[] (legacy entry that survived the schema bump,
+          // or malformed JSON) → recompute and overwrite with v3 payload.
           cache.disk_misses = cache.disk_misses + 1
           compute_and_populate_disk(
             disk, key, attacker, defender, mv, atk_rank, def_rank,
@@ -1761,9 +1769,46 @@ fn mean_damage_via_disk(
 }
 
 ///|
-/// Run the damage engine, store the pre-burn 16-roll table in L2, and
-/// return the mean damage with burn applied via `apply_burn_to_mean` so
-/// the return value matches `compute_mean_damage` exactly.
+/// Reduce a parsed v3 `variants[]` payload to the same scalar that
+/// `compute_mean_damage` returns: per-variant 16-roll mean (`s / 16`)
+/// folded through `apply_burn_to_mean`, then probability-weighted and
+/// floored. Burn must be applied per variant before weighting so integer-
+/// division rounding agrees with the in-memory path bit-for-bit.
+fn mean_damage_from_parsed_variants(
+  variants : Array[@damage_cache.ParsedVariant],
+  category : @model.MoveCategory,
+  atk_burn : Bool,
+) -> Int {
+  let mut acc = 0.0
+  for i = 0; i < variants.length(); i = i + 1 {
+    let v = variants[i]
+    let total = v.total_damages
+    let n = total.length()
+    let mean = if n == 0 {
+      0
+    } else {
+      let mut s = 0
+      for j = 0; j < n; j = j + 1 {
+        s = s + total[j]
+      }
+      s / n
+    }
+    let mean_after_burn = apply_burn_to_mean(mean, category, atk_burn)
+    acc = acc + v.probability * mean_after_burn.to_double()
+  }
+  acc.to_int()
+}
+
+///|
+/// Run the damage engine, store the v3 JSON (variants[] embedded) in L2,
+/// and return the mean damage with burn applied so the return value
+/// matches `compute_mean_damage` exactly — even for multi-hit moves.
+///
+/// #91: must reduce through `r.variants[]` (Σ probability * variant_mean)
+/// rather than the legacy `r.damages` field. The latter holds only the
+/// most-likely variant's roll table, so collapsing it would silently
+/// regress Triple Axel / Random2to5 / PopulationBomb on the populate path
+/// the same way `mean_damage_via_disk` would on the read path.
 fn compute_and_populate_disk(
   disk : @damage_cache.DamageDiskCache,
   key : String,
@@ -1784,11 +1829,17 @@ fn compute_and_populate_disk(
   if r.is_immune {
     return 0
   }
-  let mut s = 0
-  for i in 0..<16 {
-    s += r.damages[i]
+  let mut acc = 0.0
+  for i = 0; i < r.variants.length(); i = i + 1 {
+    let v = r.variants[i]
+    let mut s = 0
+    for j in 0..<16 {
+      s += v.total_damages[j]
+    }
+    let mean = apply_burn_to_mean(s / 16, mv.category, atk_burn)
+    acc = acc + v.probability * mean.to_double()
   }
-  apply_burn_to_mean(s / 16, mv.category, atk_burn)
+  acc.to_int()
 }
 
 ///|

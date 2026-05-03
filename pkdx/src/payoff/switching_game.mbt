@@ -1246,6 +1246,85 @@ fn apply_burn_to_mean(
 }
 
 ///|
+/// Convert engine `r.variants[]` to per-variant `DamageOutcome` records
+/// with burn folded in. Single source of truth for the engine-result →
+/// outcome adapter, used by both `compute_damage_variants` (in-memory
+/// path) and `compute_and_populate_disk` (L2 populate path) so the per-
+/// variant 16-roll mean + burn computation lives in exactly one place.
+fn outcomes_from_calc_result(
+  r : @model.DamageCalcResult,
+  category : @model.MoveCategory,
+  atk_burn : Bool,
+) -> Array[@model.DamageOutcome] {
+  let outcomes : Array[@model.DamageOutcome] = []
+  for i = 0; i < r.variants.length(); i = i + 1 {
+    let v = r.variants[i]
+    let mut s = 0
+    for j in 0..<16 {
+      s += v.total_damages[j]
+    }
+    let mean = apply_burn_to_mean(s / 16, category, atk_burn)
+    outcomes.push({
+      probability: v.probability,
+      mean_damage: mean,
+      hits_count: v.hits_count,
+      hit_steps: v.hits,
+    })
+  }
+  outcomes
+}
+
+///|
+/// Mirror of `outcomes_from_calc_result` for the L2 read-side path: convert
+/// `ParsedVariant`s decoded from the disk JSON to `DamageOutcome` with burn
+/// folded in. `hit_steps` is empty because the wire format intentionally
+/// omits per-hit detail to keep entries compact — call sites that need
+/// per-hit metadata recompute via `calc_damage`.
+fn outcomes_from_parsed(
+  parsed : Array[@damage_cache.ParsedVariant],
+  category : @model.MoveCategory,
+  atk_burn : Bool,
+) -> Array[@model.DamageOutcome] {
+  let outcomes : Array[@model.DamageOutcome] = []
+  for i = 0; i < parsed.length(); i = i + 1 {
+    let v = parsed[i]
+    let n = v.total_damages.length()
+    let raw_mean = if n == 0 {
+      0
+    } else {
+      let mut s = 0
+      for j = 0; j < n; j = j + 1 {
+        s = s + v.total_damages[j]
+      }
+      s / n
+    }
+    let mean = apply_burn_to_mean(raw_mean, category, atk_burn)
+    outcomes.push({
+      probability: v.probability,
+      mean_damage: mean,
+      hits_count: v.hits_count,
+      hit_steps: [],
+    })
+  }
+  outcomes
+}
+
+///|
+/// Probability-weighted mean of `DamageOutcome`s, floored to Int. Floors
+/// at the very end (not per-variant) to match the legacy `s / 16`
+/// integer-division convention exactly. Single source of truth shared by
+/// L1 (`compute_mean_damage`), L2 read (`mean_damage_via_disk`), and L2
+/// populate (`compute_and_populate_disk`) so future changes to the floor
+/// convention land in one place.
+fn weighted_mean_floor(outcomes : Array[@model.DamageOutcome]) -> Int {
+  let mut acc = 0.0
+  for i = 0; i < outcomes.length(); i = i + 1 {
+    acc = acc + outcomes[i].probability * outcomes[i].mean_damage.to_double()
+  }
+  acc.to_int()
+}
+
+///|
 /// Compute the mean damage for the given `(attacker, defender, move, ranks)`
 /// tuple directly, without cache lookup. The numeric kernel underneath
 /// `mean_damage_cached` — call-sites should reach it via the cache wrapper
@@ -1264,15 +1343,11 @@ fn compute_mean_damage(
   def_rank : Int,
   atk_burn~ : Bool = false,
 ) -> Int {
-  let outcomes = compute_damage_variants(
-    attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+  weighted_mean_floor(
+    compute_damage_variants(
+      attacker, defender, mv, atk_rank, def_rank, atk_burn~,
+    ),
   )
-  let mut acc = 0.0
-  for i = 0; i < outcomes.length(); i = i + 1 {
-    acc = acc + outcomes[i].probability * outcomes[i].mean_damage.to_double()
-  }
-  // Floor to Int — matches the legacy `s / 16` integer-division behaviour.
-  acc.to_int()
 }
 
 ///|
@@ -1317,22 +1392,7 @@ fn compute_damage_variants(
       },
     ]
   }
-  let outcomes : Array[@model.DamageOutcome] = []
-  for i = 0; i < r.variants.length(); i = i + 1 {
-    let v = r.variants[i]
-    let mut s = 0
-    for j in 0..<16 {
-      s += v.total_damages[j]
-    }
-    let mean = apply_burn_to_mean(s / 16, mv.category, atk_burn)
-    outcomes.push({
-      probability: v.probability,
-      mean_damage: mean,
-      hits_count: v.hits_count,
-      hit_steps: v.hits,
-    })
-  }
-  outcomes
+  outcomes_from_calc_result(r, mv.category, atk_burn)
 }
 
 ///|
@@ -1744,9 +1804,11 @@ fn mean_damage_via_disk(
   match @damage_cache.get(disk, key) {
     Some(json) =>
       match @damage_cache.parse_variants_from_json(json) {
-        Some(variants) => {
+        Some(parsed) => {
           cache.disk_hits = cache.disk_hits + 1
-          mean_damage_from_parsed_variants(variants, mv.category, atk_burn)
+          weighted_mean_floor(
+            outcomes_from_parsed(parsed, mv.category, atk_burn),
+          )
         }
         None => {
           // No variants[] (legacy entry that survived the schema bump,
@@ -1769,46 +1831,15 @@ fn mean_damage_via_disk(
 }
 
 ///|
-/// Reduce a parsed v3 `variants[]` payload to the same scalar that
-/// `compute_mean_damage` returns: per-variant 16-roll mean (`s / 16`)
-/// folded through `apply_burn_to_mean`, then probability-weighted and
-/// floored. Burn must be applied per variant before weighting so integer-
-/// division rounding agrees with the in-memory path bit-for-bit.
-fn mean_damage_from_parsed_variants(
-  variants : Array[@damage_cache.ParsedVariant],
-  category : @model.MoveCategory,
-  atk_burn : Bool,
-) -> Int {
-  let mut acc = 0.0
-  for i = 0; i < variants.length(); i = i + 1 {
-    let v = variants[i]
-    let total = v.total_damages
-    let n = total.length()
-    let mean = if n == 0 {
-      0
-    } else {
-      let mut s = 0
-      for j = 0; j < n; j = j + 1 {
-        s = s + total[j]
-      }
-      s / n
-    }
-    let mean_after_burn = apply_burn_to_mean(mean, category, atk_burn)
-    acc = acc + v.probability * mean_after_burn.to_double()
-  }
-  acc.to_int()
-}
-
-///|
 /// Run the damage engine, store the v3 JSON (variants[] embedded) in L2,
 /// and return the mean damage with burn applied so the return value
 /// matches `compute_mean_damage` exactly — even for multi-hit moves.
 ///
-/// #91: must reduce through `r.variants[]` (Σ probability * variant_mean)
-/// rather than the legacy `r.damages` field. The latter holds only the
-/// most-likely variant's roll table, so collapsing it would silently
-/// regress Triple Axel / Random2to5 / PopulationBomb on the populate path
-/// the same way `mean_damage_via_disk` would on the read path.
+/// #91: reduce through `r.variants[]` via `outcomes_from_calc_result` +
+/// `weighted_mean_floor` (the same pair `compute_damage_variants` /
+/// `compute_mean_damage` use) rather than the legacy `r.damages` field
+/// which holds only the most-likely variant. Sharing the helper keeps L2
+/// populate and read paths bit-identical to the L1 path.
 fn compute_and_populate_disk(
   disk : @damage_cache.DamageDiskCache,
   key : String,
@@ -1829,17 +1860,7 @@ fn compute_and_populate_disk(
   if r.is_immune {
     return 0
   }
-  let mut acc = 0.0
-  for i = 0; i < r.variants.length(); i = i + 1 {
-    let v = r.variants[i]
-    let mut s = 0
-    for j in 0..<16 {
-      s += v.total_damages[j]
-    }
-    let mean = apply_burn_to_mean(s / 16, mv.category, atk_burn)
-    acc = acc + v.probability * mean.to_double()
-  }
-  acc.to_int()
+  weighted_mean_floor(outcomes_from_calc_result(r, mv.category, atk_burn))
 }
 
 ///|

@@ -119,11 +119,12 @@ fn ctx_game(ctx : @admiral.Context) -> GameContext {
     pkdx_exit(1)
   }
   // Canonicalize the explicit `--regulation` value so case-insensitive input
-  // (e.g. `m-a`) resolves to the registered name (`M-A`). `is_available()`
-  // matches regulation strings exactly and silently allow-alls on unknown
-  // names, so passing the raw value here would let `--regulation m-a` disable
-  // Champions filtering instead of applying it. Reject unknown regulations
-  // explicitly rather than letting them no-op downstream.
+  // (e.g. `m-a`) resolves to the registered name (`M-A`). 未登録の名前は
+  // ここで明示的に弾き、後続で silent no-op になる経路を作らない。
+  // (旧アーキでは is_available() がここを通った値で filter していたが、
+  //  champions.db 分離後は DB 自体がレギュレーション準拠サブセットを保持し、
+  //  membership 判定は不要になった。canonicalize は名前 validation のみに
+  //  責務が残っている。)
   let regulation = if cli_regulation != "" {
     match @db.canonicalize_regulation(cli_regulation) {
       Some(c) => c
@@ -209,7 +210,7 @@ fn cmd_regulation() -> @admiral.CommandDef {
           // Accept any case (`m-a`, `M-A`, …) and persist the canonical
           // form. Keeps the documented `pkdx regulation set m-a` flow
           // working without surprising the rest of the codebase, which
-          // compares regulation names exactly (`is_available` etc.).
+          // compares regulation names exactly.
           let canonical = match @db.canonicalize_regulation(name) {
             Some(c) => c
             None => {
@@ -366,43 +367,23 @@ fn count_champions_assets() -> (Int, Int) {
       }
     Err(_) => 0
   }
+  // champions.db.pokemon の行数 = レギュレーション参戦数 (form 単位)。
+  // SELECT が空 / NULL / エラーなら 0 にダウングレードする (`pkdx context`
+  // hook はスキーマ未整備でも block しない契約)。
   let real_mons = match @db.query_binds(db, "SELECT COUNT(*) FROM pokemon", []) {
     Ok(rows) =>
       if rows.length() == 0 {
-        ma_pokemon_count()
+        0
       } else {
         match rows[0][0] {
           Some(s) => parse_count_int(s)
-          None => ma_pokemon_count()
+          None => 0
         }
       }
-    Err(_) => ma_pokemon_count()
+    Err(_) => 0
   }
   @db.close(db)
   (items_count, real_mons)
-}
-
-///|
-fn ma_pokemon_count() -> Int {
-  // Defer to the existing in-memory list until #95 follow-up replaces
-  // the hardcoded ma_global_nos with a champions.db-backed view.
-  let mut n = 0
-  let names : Array[String] = []
-  for r in @db.available_regulations() {
-    names.push(r)
-  }
-  // Resolve by re-running is_available against a synthetic full list —
-  // cheap because the M-A list is ~180 entries.
-  for i = 0; i < 1500; i = i + 1 {
-    let mut s = i.to_string()
-    while s.length() < 4 {
-      s = "0" + s
-    }
-    if @db.is_available(s, "M-A") {
-      n = n + 1
-    }
-  }
-  n
 }
 
 ///|
@@ -1660,12 +1641,11 @@ fn run_search(
   with_db(version=game.version, fn(db) {
     match @db.search_by_type(db, type1, type2, min_speed, game.version) {
       Ok(results) => {
-        let filtered = if game.regulation != "" {
-          results.filter(fn(p) { @db.is_available(p.global_no, game.regulation) })
-        } else {
-          results
-        }
-        println(@cli.format_search(filtered, format))
+        // version=champions の DB はそのレギュレーションのサブセットしか
+        // 含まないため、追加 filter は不要 (`is_available` は廃止済み)。
+        // 他 version は --regulation を弾いているので、ここで filter を
+        // 走らせる経路自体が存在しない。
+        println(@cli.format_search(results, format))
       }
       Err(e) => println("Error: " + e)
     }
@@ -1718,15 +1698,12 @@ fn run_learners(
     let r = @db.query_learners(db, move_name, game.version, include_inactive~)
     match r {
       Ok(results) => {
-        let filtered = if game.regulation != "" {
-          results.filter(fn(p) { @db.is_available(p.global_no, game.regulation) })
+        // version=champions の DB はレギュレーション準拠サブセットそのもの
+        // なので追加 filter 不要。他 version は --regulation を弾いている。
+        let limited = if limit > 0 && results.length() > limit {
+          results[:limit].to_array()
         } else {
           results
-        }
-        let limited = if limit > 0 && filtered.length() > limit {
-          filtered[:limit].to_array()
-        } else {
-          filtered
         }
         println(@cli.format_search(limited, format))
       }

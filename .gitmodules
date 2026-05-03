@@ -1,6 +1,8 @@
 [submodule "pokedex"]
 	path = pokedex
 	url = https://github.com/towakey/pokedex.git
+	ignore = dirty
 [submodule "champout"]
 	path = champout
 	url = https://github.com/projectpokemon/champout.git
+	ignore = dirty

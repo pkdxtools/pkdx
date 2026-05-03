@@ -1,3 +1,6 @@
 .mooncakes/
 _build/
 target/
+
+# SQLite test artifacts (pkdx_items_shadow_test.db / pkdx_empty_champions_test.db 等)
+pkdx_*_test.db

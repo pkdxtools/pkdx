@@ -122,7 +122,7 @@ fn escape_sqlite_string(s : String) -> String {
       // single quote → doubled
       out = out + "''"
     } else {
-      out = out + s.substring(start=i, end=i + 1)
+      out = out + s[i:i + 1].to_string()
     }
   }
   out

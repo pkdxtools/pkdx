@@ -3,7 +3,6 @@ import {
   "pkdxtools/pkdx/src/model" @model,
   "pkdxtools/pkdx/src/damage" @damage,
   "pkdxtools/pkdx/src/damage_cache" @damage_cache,
-  "pkdxtools/pkdx/src/db" @db,
   "pkdxtools/pkdx/src/cli" @cli,
   "pkdxtools/pkdx/src/types" @types,
   "moonbitlang/core/json" @json,
@@ -13,6 +12,7 @@ import {
 }
 
 import {
+  "pkdxtools/pkdx/src/db" @db,
   "moonbitlang/core/math" @math,
 } for "test"
 

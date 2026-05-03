@@ -113,12 +113,12 @@ pub fn run_013(db : @db.Db, _repo_root : String) -> Result[String, String] {
     if stripped.length() == 0 {
       continue
     }
-    let alias = species + "（" + stripped + "）"
+    let display_alias = species + "（" + stripped + "）"
     match
       @db.exec_binds(
         db,
         "INSERT OR IGNORE INTO pokemon_name (id, language, name) VALUES (?, 'jpn', ?)",
-        [@db.BindText(id), @db.BindText(alias)],
+        [@db.BindText(id), @db.BindText(display_alias)],
       ) {
       Err(e) => return Err(e)
       Ok(_) => inserted = inserted + 1
@@ -155,7 +155,7 @@ fn strip_first_occurrence(s : String, needle : String) -> String {
   if idx < 0 {
     return ""
   }
-  let head = s.substring(start=0, end=idx)
-  let tail = s.substring(start=idx + m, end=n)
+  let head = s[0:idx].to_string()
+  let tail = s[idx + m:n].to_string()
   head + tail
 }

@@ -363,7 +363,7 @@ fn format_probability(p : Double) -> String {
   while end > 1 && digits.unsafe_get(end - 1) == 0x30 {
     end = end - 1
   }
-  "0." + digits.substring(start=0, end~)
+  "0." + digits[0:end].to_string()
 }
 
 ///|

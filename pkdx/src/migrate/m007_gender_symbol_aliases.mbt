@@ -99,8 +99,8 @@ pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
         skipped_no_base = skipped_no_base + 1
         continue
       }
-      let alias = compose_alias(form_label, base_name, lang)
-      if alias.length() == 0 || alias == base_name {
+      let display_alias = compose_alias(form_label, base_name, lang)
+      if display_alias.length() == 0 || display_alias == base_name {
         skipped_other = skipped_other + 1
         continue
       }
@@ -118,7 +118,7 @@ pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
             form_col,
             region_col,
             @db.BindText(lang),
-            @db.BindText(alias),
+            @db.BindText(display_alias),
           ],
         ) {
         Err(e) => return Err(e)

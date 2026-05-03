@@ -111,9 +111,7 @@ test "shadow: オッカのみ resist berry type matches hardcode" {
   let hardcode_type = get_resist_berry_type("オッカのみ")
   let db_type = get_resist_berry_type_db(effects)
   inspect(hardcode_type == db_type, content="true")
-  inspect(db_type, content=
-    #|ほのお
-  )
+  inspect(db_type, content="ほのお")
   @db.close(db)
 }
 

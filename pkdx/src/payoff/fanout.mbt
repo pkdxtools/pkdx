@@ -27,7 +27,7 @@
 /// to 1.0 ± 1e-9 for the contract carried by `compose_fanouts` to hold
 /// across multi-layer composition. Deterministic transitions return a
 /// single-element array `[(1.0, new_state)]`.
-pub typealias (S) -> Array[(Double, S)] as FanoutStep[S]
+pub type FanoutStep[S] = (S) -> Array[(Double, S)]
 
 ///|
 /// Compose a list of fanout steps applied left-to-right. Probabilities

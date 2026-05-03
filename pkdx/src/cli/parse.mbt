@@ -79,7 +79,7 @@ pub fn parse_hp_ratio(s : String) -> (Int, Int) {
   // "N%" form: drop the trailing '%' and parse as (N, 100).
   let last = s[s.length() - 1]
   if last == '%' {
-    let head = s.substring(start=0, end=s.length() - 1)
+    let head = s[0:s.length() - 1].to_string()
     let n = parse_int_str(head, -1)
     if n < 0 {
       return (2, 2)
@@ -97,8 +97,8 @@ pub fn parse_hp_ratio(s : String) -> (Int, Int) {
   if slash_idx <= 0 {
     return (2, 2)
   }
-  let num_str = s.substring(start=0, end=slash_idx)
-  let den_str = s.substring(start=slash_idx + 1, end=s.length())
+  let num_str = s[0:slash_idx].to_string()
+  let den_str = s[slash_idx + 1:s.length()].to_string()
   let num = parse_int_str(num_str, -1)
   let den = parse_int_str(den_str, -1)
   if num < 0 || den <= 0 {

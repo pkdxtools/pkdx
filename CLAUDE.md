@@ -8,6 +8,7 @@
 - **nash**: 零和ナッシュ均衡ソルバー / 選出最適化（`pkdx select`） / メタ乖離分析（`pkdx meta-divergence`）
 - **self-update**: フォーク先でupstreamの最新変更を安全にマージ
 - **blog**: 構築ブログの管理
+- **battle**: 対戦中の高速応答モード（calc 事前ロード + ダメ計/メモのラベル分岐、終了時にバトルログ保存）
 
 CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、ダメージ計算、実数値計算・逆算、および構築・育成データのマークダウン出力、ゲーム理論に基づいた選出最適化計算などを担う。
 
@@ -134,6 +135,8 @@ box/                      # ユーザーデータ出力先（フォーク先でg
     SKILL.md              # upstream追従スキル
   blog/
     SKILL.md              # site/配下のブログ情報を管理するスキル
+  battle/
+    SKILL.md              # 対戦中の高速応答モード（calc 事前ロード + ダメ計/メモのラベル分岐）
 
 pokedex/                  # git submodule (towakey/pokedex)
   pokedex.db              # SQLiteデータベース (生成が必要、共有 upstream スキーマ)

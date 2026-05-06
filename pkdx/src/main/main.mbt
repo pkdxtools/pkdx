@@ -91,6 +91,35 @@ fn format_option() -> @admiral.OptionDef {
 }
 
 ///|
+/// Build a `run` callback that prints a short usage block for parent
+/// commands (those that only host subcommands and have no native
+/// action). Without it admiral surfaces its internal "missing
+/// subcommand" failure verbatim when the user types e.g. `pkdx db`
+/// alone, leaking a stack-trace-style message into the UX.
+fn parent_help_run(
+  cmd_name : String,
+  cmd_description : String,
+  subs : Array[@admiral.CommandDef],
+) -> (@admiral.Context) -> Unit {
+  fn(_ctx) {
+    println("Usage: pkdx " + cmd_name + " [command]")
+    println("")
+    println(cmd_description)
+    println("")
+    println("Commands:")
+    for sub in subs {
+      println("  " + sub.name + "  " + sub.description)
+    }
+    println("")
+    println(
+      "Run 'pkdx " +
+      cmd_name +
+      " <command> --help' for command-specific options.",
+    )
+  }
+}
+
+///|
 pub(all) struct GameContext {
   version : String
   regulation : String
@@ -185,60 +214,64 @@ fn build_cli() -> @admiral.CliApp {
 /// pkdx commands and the SessionStart hook share a single source of
 /// truth (issue #96 / P3).
 fn cmd_regulation() -> @admiral.CommandDef {
+  let name = "regulation"
+  let description = "Get/set/list the active Champions regulation"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="get",
+      description="Print the active regulation (default M-A when unset)",
+      run=Some(fn(_ctx) {
+        let r = read_box_regulation_or_default()
+        println(r.regulation)
+      }),
+    ),
+    @admiral.command(
+      name="set",
+      description="Persist a new active regulation",
+      positionals=[
+        @admiral.positional(
+          "name", description="Regulation name (e.g. M-A)", required=true,
+        ),
+      ],
+      run=Some(fn(ctx) {
+        let name = ctx_str(ctx, "name")
+        // Accept any case (`m-a`, `M-A`, …) and persist the canonical
+        // form. Keeps the documented `pkdx regulation set m-a` flow
+        // working without surprising the rest of the codebase, which
+        // compares regulation names exactly.
+        let canonical = match @db.canonicalize_regulation(name) {
+          Some(c) => c
+          None => {
+            exit_error(
+              "Unknown regulation '" +
+              name +
+              "'. Run 'pkdx regulation list' for available names.",
+            )
+            return
+          }
+        }
+        match write_box_regulation(canonical) {
+          Ok(_) => println("regulation = " + canonical)
+          Err(e) => exit_error("Failed to write box/regulation.json: " + e)
+        }
+      }),
+    ),
+    @admiral.command(
+      name="list",
+      description="List the registered regulation names",
+      run=Some(fn(_ctx) {
+        let names = @db.available_regulations()
+        for i = 0; i < names.length(); i = i + 1 {
+          println(names[i])
+        }
+      }),
+    ),
+  ]
   @admiral.command(
-    name="regulation",
-    description="Get/set/list the active Champions regulation",
-    subcommands=[
-      @admiral.command(
-        name="get",
-        description="Print the active regulation (default M-A when unset)",
-        run=Some(fn(_ctx) {
-          let r = read_box_regulation_or_default()
-          println(r.regulation)
-        }),
-      ),
-      @admiral.command(
-        name="set",
-        description="Persist a new active regulation",
-        positionals=[
-          @admiral.positional(
-            "name", description="Regulation name (e.g. M-A)", required=true,
-          ),
-        ],
-        run=Some(fn(ctx) {
-          let name = ctx_str(ctx, "name")
-          // Accept any case (`m-a`, `M-A`, …) and persist the canonical
-          // form. Keeps the documented `pkdx regulation set m-a` flow
-          // working without surprising the rest of the codebase, which
-          // compares regulation names exactly.
-          let canonical = match @db.canonicalize_regulation(name) {
-            Some(c) => c
-            None => {
-              exit_error(
-                "Unknown regulation '" +
-                name +
-                "'. Run 'pkdx regulation list' for available names.",
-              )
-              return
-            }
-          }
-          match write_box_regulation(canonical) {
-            Ok(_) => println("regulation = " + canonical)
-            Err(e) => exit_error("Failed to write box/regulation.json: " + e)
-          }
-        }),
-      ),
-      @admiral.command(
-        name="list",
-        description="List the registered regulation names",
-        run=Some(fn(_ctx) {
-          let names = @db.available_regulations()
-          for i = 0; i < names.length(); i = i + 1 {
-            println(names[i])
-          }
-        }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 
@@ -259,12 +292,36 @@ fn cmd_context() -> @admiral.CommandDef {
       // Item / Pokemon counts come from champions.db; resolve via with_db
       // with version=champions so the attached schema is in scope.
       let (items_count, mons_count) = count_champions_assets()
+      // バイナリにビルド時点で焼き込まれた `pkdx_version` と、リポジトリ側の
+      // SSoT である `pkdx/moon.mod.json` の version を比較する。drift がある
+      // = ユーザーが `git pull` 後 `setup.sh` を再実行していない or 古い
+      // バイナリがキャッシュに残っている、のどちらか。SessionStart hook で
+      // この JSON を読んだ agent がユーザーに再ビルドを促す。
+      // repo_version が空 (= moon.mod.json が読めない / repo 外で実行 etc.)
+      // のときは drift 判定せず silent 扱いにする。
+      let repo_version = read_repo_pkdx_version()
+      let drift = repo_version != "" && repo_version != pkdx_version
+      let drift_message = if drift {
+        "Local pkdx binary (" +
+        pkdx_version +
+        ") differs from repo (" +
+        repo_version +
+        "). Re-run ./setup.sh to rebuild."
+      } else {
+        ""
+      }
       let json = "{\"version\":\"" +
         r.version +
         "\",\"regulation\":\"" +
         r.regulation +
         "\",\"pkdx_version\":\"" +
         pkdx_version +
+        "\",\"repo_pkdx_version\":\"" +
+        repo_version +
+        "\",\"version_drift\":" +
+        drift.to_string() +
+        ",\"version_drift_message\":\"" +
+        drift_message +
         "\",\"items_count\":" +
         items_count.to_string() +
         ",\"champions_pokemon_count\":" +
@@ -334,6 +391,36 @@ fn box_regulation_path() -> String {
   match @sys.get_env_var("PKDX_BOX_REGULATION") {
     Some(p) => p
     None => "box/regulation.json"
+  }
+}
+
+///|
+/// Read the `version` field from the repository's `pkdx/moon.mod.json`
+/// (the SSoT for pkdx CLI version). Returns `""` on any failure —
+/// `pkdx context` is on the SessionStart hot path and must never raise
+/// or block when the file is missing (e.g. invoked outside the repo
+/// or before `setup.sh`).
+fn read_repo_pkdx_version() -> String {
+  let path = match @sys.get_env_var("PKDX_REPO_MOON_MOD") {
+    Some(p) => p
+    None => "pkdx/moon.mod.json"
+  }
+  if not(@db.file_exists(path)) {
+    return ""
+  }
+  let raw = match @db.read_file(path) {
+    Some(s) => s
+    None => return ""
+  }
+  try @json.parse(raw) catch {
+    _ => ""
+  } noraise {
+    Object(obj) =>
+      match obj.get("version") {
+        Some(String(s)) => s
+        _ => ""
+      }
+    _ => ""
   }
 }
 
@@ -599,20 +686,24 @@ fn run_damage_bench(
 /// leaving the cache DB (and its meta) in place so the next damage call
 /// simply repopulates.
 fn cmd_cache_clear() -> @admiral.CommandDef {
+  let name = "cache-clear"
+  let description = "Remove cached entries for a pkdx subcommand"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="damage",
+      description="Clear the persistent damage cache (" +
+        DAMAGE_CACHE_REL_PATH +
+        "; override via " +
+        DAMAGE_CACHE_ENV_VAR +
+        ")",
+      run=Some(fn(_ctx) { run_cache_clear_damage() }),
+    ),
+  ]
   @admiral.command(
-    name="cache-clear",
-    description="Remove cached entries for a pkdx subcommand",
-    subcommands=[
-      @admiral.command(
-        name="damage",
-        description="Clear the persistent damage cache (" +
-          DAMAGE_CACHE_REL_PATH +
-          "; override via " +
-          DAMAGE_CACHE_ENV_VAR +
-          ")",
-        run=Some(fn(_ctx) { run_cache_clear_damage() }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 
@@ -620,34 +711,38 @@ fn cmd_cache_clear() -> @admiral.CommandDef {
 /// `pkdx convert meta` — migrate a single box meta.json to the new schema
 /// introduced in issue #66. Idempotent (already-migrated files pass through).
 fn cmd_convert() -> @admiral.CommandDef {
+  let name = "convert"
+  let description = "Convert legacy box JSON (box/pokemons|teams/*.meta.json) to the new schema"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="meta",
+      description="Migrate a single meta.json to the new schema (issue #66)",
+      options=[
+        @admiral.string("in", description="Input .meta.json path", required=true),
+        @admiral.string(
+          "out",
+          description="Output path (stdout if unset, ignored when --in-place is set)",
+          default=Some(""),
+        ),
+        @admiral.bool(
+          "in-place",
+          description="Overwrite <in>; creates <in>.bak once (skipped if it already exists)",
+        ),
+      ],
+      run=Some(fn(ctx) {
+        run_convert_meta(
+          ctx_str(ctx, "in"),
+          ctx_str(ctx, "out"),
+          ctx.get_bool("in-place"),
+        )
+      }),
+    ),
+  ]
   @admiral.command(
-    name="convert",
-    description="Convert legacy box JSON (box/pokemons|teams/*.meta.json) to the new schema",
-    subcommands=[
-      @admiral.command(
-        name="meta",
-        description="Migrate a single meta.json to the new schema (issue #66)",
-        options=[
-          @admiral.string("in", description="Input .meta.json path", required=true),
-          @admiral.string(
-            "out",
-            description="Output path (stdout if unset, ignored when --in-place is set)",
-            default=Some(""),
-          ),
-          @admiral.bool(
-            "in-place",
-            description="Overwrite <in>; creates <in>.bak once (skipped if it already exists)",
-          ),
-        ],
-        run=Some(fn(ctx) {
-          run_convert_meta(
-            ctx_str(ctx, "in"),
-            ctx_str(ctx, "out"),
-            ctx.get_bool("in-place"),
-          )
-        }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 
@@ -662,48 +757,52 @@ fn cmd_convert() -> @admiral.CommandDef {
 ///   `<repo_root>/pkdx_patch/{009_champions_pokemon, 010_champions_moves,
 ///                            011_champions_learnset, 012_items}/data.json`
 fn cmd_db() -> @admiral.CommandDef {
+  let name = "db"
+  let description = "Champions DB build/init commands"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="init",
+      description="Regenerate intermediate JSON from champout submodule",
+      options=[
+        @admiral.string(
+          "champout",
+          description="Path to champout submodule (default: <repo_root>/champout)",
+          default=Some(""),
+        ),
+        @admiral.string(
+          "out",
+          description="Output root for intermediate JSON (default: <repo_root>/pkdx_patch)",
+          default=Some(""),
+        ),
+        @admiral.string(
+          "repo-root",
+          description="Project root used to resolve default paths",
+          default=Some("."),
+        ),
+      ],
+      run=Some(fn(ctx) {
+        let repo_root = ctx_str(ctx, "repo-root")
+        let champout_arg = ctx_str_opt(ctx, "champout")
+        let out_arg = ctx_str_opt(ctx, "out")
+        let champout_dir = if champout_arg.length() == 0 {
+          repo_root + "/champout"
+        } else {
+          champout_arg
+        }
+        let out_dir = if out_arg.length() == 0 {
+          repo_root + "/pkdx_patch"
+        } else {
+          out_arg
+        }
+        run_db_init(champout_dir, out_dir)
+      }),
+    ),
+  ]
   @admiral.command(
-    name="db",
-    description="Champions DB build/init commands",
-    subcommands=[
-      @admiral.command(
-        name="init",
-        description="Regenerate intermediate JSON from champout submodule",
-        options=[
-          @admiral.string(
-            "champout",
-            description="Path to champout submodule (default: <repo_root>/champout)",
-            default=Some(""),
-          ),
-          @admiral.string(
-            "out",
-            description="Output root for intermediate JSON (default: <repo_root>/pkdx_patch)",
-            default=Some(""),
-          ),
-          @admiral.string(
-            "repo-root",
-            description="Project root used to resolve default paths",
-            default=Some("."),
-          ),
-        ],
-        run=Some(fn(ctx) {
-          let repo_root = ctx_str(ctx, "repo-root")
-          let champout_arg = ctx_str_opt(ctx, "champout")
-          let out_arg = ctx_str_opt(ctx, "out")
-          let champout_dir = if champout_arg.length() == 0 {
-            repo_root + "/champout"
-          } else {
-            champout_arg
-          }
-          let out_dir = if out_arg.length() == 0 {
-            repo_root + "/pkdx_patch"
-          } else {
-            out_arg
-          }
-          run_db_init(champout_dir, out_dir)
-        }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 
@@ -1326,46 +1425,50 @@ fn cmd_damage() -> @admiral.CommandDef {
 
 ///|
 fn cmd_write() -> @admiral.CommandDef {
+  let name = "write"
+  let description = "Write skill cache JSON (stdin) to a markdown file"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="teams",
+      description="Write a team build report to box/teams/",
+      options=[
+        @admiral.string("date", description="YYYY-MM-DD", required=true),
+        @admiral.string("axis", description="Axis Pokemon name", required=true),
+        @admiral.bool(
+          "force",
+          description="Overwrite existing MD even if frontmatter has `edited: true`",
+        ),
+        @admiral.bool(
+          "publish",
+          description="Mark this team for publication on the build blog (default: unpublished)",
+        ),
+      ],
+      run=Some(fn(ctx) {
+        run_write_teams(
+          ctx_str(ctx, "date"),
+          ctx_str(ctx, "axis"),
+          ctx.get_bool("force"),
+          ctx.get_bool("publish"),
+        )
+      }),
+    ),
+    @admiral.command(
+      name="pokemon",
+      description="Write a Pokemon build to box/pokemons/",
+      options=[
+        @admiral.string("name", description="Pokemon name", required=true),
+        @admiral.string("file", description="Output filename (no extension)", required=true),
+      ],
+      run=Some(fn(ctx) {
+        run_write_pokemon(ctx_str(ctx, "name"), ctx_str(ctx, "file"))
+      }),
+    ),
+  ]
   @admiral.command(
-    name="write",
-    description="Write skill cache JSON (stdin) to a markdown file",
-    subcommands=[
-      @admiral.command(
-        name="teams",
-        description="Write a team build report to box/teams/",
-        options=[
-          @admiral.string("date", description="YYYY-MM-DD", required=true),
-          @admiral.string("axis", description="Axis Pokemon name", required=true),
-          @admiral.bool(
-            "force",
-            description="Overwrite existing MD even if frontmatter has `edited: true`",
-          ),
-          @admiral.bool(
-            "publish",
-            description="Mark this team for publication on the build blog (default: unpublished)",
-          ),
-        ],
-        run=Some(fn(ctx) {
-          run_write_teams(
-            ctx_str(ctx, "date"),
-            ctx_str(ctx, "axis"),
-            ctx.get_bool("force"),
-            ctx.get_bool("publish"),
-          )
-        }),
-      ),
-      @admiral.command(
-        name="pokemon",
-        description="Write a Pokemon build to box/pokemons/",
-        options=[
-          @admiral.string("name", description="Pokemon name", required=true),
-          @admiral.string("file", description="Output filename (no extension)", required=true),
-        ],
-        run=Some(fn(ctx) {
-          run_write_pokemon(ctx_str(ctx, "name"), ctx_str(ctx, "file"))
-        }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 
@@ -1448,21 +1551,25 @@ fn cmd_stat_reverse() -> @admiral.CommandDef {
 
 ///|
 fn cmd_init_cache() -> @admiral.CommandDef {
+  let name = "init-cache"
+  let description = "Output a placeholder JSON skeleton for skill caches"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="team",
+      description="Team cache placeholder",
+      run=Some(fn(_ctx) { run_init_cache_team() }),
+    ),
+    @admiral.command(
+      name="pokemon",
+      description="Pokemon cache placeholder",
+      run=Some(fn(_ctx) { run_init_cache_pokemon() }),
+    ),
+  ]
   @admiral.command(
-    name="init-cache",
-    description="Output a placeholder JSON skeleton for skill caches",
-    subcommands=[
-      @admiral.command(
-        name="team",
-        description="Team cache placeholder",
-        run=Some(fn(_ctx) { run_init_cache_team() }),
-      ),
-      @admiral.command(
-        name="pokemon",
-        description="Pokemon cache placeholder",
-        run=Some(fn(_ctx) { run_init_cache_pokemon() }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 
@@ -2668,28 +2775,32 @@ fn run_hbd(
 /// from stdin and solves the zero-sum game. Accepts either an explicit
 /// matrix or a monocycle character list; rejects inputs that provide both.
 fn cmd_nash() -> @admiral.CommandDef {
+  let name = "nash"
+  let description = "Solve a zero-sum Nash equilibrium or emit a DOT payoff graph"
+  let subs : Array[@admiral.CommandDef] = [
+    @admiral.command(
+      name="solve",
+      description="Solve the Nash equilibrium from a payoff JSON on stdin",
+      run=Some(fn(_ctx) { run_nash_solve_cmd() }),
+    ),
+    @admiral.command(
+      name="graph",
+      description="Emit a Graphviz DOT representation of the payoff matrix",
+      options=[
+        @admiral.string(
+          "threshold",
+          description="Edge absolute-value threshold (default 0)",
+          default=Some("0"),
+        ),
+      ],
+      run=Some(fn(ctx) { run_nash_graph_cmd(ctx_str(ctx, "threshold")) }),
+    ),
+  ]
   @admiral.command(
-    name="nash",
-    description="Solve a zero-sum Nash equilibrium or emit a DOT payoff graph",
-    subcommands=[
-      @admiral.command(
-        name="solve",
-        description="Solve the Nash equilibrium from a payoff JSON on stdin",
-        run=Some(fn(_ctx) { run_nash_solve_cmd() }),
-      ),
-      @admiral.command(
-        name="graph",
-        description="Emit a Graphviz DOT representation of the payoff matrix",
-        options=[
-          @admiral.string(
-            "threshold",
-            description="Edge absolute-value threshold (default 0)",
-            default=Some("0"),
-          ),
-        ],
-        run=Some(fn(ctx) { run_nash_graph_cmd(ctx_str(ctx, "threshold")) }),
-      ),
-    ],
+    name=name,
+    description=description,
+    subcommands=subs,
+    run=Some(parent_help_run(name, description, subs)),
   )
 }
 

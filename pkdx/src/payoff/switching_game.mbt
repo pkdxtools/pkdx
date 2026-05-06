@@ -2150,7 +2150,11 @@ fn apply_recoil(
 ///   3. recoil (attacker HP loss; minimum 1 HP for any landed recoil hit)
 ///   4. self_ko (attacker HP forced to 0, regardless of `dmg`)
 ///   5. recharge (set only if attacker is still alive after 3 & 4)
-fn resolve_post_hit_effects(
+///
+/// `pub` purely so the lib build sees it as exported; production sites
+/// have moved to `with_post_hit_effects`, leaving only white-box tests
+/// as callers — which the lib check would otherwise flag as unused.
+pub fn resolve_post_hit_effects(
   attacker_hps : Array[Int],
   attacker_active : Int,
   attacker_ranks : Array[Int],

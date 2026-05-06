@@ -208,8 +208,27 @@ bin/pkdx migrate --repo-root .
 # 1. moon.mod.json の version を編集
 # 2. 同期スクリプトを実行
 scripts/sync_version.sh
-# 3. moon.mod.json と version.mbt をコミット
+# 3. ローカルバイナリをリビルド (必須)
+cd pkdx && moon build --target native --release src/main
+# 4. moon.mod.json と version.mbt をコミット
 ```
+
+Step 3 を飛ばすと、ローカルセッションの `pkdx context --json` (SessionStart hook) が
+`version_drift=true` を返し続ける。バイナリに焼き込まれた `pkdx_version` と
+`moon.mod.json` の `version` を比較して drift を検知している。
+配布バイナリ (GitHub Releases) を使っているユーザーには影響しない。
+
+### SessionStart で `version_drift_message` を見たとき
+
+エージェントは `pkdx context --json` の結果に `version_drift_message` が含まれて
+いる (= 空文字でない) 場合、ユーザーへ以下を伝える:
+
+- ローカル pkdx バイナリと repo の version が乖離している事実
+- メッセージに含まれる再ビルド手順 (通常は `./setup.sh` 再実行 or
+  `cd pkdx && moon build --target native --release src/main`)
+
+drift があるとダメージ計算や migration 等の挙動と SSoT が一致しない可能性がある
+ため、放置せず最初に通知する。
 
 ## Reference documents
 

@@ -310,24 +310,22 @@ fn cmd_context() -> @admiral.CommandDef {
       } else {
         ""
       }
-      let json = "{\"version\":\"" +
-        r.version +
-        "\",\"regulation\":\"" +
-        r.regulation +
-        "\",\"pkdx_version\":\"" +
-        pkdx_version +
-        "\",\"repo_pkdx_version\":\"" +
-        repo_version +
-        "\",\"version_drift\":" +
-        drift.to_string() +
-        ",\"version_drift_message\":\"" +
-        drift_message +
-        "\",\"items_count\":" +
-        items_count.to_string() +
-        ",\"champions_pokemon_count\":" +
-        mons_count.to_string() +
-        "}"
-      println(json)
+      // Construct via Json values + stringify so that any string field
+      // (notably repo_version coming from a user-controllable
+      // moon.mod.json via PKDX_REPO_MOON_MOD) gets quotes / backslashes
+      // escaped. Raw concatenation here previously emitted invalid
+      // JSON when the source contained `"` or `\`.
+      let payload : Json = {
+        "version": r.version.to_json(),
+        "regulation": r.regulation.to_json(),
+        "pkdx_version": pkdx_version.to_json(),
+        "repo_pkdx_version": repo_version.to_json(),
+        "version_drift": drift.to_json(),
+        "version_drift_message": drift_message.to_json(),
+        "items_count": items_count.to_json(),
+        "champions_pokemon_count": mons_count.to_json(),
+      }
+      println(payload.stringify())
     }),
   )
 }

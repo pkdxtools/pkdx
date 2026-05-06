@@ -227,6 +227,19 @@ rm -f "$CACHE_DIR"/pkdx-*
 $REPO_ROOT/bin/pkdx version
 ```
 
+加えて、ローカルバイナリと `pkdx/moon.mod.json` の version 乖離が解消した
+ことを確認する:
+
+```bash
+$REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
+```
+
+`"version_drift":false` が出ればバイナリと repo の version が一致している。
+`true` の場合 (例: download 経由で取得した release バイナリが直前の bump
+PR にまだ追従していない、ローカル build に失敗していた、等) は 2-2 の
+build / download に戻ること。SessionStart hook が同じ判定を毎回エージェント
+に注入するので、放置すると以後のセッションで毎回 drift 通知が出る。
+
 ### 2-4: DB resync
 
 upstream の data.json 変更（道具メタ、反動技、状態異常技 等）と champout submodule pointer 移動の双方を既存 DB に反映する。**canonical な再同期は `./setup.sh`**。Step 1 で submodule を最新ポインタへ追従、Step 3.5 で `pkdx db init` が `pkdx_patch/{009..012}/data.json` を champout から再生成したのち `champions.db` を rm → `pkdx migrate` の順で流す。`pkdx migrate` は bookkeeping を持たない seed-script モデルで、全マイグレーションが冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されているため、再適用しても DB は data.json の状態へ収束する。

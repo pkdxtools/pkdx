@@ -230,6 +230,24 @@ Step 3 を飛ばすと、ローカルセッションの `pkdx context --json` (S
 drift があるとダメージ計算や migration 等の挙動と SSoT が一致しない可能性がある
 ため、放置せず最初に通知する。
 
+### `pkdx context --json` 出力スキーマ
+
+SessionStart hook (`.claude/settings.json`) から呼ばれる 1-line JSON。
+失敗時も hook を止めない設計で、すべてのフィールドは必ず存在する。
+
+| フィールド | 型 | 内容 |
+|---|---|---|
+| `version` | string | 現在の `box/regulation.json` の `version` (例: `"champions"`)。未設定時 `"champions"` |
+| `regulation` | string | 現在の `box/regulation.json` の `regulation` (例: `"M-A"`)。未設定時 `"M-A"` |
+| `pkdx_version` | string | バイナリ build 時に焼き込まれた `version.mbt` の値 |
+| `repo_pkdx_version` | string | `pkdx/moon.mod.json` の `version` を実行時に読んだ値。読めない場合は `""` |
+| `version_drift` | bool | `repo_pkdx_version != ""` かつ `repo_pkdx_version != pkdx_version` のとき `true`。`""` 比較は意図的に false 側 (silent) |
+| `version_drift_message` | string | `version_drift=true` のときのみ再ビルド指示文。それ以外は `""` |
+| `items_count` | int | champions.db 内の item 行数。読めない場合 `0` |
+| `champions_pokemon_count` | int | champions.db 内の pokemon 行数。読めない場合 `0` |
+
+`PKDX_REPO_MOON_MOD` 環境変数で `pkdx/moon.mod.json` のパスを上書き可 (テスト用)。
+
 ## Reference documents
 
 ドメイン理論・設計背景・数式導出など、コードからは読み取れない知識は `.claude/skills/*/references/` に置き、エージェントが質問に自力で回答できるようにする。システム全体のパス / データフロー俯瞰は `.claude/architecture.md` に Mermaid 図で整理されている。

@@ -40,6 +40,25 @@ $REPO_ROOT/box/cache/team_cache_<axis_name>_<timestamp>.json
 CACHE_FILE="$REPO_ROOT/box/cache/team_cache_<axis_name>_$(date +%s).json"
 ```
 
+### axis_name 解決と init-cache のタイミング
+
+`<axis_name>` は Phase 1 で軸ポケモンが確定するまで決まらない。Phase 0 完了時点ではまだ軸が無いため、次の手順で扱う:
+
+1. **Phase 0 完了時**: プレースホルダ名で初期化し、`battle_format` / `mechanics` / `version` / `regulation` を書き込む
+   ```bash
+   CACHE_TS=$(date +%s)
+   CACHE_FILE="$REPO_ROOT/box/cache/team_cache_pending_${CACHE_TS}.json"
+   bin/pkdx init-cache team > "$CACHE_FILE"
+   # battle_format / mechanics / version / regulation を jq 等でマージ
+   ```
+2. **Phase 1 軸確定後**: ファイルを `<axis_name>` 入りの正式名にリネームし、`$CACHE_FILE` を更新
+   ```bash
+   NEW_FILE="$REPO_ROOT/box/cache/team_cache_<axis_name>_${CACHE_TS}.json"
+   mv "$CACHE_FILE" "$NEW_FILE"
+   CACHE_FILE="$NEW_FILE"
+   ```
+3. **Phase 1-Team-Vision 経路**: 取り込み完了後の最初のメンバーを軸とみなして同じく rename する。Phase 1-Team-Vision 内に `init-cache team` の重複指示があるが、**Phase 0 で初期化済みなら再実行は不要**（rename のみ行う）
+
 ### キャッシュの初期化
 
 スキーマ定義は `pkdx/src/writer/schema.mbt` の `team_schema()` がSSoT。初期JSONは以下のコマンドで生成する:

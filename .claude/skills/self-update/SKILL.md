@@ -56,7 +56,7 @@ clone運用の場合、以下のメッセージを表示:
 ### 0-2: default branch 検出
 
 ```bash
-UPSTREAM_BRANCH=$(git symbolic-ref refs/remotes/$UPDATE_REMOTE/HEAD 2>/dev/null | sed 's|refs/remotes/$UPDATE_REMOTE/||')
+UPSTREAM_BRANCH=$(git symbolic-ref refs/remotes/$UPDATE_REMOTE/HEAD 2>/dev/null | sed "s|refs/remotes/${UPDATE_REMOTE}/||")
 if [ -z "$UPSTREAM_BRANCH" ]; then
   UPSTREAM_BRANCH="main"
 fi
@@ -83,6 +83,8 @@ cd $REPO_ROOT && git status --porcelain
 cd $REPO_ROOT && git branch backup/pre-update-$(date +%Y%m%d-%H%M%S)
 cd $REPO_ROOT && git stash push -u -m "self-update: auto-stash $(date +%Y%m%d-%H%M%S)"
 ```
+
+> **メモ**: Phase 1 はソース更新とバイナリ更新の双方を含む。差分の有無に関係なく Phase 1-4（バイナリ更新）まで必ず到達する設計。
 
 ## Phase 1: Fetch & Merge
 
@@ -113,7 +115,7 @@ cd $REPO_ROOT && git fetch $UPDATE_REMOTE
 |---|------|--------|-----------|
 | 1 | GitHub Web UIでフォークを同期してください。\n\n手順:\n1. ブラウザで自分のフォークリポジトリページを開く\n2. 「Sync fork」ボタンをクリック\n3. 「Update branch」をクリック\n4. 完了したら「完了」を選択してください | フォーク同期 | 完了(desc: Sync forkを実行しました), 中断(desc: 更新を中断します) |
 
-「中断」→ Phase 3（Stash復元）へスキップしてスキル終了。
+「中断」→ Phase 2（Stash復元）へスキップしてスキル終了。
 
 「完了」→ origin から pull して最新を取り込む:
 
@@ -121,7 +123,7 @@ cd $REPO_ROOT && git fetch $UPDATE_REMOTE
 cd $REPO_ROOT && git pull origin $UPSTREAM_BRANCH
 ```
 
-pull 成功後、Phase 1-1（差分確認）をスキップし **Phase 2（バイナリ更新）** へ進む。
+pull 成功後、Phase 1-1（差分確認）をスキップし **Phase 1-4（バイナリ更新）** へ進む。
 pull 失敗時は通常のコンフリクト処理（Phase 1-3）と同様に処理する。
 
 ---
@@ -134,7 +136,7 @@ pull 失敗時は通常のコンフリクト処理（Phase 1-3）と同様に処
 cd $REPO_ROOT && git log --oneline HEAD..$UPDATE_REMOTE/$UPSTREAM_BRANCH | head -20
 ```
 
-差分がない場合は「すでに最新です」と表示してPhase 3へスキップ。
+差分がない場合は「すでに最新です」と表示し、**Phase 1-4（バイナリ更新）** へ進む。バイナリ更新はソース差分の有無に関係なく必ず実行する（GitHub Releases のアセット差し替え、ローカルバイナリ欠損、version drift 残留などをカバーするため）。
 
 ### 1-2: マージ実行
 
@@ -192,79 +194,36 @@ cd $REPO_ROOT && git diff --name-only --diff-filter=U
 cd $REPO_ROOT && git commit --no-edit
 ```
 
-## Phase 2: バイナリ更新
+### 1-4: バイナリ更新（GitHub Releases ダウンロード固定）
 
-### 2-1: キャッシュクリア
+**ソース差分の有無に関係なく必ず実行する**。GitHub Releases のアセット差し替え、ローカルバイナリ欠損、`moon.mod.json` との version drift 残留などをまとめてカバーするため、ユーザーへの選択肢提示は行わない。`./setup.sh` が以下を一括で行う:
+
+- 古いバイナリキャッシュのクリア
+- GitHub Releases から最新 pkdx バイナリをダウンロード
+- pokedex / champout submodule の同期
+- `pkdx_patch/{009..012}/data.json` 再生成 → `champions.db` 再構築 → `pkdx migrate` 実行
+- `box/**/*.meta.json` の schema マイグレーション（`<path>.bak` を 1 回だけ作成、既存 `.bak` は上書きしない）
 
 ```bash
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pkdx"
 rm -f "$CACHE_DIR"/pkdx-*
+cd $REPO_ROOT && ./setup.sh
 ```
 
-### 2-2: リビルドまたはダウンロード
+`pkdx migrate` は bookkeeping を持たない seed-script モデルで、全マイグレーションが冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されているため、再適用しても DB は data.json の状態へ収束する。
 
-**AskUserQuestion**（1問）:
+ローカル開発でビルド済みバイナリを使いたい場合は、`./setup.sh` を流した後に手動で `cd pkdx && moon build --target native --release src/main` を打つ。
 
-| # | 質問 | header | オプション |
-|---|------|--------|-----------|
-| 1 | pkdx cliの更新方法は？ | pkdxアップデート | download(desc: GitHub Releasesから最新版ダウンロード/推奨), build(desc: ローカルでビルド), skip(desc: スキップ) |
-
-- **build** :
-  ```bash
-  cd $REPO_ROOT/pkdx && moon build --target native
-  ```
-
-- **download** (推奨) :
-  ```bash
-  cd $REPO_ROOT && ./setup.sh
-  ```
-
-- **skip**: 何もしない
-
-### 2-3: 動作確認
+### 1-5: 動作確認
 
 ```bash
 $REPO_ROOT/bin/pkdx version
-```
-
-加えて、ローカルバイナリと `pkdx/moon.mod.json` の version 乖離が解消した
-ことを確認する:
-
-```bash
 $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
 ```
 
-`"version_drift":false` が出ればバイナリと repo の version が一致している。
-`true` の場合 (例: download 経由で取得した release バイナリが直前の bump
-PR にまだ追従していない、ローカル build に失敗していた、等) は 2-2 の
-build / download に戻ること。SessionStart hook が同じ判定を毎回エージェント
-に注入するので、放置すると以後のセッションで毎回 drift 通知が出る。
+`"version_drift":false` が出ればバイナリと repo の version が一致している。`true` の場合（例: GitHub Releases にまだ最新版が反映されていない、`./setup.sh` の DL が失敗した）は再度 1-4 を流すか、ユーザーに状況を報告して指示を仰ぐ。SessionStart hook が同じ判定を毎回エージェントに注入するので、放置すると以後のセッションで毎回 drift 通知が出る。
 
-### 2-4: DB resync
-
-upstream の data.json 変更（道具メタ、反動技、状態異常技 等）と champout submodule pointer 移動の双方を既存 DB に反映する。**canonical な再同期は `./setup.sh`**。Step 1 で submodule を最新ポインタへ追従、Step 3.5 で `pkdx db init` が `pkdx_patch/{009..012}/data.json` を champout から再生成したのち `champions.db` を rm → `pkdx migrate` の順で流す。`pkdx migrate` は bookkeeping を持たない seed-script モデルで、全マイグレーションが冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されているため、再適用しても DB は data.json の状態へ収束する。
-
-```bash
-cd $REPO_ROOT && ./setup.sh
-```
-
-champout pointer が動いていない (pokedex.db や手書き data.json のみの更新) と確証できる場合は `bin/pkdx migrate` 単体でも済むが、判断に迷う場合は `setup.sh` で常に安全側に倒すこと。スキップした場合（例: `pkdx tools` 更新を skip したケース）は、この step も実行不要。
-
-### 2-5: box meta.json 自動マイグレーション
-
-upstream に `pkdx convert meta` 系の schema 変更が含まれていた場合、`./setup.sh` を走らせると `box/pokemons/**/*.meta.json` と `box/teams/**/*.meta.json` を新 schema へ一括変換する。元ファイルは `<path>.bak` として 1 回だけバックアップされ、既に `.bak` があるファイルは上書きされない。
-
-```bash
-cd $REPO_ROOT && ./setup.sh
-```
-
-`setup.sh` の `[4.5/5]` ステップが該当。個別に変換したい場合は以下:
-
-```bash
-$REPO_ROOT/bin/pkdx convert meta --in <path>.meta.json --in-place
-```
-
-## Phase 3: Stash復元
+## Phase 2: Stash復元
 
 Phase 0でstashした場合:
 
@@ -276,14 +235,20 @@ stash popでコンフリクトが発生した場合:
 - `box/` 内 → stash側を優先（ユーザーの作業中データ）
 - その他 → AskUserQuestionでユーザーに判断を求める
 
-## Phase 4: 完了レポート
+## Phase 3: 完了レポート
 
 ```
 === pkdxバージョンアップ完了 ===
 マージ元: $UPDATE_REMOTE/$UPSTREAM_BRANCH
-取り込み方法: <fetch & merge / Sync fork経由>
+取り込み方法: <fetch & merge / fetch (差分なし) / Sync fork経由>
 新規コミット数: <N>
 コンフリクト解決: <あり/なし>
-pkdx tools: <更新済み/スキップ>
+pkdx tools: 更新済み (GitHub Releases)
+version_drift: <false / true (要対処)>
 バックアップ: <復元済み/なし>
 ```
+
+「取り込み方法」のラベル選択指針:
+- `fetch & merge`: ソース差分があり `git merge` を実行したケース
+- `fetch (差分なし)`: 差分ゼロでバイナリ更新のみを行ったケース
+- `Sync fork経由`: Phase 1-F で GitHub Web UI の Sync fork → `git pull` を踏んだケース

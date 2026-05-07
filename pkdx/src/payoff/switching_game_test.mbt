@@ -1566,7 +1566,7 @@ test "value_accepts_explicit_alpha_beta_and_matches_default" {
 ///|
 test "switching_game_turn_limit_3_produces_finite_value_on_multi_pokemon_team" {
   // Regression: before the solver saddle fast-path + value αβ-pruning,
-  // turn_limit=3 on real 6v6 input (Nosada vs カマカマキリ) failed after ~70s
+  // turn_limit=3 on real 6v6 input failed after ~70s
   // of simplex pivots with `InconsistentGame` on a degenerate LP. This test
   // pins that the tl=3 path at least returns a finite in-range value on a
   // modestly-sized team without raising. The in-repo payload is a small 2v2

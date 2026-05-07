@@ -247,7 +247,7 @@ test "solve_zero_sum_pure_saddle_skips_lp" {
 
 ///|
 test "solve_zero_sum_switching_game_tl3_regression" {
-  // Captured 20x20 outer Nash matrix from the Nosada vs カマカマキリ repro at
+  // Captured 20x20 outer Nash matrix from a real 6v6 repro at
   // turn_limit=3 (bit issue #38912f7b Task C). Before the saddle fast-path fix,
   // this matrix triggers `InconsistentGame("col strategy has negative component
   // ...")` after ~70s of simplex pivots through near-degenerate entries.

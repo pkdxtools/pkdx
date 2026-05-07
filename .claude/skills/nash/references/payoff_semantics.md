@@ -99,13 +99,13 @@ value(state, ..., cache, stats):
 | 2v2 ノーマル統一 HP200 | 20 | 113,295 | 2.0:1 | ~23 MB |
 | 3v3 多型 HP150 | 5 | 2,664 | 0.66:1 | ~0.5 MB |
 
-メモリ推定: `cached_states × ~200 bytes/state` (SwitchingGameState struct + HashMap overhead + Double value)。2v2 turn_limit=20 で ~23 MB に収まり、6v6 の選出 1 セル (3v3) でメモリ爆発は発生しない。ただし 3v3 turn_limit=20 は状態数が指数的に増加するため、実データでの計測が必要 (bit issue #a9de372d task B)。6v6 実データ (Nosada vs カマカマキリ) での実測: turn_limit=1 は 1 秒未満、turn_limit=2 は 2 秒前後、turn_limit=3 は 40 秒前後で完走する (bit issue #38912f7b task C で pure-saddle fast path + node-level αβ-pruning 投入後)。turn_limit=4 以上は 5 分タイムアウトに収まらず、さらなる高速化は別タスクで検討。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて設定してよい (実用上限は現状 turn_limit=3)。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
+メモリ推定: `cached_states × ~200 bytes/state` (SwitchingGameState struct + HashMap overhead + Double value)。2v2 turn_limit=20 で ~23 MB に収まり、6v6 の選出 1 セル (3v3) でメモリ爆発は発生しない。ただし 3v3 turn_limit=20 は状態数が指数的に増加するため、実データでの計測が必要 (bit issue #a9de372d task B)。6v6 実データでの実測: turn_limit=1 は 1 秒未満、turn_limit=2 は 2 秒前後、turn_limit=3 は 40 秒前後で完走する (bit issue #38912f7b task C で pure-saddle fast path + node-level αβ-pruning 投入後)。turn_limit=4 以上は 5 分タイムアウトに収まらず、さらなる高速化は別タスクで検討。turn_limit を上げるほど積み技→全抜きのような多ターン脅威を評価できるようになるため、要件に応じて設定してよい (実用上限は現状 turn_limit=3)。`switching_game_winrate_stats` で `ValueStats.hits/misses` を取れるので、実行前に局所的に turn_limit を試して予算感を把握するのが推奨。
 
 ### LP 退化時の扱い (pure-saddle fast path)
 
 選出レベル 20×20 行列と `value` 再帰内部で解く per-state Nash の双方で、payoff matrix が **pure saddle** (`max_i min_j A[i,j] == min_j max_i A[i,j]` が `SADDLE_TOL = 1e-10` 内で成立) となる退化ケースを検出した時点で LP ソルバを skip し、純戦略と saddle value を直接返す。`@nash.solve_zero_sum` と `payoff.value` の双方に実装。
 
-**動機**: turn_limit=3 以上の実データで状態空間が HP 離散 × 限定的な行動空間で多数の near-identical cell を生み、二相シンプレックスが数値的に不安定な pivot を繰り返し `InconsistentGame("col strategy has negative component ...")` を返していた (Nosada vs カマカマキリ tl=3 で ~70 秒後に失敗)。pure-saddle 検出はこの class の入力を simplex に渡さず直接解決するため、bug 回避と速度向上を同時に達成する。
+**動機**: turn_limit=3 以上の実データで状態空間が HP 離散 × 限定的な行動空間で多数の near-identical cell を生み、二相シンプレックスが数値的に不安定な pivot を繰り返し `InconsistentGame("col strategy has negative component ...")` を返していた (実データの 6v6 構成 tl=3 で ~70 秒後に失敗)。pure-saddle 検出はこの class の入力を simplex に渡さず直接解決するため、bug 回避と速度向上を同時に達成する。
 
 **影響**: 既存の単体テスト (RPS, matching pennies, 2×2 mixed 等) は `maxmin < minmax` が strict に成立するため fast path を通らず、従来どおり shift-and-normalise LP 経由で解かれる。退化していない mixed Nash ケースへの影響なし。
 

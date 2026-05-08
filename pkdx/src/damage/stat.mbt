@@ -214,56 +214,6 @@ pub fn StatModel::limits(self : StatModel) -> StatLimits {
 }
 
 ///|
-pub fn StatModel::step(self : StatModel) -> Int {
-  match self {
-    Standard(_) => 4
-    Champions => 1
-  }
-}
-
-///|
-pub fn StatModel::max_per_stat(self : StatModel) -> Int {
-  match self {
-    Standard(_) => 252
-    Champions => 32
-  }
-}
-
-///|
-pub fn StatModel::sentinel(self : StatModel) -> Int {
-  match self {
-    Standard(_) => 256
-    Champions => 33
-  }
-}
-
-///|
-pub fn StatModel::step_cap(self : StatModel) -> Int {
-  match self {
-    Standard(_) => 600
-    Champions => 200
-  }
-}
-
-///|
-/// Budget used by HBD optimizers (sum of HP+B+D+fixed non-HBD must stay ≤).
-pub fn StatModel::hbd_budget(self : StatModel) -> Int {
-  match self {
-    Standard(_) => 508
-    Champions => 66
-  }
-}
-
-///|
-/// Budget used by reverse-spread (total of all 6 points must stay ≤).
-pub fn StatModel::full_budget(self : StatModel) -> Int {
-  match self {
-    Standard(_) => 510
-    Champions => 66
-  }
-}
-
-///|
 /// Calculate HP actual value from base and point amount.
 pub fn StatModel::calc_hp(self : StatModel, base : Int, pt : Int) -> Int {
   match self {
@@ -566,9 +516,10 @@ pub fn reverse_spread_with_model(
   ]
   let natures = @model.all_natures()
   let results : Array[(@model.Nature, FixedArray[Int])] = []
-  let step = model.step()
-  let max_per = model.max_per_stat()
-  let budget = model.full_budget()
+  let limits = model.limits()
+  let step = limits.step
+  let max_per = limits.max_per_stat
+  let budget = limits.full_budget
   for ni = 0; ni < natures.length(); ni = ni + 1 {
     let nature = natures[ni]
     let points : FixedArray[Int] = FixedArray::make(6, -1)

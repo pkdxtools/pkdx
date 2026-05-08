@@ -114,9 +114,10 @@ pub fn optimize_hbd_impl(
   let d_fixed = fixed_points[4] >= 0
   let (nb_num, nb_den) = @model.nature_mult_int(nature, Def)
   let (nd_num, nd_den) = @model.nature_mult_int(nature, SpD)
-  let max_per = model.max_per_stat()
-  let budget = model.hbd_budget()
-  let step_cap = model.step_cap()
+  let limits = model.limits()
+  let max_per = limits.max_per_stat
+  let budget = limits.hbd_budget
+  let step_cap = limits.step_cap
   let points : FixedArray[Int] = FixedArray::make(6, 0)
   for i = 0; i < 6; i = i + 1 {
     points[i] = if fixed_points[i] >= 0 { fixed_points[i] } else { 0 }
@@ -252,9 +253,10 @@ pub fn optimize_hbd_topn_impl(
 ) -> HbdResult {
   let (nb_num, nb_den) = @model.nature_mult_int(nature, Def)
   let (nd_num, nd_den) = @model.nature_mult_int(nature, SpD)
-  let step = model.step()
-  let max_per = model.max_per_stat()
-  let budget = model.hbd_budget()
+  let limits = model.limits()
+  let step = limits.step
+  let max_per = limits.max_per_stat
+  let budget = limits.hbd_budget
   let h_fixed = fixed_points[0] >= 0
   let b_fixed = fixed_points[2] >= 0
   let d_fixed = fixed_points[4] >= 0

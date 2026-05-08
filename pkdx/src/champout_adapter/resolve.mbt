@@ -55,57 +55,45 @@ pub fn resolve_type(bundle : LabelBundle, id_str : String) -> String {
 }
 
 ///|
-/// 特性 id (toku0 / toku1 / toku2) を表示名へ。0 は「特性なし」を意味し
-/// 空文字を返す。LabelName が見つからない場合も空文字。
-pub fn resolve_ability(bundle : LabelBundle, id_str : String) -> String {
+fn resolve_label(
+  map : Map[String, String],
+  prefix : String,
+  id_str : String,
+) -> String {
   let n = to_int_or_zero(id_str)
   if n <= 0 {
     return ""
   }
-  match bundle.tokusei.get("TOKUSEI_" + pad3(n)) {
+  match map.get(prefix + pad3(n)) {
     Some(s) => s
     None => ""
   }
 }
 
 ///|
+/// 特性 id (toku0 / toku1 / toku2) を表示名へ。0 は「特性なし」を意味し
+/// 空文字を返す。LabelName が見つからない場合も空文字。
+pub fn resolve_ability(bundle : LabelBundle, id_str : String) -> String {
+  resolve_label(bundle.tokusei, "TOKUSEI_", id_str)
+}
+
+///|
 /// 技 id (waza.json の `id`、waza_learn.json の split 後の各 id) を表示名へ。
 pub fn resolve_move(bundle : LabelBundle, id_str : String) -> String {
-  let n = to_int_or_zero(id_str)
-  if n <= 0 {
-    return ""
-  }
-  match bundle.wazaname.get("WAZANAME_" + pad3(n)) {
-    Some(s) => s
-    None => ""
-  }
+  resolve_label(bundle.wazaname, "WAZANAME_", id_str)
 }
 
 ///|
 /// 全国図鑑番号 (1-based) を base 日本語名へ。フォーム違いがあっても base
 /// 名は no で固定 — フォーム識別はアダプター側の `form` 文字列で別管理。
 pub fn resolve_monsname(bundle : LabelBundle, no_str : String) -> String {
-  let n = to_int_or_zero(no_str)
-  if n <= 0 {
-    return ""
-  }
-  match bundle.monsname.get("MONSNAME_" + pad3(n)) {
-    Some(s) => s
-    None => ""
-  }
+  resolve_label(bundle.monsname, "MONSNAME_", no_str)
 }
 
 ///|
 /// アイテム id (item.json の `id`) を表示名へ。
 pub fn resolve_item(bundle : LabelBundle, id_str : String) -> String {
-  let n = to_int_or_zero(id_str)
-  if n <= 0 {
-    return ""
-  }
-  match bundle.itemname.get("ITEMNAME_" + pad3(n)) {
-    Some(s) => s
-    None => ""
-  }
+  resolve_label(bundle.itemname, "ITEMNAME_", id_str)
 }
 
 ///|

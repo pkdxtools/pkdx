@@ -29,11 +29,11 @@ case "${RUNNER_OS:-$(uname -s)}" in
 esac
 
 PKGS=(
-  src/nash/moon.pkg
   src/payoff/moon.pkg
   .mooncakes/mizchi/numbt/src/moon.pkg
   .mooncakes/mizchi/blas/src/moon.pkg
   .mooncakes/mizchi/blas/src/bench/moon.pkg
+  .mooncakes/ushironoko/nash-mbt/moon.pkg
 )
 
 # `moon update` is what restores .mooncakes/, so the vendored packages may not

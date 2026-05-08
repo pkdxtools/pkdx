@@ -77,8 +77,6 @@ pkdx/                     # MoonBit CLI ツール (native binary)
       validate.mbt          # JSONスキーマ検証
       teams.mbt             # TeamReport JSON→CST
       pokemon.mbt           # PokemonBuild JSON→CST
-    nash/                  # 零和 Nash ソルバー (numbt/BLAS) — Layer 1
-      matrix_game.mbt, simplex.mbt, solver.mbt, fictitious.mbt, divergence.mbt
     payoff/                # pkdx ドメイン変換 + nash CLI ハンドラ — Layer 2 + 3
       semantics.mbt         # TeamPayoffModel enum (SwitchingGame / ScreenedSwitchingGame)
       from_character.mbt    # monocycle (p, v) モデル (pkdx nash solve 用)
@@ -128,9 +126,9 @@ box/                      # ユーザーデータ出力先（フォーク先でg
   nash/
     SKILL.md              # Nash 均衡ソルバー / pkdx select / meta-divergence
     references/
-      theory.md              # 零和 LP / Simplex / Fictitious play / MWU
-      exploitability.md      # exploitability / NashConv / KL / L1
-      payoff_semantics.md    # SwitchingGame / ScreenedSwitchingGame 仕様
+      theory.md              # 一次資料は ushironoko/nash-mbt の docs/theory.md
+      exploitability.md      # 一次資料は ushironoko/nash-mbt の docs/exploitability.md
+      payoff_semantics.md    # SwitchingGame / ScreenedSwitchingGame 仕様 (pkdx 固有)
   self-update/
     SKILL.md              # upstream追従スキル
   blog/
@@ -259,6 +257,6 @@ SessionStart hook (`.claude/settings.json`) から呼ばれる 1-line JSON。
 - **`.claude/skills/team-builder/references/stat_thresholds.md`** — 種族値ベンチマーク・素早さティア
 - **`.claude/skills/team-builder/references/items_abilities.md`** — 道具・特性の考察用データ
 - **`.claude/skills/calc/references/special_cases.md`** — ダメージ計算の特殊パターン網羅。おやこあい / ばけのかわ / てんねん / Psyshock 系 / シェルアームズ / ボディプレス / せいなるつるぎ / ウェザーボール / 可変威力技 / 壁 / 連続技 / 急所ランク無視 / JSON 出力フィールド。各項目に実装ファイル:行の根拠つき。`pkdx damage` のフラグが何をしているか迷ったらここを第一参照。
-- **`.claude/skills/nash/references/theory.md`** — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠。`pkdx nash solve` の正当性、数値安定性 (shift-and-normalize)、退化ケースの扱いに関する質問はここを第一参照。
-- **`.claude/skills/nash/references/exploitability.md`** — exploitability / NashConv / KL / L1 の定義と使い分け。Nash 判定基準 (≤ 1e-6)、メタ乖離分析の解釈に関する質問はここ。
-- **`.claude/skills/nash/references/payoff_semantics.md`** — `TeamPayoffModel` (SwitchingGame / ScreenedSwitchingGame) の仕様・計算量・選択基準。選出最適化のどのモデルを使うべきか、廃止済みの pairwise 系に関する履歴もここ。
+- **`.claude/skills/nash/references/theory.md`** — Layer 1 (零和 LP / Simplex / Fictitious play / MWU) は外部 repo `ushironoko/nash-mbt` (GitHub: pkdxtools/nash-mbt) に切り出し済み。pkdx 側からは shim として参照ポインタのみ残す。実装の正当性・数値安定性・退化ケースは新 repo の `docs/theory.md` を第一参照。
+- **`.claude/skills/nash/references/exploitability.md`** — Layer 1 (exploitability / NashConv / KL / L1) も同様に外部 repo へ移行。pkdx 側の shim は新 repo の `docs/exploitability.md` への参照ポインタ。
+- **`.claude/skills/nash/references/payoff_semantics.md`** — `TeamPayoffModel` (SwitchingGame / ScreenedSwitchingGame) の仕様・計算量・選択基準。pkdx ドメイン固有の Layer 2 のため pkdx 側に残す。選出最適化のどのモデルを使うべきか、廃止済みの pairwise 系に関する履歴もここ。

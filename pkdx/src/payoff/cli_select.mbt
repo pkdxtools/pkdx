@@ -394,13 +394,11 @@ fn parse_nature_field(
 }
 
 ///|
-/// `stat_points`: `{h,a,b,c,d,s}` 形式の 6 要素 SP (Champions) / EV (Standard)。
-/// post-mega 実数値の再計算に使う「振り」そのもので、`actual_stats` と違い
-/// engine override には直接渡らない。スキーマ的には `actual_stats` と同じ
-/// short key 形式のみ受け付ける。欠損・部分欠損は `None` (= 再計算不可、
-/// post-mega は engine 既定投資にフォールバック)。
-fn parse_stat_points_field(m : Map[String, Json]) -> Array[Int]? {
-  match m.get("stat_points") {
+fn parse_short_key_stats(
+  m : Map[String, Json],
+  field_name : String,
+) -> Array[Int]? {
+  match m.get(field_name) {
     Some(Object(st)) => {
       let keys = ["h", "a", "b", "c", "d", "s"]
       let out : Array[Int] = Array::make(6, 0)
@@ -414,6 +412,16 @@ fn parse_stat_points_field(m : Map[String, Json]) -> Array[Int]? {
     }
     _ => None
   }
+}
+
+///|
+/// `stat_points`: `{h,a,b,c,d,s}` 形式の 6 要素 SP (Champions) / EV (Standard)。
+/// post-mega 実数値の再計算に使う「振り」そのもので、`actual_stats` と違い
+/// engine override には直接渡らない。スキーマ的には `actual_stats` と同じ
+/// short key 形式のみ受け付ける。欠損・部分欠損は `None` (= 再計算不可、
+/// post-mega は engine 既定投資にフォールバック)。
+fn parse_stat_points_field(m : Map[String, Json]) -> Array[Int]? {
+  parse_short_key_stats(m, "stat_points")
 }
 
 ///|
@@ -423,20 +431,7 @@ fn parse_stat_points_field(m : Map[String, Json]) -> Array[Int]? {
 /// `None` にフォールバックする (厳密にして skill 側のバグを隠したくないが、
 /// 既存の base_stats だけで動いていたケースの後方互換を取るため optional)。
 fn parse_actual_stats_field(m : Map[String, Json]) -> Array[Int]? {
-  match m.get("actual_stats") {
-    Some(Object(st)) => {
-      let keys = ["h", "a", "b", "c", "d", "s"]
-      let out : Array[Int] = Array::make(6, 0)
-      for i in 0..<6 {
-        match st.get(keys[i]) {
-          Some(Number(n, ..)) => out[i] = n.to_int()
-          _ => return None
-        }
-      }
-      Some(out)
-    }
-    _ => None
-  }
+  parse_short_key_stats(m, "actual_stats")
 }
 
 ///|
@@ -446,20 +441,7 @@ fn parse_actual_stats_field(m : Map[String, Json]) -> Array[Int]? {
 /// 構築のみに emit する運用)。キー欠損・部分欠損は `None` フォールバックで、
 /// recompute_actual_stats_for_mega 側で 31 揃い (完璧個体) を仮定する。
 fn parse_ivs_field(m : Map[String, Json]) -> Array[Int]? {
-  match m.get("ivs") {
-    Some(Object(st)) => {
-      let keys = ["h", "a", "b", "c", "d", "s"]
-      let out : Array[Int] = Array::make(6, 0)
-      for i in 0..<6 {
-        match st.get(keys[i]) {
-          Some(Number(n, ..)) => out[i] = n.to_int()
-          _ => return None
-        }
-      }
-      Some(out)
-    }
-    _ => None
-  }
+  parse_short_key_stats(m, "ivs")
 }
 
 ///|

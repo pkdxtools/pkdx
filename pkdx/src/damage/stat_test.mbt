@@ -528,3 +528,124 @@ test "reverse_spread_champions: total SP <= 66 enforced" {
     assert_true(total <= 66)
   }
 }
+
+// ──────────────────────────────────────────────
+// B-4-pre: calc_stat* wrappers parameterised golden pin (pre-H7 refactor)
+//
+// These tests pin the numeric output of the 4 public wrappers and the
+// equivalence between StatModel methods and the underlying primitives.
+// The H7 refactor will route calc_stat through Standard(ivs=...).calc_other;
+// any regression in stat_idx selection, IV dispatch, or rounding will
+// surface here as a snapshot mismatch. Standard with IV=31/EV=252 has the
+// invariant that values equal Champions with SP=32 (and IV=31/EV=0 == SP=0),
+// which lets the same expected-value table cover both systems.
+// ──────────────────────────────────────────────
+
+///|
+test "calc_stat wrappers: HP-side parameterised golden" {
+  // is_hp=true: nature args ignored. Standard IV=31/EV=252 == Champions SP=32 == base+107.
+  // Standard IV=31/EV=0 == Champions SP=0 == base+75.
+  let bases = [60, 90, 130]
+  for i = 0; i < bases.length(); i = i + 1 {
+    let b = bases[i]
+    let off = b + 107
+    let def_ = b + 75
+    assert_true(calc_stat(b, is_hp=true) == off)
+    assert_true(calc_stat_champions(b, is_hp=true) == off)
+    assert_true(calc_def_stat(b, is_hp=true) == def_)
+    assert_true(calc_def_stat_champions(b, is_hp=true) == def_)
+  }
+}
+
+///|
+test "calc_stat wrappers: non-HP parameterised golden across natures" {
+  // EV=252/SP=32 raw = base + 52; EV=0/SP=0 raw = base + 20. Then floor(raw * num/den).
+  // Cases: (base, nature_num, nature_den, expected_offense, expected_defense)
+  let cases : Array[(Int, Int, Int, Int, Int)] = [
+    (60, 1, 1, 112, 80), // 112*1/1, 80*1/1
+    (60, 11, 10, 123, 88), // 1232/10=123, 880/10=88
+    (60, 9, 10, 100, 72), // 1008/10=100, 720/10=72
+    (90, 1, 1, 142, 110),
+    (90, 11, 10, 156, 121), // 1562/10=156, 1210/10=121
+    (90, 9, 10, 127, 99), // 1278/10=127, 990/10=99
+    (130, 1, 1, 182, 150),
+    (130, 11, 10, 200, 165), // 2002/10=200, 1650/10=165
+    (130, 9, 10, 163, 135), // 1638/10=163, 1350/10=135
+  ]
+  for i = 0; i < cases.length(); i = i + 1 {
+    let (b, nn, nd, off, def_) = cases[i]
+    assert_true(calc_stat(b, nature_num=nn, nature_den=nd) == off)
+    assert_true(calc_stat_champions(b, nature_num=nn, nature_den=nd) == off)
+    assert_true(calc_def_stat(b, nature_num=nn, nature_den=nd) == def_)
+    assert_true(calc_def_stat_champions(b, nature_num=nn, nature_den=nd) == def_)
+  }
+}
+
+///|
+test "calc_stat wrappers: custom override short-circuits all 4" {
+  assert_true(calc_stat(130, custom=999) == 999)
+  assert_true(calc_def_stat(130, custom=999) == 999)
+  assert_true(calc_stat_champions(130, custom=999) == 999)
+  assert_true(calc_def_stat_champions(130, custom=999) == 999)
+}
+
+///|
+test "StatModel: Standard methods equal primitives across (ivs, base, ev, idx, nature)" {
+  // After H7, calc_stat dispatches via Standard(ivs).calc_hp/calc_other.
+  // Pin: model.calc_hp(base, ev) == calc_hp_full(base, ivs[0], ev) and
+  //      model.calc_other(idx, base, ev, nn, nd) == calc_other_full(base, ivs[idx], ev, nn, nd).
+  // The non-uniform IV row catches stat_idx mistakes (e.g., picking ivs[0] instead of ivs[idx]).
+  let iv_rows : Array[FixedArray[Int]] = [
+    [28, 28, 28, 28, 28, 28],
+    [29, 29, 29, 29, 29, 29],
+    [30, 30, 30, 30, 30, 30],
+    [31, 31, 31, 31, 31, 31],
+    [28, 31, 30, 29, 31, 28], // non-uniform: stat_idx canary
+  ]
+  let bases = [60, 90, 130]
+  let evs = [0, 252]
+  let natures : Array[(Int, Int)] = [(1, 1), (11, 10), (9, 10)]
+  for ri = 0; ri < iv_rows.length(); ri = ri + 1 {
+    let ivs = iv_rows[ri]
+    let model : StatModel = Standard(ivs~)
+    for bi = 0; bi < bases.length(); bi = bi + 1 {
+      let b = bases[bi]
+      for ei = 0; ei < evs.length(); ei = ei + 1 {
+        let ev = evs[ei]
+        assert_true(model.calc_hp(b, ev) == calc_hp_full(b, ivs[0], ev))
+        for idx = 0; idx < 6; idx = idx + 1 {
+          for ni = 0; ni < natures.length(); ni = ni + 1 {
+            let (nn, nd) = natures[ni]
+            let via_model = model.calc_other(idx, b, ev, nn, nd)
+            let direct = calc_other_full(b, ivs[idx], ev, nn, nd)
+            assert_true(via_model == direct)
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+test "StatModel: Champions methods equal primitives across (sp, base, idx, nature)" {
+  // Champions ignores stat_idx (no IV system). Pin model.calc_other for all idx ∈ 0..5.
+  let model : StatModel = Champions
+  let bases = [60, 90, 130]
+  let sps = [0, 16, 32]
+  let natures : Array[(Int, Int)] = [(1, 1), (11, 10), (9, 10)]
+  for bi = 0; bi < bases.length(); bi = bi + 1 {
+    let b = bases[bi]
+    for si = 0; si < sps.length(); si = si + 1 {
+      let sp = sps[si]
+      assert_true(model.calc_hp(b, sp) == calc_hp_champions(b, sp))
+      for ni = 0; ni < natures.length(); ni = ni + 1 {
+        let (nn, nd) = natures[ni]
+        for idx = 0; idx < 6; idx = idx + 1 {
+          let via_model = model.calc_other(idx, b, sp, nn, nd)
+          let direct = calc_other_champions(b, sp, nn, nd)
+          assert_true(via_model == direct)
+        }
+      }
+    }
+  }
+}

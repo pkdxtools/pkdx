@@ -2490,12 +2490,12 @@ fn resolve_moves(
     }
     // Second actor KO'd by first attacker's hit: no second leg, just advance.
     if second_attacker_hps[second_attacker_active] <= 0 {
-      final_outs.push((p1, bump_turn_only(s1)))
+      final_outs.push((p1, clone_state(s1, 1)))
       continue
     }
     // Second actor newly slept / frozen mid-turn: skip their move.
     if action_blocked_by_fresh_status(second_pre_status, second_now_status) {
-      final_outs.push((p1, bump_turn_only(s1)))
+      final_outs.push((p1, clone_state(s1, 1)))
       continue
     }
     let second_burn = is_burned(second_now_status)
@@ -2514,17 +2514,21 @@ fn resolve_moves(
     )
     for x in after_second {
       let (p2, s2) = x
-      final_outs.push((p1 * p2, bump_turn_only(s2)))
+      final_outs.push((p1 * p2, clone_state(s2, 1)))
     }
   }
   final_outs
 }
 
 ///|
-/// Return a fresh copy of `state` with `turn` incremented by 1. Used at the
-/// tail of `resolve_moves` once both attacker legs are fully resolved so the
-/// intermediate snapshots don't prematurely advance the turn counter.
-fn bump_turn_only(state : SwitchingGameState) -> SwitchingGameState {
+/// Return a fresh copy of `state` with `turn` shifted by `turn_delta`. Used
+/// at the tail of `resolve_moves` to advance the turn counter once both
+/// attacker legs are fully resolved (turn_delta=1), and elsewhere when a
+/// pristine deep copy is needed (turn_delta=0).
+fn clone_state(
+  state : SwitchingGameState,
+  turn_delta : Int,
+) -> SwitchingGameState {
   {
     my_active: state.my_active,
     opp_active: state.opp_active,
@@ -2542,7 +2546,7 @@ fn bump_turn_only(state : SwitchingGameState) -> SwitchingGameState {
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
-    turn: state.turn + 1,
+    turn: state.turn + turn_delta,
   }
 }
 

@@ -19,8 +19,12 @@ pkdx ドメインで Nash ソルバーを呼ぶ際の流れは以下:
 1. `pkdx/src/payoff/` (Layer 2) が `FiniteMatrix` を構築
 2. `@nash.solve_zero_sum(matrix)` を呼ぶ
 3. 戻り値の `LpResult::Optimal(value, row_strategy, col_strategy)` を
-   `pkdx nash solve` / `pkdx select` / `pkdx meta-divergence` の JSON 出力に
-   整形
+   `pkdx nash solve` / `pkdx select` の JSON 出力に整形
+
+`pkdx meta-divergence` はこのフローには乗らず、`@nash.solve_zero_sum` を呼ばない。
+`cli_meta.mbt` が `usage` (実使用率 σ) と `matrix` から `Aσ` / `σᵀAσ` /
+per-action regret / max row regret を直接計算する片側指標であり、詳細は
+[`exploitability.md`](exploitability.md) を参照。
 
 Layer 2 の payoff 構築 (SwitchingGame / ScreenedSwitchingGame) は
 [`payoff_semantics.md`](payoff_semantics.md) を参照。

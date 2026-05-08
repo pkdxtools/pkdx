@@ -118,7 +118,11 @@ fn json_string_array(json : Json, key : String) -> Array[String] {
 }
 
 ///|
-fn format_stats(json : Json, key : String) -> String {
+fn format_stats_with_default(
+  json : Json,
+  key : String,
+  default : String,
+) -> String {
   match json {
     Object(obj) =>
       match obj.get(key) {
@@ -126,7 +130,7 @@ fn format_stats(json : Json, key : String) -> String {
           let get = fn(k : String) -> String {
             match st.get(k) {
               Some(Number(n, ..)) => n.to_int().to_string()
-              _ => "0"
+              _ => default
             }
           }
           let h = get("h")
@@ -137,36 +141,28 @@ fn format_stats(json : Json, key : String) -> String {
           let sp = get("s")
           "\{h}/\{a}/\{b}/\{c}/\{d}/\{sp}"
         }
-        _ => "0/0/0/0/0/0"
+        _ =>
+          "\{default}/\{default}/\{default}/\{default}/\{default}/\{default}"
       }
-    _ => "0/0/0/0/0/0"
+    _ => "\{default}/\{default}/\{default}/\{default}/\{default}/\{default}"
   }
+}
+
+///|
+fn format_stats(json : Json, key : String) -> String {
+  format_stats_with_default(json, key, "0")
 }
 
 ///|
 /// member に optional で保持する nature / stat_points / actual_stats を
 /// "-" フォールバック付きで取り出す。Json::null / 欠損 / 0 埋めを区別せず
 /// 表示上すべて "-" 扱いにすると SP=0 の振りを消してしまうため、存在する
-/// キーは値として出すが、親キーが null/欠損なら "-" を返す。
+/// キーは値として出すが、親キーが null/欠損なら単一 "-" を返す (非対称仕様)。
 fn format_stats_opt(json : Json, key : String) -> String {
   match json {
     Object(obj) =>
       match obj.get(key) {
-        Some(Object(st)) => {
-          let get = fn(k : String) -> String {
-            match st.get(k) {
-              Some(Number(n, ..)) => n.to_int().to_string()
-              _ => "-"
-            }
-          }
-          let h = get("h")
-          let a = get("a")
-          let b = get("b")
-          let c = get("c")
-          let d = get("d")
-          let sp = get("s")
-          "\{h}/\{a}/\{b}/\{c}/\{d}/\{sp}"
-        }
+        Some(Object(_)) => format_stats_with_default(json, key, "-")
         _ => "-"
       }
     _ => "-"

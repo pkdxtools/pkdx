@@ -65,36 +65,20 @@ fn item_to_json(e : ItemEntry) -> Json {
 
 ///|
 pub fn serialize_pokemon_entries(entries : Array[PokemonEntry]) -> Json {
-  let arr : Array[Json] = []
-  for i = 0; i < entries.length(); i = i + 1 {
-    arr.push(pokemon_to_json(entries[i]))
-  }
-  arr.to_json()
+  entries.map(pokemon_to_json).to_json()
 }
 
 ///|
 pub fn serialize_move_entries(entries : Array[MoveEntry]) -> Json {
-  let arr : Array[Json] = []
-  for i = 0; i < entries.length(); i = i + 1 {
-    arr.push(move_to_json(entries[i]))
-  }
-  arr.to_json()
+  entries.map(move_to_json).to_json()
 }
 
 ///|
 pub fn serialize_learnset_entries(entries : Array[LearnsetEntry]) -> Json {
-  let arr : Array[Json] = []
-  for i = 0; i < entries.length(); i = i + 1 {
-    arr.push(learnset_to_json(entries[i]))
-  }
-  arr.to_json()
+  entries.map(learnset_to_json).to_json()
 }
 
 ///|
 pub fn serialize_item_entries(entries : Array[ItemEntry]) -> Json {
-  let arr : Array[Json] = []
-  for i = 0; i < entries.length(); i = i + 1 {
-    arr.push(item_to_json(entries[i]))
-  }
-  arr.to_json()
+  entries.map(item_to_json).to_json()
 }

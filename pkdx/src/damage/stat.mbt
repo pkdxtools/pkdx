@@ -287,6 +287,35 @@ pub fn StatModel::point_for_other(
 // ──────────────────────────────────────────────
 
 ///|
+/// Module-level const so each Standard wrapper invocation does not re-allocate
+/// the IV array. All 4 wrappers assume uniform IV=31, so a single shared value
+/// is safe.
+let standard_iv31 : FixedArray[Int] = FixedArray::make(6, 31)
+
+///|
+/// Shared dispatcher behind calc_stat / calc_def_stat / calc_stat_champions /
+/// calc_def_stat_champions. `pt` is EV (Standard) or SP (Champions). Non-HP
+/// uses stat_idx=1 because all 4 wrappers feed uniform IV (Standard) or
+/// stat_idx-agnostic SP (Champions).
+fn calc_stat_with(
+  model : StatModel,
+  base : Int,
+  is_hp : Bool,
+  pt : Int,
+  nature_num : Int,
+  nature_den : Int,
+  custom : Int,
+) -> Int {
+  if custom > 0 {
+    return custom
+  }
+  if is_hp {
+    return model.calc_hp(base, pt)
+  }
+  model.calc_other(1, base, pt, nature_num, nature_den)
+}
+
+///|
 /// Lv50 stat shortcut (IV31, EV252).
 /// `nature_num` / `nature_den` で性格補正を指定 (default +10% = 11/10)。
 pub fn calc_stat(
@@ -296,13 +325,15 @@ pub fn calc_stat(
   nature_den? : Int = 10,
   custom? : Int = 0,
 ) -> Int {
-  if custom > 0 {
-    return custom
-  }
-  if is_hp {
-    return calc_hp_full(base, 31, 252)
-  }
-  calc_other_full(base, 31, 252, nature_num, nature_den)
+  calc_stat_with(
+    Standard(ivs=standard_iv31),
+    base,
+    is_hp,
+    252,
+    nature_num,
+    nature_den,
+    custom,
+  )
 }
 
 ///|
@@ -315,13 +346,7 @@ pub fn calc_stat_champions(
   nature_den? : Int = 10,
   custom? : Int = 0,
 ) -> Int {
-  if custom > 0 {
-    return custom
-  }
-  if is_hp {
-    return calc_hp_champions(base, 32)
-  }
-  calc_other_champions(base, 32, nature_num, nature_den)
+  calc_stat_with(Champions, base, is_hp, 32, nature_num, nature_den, custom)
 }
 
 ///|
@@ -335,13 +360,15 @@ pub fn calc_def_stat(
   nature_den? : Int = 1,
   custom? : Int = 0,
 ) -> Int {
-  if custom > 0 {
-    return custom
-  }
-  if is_hp {
-    return calc_hp_full(base, 31, 0)
-  }
-  calc_other_full(base, 31, 0, nature_num, nature_den)
+  calc_stat_with(
+    Standard(ivs=standard_iv31),
+    base,
+    is_hp,
+    0,
+    nature_num,
+    nature_den,
+    custom,
+  )
 }
 
 ///|
@@ -354,13 +381,7 @@ pub fn calc_def_stat_champions(
   nature_den? : Int = 1,
   custom? : Int = 0,
 ) -> Int {
-  if custom > 0 {
-    return custom
-  }
-  if is_hp {
-    return calc_hp_champions(base, 0)
-  }
-  calc_other_champions(base, 0, nature_num, nature_den)
+  calc_stat_with(Champions, base, is_hp, 0, nature_num, nature_den, custom)
 }
 
 ///|

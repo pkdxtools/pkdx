@@ -41,6 +41,70 @@ fn build_select_input(
 }
 
 ///|
+/// Per-slot stat profile used by the asymmetric-team golden below. Allows
+/// individual entries to differ in HP / Attack so that selecting a strong
+/// lead changes the resulting payoff (the symmetric `build_select_input`
+/// fixture is degenerate w.r.t. damage).
+priv struct GoldenSlot {
+  name : String
+  hp : Int
+  atk : Int
+  def_ : Int
+  spe : Int
+  type1 : String
+  move_name : String
+  move_type : String
+  move_power : Int
+}
+
+///|
+fn build_select_input_asym(
+  team : Array[GoldenSlot],
+  opp : Array[GoldenSlot],
+) -> String {
+  let mk = fn(slots : Array[GoldenSlot]) -> String {
+    let mut s = "["
+    for i in 0..<slots.length() {
+      let p = slots[i]
+      if i > 0 {
+        s = s + ","
+      }
+      s = s +
+        "{\"name\":\"" +
+        p.name +
+        "\",\"type1\":\"" +
+        p.type1 +
+        "\",\"type2\":\"\"," +
+        "\"hp\":" +
+        p.hp.to_string() +
+        ",\"atk\":" +
+        p.atk.to_string() +
+        ",\"def\":" +
+        p.def_.to_string() +
+        ",\"spa\":80,\"spd\":80,\"spe\":" +
+        p.spe.to_string() +
+        "," +
+        "\"ability\":\"\",\"item\":\"\",\"tera\":\"\"," +
+        "\"moves\":[{\"name\":\"" +
+        p.move_name +
+        "\",\"type\":\"" +
+        p.move_type +
+        "\",\"category\":\"物理\",\"power\":" +
+        p.move_power.to_string() +
+        "}]}"
+    }
+    s + "]"
+  }
+  "{\"team\":" +
+  mk(team) +
+  ",\"opponent\":" +
+  mk(opp) +
+  ",\"format\":\"single\"" +
+  ",\"team_payoff_model\":\"switching_game:1\"" +
+  "}"
+}
+
+///|
 test "select golden: 6v6 single, balanced same-speed teams" {
   let speeds = [100, 100, 100, 100, 100, 100]
   let out = run_select(build_select_input(speeds, speeds))
@@ -56,5 +120,78 @@ test "select golden: 6v6 single, team faster than opponent" {
   let out = run_select(build_select_input(team_speeds, opp_speeds))
   inspect(out, content=(
     #|{"format":"single","value":0,"exploitability":0,"selections":[[0,1,2],[0,1,3],[0,1,4],[0,1,5],[0,2,3],[0,2,4],[0,2,5],[0,3,4],[0,3,5],[0,4,5],[1,2,3],[1,2,4],[1,2,5],[1,3,4],[1,3,5],[1,4,5],[2,3,4],[2,3,5],[2,4,5],[3,4,5]],"selection_names":[["T0","T1","T2"],["T0","T1","T3"],["T0","T1","T4"],["T0","T1","T5"],["T0","T2","T3"],["T0","T2","T4"],["T0","T2","T5"],["T0","T3","T4"],["T0","T3","T5"],["T0","T4","T5"],["T1","T2","T3"],["T1","T2","T4"],["T1","T2","T5"],["T1","T3","T4"],["T1","T3","T5"],["T1","T4","T5"],["T2","T3","T4"],["T2","T3","T5"],["T2","T4","T5"],["T3","T4","T5"]],"opp_selections":[[0,1,2],[0,1,3],[0,1,4],[0,1,5],[0,2,3],[0,2,4],[0,2,5],[0,3,4],[0,3,5],[0,4,5],[1,2,3],[1,2,4],[1,2,5],[1,3,4],[1,3,5],[1,4,5],[2,3,4],[2,3,5],[2,4,5],[3,4,5]],"opp_selection_names":[["O0","O1","O2"],["O0","O1","O3"],["O0","O1","O4"],["O0","O1","O5"],["O0","O2","O3"],["O0","O2","O4"],["O0","O2","O5"],["O0","O3","O4"],["O0","O3","O5"],["O0","O4","O5"],["O1","O2","O3"],["O1","O2","O4"],["O1","O2","O5"],["O1","O3","O4"],["O1","O3","O5"],["O1","O4","O5"],["O2","O3","O4"],["O2","O3","O5"],["O2","O4","O5"],["O3","O4","O5"]],"row_strategy":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"col_strategy":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+  ))
+}
+
+///|
+/// Asymmetric team / opponent: the team has 3 strong attackers (T0..T2) and
+/// 3 weak ones (T3..T5); the opponent is uniform but strictly weaker than
+/// the strong team trio. Selections that lead with a weak Pokémon (e.g.
+/// `[3,4,5]` → lead T3) yield a different switching-game value than those
+/// led by T0..T2, so the snapshot pins the actual damage / value path —
+/// not just the JSON serialization shape and the enumeration order.
+test "select golden: 6v6 single, asymmetric strong-vs-weak teams" {
+  let strong = (200, 200, 100, 100)
+  let weak = (100, 60, 60, 60)
+  let opp_stats = (140, 100, 80, 90)
+  let mk_team = fn(prefix : String) -> Array[GoldenSlot] {
+    let out : Array[GoldenSlot] = Array::make(6, {
+      name: "",
+      hp: 0,
+      atk: 0,
+      def_: 0,
+      spe: 0,
+      type1: "ノーマル",
+      move_name: "のしかかり",
+      move_type: "ノーマル",
+      move_power: 85,
+    })
+    for i in 0..<6 {
+      let (hp, atk, def_, spe) = if i < 3 { strong } else { weak }
+      out[i] = {
+        name: prefix + i.to_string(),
+        hp,
+        atk,
+        def_,
+        spe,
+        type1: "ノーマル",
+        move_name: "のしかかり",
+        move_type: "ノーマル",
+        move_power: 85,
+      }
+    }
+    out
+  }
+  let mk_opp = fn() -> Array[GoldenSlot] {
+    let (hp, atk, def_, spe) = opp_stats
+    let out : Array[GoldenSlot] = Array::make(6, {
+      name: "",
+      hp,
+      atk,
+      def_,
+      spe,
+      type1: "ノーマル",
+      move_name: "のしかかり",
+      move_type: "ノーマル",
+      move_power: 85,
+    })
+    for i in 0..<6 {
+      out[i] = {
+        name: "O" + i.to_string(),
+        hp,
+        atk,
+        def_,
+        spe,
+        type1: "ノーマル",
+        move_name: "のしかかり",
+        move_type: "ノーマル",
+        move_power: 85,
+      }
+    }
+    out
+  }
+  let out = run_select(build_select_input_asym(mk_team("T"), mk_opp()))
+  inspect(out, content=(
+    #|{"format":"single","value":0.16666666666666669,"exploitability":0,"selections":[[0,1,2],[0,1,3],[0,1,4],[0,1,5],[0,2,3],[0,2,4],[0,2,5],[0,3,4],[0,3,5],[0,4,5],[1,2,3],[1,2,4],[1,2,5],[1,3,4],[1,3,5],[1,4,5],[2,3,4],[2,3,5],[2,4,5],[3,4,5]],"selection_names":[["T0","T1","T2"],["T0","T1","T3"],["T0","T1","T4"],["T0","T1","T5"],["T0","T2","T3"],["T0","T2","T4"],["T0","T2","T5"],["T0","T3","T4"],["T0","T3","T5"],["T0","T4","T5"],["T1","T2","T3"],["T1","T2","T4"],["T1","T2","T5"],["T1","T3","T4"],["T1","T3","T5"],["T1","T4","T5"],["T2","T3","T4"],["T2","T3","T5"],["T2","T4","T5"],["T3","T4","T5"]],"opp_selections":[[0,1,2],[0,1,3],[0,1,4],[0,1,5],[0,2,3],[0,2,4],[0,2,5],[0,3,4],[0,3,5],[0,4,5],[1,2,3],[1,2,4],[1,2,5],[1,3,4],[1,3,5],[1,4,5],[2,3,4],[2,3,5],[2,4,5],[3,4,5]],"opp_selection_names":[["O0","O1","O2"],["O0","O1","O3"],["O0","O1","O4"],["O0","O1","O5"],["O0","O2","O3"],["O0","O2","O4"],["O0","O2","O5"],["O0","O3","O4"],["O0","O3","O5"],["O0","O4","O5"],["O1","O2","O3"],["O1","O2","O4"],["O1","O2","O5"],["O1","O3","O4"],["O1","O3","O5"],["O1","O4","O5"],["O2","O3","O4"],["O2","O3","O5"],["O2","O4","O5"],["O3","O4","O5"]],"row_strategy":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"col_strategy":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
   ))
 }

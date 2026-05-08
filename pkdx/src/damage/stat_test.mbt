@@ -649,3 +649,56 @@ test "StatModel: Champions methods equal primitives across (sp, base, idx, natur
     }
   }
 }
+
+// ──────────────────────────────────────────────
+// B-6-pre: StatLimits values pin (pre-H6 destructive replacement)
+//
+// limits() returns a struct bundling the 6 scalar limits. The expected values
+// must match the 6 scalar methods today, and remain stable after B-6 removes
+// those scalar methods.
+// ──────────────────────────────────────────────
+
+///|
+test "StatModel limits: Standard values pinned" {
+  let std : StatModel = Standard(ivs=FixedArray::make(6, 31))
+  let limits = std.limits()
+  inspect(limits.step, content="4")
+  inspect(limits.max_per_stat, content="252")
+  inspect(limits.sentinel, content="256")
+  inspect(limits.step_cap, content="600")
+  inspect(limits.hbd_budget, content="508")
+  inspect(limits.full_budget, content="510")
+}
+
+///|
+test "StatModel limits: Champions values pinned" {
+  let champ : StatModel = Champions
+  let limits = champ.limits()
+  inspect(limits.step, content="1")
+  inspect(limits.max_per_stat, content="32")
+  inspect(limits.sentinel, content="33")
+  inspect(limits.step_cap, content="200")
+  inspect(limits.hbd_budget, content="66")
+  inspect(limits.full_budget, content="66")
+}
+
+///|
+test "StatModel limits: agrees with the 6 scalar methods (pre-B-6 invariant)" {
+  // This pin guarantees limits() carries identical values to the original
+  // scalar API during the additive transition. Will be removed in B-6 once
+  // the scalar methods are gone.
+  let models : Array[StatModel] = [
+    Standard(ivs=FixedArray::make(6, 31)),
+    Champions,
+  ]
+  for i = 0; i < models.length(); i = i + 1 {
+    let model = models[i]
+    let l = model.limits()
+    assert_true(l.step == model.step())
+    assert_true(l.max_per_stat == model.max_per_stat())
+    assert_true(l.sentinel == model.sentinel())
+    assert_true(l.step_cap == model.step_cap())
+    assert_true(l.hbd_budget == model.hbd_budget())
+    assert_true(l.full_budget == model.full_budget())
+  }
+}

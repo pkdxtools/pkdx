@@ -177,6 +177,43 @@ pub(all) enum StatModel {
 }
 
 ///|
+/// Bundle of model-dependent scalar limits. Returned in one struct allocation
+/// so call sites that read multiple values inside a loop can hoist
+/// `let limits = model.limits()` outside the loop.
+pub(all) struct StatLimits {
+  step : Int
+  max_per_stat : Int
+  sentinel : Int
+  step_cap : Int
+  hbd_budget : Int
+  full_budget : Int
+}
+
+///|
+pub fn StatModel::limits(self : StatModel) -> StatLimits {
+  match self {
+    Standard(_) =>
+      StatLimits::{
+        step: 4,
+        max_per_stat: 252,
+        sentinel: 256,
+        step_cap: 600,
+        hbd_budget: 508,
+        full_budget: 510,
+      }
+    Champions =>
+      StatLimits::{
+        step: 1,
+        max_per_stat: 32,
+        sentinel: 33,
+        step_cap: 200,
+        hbd_budget: 66,
+        full_budget: 66,
+      }
+  }
+}
+
+///|
 pub fn StatModel::step(self : StatModel) -> Int {
   match self {
     Standard(_) => 4

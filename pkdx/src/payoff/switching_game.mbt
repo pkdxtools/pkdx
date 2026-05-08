@@ -1864,12 +1864,17 @@ fn compute_and_populate_disk(
 }
 
 ///|
-/// Cached mean-damage lookup. `my_attacker = true` means the attacker is in
-/// `my_team` (and defender in `opp_team`); swap otherwise. `atk_ranks` /
-/// `def_ranks` are the 5-slot rank vectors of the attacker / defender side
-/// respectively. Public so external tests can observe cache counters.
-pub fn mean_damage_cached(
-  cache : DamageCache,
+/// Front portion shared by `mean_damage_cached` and `damage_variants_cached`:
+/// resolve the raw attacker/defender (with item-consumed swap), bail out on
+/// non-damaging moves, dispatch atk_rank / def_rank by move category, and
+/// build the DamageKey.
+///
+/// Returns a 5-tuple instead of an Option to dodge a heap allocation per call
+/// on the chance-node hot path. The leading `Bool` is `true` when the caller
+/// should short-circuit (mv.power <= 0); the rest of the tuple is filled with
+/// usable values regardless so the caller still has the move/raw combatants
+/// for any cleanup it does on the early-return path.
+fn prepare_damage_lookup(
   my_attacker : Bool,
   atk_idx : Int,
   atk_ranks : Array[Int],
@@ -1878,12 +1883,12 @@ pub fn mean_damage_cached(
   mv_idx : Int,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
-  atk_mega~ : Bool = false,
-  def_mega~ : Bool = false,
-  atk_burn~ : Bool = false,
-  atk_item_consumed~ : Bool = false,
-  def_item_consumed~ : Bool = false,
-) -> Int {
+  atk_mega : Bool,
+  def_mega : Bool,
+  atk_burn : Bool,
+  atk_item_consumed : Bool,
+  def_item_consumed : Bool,
+) -> (Bool, DamageKey, Combatant, Combatant, @model.Move) {
   let raw_attacker_full = if my_attacker {
     my_team[atk_idx]
   } else {
@@ -1894,9 +1899,9 @@ pub fn mean_damage_cached(
   } else {
     my_team[def_idx]
   }
-  // P5 (#97): swap to itemless combatant copies once a berry / sash has
-  // been consumed so the engine doesn't apply the item effect (resist
-  // berry halving, choice band Atk x1.5 etc.) a second time.
+  // Swap to itemless combatant copies once a berry / sash has been consumed
+  // so the engine doesn't apply the item effect (resist berry halving,
+  // choice band Atk x1.5 etc.) a second time.
   let raw_attacker = if atk_item_consumed {
     { ..raw_attacker_full, item: "" }
   } else {
@@ -1908,11 +1913,24 @@ pub fn mean_damage_cached(
     raw_defender_full
   }
   // Move list is identical across mega / base — read the move from the base
-  // combatant so that the post-mega synthetic view (which reuses `moves`) is
-  // not required here.
+  // combatant so the post-mega synthetic view (which reuses `moves`) is not
+  // required here.
   let mv = raw_attacker.moves[mv_idx]
   if mv.power <= 0 {
-    return 0
+    let dummy_key : DamageKey = {
+      my_attacker,
+      atk_idx,
+      def_idx,
+      mv_idx,
+      atk_rank: 0,
+      def_rank: 0,
+      atk_mega,
+      def_mega,
+      atk_burn,
+      atk_item_consumed,
+      def_item_consumed,
+    }
+    return (true, dummy_key, raw_attacker, raw_defender, mv)
   }
   let atk_rank = match mv.category {
     @model.Physical => atk_ranks[0]
@@ -1937,6 +1955,48 @@ pub fn mean_damage_cached(
     atk_item_consumed,
     def_item_consumed,
   }
+  (false, key, raw_attacker, raw_defender, mv)
+}
+
+///|
+/// Cached mean-damage lookup. `my_attacker = true` means the attacker is in
+/// `my_team` (and defender in `opp_team`); swap otherwise. `atk_ranks` /
+/// `def_ranks` are the 5-slot rank vectors of the attacker / defender side
+/// respectively. Public so external tests can observe cache counters.
+pub fn mean_damage_cached(
+  cache : DamageCache,
+  my_attacker : Bool,
+  atk_idx : Int,
+  atk_ranks : Array[Int],
+  def_idx : Int,
+  def_ranks : Array[Int],
+  mv_idx : Int,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  atk_mega~ : Bool = false,
+  def_mega~ : Bool = false,
+  atk_burn~ : Bool = false,
+  atk_item_consumed~ : Bool = false,
+  def_item_consumed~ : Bool = false,
+) -> Int {
+  let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
+    my_attacker,
+    atk_idx,
+    atk_ranks,
+    def_idx,
+    def_ranks,
+    mv_idx,
+    my_team,
+    opp_team,
+    atk_mega,
+    def_mega,
+    atk_burn,
+    atk_item_consumed,
+    def_item_consumed,
+  )
+  if early {
+    return 0
+  }
   match cache.data.get(key) {
     Some(v) => {
       cache.hits = cache.hits + 1
@@ -1952,11 +2012,22 @@ pub fn mean_damage_cached(
       let v = match cache.disk {
         Some(_) =>
           mean_damage_via_disk(
-            cache, attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+            cache,
+            attacker,
+            defender,
+            mv,
+            key.atk_rank,
+            key.def_rank,
+            atk_burn=atk_burn,
           )
         None =>
           compute_mean_damage(
-            attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+            attacker,
+            defender,
+            mv,
+            key.atk_rank,
+            key.def_rank,
+            atk_burn=atk_burn,
           )
       }
       cache.data[key] = v
@@ -1995,54 +2066,23 @@ fn damage_variants_cached(
   atk_item_consumed~ : Bool = false,
   def_item_consumed~ : Bool = false,
 ) -> Array[@model.DamageOutcome] {
-  let raw_attacker_full = if my_attacker {
-    my_team[atk_idx]
-  } else {
-    opp_team[atk_idx]
-  }
-  let raw_defender_full = if my_attacker {
-    opp_team[def_idx]
-  } else {
-    my_team[def_idx]
-  }
-  let raw_attacker = if atk_item_consumed {
-    { ..raw_attacker_full, item: "" }
-  } else {
-    raw_attacker_full
-  }
-  let raw_defender = if def_item_consumed {
-    { ..raw_defender_full, item: "" }
-  } else {
-    raw_defender_full
-  }
-  let mv = raw_attacker.moves[mv_idx]
-  if mv.power <= 0 {
-    return [
-      { probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] },
-    ]
-  }
-  let atk_rank = match mv.category {
-    @model.Physical => atk_ranks[0]
-    @model.Special => atk_ranks[2]
-    @model.Status => 0
-  }
-  let def_rank = match mv.category {
-    @model.Physical => def_ranks[1]
-    @model.Special => def_ranks[3]
-    @model.Status => 0
-  }
-  let key : DamageKey = {
+  let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
     atk_idx,
+    atk_ranks,
     def_idx,
+    def_ranks,
     mv_idx,
-    atk_rank,
-    def_rank,
+    my_team,
+    opp_team,
     atk_mega,
     def_mega,
     atk_burn,
     atk_item_consumed,
     def_item_consumed,
+  )
+  if early {
+    return [{ probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] }]
   }
   match cache.variants_data.get(key) {
     Some(v) => {
@@ -2054,18 +2094,29 @@ fn damage_variants_cached(
       let attacker = effective_combatant(raw_attacker, atk_mega)
       let defender = effective_combatant(raw_defender, def_mega)
       let v = compute_damage_variants(
-        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+        attacker,
+        defender,
+        mv,
+        key.atk_rank,
+        key.def_rank,
+        atk_burn=atk_burn,
       )
       cache.variants_data[key] = v
-      // Phase 2-E (#91): touch the L2 disk cache so cross-session damage
-      // entries stay populated. The disk payload is the engine's pre-burn
-      // 16-roll table (scalar), reused by `mean_damage_cached` callers
-      // (Monte Carlo / select / nash graph). Variants serialisation to
-      // disk is deferred — see open question on hit_steps fallback.
+      // Touch the L2 disk cache so cross-session damage entries stay
+      // populated. The disk payload is the engine's pre-burn 16-roll
+      // table (scalar), reused by mean_damage_cached callers (Monte
+      // Carlo / select / nash graph). Variants serialisation to disk
+      // is deferred — see open question on hit_steps fallback.
       match cache.disk {
         Some(_) => {
           let _ = mean_damage_via_disk(
-            cache, attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+            cache,
+            attacker,
+            defender,
+            mv,
+            key.atk_rank,
+            key.def_rank,
+            atk_burn=atk_burn,
           )
         }
         None => ()

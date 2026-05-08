@@ -6,7 +6,6 @@
     "mizchi/markdown": "0.4.7",
     "mizchi/jsonschema": "0.8.0",
     "mizchi/admiral": "0.1.0",
-    "mizchi/numbt": "0.2.2",
     "ushironoko/nash-mbt": "0.1.0"
   },
   "preferred-target": "native"

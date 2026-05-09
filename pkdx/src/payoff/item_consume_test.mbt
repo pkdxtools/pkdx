@@ -75,6 +75,8 @@ fn ic_state(
     opp_must_recharge: [false, false, false],
     my_item_consumed: [false, false, false],
     opp_item_consumed: [false, false, false],
+    my_moves_used: [],
+    opp_moves_used: [],
     turn: 0,
   }
 }
@@ -323,6 +325,64 @@ test "fila_berry: damage that does not cross threshold → no trigger" {
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
+  let pre_dmg_hp = 90
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="80")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+// ─── hp_threshold: オボンのみ ──────────────────────────────────────────────
+
+///|
+test "sitrus_berry: post HP <= max/2 → +max/4 heal + consume" {
+  // Defender max=200, pre=120 → post=80 (≤ 100 = max/2).
+  // Sitrus heals max/4 = 50 → 80 + 50 = 130.
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オボンのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
+  let pre_dmg_hp = 120
+  let mv = ic_move("たいあたり", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="130")
+  inspect(s.opp_item_consumed[0], content="true")
+}
+
+///|
+test "sitrus_berry: KO hit (HP=0) → no trigger" {
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オボンのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
+  let mv = ic_move("はかいこうせん", "ノーマル")
+  let outcomes = apply_item_post_damage_proc_fanout(
+    post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
+  )
+  inspect(outcomes.length(), content="1")
+  let (_, s) = outcomes[0]
+  inspect(s.opp_hps[0], content="0")
+  inspect(s.opp_item_consumed[0], content="false")
+}
+
+///|
+test "sitrus_berry: damage that does not cross threshold → no trigger" {
+  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オボンのみ")
+  let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  // 90 → 80 はどちらも 50% 以下なので発動しない (一度の閾値跨ぎ判定)。
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 90
   let mv = ic_move("たいあたり", "ノーマル")

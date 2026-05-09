@@ -115,6 +115,8 @@ fn sgvw_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
     opp_must_recharge: [false],
     my_item_consumed: [false],
     opp_item_consumed: [false],
+    my_moves_used: [],
+    opp_moves_used: [],
     turn: 0,
   }
 }

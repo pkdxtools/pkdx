@@ -63,6 +63,15 @@ pub(all) struct SwitchingGameState {
   // size; aligns with my_megaed / my_status indexing.
   my_item_consumed : Array[Bool]
   opp_item_consumed : Array[Bool]
+  // Per-slot bitmask of moves used so far (bit `i` = move index `i` was used
+  // at least once). Persists across switches — とっておき (Last Resort) needs
+  // every other move to have been used before it becomes legal, and that
+  // memory survives switch-out.
+  // Convention: length 0 = "not tracked" (test fixtures default; alive_actions
+  // skips the Last Resort filter). Length = team size = "tracked" (production
+  // initial state). Mixed length is treated as untracked for safety.
+  my_moves_used : Array[Int]
+  opp_moves_used : Array[Int]
   turn : Int
 } derive(Show, Eq, Hash)
 
@@ -71,6 +80,66 @@ pub(all) struct SwitchingGameState {
 /// and in test construction.
 pub fn zero_status(team_size : Int) -> Array[@model.StatusCondition] {
   Array::make(team_size, @model.None)
+}
+
+///|
+/// In-place: set bit `mv_idx` on `masks[slot]`. Length-0 masks (untracked
+/// fixtures) and out-of-range slots are no-ops; production state always has
+/// `length == team size`.
+fn mark_move_used_inplace(masks : Array[Int], slot : Int, mv_idx : Int) -> Unit {
+  if slot < 0 || slot >= masks.length() {
+    return
+  }
+  if mv_idx < 0 {
+    return
+  }
+  masks[slot] = masks[slot] | (1 << mv_idx)
+}
+
+///|
+/// Return a fresh `masks` copy with bit `mv_idx` set on slot `slot`. Used
+/// when a state must be passed by value (e.g. into `resolve_moves`) without
+/// mutating the caller's array.
+fn mark_move_used(masks : Array[Int], slot : Int, mv_idx : Int) -> Array[Int] {
+  let out = masks.copy()
+  mark_move_used_inplace(out, slot, mv_idx)
+  out
+}
+
+///|
+/// Check whether `mv_idx` is the `とっておき` (Last Resort) slot on this team
+/// member and whether it is currently barred. Last Resort is barred until
+/// every OTHER move on this slot has been used at least once during the
+/// battle (used-state persists across switches in mainline rules).
+///
+/// `moves_used` is the slot-level bitmask. Length 0 (untracked) is treated
+/// as "not barred" — keeps legacy test fixtures, which never construct
+/// Last-Resort movesets, working without per-fixture updates.
+fn last_resort_barred(
+  moves : Array[@model.Move],
+  mv_idx : Int,
+  moves_used_for_slot : Int,
+) -> Bool {
+  if mv_idx < 0 || mv_idx >= moves.length() {
+    return false
+  }
+  if moves[mv_idx].name != "とっておき" {
+    return false
+  }
+  // 1 技だけ覚えている (= とっておき のみ) は条件を満たしようがないので
+  // mainline でもそのまま発動する。
+  if moves.length() <= 1 {
+    return false
+  }
+  for j in 0..<moves.length() {
+    if j == mv_idx {
+      continue
+    }
+    if ((moves_used_for_slot >> j) & 1) == 0 {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -768,23 +837,35 @@ pub fn apply_item_post_damage_proc_fanout(
     // hit 1, KO on hit 2+" mechanic. Until that lands, leave the aggregate
     // KO untouched rather than incorrectly rescuing the defender.
   }
-  // フィラのみ requires the hit to *cross* the 1/2-HP threshold: the holder
-  // must have been above max/2 going in and at-or-below max/2 coming out.
-  // Without the `pre_dmg_hp` check, an immune / 0-damage hit on a holder
-  // already at low HP would heal+consume despite no damage having occurred.
-  if defender.item == "フィラのみ" &&
-    post_hp > 0 &&
-    pre_dmg_hp * 2 > max_hp &&
-    post_hp * 2 <= max_hp {
-    let heal = max_hp / 3
-    let new_hp = post_hp + heal
-    let capped = if new_hp > max_hp { max_hp } else { new_hp }
-    return [
-      (
-        1.0,
-        with_hp_and_item_consumed(state, defender_is_me, defender_slot, capped),
-      ),
-    ]
+  // フィラのみ / オボンのみ requires the hit to *cross* the 1/2-HP threshold:
+  // the holder must have been above max/2 going in and at-or-below max/2
+  // coming out. Without the `pre_dmg_hp` check, an immune / 0-damage hit on
+  // a holder already at low HP would heal+consume despite no damage having
+  // occurred.
+  //
+  // 回復量はアイテム別:
+  //   - フィラのみ (混乱実): max_hp / 3
+  //   - オボンのみ (Sitrus Berry): max_hp / 4
+  // 混乱実の "性格に合わない" 副作用 (confusion) はモデル外。
+  let heal_denom = match defender.item {
+    "フィラのみ" => Some(3)
+    "オボンのみ" => Some(4)
+    _ => None
+  }
+  match heal_denom {
+    Some(denom) =>
+      if post_hp > 0 && pre_dmg_hp * 2 > max_hp && post_hp * 2 <= max_hp {
+        let heal = max_hp / denom
+        let new_hp = post_hp + heal
+        let capped = if new_hp > max_hp { max_hp } else { new_hp }
+        return [
+          (
+            1.0,
+            with_hp_and_item_consumed(state, defender_is_me, defender_slot, capped),
+          ),
+        ]
+      }
+    None => ()
   }
   [(1.0, state)]
 }
@@ -850,6 +931,8 @@ fn with_status_set(
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_moves_used: state.my_moves_used.copy(),
+    opp_moves_used: state.opp_moves_used.copy(),
     turn: state.turn,
   }
 }
@@ -896,6 +979,27 @@ pub fn eot_slip_active(
 }
 
 ///|
+/// たべのこし / くろいヘドロ 系の EOT 自動回復を 1 スロット分計算する。
+/// 回復は max_hp / 16、HP 上限でキャップ。HP=0 (瀕死) と既に max のスロット
+/// は no-op。
+/// くろいヘドロ は持ち主の type が どく なら回復、それ以外なら max_hp / 8 の
+/// ダメージだが、本実装では未対応 (たべのこし のみ)。
+fn eot_leftovers_heal(current_hp : Int, max_hp : Int, item : String) -> Int {
+  if current_hp <= 0 {
+    return current_hp
+  }
+  if current_hp >= max_hp {
+    return current_hp
+  }
+  if item != "たべのこし" {
+    return current_hp
+  }
+  let heal = max_hp / 16
+  let new_hp = current_hp + heal
+  if new_hp > max_hp { max_hp } else { new_hp }
+}
+
+///|
 /// Apply end-of-turn slip damage and counter updates to both actives of
 /// `state` in place on fresh copies; returns the updated state. Only the
 /// active slot receives EOT — bench Pokemon don't tick. Called at the end of
@@ -911,13 +1015,23 @@ pub fn apply_eot(
   let opp_status = state.opp_status.copy()
   let my_max = effective_hp(my_team[state.my_active])
   let opp_max = effective_hp(opp_team[state.opp_active])
+  // Mainline EOT 順: たべのこし 等のアイテム回復 → 状態異常のスリップダメージ。
+  // (Gen9 公式順では item heal が status damage より先にティックする。)
+  // 持ち物消費フラグは消費系 berry 用で、たべのこし はそもそも非消費アイテム
+  // なので item_consumed の影響を受けない。
+  let my_hp_after_heal = eot_leftovers_heal(
+    my_hps[state.my_active], my_max, my_team[state.my_active].item,
+  )
+  let opp_hp_after_heal = eot_leftovers_heal(
+    opp_hps[state.opp_active], opp_max, opp_team[state.opp_active].item,
+  )
   let (my_hp_new, my_st_new) = eot_slip_active(
-    my_hps[state.my_active], my_max, my_status[state.my_active],
+    my_hp_after_heal, my_max, my_status[state.my_active],
   )
   my_hps[state.my_active] = my_hp_new
   my_status[state.my_active] = my_st_new
   let (opp_hp_new, opp_st_new) = eot_slip_active(
-    opp_hps[state.opp_active], opp_max, opp_status[state.opp_active],
+    opp_hp_after_heal, opp_max, opp_status[state.opp_active],
   )
   opp_hps[state.opp_active] = opp_hp_new
   opp_status[state.opp_active] = opp_st_new
@@ -938,6 +1052,8 @@ pub fn apply_eot(
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_moves_used: state.my_moves_used.copy(),
+    opp_moves_used: state.opp_moves_used.copy(),
     turn: state.turn,
   }
 }
@@ -2299,6 +2415,8 @@ priv struct TurnWorkspace {
   opp_must_recharge : Array[Bool]
   my_item_consumed : Array[Bool]
   opp_item_consumed : Array[Bool]
+  my_moves_used : Array[Int]
+  opp_moves_used : Array[Int]
   turn : Int
 }
 
@@ -2321,6 +2439,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_moves_used: state.my_moves_used.copy(),
+    opp_moves_used: state.opp_moves_used.copy(),
     turn: state.turn,
   }
 }
@@ -2344,6 +2464,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_must_recharge: ws.opp_must_recharge.copy(),
     my_item_consumed: ws.my_item_consumed.copy(),
     opp_item_consumed: ws.opp_item_consumed.copy(),
+    my_moves_used: ws.my_moves_used.copy(),
+    opp_moves_used: ws.opp_moves_used.copy(),
     turn: if bump_turn { ws.turn + 1 } else { ws.turn },
   }
 }
@@ -2597,6 +2719,8 @@ fn clone_state(
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_moves_used: state.my_moves_used.copy(),
+    opp_moves_used: state.opp_moves_used.copy(),
     turn: state.turn + turn_delta,
   }
 }
@@ -2647,6 +2771,8 @@ pub fn transition_with_cache(
   let opp_must_recharge_new = state.opp_must_recharge.copy()
   let my_item_consumed_new = state.my_item_consumed.copy()
   let opp_item_consumed_new = state.opp_item_consumed.copy()
+  let my_moves_used_new = state.my_moves_used.copy()
+  let opp_moves_used_new = state.opp_moves_used.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
   }
@@ -2699,6 +2825,8 @@ pub fn transition_with_cache(
       // post-hit fanouts can gate full-HP triggers (resist berry / sash).
       pre_dmg_defender_hp = my_hps_new[i]
       attack_event = Some((false, i, opp_team[state.opp_active].moves[mj], mj))
+      // Last Resort 解禁判定用に opp が選択した move を「使用済み」として記録。
+      mark_move_used_inplace(opp_moves_used_new, state.opp_active, mj)
     }
     (UseMove(mi), Switch(j)) => {
       opp_active_new = j
@@ -2712,6 +2840,8 @@ pub fn transition_with_cache(
       // post-hit effects are handled per-variant in the Some(...) arm.
       pre_dmg_defender_hp = opp_hps_new[j]
       attack_event = Some((true, j, my_team[state.my_active].moves[mi], mi))
+      // Last Resort 解禁判定用に my が選択した move を「使用済み」として記録。
+      mark_move_used_inplace(my_moves_used_new, state.my_active, mi)
     }
     (UseMove(mi), UseMove(mj)) => {
       let me = my_team[state.my_active]
@@ -2724,19 +2854,27 @@ pub fn transition_with_cache(
         me, my_ranks_new, mv_me, my_mega_now, my_para,
         opp, opp_ranks_new, mv_opp, opp_mega_now, opp_para,
       )
+      // Last Resort 解禁判定用に両サイドの move を「使用済み」として記録。
+      // resolve_moves は state を ws に変換して回すので、state を新しい mask で
+      // 上書きしてから渡す。
+      let state_marked : SwitchingGameState = {
+        ..state,
+        my_moves_used: mark_move_used(state.my_moves_used, state.my_active, mi),
+        opp_moves_used: mark_move_used(state.opp_moves_used, state.opp_active, mj),
+      }
       if s == 0 {
         // Speed tie: return two outcomes so the caller averages successor
         // *values* (not states). resolve_moves recomputes the second hit's
         // damage after the first actor's stat boosts.
         let outs : Array[(Double, SwitchingGameState)] = []
         for half in resolve_moves(
-          state, mi, mj, true, my_mega_now, opp_mega_now,
+          state_marked, mi, mj, true, my_mega_now, opp_mega_now,
           my_team, opp_team, dmg_cache,
         ) {
           outs.push((0.5 * half.0, half.1))
         }
         for half in resolve_moves(
-          state, mi, mj, false, my_mega_now, opp_mega_now,
+          state_marked, mi, mj, false, my_mega_now, opp_mega_now,
           my_team, opp_team, dmg_cache,
         ) {
           outs.push((0.5 * half.0, half.1))
@@ -2745,7 +2883,7 @@ pub fn transition_with_cache(
       } else {
         let my_first = s > 0
         return resolve_moves(
-          state, mi, mj, my_first, my_mega_now, opp_mega_now,
+          state_marked, mi, mj, my_first, my_mega_now, opp_mega_now,
           my_team, opp_team, dmg_cache,
         )
       }
@@ -2772,6 +2910,8 @@ pub fn transition_with_cache(
     opp_must_recharge: opp_must_recharge_new,
     my_item_consumed: my_item_consumed_new,
     opp_item_consumed: opp_item_consumed_new,
+    my_moves_used: my_moves_used_new,
+    opp_moves_used: opp_moves_used_new,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -2939,6 +3079,8 @@ fn pass_turn_state(
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_moves_used: state.my_moves_used.copy(),
+    opp_moves_used: state.opp_moves_used.copy(),
     turn: state.turn + 1,
   }
 }
@@ -3005,6 +3147,8 @@ pub fn attempt_turn_with_cache(
         opp_must_recharge: state.opp_must_recharge,
         my_item_consumed: state.my_item_consumed,
         opp_item_consumed: state.opp_item_consumed,
+        my_moves_used: state.my_moves_used,
+        opp_moves_used: state.opp_moves_used,
         turn: state.turn,
       }
       let branch_outs : Array[(Double, SwitchingGameState)] = match (
@@ -3074,6 +3218,8 @@ fn partial_act_outcomes(
   let opp_must_recharge = state.opp_must_recharge.copy()
   let my_item_consumed = state.my_item_consumed.copy()
   let opp_item_consumed = state.opp_item_consumed.copy()
+  let my_moves_used = state.my_moves_used.copy()
+  let opp_moves_used = state.opp_moves_used.copy()
   let mut my_active = state.my_active
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
@@ -3116,6 +3262,7 @@ fn partial_act_outcomes(
       attack_event = Some(
         (true, state.opp_active, my_team[state.my_active].moves[mi], mi),
       )
+      mark_move_used_inplace(my_moves_used, state.my_active, mi)
     }
     (false, UseMove(mj)) => {
       if mega_trigger {
@@ -3127,6 +3274,7 @@ fn partial_act_outcomes(
       attack_event = Some(
         (false, state.my_active, opp_team[state.opp_active].moves[mj], mj),
       )
+      mark_move_used_inplace(opp_moves_used, state.opp_active, mj)
     }
     (_, _) => ()
   }
@@ -3147,6 +3295,8 @@ fn partial_act_outcomes(
     opp_must_recharge,
     my_item_consumed,
     opp_item_consumed,
+    my_moves_used,
+    opp_moves_used,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -3322,6 +3472,7 @@ pub fn value(
     my_team,
     state.my_mega_used,
     must_recharge=state.my_must_recharge[state.my_active],
+    moves_used=state.my_moves_used,
   )
   let actions_opp = alive_actions(
     state.opp_active,
@@ -3329,6 +3480,7 @@ pub fn value(
     opp_team,
     state.opp_mega_used,
     must_recharge=state.opp_must_recharge[state.opp_active],
+    moves_used=state.opp_moves_used,
   )
   if actions_me.length() == 0 {
     return -1.0
@@ -3470,6 +3622,8 @@ pub fn switching_game_winrate_stats(
     opp_must_recharge: Array::make(opp_team.length(), false),
     my_item_consumed: Array::make(my_team.length(), false),
     opp_item_consumed: Array::make(opp_team.length(), false),
+    my_moves_used: Array::make(my_team.length(), 0),
+    opp_moves_used: Array::make(opp_team.length(), 0),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
@@ -3503,19 +3657,37 @@ pub fn alive_actions(
   team : Array[Combatant],
   mega_used : Bool,
   must_recharge~ : Bool = false,
+  moves_used~ : Array[Int] = [],
 ) -> Array[ActionKind] {
   let active_alive = hps[active] > 0
   if must_recharge && active_alive {
     return [UseMove(0)]
   }
+  // とっておき (Last Resort) のフィルタ用に slot ごとの mask を取得。
+  // 旧テスト fixture など length 0 の untracked 入力は 0 扱いで
+  // last_resort_barred 内の "他の技を使っていない → barred" 条件に流れ込み、
+  // 1 技目に Last Resort を投げると即フィルタされる。テストが Last Resort
+  // を持たないなら結果は不変。
+  let used_for_slot = if active < moves_used.length() {
+    moves_used[active]
+  } else {
+    0
+  }
+  let moves = team[active].moves
   let out : Array[ActionKind] = []
   if active_alive {
-    for i in 0..<team[active].moves.length() {
+    for i in 0..<moves.length() {
+      if last_resort_barred(moves, i, used_for_slot) {
+        continue
+      }
       out.push(UseMove(i))
     }
   }
   if active_alive && can_mega(active, hps, team, mega_used) {
-    for i in 0..<team[active].moves.length() {
+    for i in 0..<moves.length() {
+      if last_resort_barred(moves, i, used_for_slot) {
+        continue
+      }
       out.push(Mega(i))
     }
   }

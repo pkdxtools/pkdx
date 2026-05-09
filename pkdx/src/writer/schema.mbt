@@ -70,7 +70,10 @@ fn member_schema(
   b : @jsonschema.Builder,
   strict~ : Bool = true,
 ) -> @jsonschema.JsonSchema {
-  let moves_min = if strict { 4 } else { 0 }
+  // 技は 1 〜 4 で受け付ける。とっておき型 (Mega Kangaskhan 等) のように
+  // 意図的に 2 技構成で運用するケースがあるため、4 固定にすると validate で
+  // 弾かれてしまう。空配列 (member.moves が存在しない) は別途 required で禁止。
+  let moves_min = if strict { 1 } else { 0 }
   b.object(
     properties={
       "name": b.string(),

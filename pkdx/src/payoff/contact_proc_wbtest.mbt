@@ -73,6 +73,8 @@ fn cp_state() -> SwitchingGameState {
     opp_must_recharge: [false, false, false],
     my_item_consumed: [false, false, false],
     opp_item_consumed: [false, false, false],
+    my_moves_used: [],
+    opp_moves_used: [],
     turn: 0,
   }
 }

@@ -359,6 +359,39 @@ test "eot_slip_active: Drowsy(0) triggers Sleep(2) at EOT" {
 }
 
 ///|
+test "eot_leftovers_heal: たべのこし adds max/16, capped at max" {
+  // 80/160 → +10 → 90
+  inspect(eot_leftovers_heal(80, 160, "たべのこし"), content="90")
+  // 155/160 → +10 → cap at 160
+  inspect(eot_leftovers_heal(155, 160, "たべのこし"), content="160")
+  // already at max → no-op
+  inspect(eot_leftovers_heal(160, 160, "たべのこし"), content="160")
+  // fainted → no-op (たべのこし は瀕死では発動しない)
+  inspect(eot_leftovers_heal(0, 160, "たべのこし"), content="0")
+}
+
+///|
+test "eot_leftovers_heal: non-leftovers items are no-op" {
+  inspect(eot_leftovers_heal(80, 160, ""), content="80")
+  inspect(eot_leftovers_heal(80, 160, "オボンのみ"), content="80")
+  inspect(eot_leftovers_heal(80, 160, "きあいのタスキ"), content="80")
+}
+
+///|
+test "apply_eot: たべのこし heals before status slip" {
+  // たべのこし 装備 + Burn 状態。EOT 順は heal → burn slip。
+  // pre 80 → +160/16 = 90 → 90 - 160/16 = 80 (差し引きゼロ)。
+  let poke = mk_test_pokemon("d", "ノーマル")
+  let mut combatant = mk_test_combatant(poke)
+  combatant = { ..combatant, item: "たべのこし" }
+  let team = [combatant]
+  let mut state = mk_test_state(1, 80, 80, @model.Burn, @model.None)
+  state = { ..state, my_must_recharge: [false], opp_must_recharge: [false] }
+  let after = apply_eot(state, team, team)
+  inspect(after.my_hps[0], content="80")
+}
+
+///|
 fn mk_test_pokemon(
   name : String,
   type1 : String,
@@ -433,6 +466,8 @@ fn mk_test_state(
     opp_must_recharge: Array::make(team_size, false),
     my_item_consumed: Array::make(team_size, false),
     opp_item_consumed: Array::make(team_size, false),
+    my_moves_used: [],
+    opp_moves_used: [],
     turn: 0,
   }
 }
@@ -678,6 +713,8 @@ fn mk_same_turn_state(
     opp_must_recharge: [false],
     my_item_consumed: [false],
     opp_item_consumed: [false],
+    my_moves_used: [],
+    opp_moves_used: [],
     turn: 0,
   }
 }
@@ -1072,6 +1109,8 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     opp_must_recharge: [false],
     my_item_consumed: [false, false],
     opp_item_consumed: [false],
+    my_moves_used: [],
+    opp_moves_used: [],
     turn: 0,
   }
   let outs1 = attempt_turn_with_cache(

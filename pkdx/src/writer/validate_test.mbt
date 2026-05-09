@@ -76,7 +76,8 @@ test "validate_team_json: invalid battle_format" {
 }
 
 ///|
-test "validate_team_json: wrong moves count" {
+test "validate_team_json: too many moves rejected" {
+  // max_items=4 は維持。5 技以上は schema 違反として弾く。
   let src =
     #|{
     #|  "battle_format": "singles",
@@ -90,7 +91,11 @@ test "validate_team_json: wrong moves count" {
     #|    "item": "こだわりハチマキ",
     #|    "role": "軸",
     #|    "moves": [
-    #|      {"name":"じしん","type":"じめん","category":"物理","power":100}
+    #|      {"name":"じしん","type":"じめん","category":"物理","power":100},
+    #|      {"name":"げきりん","type":"ドラゴン","category":"物理","power":120},
+    #|      {"name":"つるぎのまい","type":"ノーマル","category":"変化","power":0},
+    #|      {"name":"ステルスロック","type":"いわ","category":"変化","power":0},
+    #|      {"name":"まもる","type":"ノーマル","category":"変化","power":0}
     #|    ]
     #|  }],
     #|  "coverage": [],
@@ -106,6 +111,35 @@ test "validate_team_json: wrong moves count" {
     errors.iter().any(fn(e) { e.contains("moves") || e.contains("Items") }),
     content="true",
   )
+}
+
+///|
+/// とっておき型 (Mega Kangaskhan 等) など意図的に 2 技構成のメンバーは
+/// schema を通る (issue: pkdx write が 4 技未満で弾かれる問題の回帰防止)。
+test "validate_team_json: fewer than 4 moves accepted" {
+  let src =
+    #|{
+    #|  "battle_format": "singles",
+    #|  "mechanics": "メガシンカ",
+    #|  "version": "scarlet_violet",
+    #|  "members": [{
+    #|    "name": "ガルーラ",
+    #|    "types": ["ノーマル"],
+    #|    "base_stats": {"h":105,"a":95,"b":80,"c":40,"d":80,"s":90},
+    #|    "ability": "おやこあい",
+    #|    "item": "ガルーラナイト",
+    #|    "role": "エース",
+    #|    "moves": [
+    #|      {"name":"とっておき","type":"ノーマル","category":"物理","power":140},
+    #|      {"name":"ねこだまし","type":"ノーマル","category":"物理","power":40}
+    #|    ]
+    #|  }],
+    #|  "coverage": [],
+    #|  "defense_matrix": [],
+    #|  "matchup_plans": []
+    #|}
+  let json = @json.parse(src)
+  inspect(validate_team_json(json), content="Ok(())")
 }
 
 ///|

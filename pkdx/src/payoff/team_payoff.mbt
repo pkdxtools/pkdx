@@ -4,7 +4,7 @@
 pub(all) enum BattleFormat {
   Single
   Double
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn pick_count(format : BattleFormat) -> Int {

@@ -5,7 +5,6 @@ import {
 }
 
 options(
-  "supported-targets": "native",
   "native-stub": [ "cwrap.c", "sqlite3.c" ],
   link: {
     "native": {
@@ -13,3 +12,5 @@ options(
     },
   },
 )
+
+supported_targets = "native"

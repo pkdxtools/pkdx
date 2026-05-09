@@ -187,7 +187,7 @@ test "build_damage_calc_entry: physical move populates atk rank key" {
   guard e.get("attacker") is Some(Object(a)) else { fail("attacker missing") }
   guard a.get("ranks") is Some(Object(rm)) else { fail("ranks missing") }
   inspect(rm.get("atk") is Some(Number(_)), content="true")
-  inspect(rm.get("spa"), content="None")
+  debug_inspect(rm.get("spa"), content="None")
   guard e.get("move") is Some(Object(m)) else { fail("move missing") }
   inspect(
     m.get("category") is Some(String("\u{7269}\u{7406}")),
@@ -208,21 +208,21 @@ test "build_damage_calc_entry: ransuu omits guaranteed_hits" {
   )
   let entry = build_damage_calc_entry(input, result, "", "")
   guard entry is Object(e) else { fail("entry must be object") }
-  inspect(e.get("guaranteed_hits"), content="None")
+  debug_inspect(e.get("guaranteed_hits"), content="None")
   // Special は spa ranks key を使う (= 0 なのでランクは空だが key 選択だけ確認)
   guard e.get("attacker") is Some(Object(a)) else { fail("attacker missing") }
   guard a.get("ranks") is Some(Object(rm)) else { fail("ranks missing") }
   inspect(rm.is_empty(), content="true")
   // 空 optional は key ごと省略する (FE schema の z.string().optional() 準拠)。
-  inspect(e.get("title"), content="None")
-  inspect(e.get("note"), content="None")
+  debug_inspect(e.get("title"), content="None")
+  debug_inspect(e.get("note"), content="None")
   guard e.get("attacker") is Some(Object(att)) else { fail("attacker missing") }
-  inspect(att.get("ability"), content="None")
-  inspect(att.get("item"), content="None")
-  inspect(att.get("nature"), content="None")
-  inspect(att.get("tera_type"), content="None")
+  debug_inspect(att.get("ability"), content="None")
+  debug_inspect(att.get("item"), content="None")
+  debug_inspect(att.get("nature"), content="None")
+  debug_inspect(att.get("tera_type"), content="None")
   guard e.get("defender") is Some(Object(defn)) else { fail("defender missing") }
-  inspect(defn.get("tera_type"), content="None")
+  debug_inspect(defn.get("tera_type"), content="None")
 }
 
 ///|

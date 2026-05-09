@@ -10,7 +10,7 @@ pub(all) enum Wall {
   Reflect
   LightScreen
   AuroraVeil
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// CLI parser. Accepts empty string or a handful of canonical spellings.

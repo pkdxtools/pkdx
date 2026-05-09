@@ -354,7 +354,7 @@ test "stat_resolution: Shell Side Arm physical mode forces contact=true" {
     atk_atk=120, atk_spa=100, def_def=100, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.force_contact, content="Some(true)")
+  debug_inspect(sr.force_contact, content="Some(true)")
 }
 
 ///|
@@ -367,7 +367,7 @@ test "stat_resolution: Shell Side Arm special mode forces contact=false" {
     atk_atk=100, atk_spa=120, def_def=120, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.force_contact, content="Some(false)")
+  debug_inspect(sr.force_contact, content="Some(false)")
 }
 
 ///|
@@ -380,7 +380,7 @@ test "stat_resolution: non-Shell-Side-Arm keeps force_contact None" {
     atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.force_contact, content="None")
+  debug_inspect(sr.force_contact, content="None")
 }
 
 ///|

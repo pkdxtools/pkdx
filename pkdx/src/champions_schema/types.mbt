@@ -32,7 +32,7 @@ pub(all) struct PokemonEntry {
   ability1 : String
   ability2 : String
   dream_ability : String
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Champions 技エントリ。`010_champions_moves/data.json` の各要素。
@@ -53,7 +53,7 @@ pub(all) struct MoveEntry {
   accuracy : String
   direct : String
   target : String
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Champions 技習得エントリ。`004_champions_learnset/data.json` の各要素。
@@ -63,7 +63,7 @@ pub(all) struct LearnsetEntry {
   id : String
   conditions : String
   waza : String
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Champions アイテムエントリ。`013_items/data.json` の各要素。
@@ -74,4 +74,4 @@ pub(all) struct ItemEntry {
   name_en : String
   category : String
   flavor : String
-} derive(Show, Eq)
+} derive(Debug, Eq)

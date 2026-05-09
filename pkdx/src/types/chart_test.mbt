@@ -69,13 +69,13 @@ test "get_dual_effectiveness: fighting vs ghost/dark immune" {
 
 ///|
 test "type_from_jp: valid types" {
-  inspect(type_from_jp("ほのお"), content="Some(Fire)")
-  inspect(type_from_jp("ひこう"), content="Some(Flying)")
-  inspect(type_from_jp("はがね"), content="Some(Steel)")
+  debug_inspect(type_from_jp("ほのお"), content="Some(Fire)")
+  debug_inspect(type_from_jp("ひこう"), content="Some(Flying)")
+  debug_inspect(type_from_jp("はがね"), content="Some(Steel)")
 }
 
 ///|
 test "type_from_jp: unknown type returns None" {
-  inspect(type_from_jp("でたらめ"), content="None")
-  inspect(type_from_jp(""), content="None")
+  debug_inspect(type_from_jp("でたらめ"), content="None")
+  debug_inspect(type_from_jp(""), content="None")
 }

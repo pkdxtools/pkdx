@@ -50,4 +50,4 @@ pub(all) struct DamageCalcInput {
   // ばけのかわ初撃フラグ。true のとき engine は damages=0 / disguise_blocked
   // を立てて早期 return する。
   disguise_active : Bool
-} derive(Show)
+} derive(Debug)

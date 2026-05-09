@@ -6,7 +6,7 @@ pub(all) enum Field {
   Grassy
   Psychic
   Misty
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Convert Japanese field name to Field enum.

@@ -144,7 +144,7 @@ fn asv_distinct_opp_hps(leaves : Array[(Double, SwitchingGameState)]) -> Int {
         break
       }
     }
-    if not(found) {
+    if !found {
       seen.push(hp)
     }
   }

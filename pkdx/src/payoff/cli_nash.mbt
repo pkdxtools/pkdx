@@ -26,7 +26,7 @@ pub suberror NashCliError {
   InfeasibleGame
   UnboundedGame
   InnerError(String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parse one number (Double) from a Json node. `raise InvalidJson` if not a
@@ -170,7 +170,7 @@ fn parse_nash_input(
   if has_matrix && has_chars {
     raise ConflictingInputs
   }
-  if not(has_matrix) && not(has_chars) {
+  if !has_matrix && !has_chars {
     raise MissingField("matrix or characters")
   }
   let (data, labels) = if has_matrix {
@@ -395,10 +395,10 @@ pub fn run_nash_graph(
     _ => raise InvalidJson("top-level must be an object")
   }
   if obj.contains("team") || obj.contains("opponent") {
-    if not(obj.contains("opponent")) {
+    if !obj.contains("opponent") {
       raise MissingField("opponent")
     }
-    if not(obj.contains("team")) {
+    if !obj.contains("team") {
       raise MissingField("team")
     }
     return run_nash_graph_team(obj, threshold)

@@ -2,9 +2,7 @@ import {
   "pkdxtools/pkdx/src/db",
   "pkdxtools/pkdx/src/champions_schema" @champions_schema,
   "moonbitlang/core/json" @json,
-  "moonbitlang/core/strconv" @strconv,
+  "moonbitlang/core/string" @string,
 }
 
-options(
-  "supported-targets": "native",
-)
+supported_targets = "native"

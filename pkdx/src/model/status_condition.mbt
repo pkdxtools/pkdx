@@ -22,7 +22,12 @@ pub(all) enum StatusCondition {
   // `Sleep(2)` に変わる (合計 1 ターン猶予 = 本家の遅延ねむり)。交代すると
   // `None` にリセットされる。
   Drowsy(Int)
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
+
+///|
+pub impl Show for StatusCondition with to_string(self) {
+  @debug.to_string(self)
+}
 
 ///|
 /// Kind of status a move can inflict. Separate from `StatusCondition` because
@@ -37,7 +42,12 @@ pub(all) enum StatusKind {
   SleepKind
   // あくびが付与する予告状態。直接ねむりを与えず 1 ターン遅延させる。
   DrowsyKind
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
+
+///|
+pub impl Show for StatusKind with to_string(self) {
+  @debug.to_string(self)
+}
 
 ///|
 /// Parse a Japanese status name into `StatusKind`. Accepts the canonical

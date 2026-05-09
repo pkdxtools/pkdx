@@ -45,7 +45,7 @@ pub(all) struct StatResolution {
   // physical mode) need contact recomputed from the chosen category rather
   // than the static table.
   force_contact : Bool?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Drive the decision table documented at the top of this file.

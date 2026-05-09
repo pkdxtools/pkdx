@@ -4,8 +4,8 @@ test "nature_from_ja: いじっぱり" {
     Some(nature) => {
       inspect(nature.name_ja, content="いじっぱり")
       inspect(nature.name_en, content="Adamant")
-      inspect(nature.up, content="Some(Atk)")
-      inspect(nature.down, content="Some(SpA)")
+      debug_inspect(nature.up, content="Some(Atk)")
+      debug_inspect(nature.down, content="Some(SpA)")
     }
     None => fail("expected Some")
   }
@@ -15,8 +15,8 @@ test "nature_from_ja: いじっぱり" {
 test "nature_from_ja: ようき" {
   match nature_from_ja("ようき") {
     Some(nature) => {
-      inspect(nature.up, content="Some(Spe)")
-      inspect(nature.down, content="Some(SpA)")
+      debug_inspect(nature.up, content="Some(Spe)")
+      debug_inspect(nature.down, content="Some(SpA)")
     }
     None => fail("expected Some")
   }
@@ -26,8 +26,8 @@ test "nature_from_ja: ようき" {
 test "nature_from_ja: ひかえめ" {
   match nature_from_ja("ひかえめ") {
     Some(nature) => {
-      inspect(nature.up, content="Some(SpA)")
-      inspect(nature.down, content="Some(Atk)")
+      debug_inspect(nature.up, content="Some(SpA)")
+      debug_inspect(nature.down, content="Some(Atk)")
     }
     None => fail("expected Some")
   }
@@ -37,8 +37,8 @@ test "nature_from_ja: ひかえめ" {
 test "nature_from_ja: neutral nature まじめ" {
   match nature_from_ja("まじめ") {
     Some(nature) => {
-      inspect(nature.up, content="None")
-      inspect(nature.down, content="None")
+      debug_inspect(nature.up, content="None")
+      debug_inspect(nature.down, content="None")
     }
     None => fail("expected Some")
   }
@@ -101,11 +101,11 @@ test "nature_mult_int: neutral stat" {
 
 ///|
 test "stat_index_from_str: all variants" {
-  inspect(stat_index_from_str("hp"), content="Some(HP)")
-  inspect(stat_index_from_str("atk"), content="Some(Atk)")
-  inspect(stat_index_from_str("def"), content="Some(Def)")
-  inspect(stat_index_from_str("spa"), content="Some(SpA)")
-  inspect(stat_index_from_str("spd"), content="Some(SpD)")
-  inspect(stat_index_from_str("spe"), content="Some(Spe)")
-  inspect(stat_index_from_str("unknown"), content="None")
+  debug_inspect(stat_index_from_str("hp"), content="Some(HP)")
+  debug_inspect(stat_index_from_str("atk"), content="Some(Atk)")
+  debug_inspect(stat_index_from_str("def"), content="Some(Def)")
+  debug_inspect(stat_index_from_str("spa"), content="Some(SpA)")
+  debug_inspect(stat_index_from_str("spd"), content="Some(SpD)")
+  debug_inspect(stat_index_from_str("spe"), content="Some(Spe)")
+  debug_inspect(stat_index_from_str("unknown"), content="None")
 }

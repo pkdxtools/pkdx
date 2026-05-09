@@ -73,7 +73,12 @@ pub(all) struct SwitchingGameState {
   my_moves_used : Array[Int]
   opp_moves_used : Array[Int]
   turn : Int
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
+
+///|
+pub impl Show for SwitchingGameState with to_string(self) {
+  @debug.to_string(self)
+}
 
 ///|
 /// Fresh `None`-filled status array sized for a team. Used at game entry
@@ -153,7 +158,7 @@ pub(all) struct SideAttempt {
   acts : Bool
   action : ActionKind
   post_status : @model.StatusCondition
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Paralyze: 12.5% chance of full-turn failure (gen7+ freeze/paralysis rate).
@@ -414,7 +419,7 @@ pub fn apply_contact_proc_fanout(
     def_ability=defender.ability,
     critical=false,
   )
-  if not(@damage.resolve_move_contact(mv, sr.force_contact)) {
+  if !@damage.resolve_move_contact(mv, sr.force_contact) {
     return [(1.0, state)]
   }
   // move 自体が連結しないケース (type immunity / ability immunity) は
@@ -547,7 +552,7 @@ pub fn apply_contact_proc_fanout(
         break
       }
     }
-    if not(merged) {
+    if !merged {
       combined.push((kind, item_contrib))
     }
   }
@@ -708,11 +713,9 @@ pub fn apply_item_pre_damage_proc_fanout(
   // resist berries trigger only on super-effective hits. Mirrors the engine
   // gate in `damage/engine.mbt`'s resist-berry block.
   let triggers_on_neutral = defender.item == "ホズのみ"
-  if not(triggers_on_neutral) &&
-    not(
-      @damage.is_super_effective(
-        resolved_type, defender.pokemon.type1, defender.pokemon.type2,
-      ),
+  if !triggers_on_neutral &&
+    !@damage.is_super_effective(
+      resolved_type, defender.pokemon.type1, defender.pokemon.type2,
     ) {
     return [(1.0, state)]
   }
@@ -825,7 +828,7 @@ pub fn apply_item_post_damage_proc_fanout(
       @damage.HitPlan::Single => false
       _ => true
     }
-    if not(is_multi_hit) {
+    if !is_multi_hit {
       return [
         (
           1.0,
@@ -1114,7 +1117,7 @@ pub(all) enum ActionKind {
   // marks `*_megaed[active] = true` so the post-mega stats/type/ability persist
   // across later switches.
   Mega(Int)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Observability hooks for memoization: callers can inspect hit/miss counts
@@ -1206,10 +1209,10 @@ pub fn terminal_value(
 ) -> Double? {
   let my_alive = any_alive(state.my_hps)
   let opp_alive = any_alive(state.opp_hps)
-  if not(my_alive) {
+  if !my_alive {
     return Some(-1.0)
   }
-  if not(opp_alive) {
+  if !opp_alive {
     return Some(1.0)
   }
   if state.turn >= turn_limit {
@@ -1542,7 +1545,7 @@ fn apply_damage_variants_fanout(
   // `damage_variants_cached` so that the engine's variant table is
   // memoised across recursion. Inside this helper we own the per-variant
   // state mutation and the four post-hit fanouts only.
-  let target_is_me = not(attacker_is_me)
+  let target_is_me = !attacker_is_me
   let target_slot = defender_active
   let attacker_slot = attacker_active
   let leaves : Array[(Double, SwitchingGameState)] = []

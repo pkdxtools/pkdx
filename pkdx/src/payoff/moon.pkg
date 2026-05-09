@@ -7,8 +7,9 @@ import {
   "pkdxtools/pkdx/src/types" @types,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/random" @random,
-  "moonbitlang/core/strconv" @strconv,
   "moonbitlang/core/hashmap" @hashmap,
+  "moonbitlang/core/debug" @debug,
+  "moonbitlang/core/string" @string,
 }
 
 import {
@@ -23,5 +24,7 @@ import {
 // real BLAS symbols. See nash/moon.pkg for the full rationale.
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
-  "supported-targets": "native",
 )
+
+supported_targets = "native"
+

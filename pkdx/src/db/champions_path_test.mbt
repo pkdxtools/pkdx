@@ -101,7 +101,7 @@ test "open_champions_rw + validate_champions_schema succeed after setup" {
     Some(p) => p
     None => return
   }
-  if not(file_exists(pokedex_path)) {
+  if !file_exists(pokedex_path) {
     return
   }
   match open_champions_rw(champions_path, pokedex_path) {
@@ -128,7 +128,7 @@ test "attach_pokedex makes pokedex.* tables visible inside a champions.db handle
     Some(p) => p
     None => return
   }
-  if not(file_exists(pokedex_path)) {
+  if !file_exists(pokedex_path) {
     return
   }
   match open_champions_rw(champions_path, pokedex_path) {

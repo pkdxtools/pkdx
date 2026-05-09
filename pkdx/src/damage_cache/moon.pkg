@@ -6,6 +6,4 @@ import {
   "moonbitlang/core/json" @json,
 }
 
-options(
-  "supported-targets": "native",
-)
+supported_targets = "native"

@@ -25,7 +25,7 @@ pub suberror MetaCliError {
   MissingFieldMeta(String)
   UsageNotNormalised(Double)
   ShapeMismatch(Int, Int)
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn json_number_meta(j : Json, ctx : String) -> Double raise MetaCliError {

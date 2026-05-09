@@ -155,7 +155,7 @@ fn strip_first_occurrence(s : String, needle : String) -> String {
   if idx < 0 {
     return ""
   }
-  let head = s[0:idx].to_string()
-  let tail = s[idx + m:n].to_string()
+  let head = s[0:idx].to_owned()
+  let tail = s[idx + m:n].to_owned()
   head + tail
 }

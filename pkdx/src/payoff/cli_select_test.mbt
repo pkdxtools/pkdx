@@ -68,10 +68,10 @@ test "select_6v6_single_outputs_3pick_distribution" {
   let j = @json.parse(out)
   match j {
     Object(m) => {
-      // C(6, 3) = 20 selections on each side.
+      // 6 × C(5, 2) = 60 selections on each side (lead-aware enumeration).
       match m.get("row_strategy") {
         Some(Array(arr)) => {
-          assert_true(arr.length() == 20)
+          assert_true(arr.length() == 60)
           let mut total = 0.0
           for x in arr {
             match x {
@@ -84,7 +84,7 @@ test "select_6v6_single_outputs_3pick_distribution" {
         _ => assert_true(false)
       }
       match m.get("col_strategy") {
-        Some(Array(arr)) => assert_true(arr.length() == 20)
+        Some(Array(arr)) => assert_true(arr.length() == 60)
         _ => assert_true(false)
       }
     }
@@ -320,8 +320,8 @@ test "parse_move_json_3elem_stat_effects_and_posthit_fields" {
 ///|
 /// Phase 14: ScreenedSwitchingGame(1) returns a SelectResult whose `selections`
 /// / `selection_names` / `row_strategy` are filtered down to retained rows
-/// only. `C(4, 3) = 4` selections on each side × `keep_top = 0.5` → 2 rows
-/// / 2 cols retained.
+/// only. `4 × C(3, 2) = 12` selections on each side × `keep_top = 0.5` → 6
+/// rows / 6 cols retained.
 test "run_select_with_screened_switching_game_returns_retained_shape" {
   let input = select_input_json_with_extra(
     [100, 100, 100, 100],
@@ -359,9 +359,9 @@ test "run_select_with_screened_switching_game_returns_retained_shape" {
       return
     }
   }
-  // 4 selections × keep_top=0.5 → ceil(4 * 0.5) = 2 retained on each axis.
-  assert_eq(selections.length(), 2)
-  assert_eq(opp_selections.length(), 2)
+  // 12 selections × keep_top=0.5 → ceil(12 * 0.5) = 6 retained on each axis.
+  assert_eq(selections.length(), 6)
+  assert_eq(opp_selections.length(), 6)
   // row_strategy must track retained selection shape.
   assert_eq(row_strategy.length(), selections.length())
 }
@@ -395,7 +395,7 @@ test "select_accepts_team_builder_member_format" {
   match j {
     Object(m) => {
       match m.get("row_strategy") {
-        Some(Array(arr)) => assert_true(arr.length() == 20)
+        Some(Array(arr)) => assert_true(arr.length() == 60)
         _ => assert_true(false)
       }
     }

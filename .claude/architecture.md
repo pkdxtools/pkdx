@@ -305,7 +305,7 @@ flowchart TD
 
   SG --> TPS[team_payoff_matrix_switching]
 
-  SCR --> PhaseA["Phase A: team_monte_carlo_value × C(6,3)² cells"]
+  SCR --> PhaseA["Phase A: team_monte_carlo_value × 60² cells (lead-aware)"]
   PhaseA --> PhaseB["Phase B: mean-based row/col pruning (keep_top quantile)"]
   PhaseB --> PhaseC["Phase C: switching_game_winrate × retained sub-matrix"]
   PhaseC --> Sub[retained sub-matrix + retained indices]

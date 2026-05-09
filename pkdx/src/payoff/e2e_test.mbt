@@ -37,13 +37,13 @@ test "end_to_end_select_with_switching_game_model_returns_valid_distribution" {
   let team_m = team_payoff_matrix_with_team_model(
     team, opp, Single, SwitchingGame(1),
   )
-  assert_true(team_m.rows() == 20 && team_m.cols() == 20)
+  assert_true(team_m.rows() == 60 && team_m.cols() == 60)
   let lp = @nash.solve_zero_sum(team_m)
   match lp {
     Optimal(row_strategy~, value~, ..) => {
       assert_true(value.is_nan() == false)
       let arr = row_strategy.to_array()
-      assert_true(arr.length() == 20)
+      assert_true(arr.length() == 60)
       let mut total = 0.0
       for x in arr {
         total += x

@@ -32,12 +32,19 @@
 ///   "format": String,
 ///   "value":  Double,
 ///   "exploitability": Double,
-///   "selections": [
-///     {"indices": [Int], "names": [String], "probability": Double}, ...
-///   ],
-///   "opponent_selections": [...]
+///   "selections":      [[Int, Int, Int], ...],   // [lead, b1, b2]
+///   "selection_names": [[String, String, String], ...],
+///   "opp_selections":  [[Int, Int, Int], ...],
+///   "opp_selection_names": [[String, String, String], ...],
+///   "row_strategy":    [Double, ...],
+///   "col_strategy":    [Double, ...]
 /// }
 /// ```
+///
+/// Each selection is an ordered tuple `[lead, b1, b2]` where index 0 is the
+/// 先頭 (lead) Pokémon and the remaining slots are the bench (sorted
+/// ascending). For singles this enumerates `6 × C(5, 2) = 60` selections per
+/// side; for doubles the model is currently unsupported (Single only).
 
 ///|
 fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
@@ -723,9 +730,10 @@ pub fn compute_select_with_team_model(
 ///|
 /// Build a `SelectResult` from the payoff matrix by solving the zero-sum
 /// Nash equilibrium. When `retained_rows` / `retained_cols` are `Some`, the
-/// matrix rows / columns index into `combinations(|team|, k)` via the given
-/// index arrays (used by the screened pipeline). When both are `None`, the
-/// full Cartesian enumeration is used (plain `SwitchingGame` path).
+/// matrix rows / columns index into `combinations_with_lead(|team|, k)` via
+/// the given index arrays (used by the screened pipeline). When both are
+/// `None`, the full lead-first enumeration is used (plain `SwitchingGame`
+/// path).
 fn build_select_result(
   format : BattleFormat,
   team : Array[Combatant],
@@ -752,8 +760,8 @@ fn build_select_result(
       @nash.exploitability(matrix, row_strategy, col_strategy)
     _ => 0.0
   }
-  let all_team = combinations(team.length(), k)
-  let all_opp = combinations(opponent.length(), k)
+  let all_team = combinations_with_lead(team.length(), k)
+  let all_opp = combinations_with_lead(opponent.length(), k)
   let team_indices = match retained_rows {
     Some(idx) => idx
     None => {

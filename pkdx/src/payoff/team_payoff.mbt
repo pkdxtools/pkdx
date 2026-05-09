@@ -48,6 +48,55 @@ pub fn combinations(n : Int, k : Int) -> Array[Array[Int]] {
 }
 
 ///|
+/// Enumerate ordered k-tuples from `[0, n)` where the first element is the
+/// designated lead (先頭選出) and the remaining `k − 1` elements form a
+/// distinct subset of `[0, n) \ {lead}` in ascending order. Total count is
+/// `n × C(n − 1, k − 1)` (e.g. `n=6, k=3 → 60`).
+///
+/// Backups are kept order-free (sorted ascending) because every alive teammate
+/// is a symmetric `Switch(_)` target in the SwitchingGame / team rollout, so
+/// permuting backups produces game-theoretically identical actions.
+///
+/// Outer loop is `lead`, inner loop iterates the lex order of the
+/// `(k − 1)`-subsets of the remaining indices, so the enumeration is stable
+/// across runs and friendly to callers that index into it by `lead × strides
+/// + offset`.
+pub fn combinations_with_lead(n : Int, k : Int) -> Array[Array[Int]] {
+  let result : Array[Array[Int]] = []
+  if k <= 0 || k > n {
+    return result
+  }
+  for lead in 0..<n {
+    let rest_count = n - 1
+    let rest_k = k - 1
+    if rest_k == 0 {
+      result.push([lead])
+      continue
+    }
+    // Map a fictional index space [0, n-1) onto [0, n) skipping `lead`.
+    let map_back = Array::make(rest_count, 0)
+    let mut p = 0
+    for i in 0..<n {
+      if i == lead {
+        continue
+      }
+      map_back[p] = i
+      p = p + 1
+    }
+    let backups = combinations(rest_count, rest_k)
+    for sub in backups {
+      let snap = Array::make(k, 0)
+      snap[0] = lead
+      for j in 0..<rest_k {
+        snap[j + 1] = map_back[sub[j]]
+      }
+      result.push(snap)
+    }
+  }
+  result
+}
+
+///|
 /// Pick the combatants at `indices` from `team`, preserving order.
 fn pick_combatants(
   team : Array[Combatant],
@@ -86,8 +135,8 @@ pub fn team_payoff_matrix_switching(
       raise EmptyMoves(c.pokemon.name_ja)
     }
   }
-  let sel_a = combinations(na, k)
-  let sel_b = combinations(nb, k)
+  let sel_a = combinations_with_lead(na, k)
+  let sel_b = combinations_with_lead(nb, k)
   let size_a = sel_a.length()
   let size_b = sel_b.length()
   let data = Array::make(size_a, ([] : Array[Double]))

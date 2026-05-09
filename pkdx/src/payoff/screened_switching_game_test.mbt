@@ -63,12 +63,13 @@ test "team_payoff_matrix_screened_bit_exact_when_keep_top_one" {
 test "team_payoff_matrix_screened_retained_count_matches_ceil_of_quantile" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
-  // C(4, 3) = 4 selections on each side. keep_top = 0.5 → ceil(4 * 0.5) = 2.
+  // 4 × C(3, 2) = 12 lead-aware selections on each side. keep_top = 0.5 →
+  // ceil(12 * 0.5) = 6.
   let (_, rows, cols) = team_payoff_matrix_screened(
     team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
-  assert_eq(rows.length(), 2)
-  assert_eq(cols.length(), 2)
+  assert_eq(rows.length(), 6)
+  assert_eq(cols.length(), 6)
 }
 
 ///|
@@ -106,7 +107,7 @@ test "team_payoff_matrix_screened_keeps_nash_weighted_rows" {
   let (_, retained_rows, _) = team_payoff_matrix_screened(
     team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
-  assert_eq(retained_rows.length(), 2)
+  assert_eq(retained_rows.length(), 6)
 }
 
 ///|

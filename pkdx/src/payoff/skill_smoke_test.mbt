@@ -67,7 +67,7 @@ test "team_builder_phase7_invokes_select_smoke" {
       }
       match m.get("row_strategy") {
         Some(Array(arr)) => {
-          assert_true(arr.length() == 20)
+          assert_true(arr.length() == 60)
           let mut total = 0.0
           for x in arr {
             match x {

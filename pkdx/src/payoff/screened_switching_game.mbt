@@ -16,9 +16,9 @@
 ///|
 /// Run the 2-stage pipeline. Returns `(sub_matrix, retained_row_indices,
 /// retained_col_indices)` where the indices reference the original
-/// `combinations(|team|, k)` enumeration (ascending). Caller is responsible
-/// for using these indices to slice the selection labels / strategy vectors
-/// down to the retained subset.
+/// `combinations_with_lead(|team|, k)` enumeration (lead-first, backups
+/// ascending). Caller is responsible for using these indices to slice the
+/// selection labels / strategy vectors down to the retained subset.
 pub fn team_payoff_matrix_screened(
   team_a : Array[Combatant],
   team_b : Array[Combatant],
@@ -46,8 +46,8 @@ pub fn team_payoff_matrix_screened(
       raise EmptyMoves(c.pokemon.name_ja)
     }
   }
-  let sel_a = combinations(na, k)
-  let sel_b = combinations(nb, k)
+  let sel_a = combinations_with_lead(na, k)
+  let sel_b = combinations_with_lead(nb, k)
   let size_a = sel_a.length()
   let size_b = sel_b.length()
 
@@ -174,8 +174,9 @@ fn retain_top_indices(scores : Array[Double], quantile : Double) -> Array[Int] {
   } else {
     raw
   }
-  // Simple selection: pick top-`keep` by score via an O(n^2) pass — n ≤ 20
-  // in practice (C(6,3)), so this stays under a microsecond.
+  // Simple selection: pick top-`keep` by score via an O(n^2) pass — n ≤ 60
+  // in practice (6 × C(5,2) lead-aware enumeration), so this stays well under
+  // a millisecond.
   let picked = Array::make(n, false)
   for _ in 0..<keep {
     let mut best = -1

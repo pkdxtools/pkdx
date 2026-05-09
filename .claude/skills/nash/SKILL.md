@@ -212,7 +212,7 @@ JSON
   "format": "single",
   "value": 0.0,
   "exploitability": 0.0,
-  "selections": [[0,1,2], [0,1,3], ...],
+  "selections": [[0,1,2], [0,1,3], ..., [1,0,2], ...],
   "selection_names": [["P0","P1","P2"], ...],
   "opp_selections": [...],
   "opp_selection_names": [...],
@@ -221,9 +221,11 @@ JSON
 }
 ```
 
+各 selection は `[lead, b1, b2]` の **順序付きタプル**で、**位置 0 が先頭選出 (lead)**、後ろ 2 体は控え (昇順)。シングル 6v6 では `6 × C(5,2) = 60` 通り列挙されるので `row_strategy` / `col_strategy` も長さ 60。同じメンバー集合でも先頭が違えば別エントリ扱いになる点に注意 (例: `[0,1,2]` と `[1,0,2]` は別物)。
+
 ### 結果整形
 
-確率 > 1% の選出のみ表示:
+確率 > 1% の選出のみ表示。先頭の Pokémon は **太字**で強調する:
 
 ```markdown
 ## 選出分布 ({format})
@@ -232,9 +234,9 @@ JSON
 - **exploitability**: {exploitability:.6f}
 
 ### 採用すべき選出
-| 確率 | 選出メンバー |
+| 確率 | 先頭 → 控え |
 |---|---|
-| {p:.1%} | {names} |
+| {p:.1%} | **{names[0]}** → {names[1]}, {names[2]} |
 ...
 
 ### 相手の最適選出

@@ -13,16 +13,17 @@ pub const MC_TURN_LIMIT : Int = 5
 
 ///|
 /// `pkdx select` の auto-screening 閾値。`SwitchingGame(N)` のまま DP が
-/// 走ると 20×20 のマトリクス全セルで 4 ターン以上の先読みが必要になり、
-/// 状態異常実装以降は確率ファンアウト (まひ 12.5% / 命中率 / 状態付与 chance)
-/// により DP 分岐数が倍増するため、この turn_limit 以上で自動的に
-/// `ScreenedSwitchingGame` にフォールバックする。`screened_switching_game:...`
-/// を明示指定したときはこの閾値を無視してユーザー指定をそのまま使う。
+/// 走ると 60×60 のマトリクス (`combinations_with_lead(6, 3)` の lead-aware
+/// 列挙) 全セルで 4 ターン以上の先読みが必要になり、状態異常実装以降は
+/// 確率ファンアウト (まひ 12.5% / 命中率 / 状態付与 chance) により DP 分岐数が
+/// 倍増するため、この turn_limit 以上で自動的に `ScreenedSwitchingGame` に
+/// フォールバックする。`screened_switching_game:...` を明示指定したときは
+/// この閾値を無視してユーザー指定をそのまま使う。
 pub const AUTO_SCREEN_TURN_LIMIT : Int = 4
 
 ///|
 /// Auto-upgrade 時の既定 MC trials。`.claude/skills/nash/SKILL.md` の
-/// チューニングガイド (1000 trials × 400 セル) と揃える。
+/// チューニングガイド (1000 trials × 3600 セル = 60×60 lead-aware) と揃える。
 pub const AUTO_SCREEN_TRIALS : Int = 1000
 
 ///|
@@ -30,8 +31,11 @@ pub const AUTO_SCREEN_TRIALS : Int = 1000
 pub const AUTO_SCREEN_SEED : UInt64 = 42
 
 ///|
-/// Auto-upgrade 時の既定 keep_top_quantile。C(6,3)=20 selections で
-/// 6 retained ≒ Nash support を十分カバーする下限。
+/// Auto-upgrade 時の既定 keep_top_quantile。
+/// `combinations_with_lead(6, 3)` = 60 selections × 0.3 → 18 retained で
+/// Nash support を十分カバーする下限 (lead-aware 列挙では同じメンバー集合
+/// でも先頭違いがそれぞれエントリになるため、support サイズは旧 20-row
+/// 時代より大きめ)。
 pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 
 ///|

@@ -203,7 +203,7 @@ test "select_markdown_report_written_to_box_teams" {
   let md = render_select_markdown(r)
   assert_true(md.contains("# Selection Report"))
   assert_true(md.contains("- format: single"))
-  assert_true(md.contains("| probability | members |"))
+  assert_true(md.contains("| probability | lead | bench |"))
 }
 
 ///|

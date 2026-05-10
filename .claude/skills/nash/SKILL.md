@@ -24,7 +24,7 @@ PKDX=$REPO_ROOT/bin/pkdx
 | exploitability | 現在の戦略 σ に対する最良応答で得られる追加利得。零和で 0 なら σ は Nash 均衡 |
 | support | 確率 > 0 の純戦略 index 集合 |
 | TeamPayoffModel | 利得の作り方 (`switching_game` / `screened_switching_game:<trials>:<seed>:<keep_top>`)。turn_limit 既定は MC=5 / DP=5 (`switching_game:<N>` で個別上書き可) |
-| BattleFormat | `single` = 3 体選出 (20x20) のみ対応 (`double` は現状未サポート) |
+| BattleFormat | `single` = lead-aware 3 体選出 (60x60、`6 × C(5,2) = 60` 通りで先頭 (lead) を含む順序付きタプル) のみ対応 (`double` は現状未サポート) |
 
 詳細はまず `references/` を参照:
 - `references/theory.md` — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠

@@ -914,15 +914,17 @@ pub fn render_select_markdown(r : SelectResult) -> String {
   s = s + "- value: " + r.value.to_string() + "\n"
   s = s + "- exploitability: " + r.exploitability.to_string() + "\n\n"
   s = s + "## Row-player selection distribution\n\n"
-  s = s + "| probability | members |\n| --- | --- |\n"
+  s = s + "| probability | lead | bench |\n| --- | --- | --- |\n"
   for i in 0..<r.selections.length() {
     if r.row_strategy[i] > 1.0e-6 {
-      s = s + "| " + r.row_strategy[i].to_string() + " | "
-      for j in 0..<r.selection_names[i].length() {
-        if j > 0 {
+      let names = r.selection_names[i]
+      let lead = if names.length() > 0 { names[0] } else { "" }
+      s = s + "| " + r.row_strategy[i].to_string() + " | " + lead + " | "
+      for j in 1..<names.length() {
+        if j > 1 {
           s = s + ", "
         }
-        s = s + r.selection_names[i][j]
+        s = s + names[j]
       }
       s = s + " |\n"
     }

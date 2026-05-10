@@ -122,32 +122,30 @@ test "end_to_end_amaeru_worth_more_vs_physical_than_vs_special_opp" {
 }
 
 ///|
-/// Behavioral pin for the lead-aware enumeration: same 3-member roster with
-/// the lead permuted between T0 and T1 must produce different switching-game
-/// values. Without this, regressing `combinations_with_lead` to the old
-/// order-free `combinations` would still pass every other golden because
-/// row 0 and row k+ … happen to map onto the same SwitchingGame state when
-/// the lead does not affect dynamics.
-test "end_to_end_lead_aware_payoff_matrix_value_changes_with_lead" {
+/// Behavioral pin for the lead-aware enumeration: same backup set with the
+/// lead permuted between T0 and T1 must yield different switching-game DP
+/// values. Combined with the structural pins on `combinations_with_lead`
+/// in `team_payoff_test.mbt`, this guards against regressing the matrix
+/// builder back to order-free `combinations` — the matrix path eventually
+/// calls `switching_game_winrate(pick_combatants(team, sel), …)`, so a
+/// direct two-call comparison exercises the same DP that
+/// `team_payoff_matrix_switching` would invoke for rows `[0,1,2]` and
+/// `[1,0,2]`, without paying for the full 12×12 enumeration.
+test "end_to_end_lead_aware_switching_game_value_changes_with_lead" {
   let mv = mk_move("のしかかり", "ノーマル", @model.Physical, 85)
-  // T0 = fast / frail glass cannon, T1 = slow / bulky tank, T2/T3 average.
-  // Leading with T0 vs T1 changes who absorbs the opening hit and who deals
-  // damage on turn 1, so [0,1,2] and [1,0,2] cannot collapse to the same
-  // value in the SwitchingGame DP.
-  let team = [
-    mk_combatant(
-      mk_pokemon("T0", "ノーマル", "", 110, 70, 60, 70, 60, 200), [mv],
-    ),
-    mk_combatant(
-      mk_pokemon("T1", "ノーマル", "", 200, 160, 140, 70, 140, 50), [mv],
-    ),
-    mk_combatant(
-      mk_pokemon("T2", "ノーマル", "", 130, 100, 100, 80, 100, 100), [mv],
-    ),
-    mk_combatant(
-      mk_pokemon("T3", "ノーマル", "", 130, 100, 100, 80, 100, 100), [mv],
-    ),
-  ]
+  // T0 = fast / frail glass cannon, T1 = slow / bulky tank, T2 = average.
+  // switching_game_winrate uses active=0 on each side, so reordering the
+  // input array directly mirrors permuting the lead column emitted by
+  // combinations_with_lead.
+  let t0 = mk_combatant(
+    mk_pokemon("T0", "ノーマル", "", 110, 70, 60, 70, 60, 200), [mv],
+  )
+  let t1 = mk_combatant(
+    mk_pokemon("T1", "ノーマル", "", 200, 160, 140, 70, 140, 50), [mv],
+  )
+  let t2 = mk_combatant(
+    mk_pokemon("T2", "ノーマル", "", 130, 100, 100, 80, 100, 100), [mv],
+  )
   let opp = [
     mk_combatant(
       mk_pokemon("O0", "ノーマル", "", 140, 110, 100, 80, 100, 110), [mv],
@@ -158,28 +156,10 @@ test "end_to_end_lead_aware_payoff_matrix_value_changes_with_lead" {
     mk_combatant(
       mk_pokemon("O2", "ノーマル", "", 140, 110, 100, 80, 100, 110), [mv],
     ),
-    mk_combatant(
-      mk_pokemon("O3", "ノーマル", "", 140, 110, 100, 80, 100, 110), [mv],
-    ),
   ]
-  let m = team_payoff_matrix_with_team_model(
-    team, opp, Single, SwitchingGame(8),
-  )
-  // combinations_with_lead(4, 3) enumerates 12 selections in lead-major order:
-  //   row  0 = [0,1,2] (T0 leads)
-  //   row  3 = [1,0,2] (T1 leads, same backup set {0,2})
-  // Pinning a column-by-column inequality ensures the lead actually moves the
-  // value along the entire opponent enumeration, not just one cherry-picked
-  // matchup.
-  assert_true(m.rows() == 12 && m.cols() == 12)
-  let mut any_diff = false
-  for j in 0..<m.cols() {
-    if (m.at(0, j) - m.at(3, j)).abs() > 1.0e-9 {
-      any_diff = true
-      break
-    }
-  }
-  assert_true(any_diff)
+  let v_t0_lead = switching_game_winrate([t0, t1, t2], opp, 4)
+  let v_t1_lead = switching_game_winrate([t1, t0, t2], opp, 4)
+  assert_true((v_t0_lead - v_t1_lead).abs() > 1.0e-9)
 }
 
 ///|

@@ -54,7 +54,7 @@ pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 pub(all) enum TeamPayoffModel {
   SwitchingGame(Int)
   ScreenedSwitchingGame(Int, UInt64, Double, Int)
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///|
 /// A single-Pokemon combatant with moves and equipment. The underlying
@@ -93,16 +93,11 @@ pub(all) struct Combatant {
   stat_points : Array[Int]?
   actual_stats : Array[Int]?
   ivs : Array[Int]?
-} derive(Debug)
+} derive(Show)
 
 ///|
 pub suberror PayoffError {
   EmptyCombatants
   EmptyMoves(String)
   UnsupportedFormat(String)
-} derive(Debug)
-
-///|
-pub impl Show for PayoffError with to_string(self) {
-  @debug.to_string(self)
-}
+} derive(Show)

@@ -19,12 +19,7 @@ pub enum PokemonType {
   Dark
   Steel
   Fairy
-} derive(Debug, Eq)
-
-///|
-pub impl Show for PokemonType with to_string(self) {
-  @debug.to_string(self)
-}
+} derive(Show, Eq)
 
 ///|
 /// All 18 types in order.

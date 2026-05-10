@@ -48,15 +48,15 @@ test "matches_snap: LifeOrb H ≡ 0 (mod 10)" {
 
 ///|
 test "hp_snap_from_str: valid values" {
-  debug_inspect(hp_snap_from_str("none"), content="Some(NoSnap)")
-  debug_inspect(hp_snap_from_str("leftovers"), content="Some(Leftovers)")
-  debug_inspect(hp_snap_from_str("residual"), content="Some(Residual)")
-  debug_inspect(hp_snap_from_str("sitrus"), content="Some(Sitrus)")
-  debug_inspect(hp_snap_from_str("lifeorb"), content="Some(LifeOrb)")
+  inspect(hp_snap_from_str("none"), content="Some(NoSnap)")
+  inspect(hp_snap_from_str("leftovers"), content="Some(Leftovers)")
+  inspect(hp_snap_from_str("residual"), content="Some(Residual)")
+  inspect(hp_snap_from_str("sitrus"), content="Some(Sitrus)")
+  inspect(hp_snap_from_str("lifeorb"), content="Some(LifeOrb)")
 }
 
 ///|
 test "hp_snap_from_str: invalid" {
-  debug_inspect(hp_snap_from_str("unknown"), content="None")
-  debug_inspect(hp_snap_from_str(""), content="None")
+  inspect(hp_snap_from_str("unknown"), content="None")
+  inspect(hp_snap_from_str(""), content="None")
 }

@@ -21,12 +21,12 @@ test "StatusCondition equality: Sleep counter distinguishes variants" {
 
 ///|
 test "StatusKind round trip via from_jp" {
-  debug_inspect(status_kind_from_jp("まひ"), content="Some(ParalyzeKind)")
-  debug_inspect(status_kind_from_jp("やけど"), content="Some(BurnKind)")
-  debug_inspect(status_kind_from_jp("どく"), content="Some(PoisonKind)")
-  debug_inspect(status_kind_from_jp("もうどく"), content="Some(BadPoisonKind)")
-  debug_inspect(status_kind_from_jp("ねむり"), content="Some(SleepKind)")
-  debug_inspect(status_kind_from_jp("unknown"), content="None")
+  inspect(status_kind_from_jp("まひ"), content="Some(ParalyzeKind)")
+  inspect(status_kind_from_jp("やけど"), content="Some(BurnKind)")
+  inspect(status_kind_from_jp("どく"), content="Some(PoisonKind)")
+  inspect(status_kind_from_jp("もうどく"), content="Some(BadPoisonKind)")
+  inspect(status_kind_from_jp("ねむり"), content="Some(SleepKind)")
+  inspect(status_kind_from_jp("unknown"), content="None")
 }
 
 ///|
@@ -71,7 +71,7 @@ test "inflict_status: maps StatusKind to initial StatusCondition" {
 
 ///|
 test "status_kind_from_jp: あくび maps to DrowsyKind" {
-  debug_inspect(status_kind_from_jp("あくび"), content="Some(DrowsyKind)")
+  inspect(status_kind_from_jp("あくび"), content="Some(DrowsyKind)")
 }
 
 ///|

@@ -2,7 +2,8 @@ import {
   "pkdxtools/pkdx/src/model",
   "pkdxtools/pkdx/src/types",
   "pkdxtools/pkdx/src/db",
-  "moonbitlang/core/debug" @debug,
 }
 
-supported_targets = "native"
+options(
+  "supported-targets": "native",
+)

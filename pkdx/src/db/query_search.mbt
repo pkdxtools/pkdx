@@ -12,7 +12,7 @@ pub(all) struct SearchResult {
   spd : Int
   spe : Int
   bst : Int
-} derive(Debug)
+} derive(Show)
 
 ///|
 /// Search Pokemon by type with optional speed minimum.

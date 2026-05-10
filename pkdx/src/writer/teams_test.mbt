@@ -36,8 +36,8 @@ test "build_team_document: deterministic markdown output" {
   assert_true(md.contains("## 推奨技構成"))
   assert_true(md.contains("### ガブリアス"))
   assert_true(md.contains("| じしん |"))
-  assert_true(!md.contains("## 構築の強み"))
-  assert_true(!md.contains("## 構築の弱み・注意点"))
+  assert_true(not(md.contains("## 構築の強み")))
+  assert_true(not(md.contains("## 構築の弱み・注意点")))
 }
 
 ///|
@@ -150,7 +150,7 @@ test "build_team_document: memo with pipe is escaped" {
     let lines = md.split("\n")
     let mut count = 0
     for line in lines {
-      let line_str = line.to_owned()
+      let line_str = line.to_string()
       if line_str.contains("ガブリアス") && line_str.contains("HBD振り") {
         let chars = line_str.to_array()
         for i, c in chars {
@@ -202,7 +202,7 @@ test "build_team_document: memo with newlines collapsed to single row" {
     let lines = md.split("\n")
     let mut count = 0
     for line in lines {
-      let line_str = line.to_owned()
+      let line_str = line.to_string()
       if line_str.contains("| 1 | ガブリアス |") {
         count = count + 1
       }

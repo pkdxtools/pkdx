@@ -7,12 +7,7 @@ pub(all) enum HpSnap {
   Residual
   Sitrus
   LifeOrb
-} derive(Debug, Eq)
-
-///|
-pub impl Show for HpSnap with to_string(self) {
-  @debug.to_string(self)
-}
+} derive(Show, Eq)
 
 ///|
 /// Check whether an HP actual value satisfies a snap constraint.

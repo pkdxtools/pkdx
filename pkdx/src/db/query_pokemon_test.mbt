@@ -51,7 +51,7 @@ fn open_test_champions_db() -> Db? {
     None => return None
   }
   let champions_path = resolve_champions_db_path_from(pokedex_path)
-  if !file_exists(champions_path) {
+  if not(file_exists(champions_path)) {
     return None
   }
   match open_for(pokedex_path, "champions") {

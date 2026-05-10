@@ -179,7 +179,7 @@ pub enum MetaKind {
   Pokemon
   Team
   Unknown
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///|
 pub fn detect_meta_kind(input : Json) -> MetaKind {

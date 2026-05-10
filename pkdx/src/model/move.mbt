@@ -10,7 +10,7 @@ pub(all) struct StatEffect {
   stat : Int
   delta : Int
   target : Int
-} derive(Debug, Eq, Hash)
+} derive(Show, Eq, Hash)
 
 ///|
 /// A move (technique) usable by a Pokemon. Move metadata used by the payoff
@@ -62,4 +62,4 @@ pub(all) struct Move {
   recoil_den : Int
   self_ko : Bool
   recharge : Bool
-} derive(Debug, Eq)
+} derive(Show, Eq)

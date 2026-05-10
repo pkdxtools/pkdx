@@ -152,7 +152,7 @@ pub fn validate_team_json(json : Json) -> Result[Unit, Array[String]] {
   match json {
     Object(root) => {
       let legacy = detect_legacy_team(root)
-      if !legacy.is_empty() {
+      if not(legacy.is_empty()) {
         return Err(legacy)
       }
     }
@@ -185,7 +185,7 @@ pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
   match json {
     Object(root) => {
       let legacy = detect_legacy_pokemon(root)
-      if !legacy.is_empty() {
+      if not(legacy.is_empty()) {
         return Err(legacy)
       }
     }

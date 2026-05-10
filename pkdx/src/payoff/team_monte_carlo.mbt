@@ -348,7 +348,7 @@ fn mc_try_apply_status(
   if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
     return
   }
-  if !rand_bool(rng, chance.to_double() / 100.0) {
+  if not(rand_bool(rng, chance.to_double() / 100.0)) {
     return
   }
   defender_status_arr[defender_slot] = @model.inflict_status(kind)
@@ -536,7 +536,7 @@ pub fn team_rollout(
           _ => ()
         }
         // Step 3: resolve moves honouring paralysis speed halving and skips.
-        if !own_switches && !opp_switches {
+        if not(own_switches) && not(opp_switches) {
           let mi_own = match ao {
             TmUseMove(i) => i
             _ => -1
@@ -613,7 +613,7 @@ pub fn team_rollout(
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
-              !opp_blocked_mid_turn {
+              not(opp_blocked_mid_turn) {
               // Read burn *after* first leg's status fan-out so a fresh burn
               // from own's move halves opp's physical damage this turn.
               let opp_burn_now = is_burned(opp_status[opp_active])
@@ -669,7 +669,7 @@ pub fn team_rollout(
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
               own_attempt_acts &&
-              !own_blocked_mid_turn {
+              not(own_blocked_mid_turn) {
               let own_burn_now = is_burned(own_status[own_active])
               let before = opp_hps[opp_active]
               opp_hps[opp_active] = team_perform_attack(
@@ -692,7 +692,7 @@ pub fn team_rollout(
               }
             }
           }
-        } else if !own_switches {
+        } else if not(own_switches) {
           let mi_own = match ao {
             TmUseMove(i) => i
             _ => -1
@@ -720,7 +720,7 @@ pub fn team_rollout(
               return 1.0
             }
           }
-        } else if !opp_switches {
+        } else if not(opp_switches) {
           let mi_opp = match ap {
             TmUseMove(i) => i
             _ => -1

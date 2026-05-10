@@ -4,7 +4,7 @@ pub(all) struct CoverageResult {
   covered : Array[PokemonType]
   not_covered : Array[PokemonType]
   coverage_rate : Double
-} derive(Debug)
+} derive(Show)
 
 ///|
 /// Calculate offensive coverage for a set of attack types.

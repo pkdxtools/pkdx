@@ -23,4 +23,4 @@ pub(all) struct DamageOutcome {
   mean_damage : Int
   hits_count : Int
   hit_steps : Array[HitStep]
-} derive(Debug, Eq)
+} derive(Show, Eq)

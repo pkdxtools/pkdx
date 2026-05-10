@@ -152,7 +152,7 @@ fn sgvw_distinct_opp_hps(leaves : Array[(Double, SwitchingGameState)]) -> Int {
         break
       }
     }
-    if !found {
+    if not(found) {
       seen.push(hp)
     }
   }

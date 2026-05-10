@@ -68,7 +68,7 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
   let diff_active = { ..base, my_active: 1 }
   let diff_hp = { ..base, my_hps: [99, 100, 100] }
   let diff_turn = { ..base, turn: 1 }
-  @debug.assert_eq(base, same)
+  assert_eq(base, same)
   assert_true(base != diff_active)
   assert_true(base != diff_hp)
   assert_true(base != diff_turn)
@@ -76,7 +76,7 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
   cache[base] = 0.5
   match cache.get(same) {
-    Some(v) => @debug.assert_eq(v, 0.5)
+    Some(v) => assert_eq(v, 0.5)
     None => assert_true(false)
   }
   match cache.get(diff_active) {
@@ -111,7 +111,7 @@ test "terminal_value_all_my_fainted_returns_minus_one" {
     turn: 0,
   }
   match terminal_value(state, team_a, team_b, 5) {
-    Some(v) => @debug.assert_eq(v, -1.0)
+    Some(v) => assert_eq(v, -1.0)
     None => assert_true(false)
   }
 }
@@ -142,7 +142,7 @@ test "terminal_value_all_opp_fainted_returns_plus_one" {
     turn: 0,
   }
   match terminal_value(state, team_a, team_b, 5) {
-    Some(v) => @debug.assert_eq(v, 1.0)
+    Some(v) => assert_eq(v, 1.0)
     None => assert_true(false)
   }
 }
@@ -226,9 +226,9 @@ test "alive_actions_excludes_fainted_switch_targets" {
       Mega(_) => ()
     }
   }
-  @debug.assert_eq(move_count, 1)
-  @debug.assert_eq(switch_targets.length(), 1)
-  @debug.assert_eq(switch_targets[0], 2)
+  assert_eq(move_count, 1)
+  assert_eq(switch_targets.length(), 1)
+  assert_eq(switch_targets[0], 2)
 }
 
 ///|
@@ -283,7 +283,7 @@ test "value_returns_terminal_value_for_terminal_state" {
   let stats = new_stats()
   let dmg_cache = new_damage_cache()
   let v = value(state, team_a, team_b, 5, cache, stats, dmg_cache)
-  @debug.assert_eq(v, 0.0)
+  assert_eq(v, 0.0)
 }
 
 ///|
@@ -299,7 +299,7 @@ test "value_matches_nash_value_of_one_step_payoff_matrix" {
     [mk_move("weak", "ノーマル", @model.Physical, 1)],
   )
   let v = switching_game_winrate([strong], [weak], 1)
-  @debug.assert_eq(v, 1.0)
+  assert_eq(v, 1.0)
 }
 
 ///|
@@ -418,9 +418,9 @@ test "transition_attack_vs_attack_resolves_sequentially_by_speed" {
     turn: 0,
   }
   let next = transition(state, UseMove(0), UseMove(0), [fast], [slow])
-  @debug.assert_eq(next.opp_hps[0], 0)
-  @debug.assert_eq(next.my_hps[0], 100)
-  @debug.assert_eq(next.turn, 1)
+  assert_eq(next.opp_hps[0], 0)
+  assert_eq(next.my_hps[0], 100)
+  assert_eq(next.turn, 1)
 }
 
 ///|
@@ -464,11 +464,11 @@ test "transition_attack_vs_switch_damages_newly_switched_target" {
     turn: 0,
   }
   let next = transition(state, UseMove(0), Switch(1), my_team, opp_team)
-  @debug.assert_eq(next.opp_active, 1)
-  @debug.assert_eq(next.my_hps[0], 100)
+  assert_eq(next.opp_active, 1)
+  assert_eq(next.my_hps[0], 100)
   assert_true(next.opp_hps[1] < 100)
-  @debug.assert_eq(next.opp_hps[0], 100)
-  @debug.assert_eq(next.turn, 1)
+  assert_eq(next.opp_hps[0], 100)
+  assert_eq(next.turn, 1)
 }
 
 ///|
@@ -515,13 +515,13 @@ test "transition_switch_vs_switch_updates_actives_only_without_damage" {
     turn: 0,
   }
   let next = transition(state, Switch(1), Switch(1), my_team, opp_team)
-  @debug.assert_eq(next.my_active, 1)
-  @debug.assert_eq(next.opp_active, 1)
-  @debug.assert_eq(next.my_hps[0], 100)
-  @debug.assert_eq(next.my_hps[1], 100)
-  @debug.assert_eq(next.opp_hps[0], 100)
-  @debug.assert_eq(next.opp_hps[1], 100)
-  @debug.assert_eq(next.turn, 1)
+  assert_eq(next.my_active, 1)
+  assert_eq(next.opp_active, 1)
+  assert_eq(next.my_hps[0], 100)
+  assert_eq(next.my_hps[1], 100)
+  assert_eq(next.opp_hps[0], 100)
+  assert_eq(next.opp_hps[1], 100)
+  assert_eq(next.turn, 1)
 }
 
 ///|
@@ -547,7 +547,7 @@ test "alive_actions_includes_all_moves_and_alive_switches" {
   let hps = [100, 100, 100]
   let actions = alive_actions(0, hps, team, false)
   // 3 moves + 2 switches = 5 legal actions
-  @debug.assert_eq(actions.length(), 5)
+  assert_eq(actions.length(), 5)
   let mut moves = 0
   let mut switches = 0
   for a in actions {
@@ -557,8 +557,8 @@ test "alive_actions_includes_all_moves_and_alive_switches" {
       Mega(_) => ()
     }
   }
-  @debug.assert_eq(moves, 3)
-  @debug.assert_eq(switches, 2)
+  assert_eq(moves, 3)
+  assert_eq(switches, 2)
 }
 
 ///|
@@ -595,8 +595,8 @@ test "alive_actions: とっておき is barred when other moves not yet used" {
       _ => ()
     }
   }
-  @debug.assert_eq(last_resort_count, 0) // barred
-  @debug.assert_eq(nekodamashi_count, 1) // legal
+  assert_eq(last_resort_count, 0) // barred
+  assert_eq(nekodamashi_count, 1) // legal
 }
 
 ///|
@@ -629,7 +629,7 @@ test "alive_actions: とっておき becomes legal once other moves used" {
       _ => ()
     }
   }
-  @debug.assert_eq(last_resort_count, 1)
+  assert_eq(last_resort_count, 1)
 }
 
 ///|
@@ -648,7 +648,7 @@ test "alive_actions: lone とっておき is always legal" {
   let hps = [100, 100]
   let actions = alive_actions(0, hps, team, false)
   // 1 move (とっておき, 解禁状態) + 1 switch
-  @debug.assert_eq(actions.length(), 2)
+  assert_eq(actions.length(), 2)
 }
 
 ///|
@@ -682,11 +682,11 @@ test "state_ranks_distinguish_otherwise_identical_states" {
   cache[base] = 0.1
   cache[boosted] = 0.9
   match cache.get(base) {
-    Some(v) => @debug.assert_eq(v, 0.1)
+    Some(v) => assert_eq(v, 0.1)
     None => assert_true(false)
   }
   match cache.get(boosted) {
-    Some(v) => @debug.assert_eq(v, 0.9)
+    Some(v) => assert_eq(v, 0.9)
     None => assert_true(false)
   }
 }
@@ -728,8 +728,8 @@ test "transition_priority_move_outpaces_faster_opponent" {
     state, UseMove(0), UseMove(0), [slow_prio], [fast_normal],
   )
   // Priority KO skips the opponent's attack.
-  @debug.assert_eq(next.opp_hps[0], 0)
-  @debug.assert_eq(next.my_hps[0], 100)
+  assert_eq(next.opp_hps[0], 0)
+  assert_eq(next.my_hps[0], 100)
 }
 
 ///|
@@ -764,7 +764,7 @@ test "transition_sword_dance_raises_attacker_rank_by_two" {
     turn: 0,
   }
   let next = transition(state, UseMove(0), UseMove(0), [me], [opp])
-  @debug.assert_eq(next.my_ranks[0], 2)
+  assert_eq(next.my_ranks[0], 2)
 }
 
 ///|
@@ -799,10 +799,10 @@ test "transition_rank_clamps_to_plus_two_after_two_sword_dances" {
     turn: 0,
   }
   state = transition(state, UseMove(0), UseMove(0), [me], [opp])
-  @debug.assert_eq(state.my_ranks[0], 2)
+  assert_eq(state.my_ranks[0], 2)
   state = transition(state, UseMove(0), UseMove(0), [me], [opp])
   // Clamped to +2, not accumulating to +4.
-  @debug.assert_eq(state.my_ranks[0], 2)
+  assert_eq(state.my_ranks[0], 2)
 }
 
 ///|
@@ -851,8 +851,8 @@ test "transition_switch_resets_active_ranks_to_zero" {
   let next = transition(state, Switch(1), Switch(1), my_team, opp_team)
   // Both sides' ranks reset to the zero vector.
   for i in 0..<5 {
-    @debug.assert_eq(next.my_ranks[i], 0)
-    @debug.assert_eq(next.opp_ranks[i], 0)
+    assert_eq(next.my_ranks[i], 0)
+    assert_eq(next.opp_ranks[i], 0)
   }
 }
 
@@ -994,9 +994,9 @@ test "damage_cache_hits_increment_on_repeated_identical_transitions" {
   let ranks = [0, 0, 0, 0, 0]
   let d1 = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
   let d2 = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
-  @debug.assert_eq(d1, d2)
-  @debug.assert_eq(cache.misses, 1)
-  @debug.assert_eq(cache.hits, 1)
+  assert_eq(d1, d2)
+  assert_eq(cache.misses, 1)
+  assert_eq(cache.hits, 1)
 }
 
 ///|
@@ -1019,8 +1019,8 @@ test "damage_cache_distinguishes_sides_for_symmetric_teams" {
     cache, false, 0, ranks, 0, ranks, 0, [a], [b],
   )
   // Both entries are fresh misses, not collisions.
-  @debug.assert_eq(cache.misses, 2)
-  @debug.assert_eq(cache.hits, 0)
+  assert_eq(cache.misses, 2)
+  assert_eq(cache.hits, 0)
   // Damage values differ because the attackers differ (A has ATK=150,
   // B has ATK=80).
   assert_true(d_mine > d_opp)
@@ -1091,10 +1091,10 @@ test "state_is_hashable_with_mega_fields" {
   cache[diff_my_used] = 0.2
   cache[diff_opp_used] = 0.3
   cache[diff_my_flag] = 0.4
-  @debug.assert_eq(cache.get(base), Some(0.1))
-  @debug.assert_eq(cache.get(diff_my_used), Some(0.2))
-  @debug.assert_eq(cache.get(diff_opp_used), Some(0.3))
-  @debug.assert_eq(cache.get(diff_my_flag), Some(0.4))
+  assert_eq(cache.get(base), Some(0.1))
+  assert_eq(cache.get(diff_my_used), Some(0.2))
+  assert_eq(cache.get(diff_opp_used), Some(0.3))
+  assert_eq(cache.get(diff_my_flag), Some(0.4))
 }
 
 ///|
@@ -1123,9 +1123,9 @@ test "alive_actions_includes_mega_when_available" {
       Switch(_) => switches += 1
     }
   }
-  @debug.assert_eq(moves, 2)
-  @debug.assert_eq(megas, 2)
-  @debug.assert_eq(switches, 0)
+  assert_eq(moves, 2)
+  assert_eq(megas, 2)
+  assert_eq(switches, 0)
 }
 
 ///|
@@ -1146,7 +1146,7 @@ test "alive_actions_excludes_mega_when_already_used" {
       _ => ()
     }
   }
-  @debug.assert_eq(megas, 0)
+  assert_eq(megas, 0)
 }
 
 ///|
@@ -1168,7 +1168,7 @@ test "alive_actions_excludes_mega_when_no_mega_form" {
       _ => ()
     }
   }
-  @debug.assert_eq(megas, 0)
+  assert_eq(megas, 0)
 }
 
 ///|
@@ -1185,11 +1185,11 @@ test "transition_mega_sets_mega_used_and_megaed_flags" {
   )
   let state = mk_mega_state_1v1(my_hp=100, opp_hp=500)
   let next = transition(state, Mega(0), UseMove(0), [me], [opp])
-  @debug.assert_eq(next.my_mega_used, true)
-  @debug.assert_eq(next.my_megaed[0], true)
+  assert_eq(next.my_mega_used, true)
+  assert_eq(next.my_megaed[0], true)
   // Opp side unchanged.
-  @debug.assert_eq(next.opp_mega_used, false)
-  @debug.assert_eq(next.opp_megaed[0], false)
+  assert_eq(next.opp_mega_used, false)
+  assert_eq(next.opp_megaed[0], false)
 }
 
 ///|
@@ -1290,11 +1290,11 @@ test "transition_mega_vs_switch_damages_newly_switched_target" {
     turn: 0,
   }
   let next = transition(state, Mega(0), Switch(1), [me], opp_team)
-  @debug.assert_eq(next.opp_active, 1)
+  assert_eq(next.opp_active, 1)
   // Outgoing opp slot untouched, incoming slot took the mega-boosted hit.
-  @debug.assert_eq(next.opp_hps[0], 500)
+  assert_eq(next.opp_hps[0], 500)
   assert_true(next.opp_hps[1] < 500)
-  @debug.assert_eq(next.my_mega_used, true)
+  assert_eq(next.my_mega_used, true)
 }
 
 ///|
@@ -1313,10 +1313,10 @@ test "transition_simultaneous_mega_both_sides_flips_both" {
   )
   let state = mk_mega_state_1v1(my_hp=500, opp_hp=500)
   let next = transition(state, Mega(0), Mega(0), [me], [opp])
-  @debug.assert_eq(next.my_mega_used, true)
-  @debug.assert_eq(next.opp_mega_used, true)
-  @debug.assert_eq(next.my_megaed[0], true)
-  @debug.assert_eq(next.opp_megaed[0], true)
+  assert_eq(next.my_mega_used, true)
+  assert_eq(next.opp_mega_used, true)
+  assert_eq(next.my_megaed[0], true)
+  assert_eq(next.opp_megaed[0], true)
 }
 
 ///|
@@ -1360,20 +1360,20 @@ test "mega_persists_after_switch_out_and_back_in" {
   }
   // Turn 1: mega slot 0.
   let after_mega = transition(state, Mega(0), UseMove(0), [me_0, me_1], [opp])
-  @debug.assert_eq(after_mega.my_megaed[0], true)
+  assert_eq(after_mega.my_megaed[0], true)
   // Turn 2: switch to slot 1.
   let after_switch_out = transition(
     after_mega, Switch(1), UseMove(0), [me_0, me_1], [opp],
   )
-  @debug.assert_eq(after_switch_out.my_active, 1)
+  assert_eq(after_switch_out.my_active, 1)
   // Slot 0's mega flag must still be set.
-  @debug.assert_eq(after_switch_out.my_megaed[0], true)
+  assert_eq(after_switch_out.my_megaed[0], true)
   // Turn 3: switch back to slot 0.
   let after_switch_back = transition(
     after_switch_out, Switch(0), UseMove(0), [me_0, me_1], [opp],
   )
-  @debug.assert_eq(after_switch_back.my_active, 0)
-  @debug.assert_eq(after_switch_back.my_megaed[0], true)
+  assert_eq(after_switch_back.my_active, 0)
+  assert_eq(after_switch_back.my_megaed[0], true)
 }
 
 ///|
@@ -1401,7 +1401,7 @@ test "alive_actions_no_mega_for_second_pokemon_after_first_mega" {
       _ => ()
     }
   }
-  @debug.assert_eq(megas, 0)
+  assert_eq(megas, 0)
 }
 
 ///|
@@ -1445,16 +1445,16 @@ test "damage_cache_distinguishes_mega_vs_base" {
     cache, true, 0, ranks, 0, ranks, 0, [a], [b],
     atk_mega=true, def_mega=false,
   )
-  @debug.assert_eq(cache.misses, 2)
-  @debug.assert_eq(cache.hits, 0)
+  assert_eq(cache.misses, 2)
+  assert_eq(cache.hits, 0)
   assert_true(d_mega > d_base)
   // Hit on repeated lookup confirms the cache reuses the new mega key.
   let d_mega_again = mean_damage_cached(
     cache, true, 0, ranks, 0, ranks, 0, [a], [b],
     atk_mega=true, def_mega=false,
   )
-  @debug.assert_eq(d_mega_again, d_mega)
-  @debug.assert_eq(cache.hits, 1)
+  assert_eq(d_mega_again, d_mega)
+  assert_eq(cache.hits, 1)
 }
 
 ///|
@@ -1723,8 +1723,8 @@ test "switching_game_turn_limit_3_produces_finite_value_on_multi_pokemon_team" {
   )
   let v = switching_game_winrate([a0, a1], [b0, b1], 2)
   assert_true(v >= -1.0 && v <= 1.0)
-  assert_true(!v.is_nan())
-  assert_true(!v.is_inf())
+  assert_true(not(v.is_nan()))
+  assert_true(not(v.is_inf()))
 }
 
 ///|
@@ -1755,7 +1755,7 @@ test "state_space_2v2_default_turn_limit_bounded" {
   )
   println("2v2 tl=\{@payoff.DP_TURN_LIMIT}: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}, dmg_misses=\{dmg.misses}")
   assert_true(v >= -1.0 && v <= 1.0)
-  assert_true(!v.is_nan())
+  assert_true(not(v.is_nan()))
   assert_true(stats.cached_states > 0)
   assert_true(stats.cached_states < 500000)
   assert_true(dmg.misses < 200)
@@ -1784,7 +1784,7 @@ test "state_space_3v3_turn_limit_5_bounded" {
   let (v, stats, _) = switching_game_winrate_stats(team_a, team_b, 5)
   println("3v3 tl=5: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}")
   assert_true(v >= -1.0 && v <= 1.0)
-  assert_true(!v.is_nan())
+  assert_true(not(v.is_nan()))
   assert_true(stats.cached_states > 0)
   assert_true(stats.cached_states < 500000)
 }
@@ -1835,8 +1835,8 @@ test "Amaeru lowers opp Atk -2 this turn, slower physical damage reduced" {
   let damage_without = 200 - ns_filler.my_hps[0]
   assert_true(damage_without > 0)
   assert_true(damage_with_amaeru < damage_without)
-  @debug.assert_eq(ns_amaeru.opp_ranks[0], -2)
-  @debug.assert_eq(ns_filler.opp_ranks[0], 0)
+  assert_eq(ns_amaeru.opp_ranks[0], -2)
+  assert_eq(ns_filler.opp_ranks[0], 0)
 }
 
 ///|
@@ -1920,9 +1920,9 @@ test "self_ko zeroes attacker HP even when hitting Ghost (dmg=0)" {
   }
   let ns = transition(state, UseMove(0), UseMove(0), [attacker], [ghost])
   // Ghost ist immune to the Normal-type self-destruct, so defender HP untouched.
-  @debug.assert_eq(ns.opp_hps[0], 200)
+  assert_eq(ns.opp_hps[0], 200)
   // Attacker fainted from self_ko regardless of the 0-damage hit.
-  @debug.assert_eq(ns.my_hps[0], 0)
+  assert_eq(ns.my_hps[0], 0)
 }
 
 ///|
@@ -1963,24 +1963,24 @@ test "recharge move forces attacker skip on the turn after the hit lands" {
   let outs1 = attempt_turn_with_cache(
     s0, UseMove(0), UseMove(0), [me], [opp], new_damage_cache(),
   )
-  @debug.assert_eq(outs1.length(), 1)
+  assert_eq(outs1.length(), 1)
   let (_, s1) = outs1[0]
   // Hyper Beam landed on turn 1.
   assert_true(s1.opp_hps[0] < 300)
   // Post-hit helper set the recharge flag; the turn-end clear only consumes
   // flags that were true at turn start, so the freshly-set flag persists
   // into turn 2.
-  @debug.assert_eq(s1.my_must_recharge[0], true)
+  assert_eq(s1.my_must_recharge[0], true)
   let hp_before_turn2 = s1.opp_hps[0]
   let outs2 = attempt_turn_with_cache(
     s1, UseMove(0), UseMove(0), [me], [opp], new_damage_cache(),
   )
-  @debug.assert_eq(outs2.length(), 1)
+  assert_eq(outs2.length(), 1)
   let (_, s2) = outs2[0]
   // Turn 2: recharge blocks UseMove, observable as no new damage to opp.
-  @debug.assert_eq(s2.opp_hps[0], hp_before_turn2)
+  assert_eq(s2.opp_hps[0], hp_before_turn2)
   // Flag consumed at end of turn 2 (it was set at turn 2 start).
-  @debug.assert_eq(s2.my_must_recharge[0], false)
+  assert_eq(s2.my_must_recharge[0], false)
   // Turn 3 (not exercised here) would allow a fresh Hyper Beam again.
 }
 
@@ -2023,12 +2023,12 @@ test "must_recharge forces attacker UseMove to skip and clears after one turn" {
     state, UseMove(0), UseMove(0), [me], [opp], new_damage_cache(),
   )
   // Deterministic: no accuracy/status fan-out from either side.
-  @debug.assert_eq(outs.length(), 1)
+  assert_eq(outs.length(), 1)
   let (p, next) = outs[0]
   assert_true((p - 1.0).abs() < 1.0e-9)
   // Attacker skipped → opp HP unchanged.
-  @debug.assert_eq(next.opp_hps[0], 200)
+  assert_eq(next.opp_hps[0], 200)
   // Recharge consumed at end of turn.
-  @debug.assert_eq(next.my_must_recharge[0], false)
-  @debug.assert_eq(next.opp_must_recharge[0], false)
+  assert_eq(next.my_must_recharge[0], false)
+  assert_eq(next.opp_must_recharge[0], false)
 }

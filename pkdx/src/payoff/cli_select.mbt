@@ -553,7 +553,7 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
   }
   match s.strip_prefix("switching_game:") {
     Some(rest) => {
-      let turn_limit = try @string.parse_int(rest.to_owned()) catch {
+      let turn_limit = try @strconv.parse_int(rest.to_string()) catch {
         _ =>
           raise InvalidJson(
             "switching_game turn_limit must be a positive integer",
@@ -569,7 +569,7 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
     None => ()
   }
   match s.strip_prefix("screened_switching_game:") {
-    Some(rest) => parse_screened_spec(rest.to_owned())
+    Some(rest) => parse_screened_spec(rest.to_string())
     None =>
       raise InvalidJson(
         "team_payoff_model must be 'switching_game' or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
@@ -583,34 +583,34 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
 /// `DP_TURN_LIMIT` is used. Enforces `trials > 0` and `0 < keep_top <= 1`.
 fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
   let (trials_str, after_trials) = match rest.split_once(":") {
-    Some((a, b)) => (a.to_owned(), b.to_owned())
+    Some((a, b)) => (a.to_string(), b.to_string())
     None =>
       raise InvalidJson(
         "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
   let (seed_str, keep_top_and_maybe_tl) = match after_trials.view().split_once(":") {
-    Some((a, b)) => (a.to_owned(), b.to_owned())
+    Some((a, b)) => (a.to_string(), b.to_string())
     None =>
       raise InvalidJson(
         "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
   let (keep_top_str, opt_tl_str) = match keep_top_and_maybe_tl.view().split_once(":") {
-    Some((a, b)) => (a.to_owned(), Some(b.to_owned()))
+    Some((a, b)) => (a.to_string(), Some(b.to_string()))
     None => (keep_top_and_maybe_tl, None)
   }
-  let trials = try @string.parse_int(trials_str) catch {
+  let trials = try @strconv.parse_int(trials_str) catch {
     _ =>
       raise InvalidJson("screened_switching_game trials must be a positive integer")
   }
   if trials <= 0 {
     raise InvalidJson("screened_switching_game trials must be a positive integer")
   }
-  let seed = try @string.parse_uint64(seed_str) catch {
+  let seed = try @strconv.parse_uint64(seed_str) catch {
     _ => raise InvalidJson("screened_switching_game seed must be a UInt64 literal")
   }
-  let keep_top = try @string.parse_double(keep_top_str) catch {
+  let keep_top = try @strconv.parse_double(keep_top_str) catch {
     _ =>
       raise InvalidJson(
         "screened_switching_game keep_top_quantile must be a number in (0, 1]",
@@ -623,7 +623,7 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
   }
   let refine_tl = match opt_tl_str {
     Some(s) => {
-      let tl = try @string.parse_int(s) catch {
+      let tl = try @strconv.parse_int(s) catch {
         _ =>
           raise InvalidJson(
             "screened_switching_game turn_limit must be a positive integer",

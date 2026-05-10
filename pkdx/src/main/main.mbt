@@ -337,12 +337,12 @@ fn cmd_context() -> @admiral.CommandDef {
 struct BoxRegulation {
   version : String
   regulation : String
-} derive(Debug)
+} derive(Show)
 
 ///|
 fn read_box_regulation_or_default() -> BoxRegulation {
   let path = box_regulation_path()
-  if !@db.file_exists(path) {
+  if not(@db.file_exists(path)) {
     return { version: "champions", regulation: "M-A" }
   }
   let raw = match @db.read_file(path) {
@@ -403,7 +403,7 @@ fn read_repo_pkdx_version() -> String {
     Some(p) => p
     None => "pkdx/moon.mod.json"
   }
-  if !@db.file_exists(path) {
+  if not(@db.file_exists(path)) {
     return ""
   }
   let raw = match @db.read_file(path) {
@@ -431,7 +431,7 @@ fn count_champions_assets() -> (Int, Int) {
     Err(_) => return (0, 0)
   }
   let champions_path = resolve_champions_db_path_from(pokedex_path)
-  if !@db.file_exists(champions_path) {
+  if not(@db.file_exists(champions_path)) {
     return (0, 0)
   }
   let db = match @db.open_for(pokedex_path, "champions") {
@@ -1011,7 +1011,7 @@ fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Uni
     // Preserve the original content once (.bak 上書き防止) so the migration
     // is reversible for the user; subsequent runs become no-ops.
     let bak_path = in_path + ".bak"
-    if !@db.file_exists(bak_path) {
+    if not(@db.file_exists(bak_path)) {
       let rc_bak = pkdx_write_file(
         @db.to_c_bytes(bak_path),
         @db.to_c_bytes(raw),
@@ -1076,7 +1076,7 @@ fn run_migrate(repo_root : String) -> Unit {
   // Ensure champions.db exists — the runner refuses to open a missing
   // file. Bootstrap it lazily so first-time installs and existing
   // installs that pre-date the platform refactor both succeed.
-  if !@db.file_exists(champions_path) {
+  if not(@db.file_exists(champions_path)) {
     match @db.open_champions_rwc(champions_path) {
       Err(e) => {
         exit_error("failed to create champions.db at " + champions_path + ": " + e)
@@ -1647,7 +1647,7 @@ fn[T] with_db(f : (@db.Db) -> T, version~ : String = "") -> T {
   // 経路では呼び出さない (pokedex 側のテーブルは pokedex.* でアクセス可能)。
   let db = if version == "champions" {
     let champions_path = resolve_champions_db_path_from(db_path)
-    if !@db.file_exists(champions_path) {
+    if not(@db.file_exists(champions_path)) {
       println(
         "Error: champions.db not found at " +
         champions_path +
@@ -1806,7 +1806,7 @@ fn run_learners(
         // version=champions の DB はレギュレーション準拠サブセットそのもの
         // なので追加 filter 不要。他 version は --regulation を弾いている。
         let limited = if limit > 0 && results.length() > limit {
-          results[:limit].to_owned()
+          results[:limit].to_array()
         } else {
           results
         }
@@ -1948,7 +1948,7 @@ fn run_damage(
   // `--attach-team` もバイパス — attach 処理は DamageCalcInput / Result が
   // 必要で、cached JSON からは復元できないため、毎回 fresh に計算する。
   let use_cache = match format {
-    @cli.Json => !no_cache && attach_team.length() == 0
+    @cli.Json => not(no_cache) && attach_team.length() == 0
     _ => false
   }
   let cache_key_opt : String? = if use_cache {
@@ -2389,7 +2389,7 @@ fn run_write_teams(
       None => false
     }
   }
-  if !skip_md {
+  if not(skip_md) {
     let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
     if rc != 0 {
       exit_error("Failed to write " + md_path)
@@ -2848,14 +2848,14 @@ fn parse_double(s : String, default : Double) -> Double {
         result = result * 10.0 + d
       }
       has_digit = true
-    } else if c == 0x2E && !in_frac {
+    } else if c == 0x2E && not(in_frac) {
       in_frac = true
     } else {
       break
     }
     i = i + 1
   }
-  if !has_digit {
+  if not(has_digit) {
     return default
   }
   if negative {

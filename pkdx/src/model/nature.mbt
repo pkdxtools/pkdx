@@ -6,12 +6,7 @@ pub(all) enum StatIndex {
   SpA
   SpD
   Spe
-} derive(Debug, Eq)
-
-///|
-pub impl Show for StatIndex with to_string(self) {
-  @debug.to_string(self)
-}
+} derive(Show, Eq)
 
 ///|
 pub(all) struct Nature {
@@ -19,7 +14,7 @@ pub(all) struct Nature {
   name_en : String
   up : StatIndex?
   down : StatIndex?
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///|
 pub fn all_natures() -> Array[Nature] {

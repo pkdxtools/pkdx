@@ -27,13 +27,18 @@ cd $REPO_ROOT && git remote -v
 
 **A. フォーク運用** — `origin` がユーザーのフォーク、`upstream` が本家
 - `upstream` が存在する → そのまま続行
-- `origin` が `pkdxtools/pkdx`（旧 `ushironoko/pkdx` 含む）でない + `upstream` がない → `setup.sh` を実行して自動設定:
+- `origin` が canonical `pkdxtools/pkdx` でない + `upstream` がない → `setup.sh` を実行して自動設定:
   ```bash
   cd $REPO_ROOT && ./setup.sh
   ```
   （`setup.sh` が upstream remote を自動追加する）
 
-**B. clone運用** — `origin` が `pkdxtools/pkdx`（旧 `ushironoko/pkdx` からのリダイレクト含む）で、`upstream` が存在しない
+  **注意**: 旧 `ushironoko/pkdx` は GitHub redirect ではなく独立した fork として
+  残っているため、`pkdxtools/pkdx` より遅れていることがある。`origin` が
+  `ushironoko/pkdx` の場合も **フォーク運用** として扱い、必ず `upstream` を
+  `pkdxtools/pkdx` に向けて追加する（version bump を取りこぼさないため）。
+
+**B. clone運用** — `origin` が canonical `pkdxtools/pkdx` 本体で、`upstream` が存在しない
 - `origin` から直接 pull する（`upstream` の代わりに `origin` を使う）
 - 以降のフェーズで `upstream` と記載された箇所を `origin` に読み替える
 
@@ -43,6 +48,16 @@ cd $REPO_ROOT && git remote -v
 UPDATE_REMOTE="upstream"
 # clone運用
 UPDATE_REMOTE="origin"
+```
+
+判定ロジックの参考スニペット (`origin` URL → 運用モデル):
+```bash
+ORIGIN_URL="$(git -C $REPO_ROOT remote get-url origin 2>/dev/null || true)"
+if echo "$ORIGIN_URL" | grep -qE "[:/]pkdxtools/pkdx(\.git)?/?$"; then
+  MODE="clone"   # canonical upstream を直接 clone している
+else
+  MODE="fork"    # ユーザーの fork、または ushironoko/pkdx (= legacy fork)
+fi
 ```
 
 clone運用の場合、以下のメッセージを表示:
@@ -96,9 +111,17 @@ cd $REPO_ROOT && git fetch $UPDATE_REMOTE
 
 ### 1-F: Web環境フォールバック（フォーク運用 + fetch失敗時）
 
-**条件**: `$UPDATE_REMOTE` が `upstream` （フォーク運用）かつ `git fetch upstream` が失敗（exit code ≠ 0）
+**条件**（いずれか満たせば発火）:
 
-この状況は Claude Code on the web 環境で発生する。web環境では git proxy がセッション対象リポジトリ（origin）のみにアクセスを制限するため、upstream への fetch がブロックされる。
+1. `$UPDATE_REMOTE` が `upstream` （フォーク運用）かつ `git fetch upstream` が失敗（exit code ≠ 0）
+2. フォーク運用判定だが `upstream` remote 自体が存在せず、`./setup.sh` を流しても
+   web 環境では `git remote add upstream` 直後の fetch が proxy にブロックされる
+3. Clone 判定として `git fetch origin` を試したが、`origin` 側がすでに最新まで
+   進んでいるはずなのに Phase 1-5 で `version_drift=true` が残る場合（origin
+   が canonical `pkdxtools/pkdx` でなく legacy fork に向いている疑いがあるため、
+   Sync fork 経由で取り込むほうが確実）
+
+この状況は主に Claude Code on the web 環境で発生する。web環境では git proxy がセッション対象リポジトリ（origin）のみにアクセスを制限するため、upstream への fetch がブロックされる。
 
 **手順**:
 
@@ -221,7 +244,53 @@ $REPO_ROOT/bin/pkdx version
 $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
 ```
 
-`"version_drift":false` が出ればバイナリと repo の version が一致している。`true` の場合（例: GitHub Releases にまだ最新版が反映されていない、`./setup.sh` の DL が失敗した）は再度 1-4 を流すか、ユーザーに状況を報告して指示を仰ぐ。SessionStart hook が同じ判定を毎回エージェントに注入するので、放置すると以後のセッションで毎回 drift 通知が出る。
+`"version_drift":false` が出ればバイナリと repo の version が一致している。
+
+`true` の場合は、バイナリ側だけが新しい version を持ち、repo の `moon.mod.json` が
+古い状態で取り残されている。これを放置すると SessionStart hook が毎セッション
+`version_drift_message` を注入し続けるため、以下の **drift 復旧フロー** を順に試す。
+
+#### 1-5-R: drift 復旧フロー
+
+1. **upstream 不在ならまず追加** — `setup.sh` が再分類して `upstream` を追加
+   する。すでに追加済みでも冪等:
+   ```bash
+   cd $REPO_ROOT && ./setup.sh
+   ```
+   ※ `setup.sh` の Step 0 が `origin` を判定し、canonical `pkdxtools/pkdx` 以外なら
+   `upstream` を `pkdxtools/pkdx` に向けて自動追加する（legacy `ushironoko/pkdx`
+   origin もここで救済される）。
+
+2. **未取り込みコミットを fetch + merge** — `moon.mod.json` の version bump
+   コミットが upstream/origin に存在するのに HEAD に取り込まれていないケース:
+   ```bash
+   # $UPDATE_REMOTE は Phase 0-1 で設定済み (fork=upstream, clone=origin)
+   cd $REPO_ROOT && git fetch $UPDATE_REMOTE
+   cd $REPO_ROOT && git log --oneline HEAD..$UPDATE_REMOTE/$UPSTREAM_BRANCH -- moon.mod.json | head -5
+   cd $REPO_ROOT && git merge $UPDATE_REMOTE/$UPSTREAM_BRANCH --no-edit
+   ```
+   コンフリクトが出たら **Phase 1-3** の手順に従って解決する。
+   `git fetch` が失敗する web 環境では **Phase 1-F** に戻り、GitHub Web UI の
+   Sync fork → `git pull origin $UPSTREAM_BRANCH` の経路で取り込む。
+
+3. **再度 drift を確認** — 取り込みに成功したら再判定:
+   ```bash
+   $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
+   ```
+   `false` になれば復旧完了。
+
+4. **まだ `true` のとき** — 以下の可能性をユーザーに報告し、状況に応じた
+   選択肢を提示する:
+   - GitHub Releases にまだ最新版が反映されていない（upstream `moon.mod.json` の
+     値より古いバイナリしか配布されていない）→ 数分待って `./setup.sh` を再実行
+   - `./setup.sh` の DL が失敗した（CDN/network 不調）→ `./setup.sh` を再実行
+   - ローカルにビルド済みバイナリがあり、それが古い → `moon build --target native --release src/main`
+     でリビルド、または `_build/native/{release,debug}/build/src/main/main.exe` を削除して
+     `./setup.sh` を再実行（リリースバイナリへフォールバックされる）
+
+SessionStart hook が同じ判定を毎回エージェントに注入するので、復旧できないまま
+スキルを終了するときは、Phase 3 の完了レポートで `version_drift: true (要対処)`
+と明示し、上記のどのケースに該当しそうかを併記する。
 
 ## Phase 2: Stash復元
 

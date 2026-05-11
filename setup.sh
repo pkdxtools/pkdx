@@ -48,11 +48,13 @@ if git -C "$REPO_ROOT" remote get-url upstream &>/dev/null; then
   fi
 fi
 
-if echo "$ORIGIN_URL" | grep -qE "($UPSTREAM_REPO|$LEGACY_REPO)"; then
-  # origin is the upstream repo itself (clone setup)
+if echo "$ORIGIN_URL" | grep -qE "[:/]$UPSTREAM_REPO(\.git)?/?$"; then
+  # origin is the canonical upstream repo itself (clone setup)
   echo "  Clone setup detected. No additional remote needed."
 else
-  # origin is a fork
+  # origin is a fork (including legacy ushironoko/pkdx, which is a real fork that
+  # lags behind pkdxtools/pkdx — not a GitHub redirect). Add upstream so future
+  # `git fetch upstream` can pull the latest release/version bump.
   if git -C "$REPO_ROOT" remote get-url upstream &>/dev/null; then
     echo "  upstream remote already configured."
   else

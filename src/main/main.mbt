@@ -2978,34 +2978,72 @@ fn format_progress_stderr(event : @payoff.ProgressEvent) -> String {
 }
 
 ///|
+/// Escape a string for safe embedding inside a JSON string literal. Today the
+/// progress event string fields (phase name / classification) are controlled
+/// constants, but the helper exists so callers do not need to think about it
+/// when new string fields show up — see `format_progress_json`.
+fn json_escape_string(s : String) -> String {
+  let mut out = ""
+  for ch in s {
+    let code = ch.to_int()
+    if ch == '"' {
+      out = out + "\\\""
+    } else if ch == '\\' {
+      out = out + "\\\\"
+    } else if ch == '\n' {
+      out = out + "\\n"
+    } else if ch == '\r' {
+      out = out + "\\r"
+    } else if ch == '\t' {
+      out = out + "\\t"
+    } else if ch == '\u{08}' {
+      out = out + "\\b"
+    } else if ch == '\u{0C}' {
+      out = out + "\\f"
+    } else if code < 0x20 {
+      let hex = "0123456789abcdef"
+      let hi = (code >> 4) & 0xF
+      let lo = code & 0xF
+      out = out + "\\u00" + hex[hi:hi + 1].to_string() + hex[lo:lo + 1].to_string()
+    } else {
+      out = out + ch.to_string()
+    }
+  }
+  out
+}
+
+///|
 /// Render a `ProgressEvent` as a single JSON object (one line per event,
-/// suitable for JSON Lines / `jq -c` consumers).
+/// suitable for JSON Lines / `jq -c` consumers). The `cell_start` payload
+/// uses `team_indices` / `opp_indices` for the row/column selection arrays —
+/// this is the documented public schema for consumers (e.g. the grid
+/// visualiser script and downstream agents).
 fn format_progress_json(event : @payoff.ProgressEvent) -> String {
   match event {
     PhaseStart(name, total) =>
       "{\"event\":\"phase_start\",\"phase\":\"" +
-      name +
+      json_escape_string(name) +
       "\",\"total\":" +
       total.to_string() +
       "}"
     PhaseProgress(name, current, total) =>
       "{\"event\":\"phase_progress\",\"phase\":\"" +
-      name +
+      json_escape_string(name) +
       "\",\"current\":" +
       current.to_string() +
       ",\"total\":" +
       total.to_string() +
       "}"
     PhaseEnd(name) =>
-      "{\"event\":\"phase_end\",\"phase\":\"" + name + "\"}"
+      "{\"event\":\"phase_end\",\"phase\":\"" + json_escape_string(name) + "\"}"
     CellStart(team_sel, opp_sel, row, col) =>
       "{\"event\":\"cell_start\",\"row\":" +
       row.to_string() +
       ",\"col\":" +
       col.to_string() +
-      ",\"team\":" +
+      ",\"team_indices\":" +
       format_int_array(team_sel) +
-      ",\"opp\":" +
+      ",\"opp_indices\":" +
       format_int_array(opp_sel) +
       "}"
     DpNode(visited, hits, depth, rows, cols, outcomes, classification) =>
@@ -3022,7 +3060,7 @@ fn format_progress_json(event : @payoff.ProgressEvent) -> String {
       ",\"outcomes\":" +
       outcomes.to_string() +
       ",\"classification\":\"" +
-      classification +
+      json_escape_string(classification) +
       "\"}"
   }
 }

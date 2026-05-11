@@ -1181,12 +1181,17 @@ pub fn new_stats() -> ValueStats {
 
 ///|
 /// Build a `ValueStats` that emits `DpNode` events through `progress` every
-/// `log_every` cache misses. `log_every <= 0` disables emission (equivalent
-/// to `new_stats()`).
+/// `log_every` cache misses. `log_every <= 0` disables emission and returns a
+/// value identical to `new_stats()` (the supplied `progress` closure is
+/// discarded in favour of `noop_progress`), so disabled-progress callers stay
+/// observationally equivalent to the legacy `new_stats()` path.
 pub fn new_stats_with_progress(
   progress : (ProgressEvent) -> Unit,
   log_every : Int,
 ) -> ValueStats {
+  if log_every <= 0 {
+    return new_stats()
+  }
   {
     hits: 0,
     misses: 0,

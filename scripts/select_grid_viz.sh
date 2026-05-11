@@ -8,8 +8,11 @@
 #   the cell at (row, col) on each `cell_start` event, and tags it as done
 #   when the next cell_start arrives or the phase ends. Phases are colour-
 #   coded so screening fill (cyan) and dp-refine fill (magenta) remain
-#   distinguishable. The current in-progress cell is rendered as ▢ in yellow,
-#   completed cells as ■.
+#   distinguishable. The current in-progress cell is rendered as `o` in
+#   yellow, completed cells as `#`. ASCII glyphs are used deliberately:
+#   East Asian / CJK locales render box-drawing characters (▢ / ■ / ·) as
+#   width 2, which breaks the column alignment of the 60×60 grid because
+#   the cursor-move (`paint`) is column-indexed under width-1 assumption.
 # - **Non-TTY mode** (stdout is a pipe / file / Claude Code Bash output):
 #   prints one line per phase boundary plus a final "phase done (N cells)"
 #   summary, so log-style consumers (CI, agents) get useful output without
@@ -46,7 +49,7 @@ if [ "$MODE" = tty ]; then
     printf "\033[2J\033[H"
     printf "Phase: (waiting)\n\n"
     for (r = 0; r < ROWS; r++) {
-      for (c = 0; c < COLS; c++) printf "\033[2m·\033[0m"
+      for (c = 0; c < COLS; c++) printf "\033[2m.\033[0m"
       printf "\n"
     }
     fflush()
@@ -62,17 +65,20 @@ if [ "$MODE" = tty ]; then
   }
 
   # Coloured "done" mark for cells that completed under each phase.
-  # ▢ (in-progress) is replaced by ■ (filled), colour-coded per phase so the
+  # `o` (in-progress) is replaced by `#` (filled), colour-coded per phase so
   # screening fill (cyan) and dp-refine fill (magenta) remain distinguishable.
+  # Glyphs are ASCII (width 1 on every terminal/locale) so the cursor-move
+  # `paint(r, c)` lands on the right visual column in CJK / East Asian width
+  # environments too.
   function done_mark() {
-    if (current_phase == "screening")      return "\033[36m■\033[0m"
-    if (current_phase == "dp-refine")      return "\033[1;35m■\033[0m"
-    if (current_phase == "dp-full")        return "\033[1;32m■\033[0m"
+    if (current_phase == "screening")      return "\033[36m#\033[0m"
+    if (current_phase == "dp-refine")      return "\033[1;35m#\033[0m"
+    if (current_phase == "dp-full")        return "\033[1;32m#\033[0m"
     return "\033[37m?\033[0m"
   }
 
   function in_progress_mark() {
-    return "\033[1;33m▢\033[0m"
+    return "\033[1;33mo\033[0m"
   }
 
   function paint(r, c, mark) {

@@ -14,7 +14,10 @@ allowed-tools: Bash, Read, AskUserQuestion
 SKILL_DIR=（このSKILL.mdが置かれたディレクトリ）
 REPO_ROOT=$SKILL_DIR/../../../..
 PKDX=$REPO_ROOT/bin/pkdx
+VIZ=$REPO_ROOT/scripts/select_grid_viz.sh   # pkdx select の進捗可視化
 ```
+
+`$VIZ` は `pkdx select --progress=json` の stderr (JSON Lines) を受け取り、stdout が TTY なら 60×60 グリッドを live 描画、TTY 以外 (Claude Code の Bash ツール / CI / リダイレクト) では phase 境界 + dp ノードサマリの数行ログに自動切替する。`pkdx select` を呼ぶときは原則として `2> >($VIZ)` を付ける。
 
 ## 用語
 
@@ -188,7 +191,12 @@ ls box/teams/*.meta.json
 # 技の priority / stat_effects は `pkdx moves` の出力にそのまま乗ってくる
 # ので、stdin JSON にはそのままコピペすれば DB 由来の情報が伝わる。
 # 省略した場合はデフォルト (priority=0 / stat_effects=[]) で扱われる。
-cat <<'JSON' | $PKDX select
+#
+# 進捗フィードバック: 必ず --progress=json と 2> >($VIZ) をセットで付ける。
+# - ユーザー TTY 上: 60×60 グリッドが live 描画される
+# - 非 TTY (agent / CI): "[viz] phase ... done (cells=N | dp samples=...)" の数行
+# 結果 JSON は stdout (> result.json でファイル保存) に出るので select の挙動は不変。
+cat <<'JSON' | $PKDX select --progress=json 2> >($VIZ) > /tmp/select_result.json
 {
   "team": [
     {"name":"P0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":100,
@@ -202,7 +210,10 @@ cat <<'JSON' | $PKDX select
   "team_payoff_model": "switching_game:<N>"
 }
 JSON
+cat /tmp/select_result.json   # ← 結果整形フェーズで使う
 ```
+
+**進捗フィードバックを止めたい場合**: `--progress=off` (既定値) を明示するか、`2> >($VIZ)` を外す。長い `--progress-every` を渡せば dp ノードサンプル頻度を間引ける (例: `--progress-every=5000`)。
 
 `<N>` は直前の AskUserQuestion で得た値を埋める (おまかせ=5 / じっくり読む=10 / サクッと=3、Other 入力時はその正整数)。`screened_switching_game` を選んだ場合は `"screened_switching_game:1000:42:0.3:<N>"` のように 4 番目のフィールドとして同じ値を付ける。
 

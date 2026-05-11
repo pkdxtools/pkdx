@@ -37,7 +37,8 @@
   { "name": "ハードプラント", "priority": 0, "stat_effects": [], "recharge": true },
 
   { "name": "しんそく", "priority": 2, "stat_effects": [] },
-  { "name": "ファーストブラッド", "priority": 2, "stat_effects": [] },
+  { "name": "であいがしら", "priority": 2, "stat_effects": [] },
+  { "name": "フェイント", "priority": 2, "stat_effects": [] },
   { "name": "バレットパンチ", "priority": 1, "stat_effects": [] },
   { "name": "こおりのつぶて", "priority": 1, "stat_effects": [] },
   { "name": "アクアジェット", "priority": 1, "stat_effects": [] },
@@ -61,6 +62,5 @@
   { "name": "からをやぶる", "priority": 0, "stat_effects": [[0, 2, 0], [2, 2, 0], [4, 2, 0], [1, -1, 0], [3, -1, 0]] },
   { "name": "ロックカット", "priority": 0, "stat_effects": [[4, 2, 0]] },
   { "name": "こうそくいどう", "priority": 0, "stat_effects": [[4, 2, 0]] },
-  { "name": "アジリティ", "priority": 0, "stat_effects": [[4, 2, 0]] },
   { "name": "ビルドアップ", "priority": 0, "stat_effects": [[0, 1, 0], [1, 1, 0]] }
 ]

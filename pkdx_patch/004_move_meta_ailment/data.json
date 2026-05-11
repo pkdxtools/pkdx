@@ -2,6 +2,7 @@
   { "name": "おにび", "ailment_ja": "やけど", "ailment_chance": 85 },
   { "name": "でんじは", "ailment_ja": "まひ", "ailment_chance": 90 },
   { "name": "へびにらみ", "ailment_ja": "まひ", "ailment_chance": 100 },
+  { "name": "しびれごな", "ailment_ja": "まひ", "ailment_chance": 75 },
   { "name": "どくどく", "ailment_ja": "もうどく", "ailment_chance": 90 },
   { "name": "どくのこな", "ailment_ja": "どく", "ailment_chance": 75 },
   { "name": "どくガス", "ailment_ja": "どく", "ailment_chance": 90 },

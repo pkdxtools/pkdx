@@ -11,6 +11,13 @@ pub fn run_002(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
+  // data.json から削除されたエントリも DB から消すため、毎回 truncate する。
+  // 後続の m004/m005 は SELECT で既存判定するので、ここでクリアしても
+  // 整合性は保たれる (data.json の状態へ収束する)。
+  match @db.exec(db, "DELETE FROM move_meta") {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
   let path = repo_root + "/pkdx_patch/002_move_meta/data.json"
   let raw = match @db.read_file(path) {
     Some(s) => s

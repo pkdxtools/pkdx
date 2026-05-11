@@ -96,7 +96,7 @@ else
 fi
 
 # --- Step 2.7: Link-flag / BLAS guidance for local moon build / moon test ---
-# pkdx/src/nash/moon.pkg と pkdx/src/payoff/moon.pkg は `cc-link-flags` の
+# src/payoff/moon.pkg と推移依存先の vendored moon.pkg は `cc-link-flags` の
 # 既定値として macOS 向け `-framework Accelerate` を埋め込んでいる。
 # `src/main` はこれらを推移的に依存するため、Linux/Windows で
 # `moon build --target native src/main` を実行する場合もリンク失敗を避ける
@@ -181,15 +181,15 @@ esac
 # --- Step 3: pkdx binary ---
 echo "[3/5] Downloading pkdx binary ($BINARY_NAME)..."
 
-LOCAL_BUILD="$REPO_ROOT/pkdx/_build/native/release/build/src/main/main.exe"
-LOCAL_BUILD_DEBUG="$REPO_ROOT/pkdx/_build/native/debug/build/src/main/main.exe"
+LOCAL_BUILD="$REPO_ROOT/_build/native/release/build/src/main/main.exe"
+LOCAL_BUILD_DEBUG="$REPO_ROOT/_build/native/debug/build/src/main/main.exe"
 
 # Detect stale local build: if any source file is newer than the binary, it's outdated
 is_build_stale() {
   local bin="$1"
   [ ! -f "$bin" ] && return 1
   local newest_src
-  newest_src=$(find "$REPO_ROOT/pkdx/src" -name '*.mbt' -newer "$bin" -print -quit 2>/dev/null)
+  newest_src=$(find "$REPO_ROOT/src" -name '*.mbt' -newer "$bin" -print -quit 2>/dev/null)
   [ -n "$newest_src" ]
 }
 
@@ -235,7 +235,7 @@ if [ "$NEED_DOWNLOAD" = true ]; then
       echo "  Downloaded to $BINARY"
     else
       echo "  Warning: No release found. You can build locally instead:"
-      echo "    cd pkdx && moon build --target native"
+      echo "    moon build --target native"
       echo "  (requires MoonBit toolchain: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash)"
     fi
   }

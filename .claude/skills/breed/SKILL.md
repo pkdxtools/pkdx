@@ -42,7 +42,7 @@ CACHE_FILE="$REPO_ROOT/box/cache/breed_cache_<pokemon_name>_$(date +%s).json"
 
 ### キャッシュの初期化
 
-スキーマ定義は `pkdx/src/writer/schema.mbt` の `pokemon_schema()` がSSoT。初期JSONは以下のコマンドで生成する:
+スキーマ定義は `src/writer/schema.mbt` の `pokemon_schema()` がSSoT。初期JSONは以下のコマンドで生成する:
 
 ```bash
 bin/pkdx init-cache pokemon > "$CACHE_FILE"

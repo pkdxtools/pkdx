@@ -43,7 +43,7 @@ NOT_FOUND の場合は以下を案内してスキルを終了:
 ```
 pkdx CLI が見つかりません。リポジトリルートで以下を実行:
   ./setup.sh
-  cd pkdx && moon build --target native src/main
+  moon build --target native src/main
 ```
 
 ## Phase 1: タスク選択 (AskUserQuestion)

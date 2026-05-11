@@ -62,44 +62,43 @@ setup.sh実行前ではすべてのツールが利用不可。
 ## Architecture
 
 ```
-pkdx/                     # MoonBit CLI ツール (native binary)
-  moon.mod.json            # モジュール定義 (deps: moonbitlang/x, mizchi/markdown) — バージョンの SSoT
-  src/
-    main/                  # エントリポイント + SQLite C-FFI + File I/O FFI
-      main.mbt, cwrap.c, sqlite3.c, io_ffi.mbt
-      version.mbt           # 自動生成 (scripts/sync_version.sh → moon.mod.json から同期)
-    db/                    # DB接続 + クエリ関数
-    damage/                # Gen9ダメージ計算エンジン (4096丸め, 16段階乱数)
-    types/                 # 18x18タイプ相性テーブル (ハードコード)
-    model/                 # Pokemon, Move, DamageCalcInput/Result 型
-    cli/                   # サブコマンドパーサー + JSON/テーブルフォーマッタ
-    writer/                # JSON→マークダウンCST変換 (mizchi/markdown使用)
-      validate.mbt          # JSONスキーマ検証
-      teams.mbt             # TeamReport JSON→CST
-      pokemon.mbt           # PokemonBuild JSON→CST
-    payoff/                # pkdx ドメイン変換 + nash CLI ハンドラ — Layer 2 + 3
-      semantics.mbt         # TeamPayoffModel enum (SwitchingGame / ScreenedSwitchingGame)
-      from_character.mbt    # monocycle (p, v) モデル (pkdx nash solve 用)
-      damage_utils.mbt      # damage 共通ヘルパー (avg_damage / build_input_with_ranks)
-      monte_carlo.mbt       # seeded RNG + ε-greedy helpers (team_monte_carlo から利用)
-      team_monte_carlo.mbt  # team-level 3v3 MC rollout
-      switching_game.mbt    # team-level extensive-form DP (+ αβ pruning)
-      screened_switching_game.mbt  # MC screening → SwitchingGame refine パイプライン
-      team_payoff.mbt       # 選出 (k-combination) ディスパッチ
-      cli_nash.mbt, cli_select.mbt, cli_meta.mbt  # JSON/DOT ハンドラ
-    migrate/               # pkdx_patch マイグレーションランナー (2-stage, bookkeeping なし)
-      runner.mbt            # トランザクション + 順次適用 (pokedex.db / champions.db 別々)
-      migrations.mbt        # 登録配列 (migrations_pokedex / migrations_champions / 互換用 migrations)
-      json_util.mbt         # Json アクセサ
-      m001-m007             # pokedex.db ターゲット (mega_legendsza → move_meta → mega_forms → ailment → posthit → form_name_aliases → gender_symbol_aliases)
-      m008-m012             # champions.db ターゲット (init_schema → pokemon → moves → learnset → items)
-    champions_schema/      # champions.db のスキーマ宣言 (DDL / 型 / parse / serialize)
-      ddl.mbt, types.mbt, validate.mbt, serialize.mbt
-    champout_adapter/      # champout (= projectpokemon/champout submodule) → 中間 JSON アダプター
-      label_index.mbt       # rom-txt/jpn の OriginalText 解決 (typename / tokusei / monsname / wazaname / itemname / zkn_form)
-      resolve.mbt           # ID → 名前変換 (type の Index 9 欠番対応含む)
-      pokemon_mapper.mbt    # personal.json → PokemonEntry (fo='0' は base 形態として form='' に正規化)
-      move_mapper.mbt, learnset_mapper.mbt, item_mapper.mbt
+moon.mod.json              # MoonBit モジュール定義 (deps: moonbitlang/x, mizchi/markdown) — バージョンの SSoT
+src/                       # MoonBit CLI ツール (native binary) のソースツリー
+  main/                    # エントリポイント + SQLite C-FFI + File I/O FFI
+    main.mbt, cwrap.c, sqlite3.c, io_ffi.mbt
+    version.mbt             # 自動生成 (scripts/sync_version.sh → moon.mod.json から同期)
+  db/                      # DB接続 + クエリ関数
+  damage/                  # Gen9ダメージ計算エンジン (4096丸め, 16段階乱数)
+  types/                   # 18x18タイプ相性テーブル (ハードコード)
+  model/                   # Pokemon, Move, DamageCalcInput/Result 型
+  cli/                     # サブコマンドパーサー + JSON/テーブルフォーマッタ
+  writer/                  # JSON→マークダウンCST変換 (mizchi/markdown使用)
+    validate.mbt            # JSONスキーマ検証
+    teams.mbt               # TeamReport JSON→CST
+    pokemon.mbt             # PokemonBuild JSON→CST
+  payoff/                  # pkdx ドメイン変換 + nash CLI ハンドラ — Layer 2 + 3
+    semantics.mbt           # TeamPayoffModel enum (SwitchingGame / ScreenedSwitchingGame)
+    from_character.mbt      # monocycle (p, v) モデル (pkdx nash solve 用)
+    damage_utils.mbt        # damage 共通ヘルパー (avg_damage / build_input_with_ranks)
+    monte_carlo.mbt         # seeded RNG + ε-greedy helpers (team_monte_carlo から利用)
+    team_monte_carlo.mbt    # team-level 3v3 MC rollout
+    switching_game.mbt      # team-level extensive-form DP (+ αβ pruning)
+    screened_switching_game.mbt  # MC screening → SwitchingGame refine パイプライン
+    team_payoff.mbt         # 選出 (k-combination) ディスパッチ
+    cli_nash.mbt, cli_select.mbt, cli_meta.mbt  # JSON/DOT ハンドラ
+  migrate/                 # pkdx_patch マイグレーションランナー (2-stage, bookkeeping なし)
+    runner.mbt              # トランザクション + 順次適用 (pokedex.db / champions.db 別々)
+    migrations.mbt          # 登録配列 (migrations_pokedex / migrations_champions / 互換用 migrations)
+    json_util.mbt           # Json アクセサ
+    m001-m007               # pokedex.db ターゲット (mega_legendsza → move_meta → mega_forms → ailment → posthit → form_name_aliases → gender_symbol_aliases)
+    m008-m012               # champions.db ターゲット (init_schema → pokemon → moves → learnset → items)
+  champions_schema/        # champions.db のスキーマ宣言 (DDL / 型 / parse / serialize)
+    ddl.mbt, types.mbt, validate.mbt, serialize.mbt
+  champout_adapter/        # champout (= projectpokemon/champout submodule) → 中間 JSON アダプター
+    label_index.mbt         # rom-txt/jpn の OriginalText 解決 (typename / tokusei / monsname / wazaname / itemname / zkn_form)
+    resolve.mbt             # ID → 名前変換 (type の Index 9 欠番対応含む)
+    pokemon_mapper.mbt      # personal.json → PokemonEntry (fo='0' は base 形態として form='' に正規化)
+    move_mapper.mbt, learnset_mapper.mbt, item_mapper.mbt
 
 bin/
   pkdx                    # Unix用ラッパースクリプト (ローカルビルド優先)
@@ -175,7 +174,7 @@ site/
 
 ### マイグレーション
 
-- `pkdx_patch/NNN_name/data.json` に中間 JSON、ロジックは `pkdx/src/migrate/mNNN_*.mbt`
+- `pkdx_patch/NNN_name/data.json` に中間 JSON、ロジックは `src/migrate/mNNN_*.mbt`
 - ランナーは **2-stage**: `migrations_pokedex()` が pokedex.db に、`migrations_champions()` が champions.db に対して順次適用する。`pkdx migrate` は両方を一度に流す
 - `setup.sh` Step 3.5 が `pkdx db init` で `pkdx_patch/{009..012}/data.json` を champout から再生成 → `champions.db` を rm → `pkdx migrate --repo-root` の順で実行する。毎回 fresh から再構築されるので、pokedex.db / champions.db にユーザーランタイムの書き込みは存在しない（damage cache は別ファイル `box/cache/damage_cache.sqlite`）。pokedex.db は upstream submodule 管理 — 完全に作り直したい場合は `rm pokedex/pokedex.db && ./setup.sh`
 - bookkeeping は廃止済み。各 migration は冪等（DELETE → 再投入 / INSERT OR REPLACE / existence-check / ALTER TABLE は ensure_column）として実装されており、何度流しても data.json の状態へ収束する
@@ -200,14 +199,14 @@ bin/pkdx migrate --repo-root .
 
 ## Version Management
 
-バージョンは `pkdx/moon.mod.json` の `version` フィールドが SSoT。変更時:
+バージョンは `moon.mod.json` の `version` フィールドが SSoT。変更時:
 
 ```bash
 # 1. moon.mod.json の version を編集
 # 2. 同期スクリプトを実行
 scripts/sync_version.sh
 # 3. ローカルバイナリをリビルド (必須)
-cd pkdx && moon build --target native --release src/main
+moon build --target native --release src/main
 # 4. moon.mod.json と version.mbt をコミット
 ```
 
@@ -223,7 +222,7 @@ Step 3 を飛ばすと、ローカルセッションの `pkdx context --json` (S
 
 - ローカル pkdx バイナリと repo の version が乖離している事実
 - メッセージに含まれる再ビルド手順 (通常は `./setup.sh` 再実行 or
-  `cd pkdx && moon build --target native --release src/main`)
+  `moon build --target native --release src/main`)
 
 drift があるとダメージ計算や migration 等の挙動と SSoT が一致しない可能性がある
 ため、放置せず最初に通知する。
@@ -238,13 +237,13 @@ SessionStart hook (`.claude/settings.json`) から呼ばれる 1-line JSON。
 | `version` | string | 現在の `box/regulation.json` の `version` (例: `"champions"`)。未設定時 `"champions"` |
 | `regulation` | string | 現在の `box/regulation.json` の `regulation` (例: `"M-A"`)。未設定時 `"M-A"` |
 | `pkdx_version` | string | バイナリ build 時に焼き込まれた `version.mbt` の値 |
-| `repo_pkdx_version` | string | `pkdx/moon.mod.json` の `version` を実行時に読んだ値。読めない場合は `""` |
+| `repo_pkdx_version` | string | `moon.mod.json` の `version` を実行時に読んだ値。読めない場合は `""` |
 | `version_drift` | bool | `repo_pkdx_version != ""` かつ `repo_pkdx_version != pkdx_version` のとき `true`。`""` 比較は意図的に false 側 (silent) |
 | `version_drift_message` | string | `version_drift=true` のときのみ再ビルド指示文。それ以外は `""` |
 | `items_count` | int | champions.db 内の item 行数。読めない場合 `0` |
 | `champions_pokemon_count` | int | champions.db 内の pokemon 行数。読めない場合 `0` |
 
-`PKDX_REPO_MOON_MOD` 環境変数で `pkdx/moon.mod.json` のパスを上書き可 (テスト用)。
+`PKDX_REPO_MOON_MOD` 環境変数で `moon.mod.json` のパスを上書き可 (テスト用)。
 
 ## Reference documents
 

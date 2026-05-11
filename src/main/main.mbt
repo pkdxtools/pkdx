@@ -293,7 +293,7 @@ fn cmd_context() -> @admiral.CommandDef {
       // with version=champions so the attached schema is in scope.
       let (items_count, mons_count) = count_champions_assets()
       // バイナリにビルド時点で焼き込まれた `pkdx_version` と、リポジトリ側の
-      // SSoT である `pkdx/moon.mod.json` の version を比較する。drift がある
+      // SSoT である `moon.mod.json` の version を比較する。drift がある
       // = ユーザーが `git pull` 後 `setup.sh` を再実行していない or 古い
       // バイナリがキャッシュに残っている、のどちらか。SessionStart hook で
       // この JSON を読んだ agent がユーザーに再ビルドを促す。
@@ -393,7 +393,7 @@ fn box_regulation_path() -> String {
 }
 
 ///|
-/// Read the `version` field from the repository's `pkdx/moon.mod.json`
+/// Read the `version` field from the repository's `moon.mod.json`
 /// (the SSoT for pkdx CLI version). Returns `""` on any failure —
 /// `pkdx context` is on the SessionStart hot path and must never raise
 /// or block when the file is missing (e.g. invoked outside the repo
@@ -401,7 +401,7 @@ fn box_regulation_path() -> String {
 fn read_repo_pkdx_version() -> String {
   let path = match @sys.get_env_var("PKDX_REPO_MOON_MOD") {
     Some(p) => p
-    None => "pkdx/moon.mod.json"
+    None => "moon.mod.json"
   }
   if not(@db.file_exists(path)) {
     return ""
@@ -1836,7 +1836,7 @@ const DAMAGE_CACHE_ENV_VAR : String = "PKDX_DAMAGE_CACHE"
 ///      (`./pokedex/pokedex.db`, `../pokedex/pokedex.db`) and return
 ///      `<root>/box/cache/damage_cache.sqlite` for the first match. This keeps
 ///      `pkdx damage` / `pkdx select` pointing at the same cache whether they
-///      are run from the repo root or from `pkdx/` during development.
+///      are run from the repo root or from a sibling subdirectory.
 ///   3. Fallback: CWD-relative `box/cache/damage_cache.sqlite`, matching the
 ///      historical behavior when the repo root cannot be located.
 fn resolve_damage_cache_path() -> String {

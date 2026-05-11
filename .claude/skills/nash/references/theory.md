@@ -9,14 +9,14 @@
 >
 > Nash ソルバー本体 (`solve_zero_sum` / `simplex` / `fictitious_play` /
 > `mwu`) は mooncakes パッケージ `ushironoko/nash-mbt` として独立配布
-> されており、pkdx は `pkdx/moon.mod.json` の deps からバージョンを指定して
+> されており、pkdx は `moon.mod.json` の deps からバージョンを指定して
 > 参照する (現在の pin は `moon.mod.json` を確認)。
 
 ## pkdx 固有の使い方
 
 pkdx ドメインで Nash ソルバーを呼ぶ際の流れは以下:
 
-1. `pkdx/src/payoff/` (Layer 2) が `FiniteMatrix` を構築
+1. `src/payoff/` (Layer 2) が `FiniteMatrix` を構築
 2. `@nash.solve_zero_sum(matrix)` を呼ぶ
 3. 戻り値の `LpResult::Optimal(value, row_strategy, col_strategy)` を
    `pkdx nash solve` / `pkdx select` の JSON 出力に整形

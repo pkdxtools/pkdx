@@ -1,11 +1,11 @@
 #!/bin/sh
 set -eu
-VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' pkdx/moon.mod.json)
+VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' moon.mod.json)
 if [ -z "$VERSION" ]; then
-  echo "Error: failed to read version from pkdx/moon.mod.json" >&2
+  echo "Error: failed to read version from moon.mod.json" >&2
   exit 1
 fi
-TARGET="pkdx/src/main/version.mbt"
+TARGET="src/main/version.mbt"
 echo "///|" > "$TARGET"
 echo "let pkdx_version : String = \"$VERSION\"" >> "$TARGET"
 echo "synced version: $VERSION"
@@ -13,4 +13,4 @@ echo "synced version: $VERSION"
 # version_drift がローカルセッションで発火し続ける原因になるので、
 # 同じワークフローの中でリビルドまで誘導する。CI ビルドに任せたい場合は
 # このメッセージを無視してよい (commit すれば release バイナリが追従する)。
-echo "next: cd pkdx && moon build --target native --release src/main"
+echo "next: moon build --target native --release src/main"

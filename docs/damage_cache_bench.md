@@ -5,7 +5,7 @@
 ## 計測環境
 
 - macOS (darwin 25.3.0 / arm64)
-- `moon build` の debug ビルド (`pkdx/_build/native/debug/build/src/main/main.exe`)
+- `moon build` の debug ビルド (`_build/native/debug/build/src/main/main.exe`)
 - ベンチ入力: `ガブリアス × バンギラス × じしん` (type-chart neutral, calc 有効)
 - `pokedex.db` / `champions.db` ともに `pkdx migrate` 適用済み (本計測時点では pokedex 8 件 + champions 5 件)
 

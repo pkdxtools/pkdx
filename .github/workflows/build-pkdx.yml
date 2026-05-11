@@ -78,28 +78,26 @@ jobs:
         run: echo "MOON_CC=C:/msys64/mingw64/bin/gcc.exe" >> "$GITHUB_ENV"
 
       - name: Build
-        working-directory: pkdx
         run: |
           moon update
-          bash ../scripts/configure_native_link_flags.sh
+          bash scripts/configure_native_link_flags.sh
           moon build --target native src/main
         shell: bash
 
       - name: Test
-        working-directory: pkdx
         run: |
-          bash ../scripts/configure_native_link_flags.sh
+          bash scripts/configure_native_link_flags.sh
           moon test --target native
         shell: bash
 
       - name: Copy binary (Unix)
         if: runner.os != 'Windows'
-        run: cp pkdx/_build/native/debug/build/src/main/main.exe ${{ matrix.binary }}
+        run: cp _build/native/debug/build/src/main/main.exe ${{ matrix.binary }}
 
       - name: Copy binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Copy-Item "pkdx\_build\native\debug\build\src\main\main.exe" "${{ matrix.binary }}"
+        run: Copy-Item "_build\native\debug\build\src\main\main.exe" "${{ matrix.binary }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

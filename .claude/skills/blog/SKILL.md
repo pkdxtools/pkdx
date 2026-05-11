@@ -865,7 +865,7 @@ jq --arg v "$NEW_CONCEPT" --arg ts "$NOW" '.concept = $v | .updated_at = $ts' "$
 
 現 md を Read し、以下 4 ケースで処理 (Edit tool を使用):
 
-writer (`pkdx/src/writer/teams.mbt` `build_team_document`) の空行保証:
+writer (`src/writer/teams.mbt` `build_team_document`) の空行保証:
 - 各 `## <見出し>` の**前後**に空行が 1 本ずつ入る
 - concept 本体は 1 段落 (Paragraph) で出力される (改行は writer 側で半角スペース化されている)
 - よって md 内の concept セクションは必ず `## 構築コンセプト\n\n<OLD>\n\n## チーム` のパターンで出現する (次章は常に `## チーム`)
@@ -1029,7 +1029,7 @@ jq --argjson i "$IDX" --arg v "$NEW_ROLE" --arg ts "$NOW" \
 
 `## チーム` セクションの表の対象行を Edit で書き換える。
 
-writer 仕様 (`pkdx/src/writer/teams.mbt` `build_members_table`) では列は `# | ポケモン | タイプ | 種族値 | 特性 | 持ち物 | メモ` の 7 列。行は `| <IDX+1> | <NAME> | <types> | <bs> | <ability> | <item> | <OLD_ROLE> |` 形式。
+writer 仕様 (`src/writer/teams.mbt` `build_members_table`) では列は `# | ポケモン | タイプ | 種族値 | 特性 | 持ち物 | メモ` の 7 列。行は `| <IDX+1> | <NAME> | <types> | <bs> | <ability> | <item> | <OLD_ROLE> |` 形式。
 
 アプローチ:
 

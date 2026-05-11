@@ -15,7 +15,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PKDX_DIR="$REPO_ROOT/pkdx"
 
 REPEATS=1
 while getopts "n:" opt; do
@@ -25,12 +24,12 @@ while getopts "n:" opt; do
   esac
 done
 
-if [ ! -d "$PKDX_DIR" ]; then
-  echo "bench_branch.sh: $PKDX_DIR not found — run ./setup.sh from the repo root." >&2
+if [ ! -f "$REPO_ROOT/moon.mod.json" ]; then
+  echo "bench_branch.sh: $REPO_ROOT/moon.mod.json not found — run ./setup.sh from the repo root." >&2
   exit 1
 fi
 
-cd "$PKDX_DIR"
+cd "$REPO_ROOT"
 
 # millis 取得は GNU date / BSD date 両対応 (perl にフォールバック)。
 now_ms() {
@@ -44,7 +43,7 @@ now_ms() {
 run_once() {
   local start end
   start=$(now_ms)
-  moon test --target native -p pkdx/payoff -f branch_count_test.mbt >/dev/null 2>&1
+  moon test --target native -p src/payoff -f branch_count_test.mbt >/dev/null 2>&1
   end=$(now_ms)
   echo $(( end - start ))
 }

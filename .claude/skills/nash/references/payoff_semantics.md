@@ -296,7 +296,7 @@ screening は **MC phase に 3,600 cells × N trials の rollout オーバヘッ
 - skill 側は turn_limit だけを考えて `switching_game:<N>` を組み立てればよく、screening を使うかどうかの判断は CLI が担う
 - `screened_switching_game:...` を明示したケースは `auto_upgrade_team_model` の match が外れてパススルーするため、ユーザー指定の `trials` / `seed` / `keep_top` / `refine_turn_limit` がそのまま使われる
 - `switching_game:3` / `switching_game:4` のように閾値未満の turn_limit は従来どおり pure SwitchingGame で動く
-- 既定パラメータ (1000/42/0.3) は `pkdx/src/payoff/semantics.mbt` の定数で集約管理。調整したい場合はここを書き換える
+- 既定パラメータ (1000/42/0.3) は `src/payoff/semantics.mbt` の定数で集約管理。調整したい場合はここを書き換える
 
 ## Post-hit side effects (Phase 2-4)
 

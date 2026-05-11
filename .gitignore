@@ -14,3 +14,11 @@ pkdx_patch/009_champions_pokemon/data.json
 pkdx_patch/010_champions_moves/data.json
 pkdx_patch/011_champions_learnset/data.json
 pkdx_patch/012_items/data.json
+
+# MoonBit toolchain artifacts (moon update / moon build outputs)
+.mooncakes/
+_build/
+target/
+
+# SQLite test artifacts (pkdx_items_shadow_test.db / pkdx_empty_champions_test.db 等)
+pkdx_*_test.db

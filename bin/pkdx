@@ -29,8 +29,8 @@ fi
 BINARY="$CACHE_DIR/$BINARY_NAME"
 
 # Check for locally built binary first
-LOCAL_BUILD="$REPO_ROOT/pkdx/_build/native/release/build/src/main/main.exe"
-LOCAL_BUILD_DEBUG="$REPO_ROOT/pkdx/_build/native/debug/build/src/main/main.exe"
+LOCAL_BUILD="$REPO_ROOT/_build/native/release/build/src/main/main.exe"
+LOCAL_BUILD_DEBUG="$REPO_ROOT/_build/native/debug/build/src/main/main.exe"
 if [ -f "$LOCAL_BUILD" ]; then
   exec "$LOCAL_BUILD" "$@"
 elif [ -f "$LOCAL_BUILD_DEBUG" ]; then

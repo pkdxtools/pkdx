@@ -212,7 +212,7 @@ cd $REPO_ROOT && ./setup.sh
 
 `pkdx migrate` は bookkeeping を持たない seed-script モデルで、全マイグレーションが冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されているため、再適用しても DB は data.json の状態へ収束する。
 
-ローカル開発でビルド済みバイナリを使いたい場合は、`./setup.sh` を流した後に手動で `cd pkdx && moon build --target native --release src/main` を打つ。
+ローカル開発でビルド済みバイナリを使いたい場合は、`./setup.sh` を流した後に手動で `moon build --target native --release src/main` を打つ。
 
 ### 1-5: 動作確認
 

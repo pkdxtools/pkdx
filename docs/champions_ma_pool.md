@@ -4,11 +4,11 @@ version: champions
 generated: false
 last_updated: 2026-04-30
 sources:
-  - https://github.com/pkdxtools/pkdx/blob/main/pkdx/src/db/regulation.mbt
+  - https://github.com/pkdxtools/pkdx/blob/main/src/db/regulation.mbt
   - https://www.pokemon-champions.com/
 description: |
   Champions レギュレーション M-A の利用可能ポケモン・技プールの SSoT。
-  ポケモン globalNo は `pkdx/src/db/regulation.mbt::ma_global_nos()` を出典とする。
+  ポケモン globalNo は `src/db/regulation.mbt::ma_global_nos()` を出典とする。
   技プールは champions_learnset テーブルの実データ + 漏れ補完用に手動追加した連続技。
   本ファイルは Phase 0-B `pkdx audit champions-ma` および Phase 0-C `m014_champions_ma_completion`
   migration の入力として参照される。
@@ -309,7 +309,7 @@ Champions レギュレーションで利用可能な持ち物は `champions.db::
 ## Notes
 
 - 本 SSoT は `pkdx audit champions-ma --json` の入力として使用される。
-- 実装は `pkdx/src/cli/champions_audit.mbt` で SSoT yaml を parse し、`local_pokedex(version=champions)` / `champions_learnset` と突合して欠落を JSON 出力する。
-- 修正は `pkdx_patch/014_champions_ma_completion/data.json` + `pkdx/src/migrate/m014_champions_ma_completion.mbt` で適用する (冪等)。
+- 実装は `src/cli/champions_audit.mbt` で SSoT yaml を parse し、`local_pokedex(version=champions)` / `champions_learnset` と突合して欠落を JSON 出力する。
+- 修正は `pkdx_patch/014_champions_ma_completion/data.json` + `src/migrate/m014_champions_ma_completion.mbt` で適用する (冪等)。
 - 公式情報の URL が確定したら `frontmatter.sources` に追記する。
 - 自動生成スクリプト (`scripts/generate_ma_pool.sh`) は follow-up issue として切り出し済 (frontmatter `generated: false` で明示)。

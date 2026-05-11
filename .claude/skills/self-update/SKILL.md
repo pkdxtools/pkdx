@@ -33,11 +33,6 @@ cd $REPO_ROOT && git remote -v
   ```
   （`setup.sh` が upstream remote を自動追加する）
 
-  **注意**: 旧 `ushironoko/pkdx` は GitHub redirect ではなく独立した fork として
-  残っているため、`pkdxtools/pkdx` より遅れていることがある。`origin` が
-  `ushironoko/pkdx` の場合も **フォーク運用** として扱い、必ず `upstream` を
-  `pkdxtools/pkdx` に向けて追加する（version bump を取りこぼさないため）。
-
 **B. clone運用** — `origin` が canonical `pkdxtools/pkdx` 本体で、`upstream` が存在しない
 - `origin` から直接 pull する（`upstream` の代わりに `origin` を使う）
 - 以降のフェーズで `upstream` と記載された箇所を `origin` に読み替える
@@ -56,7 +51,7 @@ ORIGIN_URL="$(git -C $REPO_ROOT remote get-url origin 2>/dev/null || true)"
 if echo "$ORIGIN_URL" | grep -qE "[:/]pkdxtools/pkdx(\.git)?/?$"; then
   MODE="clone"   # canonical upstream を直接 clone している
 else
-  MODE="fork"    # ユーザーの fork、または ushironoko/pkdx (= legacy fork)
+  MODE="fork"    # ユーザーの fork
 fi
 ```
 
@@ -258,8 +253,7 @@ $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
    cd $REPO_ROOT && ./setup.sh
    ```
    ※ `setup.sh` の Step 0 が `origin` を判定し、canonical `pkdxtools/pkdx` 以外なら
-   `upstream` を `pkdxtools/pkdx` に向けて自動追加する（legacy `ushironoko/pkdx`
-   origin もここで救済される）。
+   `upstream` を `pkdxtools/pkdx` に向けて自動追加する。
 
 2. **未取り込みコミットを fetch + merge** — `moon.mod.json` の version bump
    コミットが upstream/origin に存在するのに HEAD に取り込まれていないケース:

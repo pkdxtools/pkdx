@@ -29,6 +29,8 @@ pub fn team_payoff_matrix_screened(
   refine_turn_limit~ : Int = DP_TURN_LIMIT,
   mc_turn_limit~ : Int = MC_TURN_LIMIT,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -57,7 +59,13 @@ pub fn team_payoff_matrix_screened(
   // (required by the oracle test) and avoids duplicate MC + refine work.
   if keep_top_quantile >= 1.0 {
     let m = team_payoff_matrix_switching(
-      team_a, team_b, format, refine_turn_limit, disk~,
+      team_a,
+      team_b,
+      format,
+      refine_turn_limit,
+      disk~,
+      progress~,
+      dp_log_every~,
     )
     let rows = Array::make(size_a, 0)
     for i in 0..<size_a {
@@ -72,10 +80,13 @@ pub fn team_payoff_matrix_screened(
 
   // Phase A: full-matrix MC screening. Cell seed = mc_seed XOR cell_idx so
   // each cell's RNG state is independent of enumeration order.
+  let phase_a_total = size_a * size_b
+  progress(PhaseStart("screening", phase_a_total))
   let screen = Array::make(size_a, ([] : Array[Double]))
   for i in 0..<size_a {
     let row = Array::make(size_b, 0.0)
     for j in 0..<size_b {
+      progress(CellStart(sel_a[i], sel_b[j], i, j))
       let cell_idx = (i * size_b + j).to_uint64()
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
@@ -83,32 +94,54 @@ pub fn team_payoff_matrix_screened(
         picked_a, picked_b, mc_trials, mc_seed ^ cell_idx,
         turn_limit=mc_turn_limit,
       )
+      progress(PhaseProgress("screening", i * size_b + j + 1, phase_a_total))
     }
     screen[i] = row
   }
+  progress(PhaseEnd("screening"))
 
   // Phase B: Nash-weighted scoring. Solve Nash on the screening matrix and
   // score each selection by its expected value under the opponent's equilibrium
   // strategy. All Nash-support rows achieve the game value (tied at top);
   // non-support rows score strictly less. This guarantees screening never
   // drops a Nash-support selection.
+  progress(PhaseStart("nash-scoring", 1))
   let (row_score, col_score) = screen_nash_scores(screen, size_a, size_b)
   let row_keep = retain_top_indices(row_score, keep_top_quantile)
   let col_keep = retain_top_indices(col_score, keep_top_quantile)
+  progress(PhaseEnd("nash-scoring"))
 
   // Phase C: refine the retained sub-matrix with full SwitchingGame DP.
+  let phase_c_total = row_keep.length() * col_keep.length()
+  progress(PhaseStart("dp-refine", phase_c_total))
   let data = Array::make(row_keep.length(), ([] : Array[Double]))
   for i in 0..<row_keep.length() {
     let row = Array::make(col_keep.length(), 0.0)
     for j in 0..<col_keep.length() {
+      progress(
+        CellStart(
+          sel_a[row_keep[i]], sel_b[col_keep[j]], row_keep[i], col_keep[j],
+        ),
+      )
       let picked_a = pick_combatants(team_a, sel_a[row_keep[i]])
       let picked_b = pick_combatants(team_b, sel_b[col_keep[j]])
       row[j] = switching_game_winrate(
-        picked_a, picked_b, refine_turn_limit, disk~,
+        picked_a,
+        picked_b,
+        refine_turn_limit,
+        disk~,
+        progress~,
+        dp_log_every~,
+      )
+      progress(
+        PhaseProgress(
+          "dp-refine", i * col_keep.length() + j + 1, phase_c_total,
+        ),
       )
     }
     data[i] = row
   }
+  progress(PhaseEnd("dp-refine"))
   let m = match @nash.FiniteMatrix::new(data) {
     Ok(m) => m
     Err(_) => raise EmptyCombatants

@@ -701,6 +701,8 @@ pub fn compute_select_with_team_model(
   format : BattleFormat,
   team_model : TeamPayoffModel,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> SelectResult raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
@@ -716,8 +718,16 @@ pub fn compute_select_with_team_model(
   let (matrix, retained_rows, retained_cols) = match team_model {
     ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) => {
       let (m, rows, cols) = try team_payoff_matrix_screened(
-          team, opponent, format, trials, seed, keep_top,
-          refine_turn_limit=refine_tl, disk~,
+          team,
+          opponent,
+          format,
+          trials,
+          seed,
+          keep_top,
+          refine_turn_limit=refine_tl,
+          disk~,
+          progress~,
+          dp_log_every~,
         ) catch {
         err => raise InnerError(err.to_string())
       }
@@ -725,16 +735,25 @@ pub fn compute_select_with_team_model(
     }
     _ => {
       let m = try team_payoff_matrix_with_team_model(
-          team, opponent, format, team_model, disk~,
+          team,
+          opponent,
+          format,
+          team_model,
+          disk~,
+          progress~,
+          dp_log_every~,
         ) catch {
         err => raise InnerError(err.to_string())
       }
       (m, None, None)
     }
   }
-  build_select_result(
+  progress(PhaseStart("select-nash", 1))
+  let result = build_select_result(
     format, team, opponent, matrix, retained_rows, retained_cols,
   )
+  progress(PhaseEnd("select-nash"))
+  result
 }
 
 ///|
@@ -859,6 +878,8 @@ fn parse_stat_system_field(s : String) -> @model.StatSystem raise NashCliError {
 pub fn run_select(
   input_json : String,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
     err => raise InvalidJson(err.to_string())
@@ -901,7 +922,9 @@ pub fn run_select(
       )
     _ => ()
   }
-  let r = compute_select_with_team_model(team, opp, format, team_model, disk~)
+  let r = compute_select_with_team_model(
+    team, opp, format, team_model, disk~, progress~, dp_log_every~,
+  )
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()

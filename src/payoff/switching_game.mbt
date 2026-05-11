@@ -1117,18 +1117,84 @@ pub(all) enum ActionKind {
 } derive(Show, Eq)
 
 ///|
+/// Live progress events emitted from the SwitchingGame DP and the screened
+/// pipeline. Sinks may format these to stderr (`--progress=stderr`) or to
+/// JSON Lines (`--progress=json`); the default sink is a no-op.
+///
+/// - `PhaseStart(name, total)` — Phase A/B/C boundary; `total` is the unit
+///   count for the phase (cells for A/C, 1 for B).
+/// - `PhaseProgress(name, current, total)` — increment marker within a phase.
+/// - `PhaseEnd(name)` — phase completion.
+/// - `CellStart(team_indices, opp_indices, row, col)` — entering a selection
+///   cell of the team-payoff matrix. `row` / `col` are the indices in the
+///   original `combinations_with_lead(n, k)` enumeration (0..size_a × 0..size_b),
+///   so a visualiser can paint a fixed grid (e.g. 60×60 for 6-vs-6 single)
+///   regardless of whether the screened pipeline has dropped some cells.
+/// - `DpNode(visited, hits, depth, rows, cols, outcomes, classification)` —
+///   DP recursion checkpoint (emitted from `value()` every
+///   `ValueStats::log_every` cache misses). `visited` is the running miss
+///   count, `hits` the running cache-hit count, `depth` the recursion depth
+///   of the sample node, `rows × cols` the per-turn action matrix at that
+///   node, `outcomes` the stochastic edges walked from it, and
+///   `classification` one of `"saddle"` / `"nash"` / `"pruned"`.
+pub(all) enum ProgressEvent {
+  PhaseStart(String, Int)
+  PhaseProgress(String, Int, Int)
+  PhaseEnd(String)
+  CellStart(Array[Int], Array[Int], Int, Int)
+  DpNode(Int, Int, Int, Int, Int, Int, String)
+} derive(Show)
+
+///|
 /// Observability hooks for memoization: callers can inspect hit/miss counts
 /// without relying on wall-clock timing. Used by tests and by CLI diagnostics
 /// to verify that larger `turn_limit` values stay cache-bound.
+///
+/// The `progress` closure receives DP-node checkpoints when `log_every > 0`.
+/// `last_logged` tracks the miss count at the previous emission so the gating
+/// stays O(1) per visit.
 pub(all) struct ValueStats {
   mut hits : Int
   mut misses : Int
   mut cached_states : Int
+  mut last_logged : Int
+  log_every : Int
+  progress : (ProgressEvent) -> Unit
+}
+
+///|
+fn noop_progress(_event : ProgressEvent) -> Unit {
+  ()
 }
 
 ///|
 pub fn new_stats() -> ValueStats {
-  { hits: 0, misses: 0, cached_states: 0 }
+  {
+    hits: 0,
+    misses: 0,
+    cached_states: 0,
+    last_logged: 0,
+    log_every: 0,
+    progress: noop_progress,
+  }
+}
+
+///|
+/// Build a `ValueStats` that emits `DpNode` events through `progress` every
+/// `log_every` cache misses. `log_every <= 0` disables emission (equivalent
+/// to `new_stats()`).
+pub fn new_stats_with_progress(
+  progress : (ProgressEvent) -> Unit,
+  log_every : Int,
+) -> ValueStats {
+  {
+    hits: 0,
+    misses: 0,
+    cached_states: 0,
+    last_logged: 0,
+    log_every,
+    progress,
+  }
 }
 
 ///|
@@ -3453,6 +3519,7 @@ pub fn value(
   dmg_cache : DamageCache,
   alpha~ : Double = -1.0,
   beta~ : Double = 1.0,
+  depth~ : Int = 0,
 ) -> Double {
   let _ = alpha // Reserved for future symmetric α-cutoff; see doc comment.
   match terminal_value(state, my_team, opp_team, turn_limit) {
@@ -3494,6 +3561,7 @@ pub fn value(
   for i in 0..<rows {
     data[i] = Array::make(cols, 0.0)
   }
+  let mut total_outcomes = 0
   // Running pure-maximin lower bound on the Nash value. Nash(A) ≥ max_i row_min_i
   // holds for every filled row, so once this lower bound is ≥ β we can
   // return it: the caller only needs `≤ β` to be informative.
@@ -3505,11 +3573,19 @@ pub fn value(
       let outcomes = attempt_turn_with_cache(
         state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
       )
+      total_outcomes = total_outcomes + outcomes.length()
       let mut ev = 0.0
       for outcome in outcomes {
         let (prob, next) = outcome
         ev += prob * value(
-          next, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
+          next,
+          my_team,
+          opp_team,
+          turn_limit,
+          cache,
+          stats,
+          dmg_cache,
+          depth=depth + 1,
         )
       }
       data[i][j] = ev
@@ -3529,6 +3605,7 @@ pub fn value(
   if pruned_early {
     // Do NOT cache: the returned value is a lower bound, not the exact Nash.
     // A different caller with a wider β would miss the true value.
+    maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "pruned")
     return lower
   }
   // All rows filled: check for a pure saddle (maxmin == minmax within tolerance)
@@ -3550,6 +3627,7 @@ pub fn value(
   if upper - lower <= VALUE_SADDLE_TOL {
     let saddle = (upper + lower) / 2.0
     cache.set(state, saddle)
+    maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "saddle")
     return saddle
   }
   let m = match @nash.FiniteMatrix::new(data) {
@@ -3564,7 +3642,38 @@ pub fn value(
     _ => 0.0
   }
   cache.set(state, result)
+  maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "nash")
   result
+}
+
+///|
+/// Emit a `DpNode` checkpoint when the running miss-count crosses the
+/// `log_every` gate. Called from `value()` at each non-pruned exit so the
+/// payload reflects the node that actually completed (depth + matrix dims +
+/// outcome count + classification).
+fn maybe_emit_dp_node(
+  stats : ValueStats,
+  depth : Int,
+  rows : Int,
+  cols : Int,
+  outcomes : Int,
+  classification : String,
+) -> Unit {
+  if stats.log_every > 0 &&
+    stats.misses - stats.last_logged >= stats.log_every {
+    stats.last_logged = stats.misses
+    (stats.progress)(
+      DpNode(
+        stats.misses,
+        stats.hits,
+        depth,
+        rows,
+        cols,
+        outcomes,
+        classification,
+      ),
+    )
+  }
 }
 
 ///|
@@ -3579,9 +3688,11 @@ pub fn switching_game_winrate(
   opp_team : Array[Combatant],
   turn_limit : Int,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> Double {
   let (v, _, _) = switching_game_winrate_stats(
-    my_team, opp_team, turn_limit, disk~,
+    my_team, opp_team, turn_limit, disk~, progress~, dp_log_every~,
   )
   v
 }
@@ -3596,6 +3707,8 @@ pub fn switching_game_winrate_stats(
   opp_team : Array[Combatant],
   turn_limit : Int,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> (Double, ValueStats, DamageCache) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
@@ -3627,7 +3740,7 @@ pub fn switching_game_winrate_stats(
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
-  let stats = new_stats()
+  let stats = new_stats_with_progress(progress, dp_log_every)
   let dmg_cache = new_damage_cache(disk~)
   let v = value(state, my_team, opp_team, turn_limit, cache, stats, dmg_cache)
   stats.cached_states = cache.length()

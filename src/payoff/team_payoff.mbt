@@ -118,6 +118,8 @@ pub fn team_payoff_matrix_switching(
   format : BattleFormat,
   turn_limit : Int,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> @nash.FiniteMatrix raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -139,16 +141,23 @@ pub fn team_payoff_matrix_switching(
   let sel_b = combinations_with_lead(nb, k)
   let size_a = sel_a.length()
   let size_b = sel_b.length()
+  let total = size_a * size_b
+  progress(PhaseStart("dp-full", total))
   let data = Array::make(size_a, ([] : Array[Double]))
   for i in 0..<size_a {
     let row = Array::make(size_b, 0.0)
     for j in 0..<size_b {
+      progress(CellStart(sel_a[i], sel_b[j], i, j))
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
-      row[j] = switching_game_winrate(picked_a, picked_b, turn_limit, disk~)
+      row[j] = switching_game_winrate(
+        picked_a, picked_b, turn_limit, disk~, progress~, dp_log_every~,
+      )
+      progress(PhaseProgress("dp-full", i * size_b + j + 1, total))
     }
     data[i] = row
   }
+  progress(PhaseEnd("dp-full"))
   match @nash.FiniteMatrix::new(data) {
     Ok(m) => m
     Err(_) => raise EmptyCombatants
@@ -171,6 +180,8 @@ pub fn team_payoff_matrix_with_team_model(
   format : BattleFormat,
   team_model : TeamPayoffModel,
   disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> @nash.FiniteMatrix raise PayoffError {
   match team_model {
     SwitchingGame(turn_limit) => {
@@ -181,7 +192,15 @@ pub fn team_payoff_matrix_with_team_model(
           )
         Single => ()
       }
-      team_payoff_matrix_switching(team_a, team_b, format, turn_limit, disk~)
+      team_payoff_matrix_switching(
+        team_a,
+        team_b,
+        format,
+        turn_limit,
+        disk~,
+        progress~,
+        dp_log_every~,
+      )
     }
     ScreenedSwitchingGame(_, _, _, _) =>
       raise UnsupportedFormat(

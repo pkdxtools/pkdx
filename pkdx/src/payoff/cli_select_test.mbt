@@ -320,12 +320,13 @@ test "parse_move_json_3elem_stat_effects_and_posthit_fields" {
 ///|
 /// Phase 14: ScreenedSwitchingGame(1) returns a SelectResult whose `selections`
 /// / `selection_names` / `row_strategy` are filtered down to retained rows
-/// only. `4 × C(3, 2) = 12` selections on each side × `keep_top = 0.5` → 6
-/// rows / 6 cols retained.
+/// only. `6 × C(5, 2) = 60` selections on each side × `keep_top = 0.5` →
+/// `ceil(60 × 0.5) = 30` rows / 30 cols retained. CLI 境界の
+/// `REQUIRED_TEAM_SIZE = 6` 制約に合わせて 6v6 入力で評価する。
 test "run_select_with_screened_switching_game_returns_retained_shape" {
   let input = select_input_json_with_extra(
-    [100, 100, 100, 100],
-    [100, 100, 100, 100],
+    [100, 100, 100, 100, 100, 100],
+    [100, 100, 100, 100, 100, 100],
     "single",
     ",\"team_payoff_model\":\"screened_switching_game:10:42:0.5:1\"",
   )
@@ -359,9 +360,9 @@ test "run_select_with_screened_switching_game_returns_retained_shape" {
       return
     }
   }
-  // 12 selections × keep_top=0.5 → ceil(12 * 0.5) = 6 retained on each axis.
-  assert_eq(selections.length(), 6)
-  assert_eq(opp_selections.length(), 6)
+  // 60 selections × keep_top=0.5 → ceil(60 * 0.5) = 30 retained on each axis.
+  assert_eq(selections.length(), 30)
+  assert_eq(opp_selections.length(), 30)
   // row_strategy must track retained selection shape.
   assert_eq(row_strategy.length(), selections.length())
 }
@@ -381,6 +382,47 @@ test "run_select_rejects_screened_switching_game_with_double_format" {
     _ => true
   }
   assert_true(errored)
+}
+
+///|
+/// CLI 境界 `compute_select_with_team_model` は `REQUIRED_TEAM_SIZE = 6` を
+/// 厳密に要求する。6 体未満 / 7 体以上の team は `InvalidJson` で弾かれる。
+/// これにより lead-aware 列挙の計算量 `(n × C(n−1, 2))²` が想定外の n で
+/// 爆発するのを CLI 入口で阻止する。エラーメッセージにサイズが含まれることで
+/// JSON 入力ミスを利用者がすぐ特定できる。
+test "run_select_rejects_team_size_other_than_six" {
+  // n=5 → 5 × C(4, 2) = 50 だが REQUIRED_TEAM_SIZE 違反で弾かれる。
+  let undersized = select_input_json_with_extra(
+    [100, 100, 100, 100, 100],
+    [100, 100, 100, 100, 100, 100],
+    "single",
+    ",\"team_payoff_model\":\"switching_game:1\"",
+  )
+  let undersized_msg = try {
+    let _ = run_select(undersized)
+    ""
+  } catch {
+    InvalidJson(msg) => msg
+    e => e.to_string()
+  }
+  assert_true(undersized_msg.contains("exactly 6"))
+  assert_true(undersized_msg.contains("team=5"))
+  // n=7 → 7 × C(6, 2) = 105 で行列が 105×60 になる前に弾く。
+  let oversized = select_input_json_with_extra(
+    [100, 100, 100, 100, 100, 100],
+    [100, 100, 100, 100, 100, 100, 100],
+    "single",
+    ",\"team_payoff_model\":\"switching_game:1\"",
+  )
+  let oversized_msg = try {
+    let _ = run_select(oversized)
+    ""
+  } catch {
+    InvalidJson(msg) => msg
+    e => e.to_string()
+  }
+  assert_true(oversized_msg.contains("exactly 6"))
+  assert_true(oversized_msg.contains("opponent=7"))
 }
 
 ///|

@@ -685,6 +685,14 @@ fn selection_names(
 }
 
 ///|
+/// `pkdx select` の CLI 境界で許容するチームサイズ。ポケモン本編のパーティ
+/// 上限と一致 (6 体)。lead-aware 列挙は `(n × C(n−1, k−1))²` セルなので、
+/// ここを緩めると oversized JSON 1 件で行列が爆発する。低レベル
+/// `team_payoff_matrix_*` (k ≦ n のみ要求) は単体テストから直接叩かれる
+/// ため、サイズ制限は本関数 (= ユーザー入力の最初の関門) でのみ強制する。
+pub const REQUIRED_TEAM_SIZE : Int = 6
+
+///|
 /// Compute the selection-level Nash distribution for `team` vs `opponent`
 /// under a full `TeamPayoffModel` (Phase 13 entry point).
 pub fn compute_select_with_team_model(
@@ -694,13 +702,15 @@ pub fn compute_select_with_team_model(
   team_model : TeamPayoffModel,
   disk~ : @damage_cache.DamageDiskCache? = None,
 ) -> SelectResult raise NashCliError {
-  let k = match format {
-    Single => 3
-    Double => 4
-  }
-  if team.length() < k || opponent.length() < k {
+  if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
-      "team and opponent must each have at least " + k.to_string() + " members",
+      "team and opponent must each have exactly " +
+      REQUIRED_TEAM_SIZE.to_string() +
+      " members (got team=" +
+      team.length().to_string() +
+      ", opponent=" +
+      opponent.length().to_string() +
+      ")",
     )
   }
   let (matrix, retained_rows, retained_cols) = match team_model {

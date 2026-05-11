@@ -355,14 +355,22 @@ test "compute_mean_damage: actual_stats override changes damage output" {
 /// 値の差分検証は `compute_mean_damage` 側の直接テストに寄せた (Nash value は
 /// スケール不変のため差分が 0 で埋もれうる)。
 test "run_select: accepts team-builder member with actual_stats" {
-  // 最小限の 3v3 select 用入力: 両チーム 3 体、物理/特殊/サポートを 1 本ずつ。
-  // actual_stats を与えたときは攻撃側の実 A/C が base 相当より低く、
-  // 期待値が base 投資 default と変わる。
-  let with_stats =
-    #|{
-    #|  "format": "single",
-    #|  "stat_system": "champions",
-    #|  "team": [
+  // 6v6 select 用入力: actual_stats を持つ A/B/C と、CLI 境界が要求する
+  // `REQUIRED_TEAM_SIZE = 6` を満たすための padding 3 体 (D/E/F) を team に、
+  // 対称に X/Y/Z + padding 3 体 (W/V/U) を opponent に配置する。
+  // 本テストの趣旨は actual_stats / nature 付き team-builder member 形式の
+  // パースが run_select を素通りすることで、padding 側は最小フィールドのみ。
+  let team_padding =
+    #|,
+    #|    {"name":"D","types":["ノーマル"],"base_stats":{"h":100,"a":80,"b":80,"c":80,"d":80,"s":80},"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|    {"name":"E","types":["ノーマル"],"base_stats":{"h":100,"a":80,"b":80,"c":80,"d":80,"s":80},"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|    {"name":"F","types":["ノーマル"],"base_stats":{"h":100,"a":80,"b":80,"c":80,"d":80,"s":80},"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]}
+  let opp_padding =
+    #|,
+    #|    {"name":"W","types":["ノーマル"],"base_stats":{"h":100,"a":80,"b":80,"c":80,"d":80,"s":80},"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|    {"name":"V","types":["ノーマル"],"base_stats":{"h":100,"a":80,"b":80,"c":80,"d":80,"s":80},"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]},
+    #|    {"name":"U","types":["ノーマル"],"base_stats":{"h":100,"a":80,"b":80,"c":80,"d":80,"s":80},"ability":"","item":"","tera":"","moves":[{"name":"のしかかり","type":"ノーマル","category":"物理","power":85}]}
+  let with_stats_team =
     #|    {
     #|      "name": "A",
     #|      "types": ["ノーマル"],
@@ -396,42 +404,7 @@ test "run_select: accepts team-builder member with actual_stats" {
     #|        {"name":"10まんボルト","type":"でんき","category":"特殊","power":90}
     #|      ]
     #|    }
-    #|  ],
-    #|  "opponent": [
-    #|    {
-    #|      "name": "X",
-    #|      "types": ["ほのお"],
-    #|      "base_stats": {"h":100,"a":110,"b":90,"c":90,"d":90,"s":100},
-    #|      "ability": "","item": "","tera": "",
-    #|      "moves": [
-    #|        {"name":"かえんほうしゃ","type":"ほのお","category":"特殊","power":90}
-    #|      ]
-    #|    },
-    #|    {
-    #|      "name": "Y",
-    #|      "types": ["くさ"],
-    #|      "base_stats": {"h":100,"a":90,"b":100,"c":110,"d":100,"s":80},
-    #|      "ability": "","item": "","tera": "",
-    #|      "moves": [
-    #|        {"name":"エナジーボール","type":"くさ","category":"特殊","power":90}
-    #|      ]
-    #|    },
-    #|    {
-    #|      "name": "Z",
-    #|      "types": ["いわ"],
-    #|      "base_stats": {"h":100,"a":120,"b":130,"c":70,"d":90,"s":60},
-    #|      "ability": "","item": "","tera": "",
-    #|      "moves": [
-    #|        {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
-    #|      ]
-    #|    }
-    #|  ]
-    #|}
-  let without_stats =
-    #|{
-    #|  "format": "single",
-    #|  "stat_system": "champions",
-    #|  "team": [
+  let without_stats_team =
     #|    {
     #|      "name": "A",
     #|      "types": ["ノーマル"],
@@ -459,8 +432,7 @@ test "run_select: accepts team-builder member with actual_stats" {
     #|        {"name":"10まんボルト","type":"でんき","category":"特殊","power":90}
     #|      ]
     #|    }
-    #|  ],
-    #|  "opponent": [
+  let shared_opp =
     #|    {
     #|      "name": "X",
     #|      "types": ["ほのお"],
@@ -488,8 +460,30 @@ test "run_select: accepts team-builder member with actual_stats" {
     #|        {"name":"ストーンエッジ","type":"いわ","category":"物理","power":100}
     #|      ]
     #|    }
+  // team_payoff_model に `switching_game:1` を明示。本テストは actual_stats /
+  // nature パースの素通りだけを見る smoke なので、6v6 デフォルトの DP=5
+  // (60×60 セル × DP_TURN_LIMIT=5) が走ると非現実的に遅い。tl=1 でも
+  // run_select の JSON 入出力経路は同じものを通る。
+  let header =
+    #|{
+    #|  "format": "single",
+    #|  "stat_system": "champions",
+    #|  "team_payoff_model": "switching_game:1",
+    #|  "team": [
+  let team_to_opp =
+    #|
+    #|  ],
+    #|  "opponent": [
+  let opp_close =
+    #|
     #|  ]
     #|}
+  let with_stats = header +
+    with_stats_team + team_padding + team_to_opp +
+    shared_opp + opp_padding + opp_close
+  let without_stats = header +
+    without_stats_team + team_padding + team_to_opp +
+    shared_opp + opp_padding + opp_close
   let out_with = run_select(with_stats)
   let out_without = run_select(without_stats)
   // どちらも JSON としてはパース可能であり、既知のフィールドを含む。

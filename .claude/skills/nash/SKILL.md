@@ -226,11 +226,20 @@ JSON
 #### 3a. 「エージェントが実行」を選んだ場合
 
 ```bash
-$PKDX select --progress=json 2> >($VIZ) > /tmp/pkdx_select_result.json < /tmp/pkdx_select_input.json
+$PKDX select --parallel=auto --progress=json 2> >($VIZ) > /tmp/pkdx_select_result.json < /tmp/pkdx_select_input.json
 cat /tmp/pkdx_select_result.json   # ← 結果整形フェーズで使う
 ```
 
 **進捗フィードバックを止めたい場合**: `--progress=off` (既定値) を明示するか、`2> >($VIZ)` を外す。長い `--progress-every` を渡せば dp ノードサンプル頻度を間引ける (例: `--progress-every=5000`)。
+
+**`--parallel` フラグ**:
+
+- 既定値 `1` は in-process 計算で、damage cache (`box/cache/damage_cache.sqlite`) の L2 を活用する。**同じチーム / 相手で複数回連続呼ぶ場合はこちらの方が速い** (ヒット率が高いと 2 回目以降が大幅短縮)。
+- `auto` は `nproc()` (Windows は 64 で clamp) でシャード並列実行する。**turn_limit が大きい (5+) で初回計算かつ単発で結果を欲しい場合に最速**。シャードでは damage cache (disk) を使わないため L2 ヒット率は下がるが、CPU を全コア使い切れる利得が遥かに大きい。
+- 明示的に整数を渡すこともできる (`--parallel=8` 等)。Windows 上では `MAXIMUM_WAIT_OBJECTS=64` の制約があり、それを超える明示指定はエラーになる。
+- 緊急時は `PKDX_NO_PARALLEL=1` 環境変数で `auto` 指定を強制 1 に落とせる (テスト・デバッグ用 escape hatch)。
+
+bit-exact parity は保たれているため、結果 JSON は `--parallel` 値に依存しない。
 
 #### 3b. 「ターミナルで自分で実行」を選んだ場合
 
@@ -241,9 +250,11 @@ cat /tmp/pkdx_select_result.json   # ← 結果整形フェーズで使う
 
    ```bash
    cd <REPO_ROOT> && cat /tmp/pkdx_select_input.json \
-     | bin/pkdx select --progress=json 2> >(scripts/select_grid_viz.sh) \
+     | bin/pkdx select --parallel=auto --progress=json 2> >(scripts/select_grid_viz.sh) \
      > /tmp/pkdx_select_result.json
    ```
+
+   グリッドビジュアライザは並列パスでも動くが、子プロセスは `--progress=off` を強制するため細粒度の `cell_start` イベントは出ない。`PhaseStart` / `PhaseEnd` レベルの進捗だけ流れる。細粒度表示を見たい場合は `--parallel=1` を明示する (代わりに数倍遅くなる)。
    ````
 
 2. 提示後、AskUserQuestion で完了確認を取る:

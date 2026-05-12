@@ -193,6 +193,18 @@ pub fn read_file(path : String) -> String? {
 }
 
 ///|
+/// Write `content` to `path` as UTF-8. Returns `Ok(())` on success or
+/// `Err(_)` with an errno-derived message on failure.
+pub fn write_file_str(path : String, content : String) -> Result[Unit, String] {
+  let rc = pkdx_write_file(to_c_bytes(path), to_c_bytes(content))
+  if rc == 0 {
+    Ok(())
+  } else {
+    Err("write failed (errno=" + rc.to_string() + ") for " + path)
+  }
+}
+
+///|
 pub fn file_exists(path : String) -> Bool {
   pkdx_file_exists(to_c_bytes(path)) != 0
 }

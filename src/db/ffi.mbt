@@ -130,6 +130,12 @@ extern "C" fn pkdx_table_exists(db : Db, table_name : Bytes) -> Int = "pkdx_tabl
 extern "C" fn pkdx_read_file(path : Bytes) -> String = "pkdx_read_file"
 
 ///|
+/// Write `content` to `path` as UTF-8. Returns 0 on success, errno on
+/// failure. Implementation lives in `src/db/cwrap.c` (pkdx_write_file).
+#borrow(path, content)
+extern "C" fn pkdx_write_file(path : Bytes, content : Bytes) -> Int = "pkdx_write_file"
+
+///|
 #borrow(path)
 extern "C" fn pkdx_file_exists(path : Bytes) -> Int = "pkdx_file_exists"
 

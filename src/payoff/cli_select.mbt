@@ -642,6 +642,82 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
 }
 
 ///|
+/// Resolve the `--parallel` CLI flag into a concrete shard count.
+/// Pure: every external dependency (CPU count, hard cap, env lookup)
+/// is passed in so the function can be unit-tested without touching
+/// real OS state.
+///
+/// - `"1"` → 1 (in-process path, default for backward compatibility)
+/// - `"auto"` → `nproc_fn()` clamped to `max_cap_fn()` (Windows 64,
+///   POSIX effectively unbounded). `PKDX_NO_PARALLEL=1` forces 1.
+/// - `"N"` (positive integer) → N. On Windows the caller-provided
+///   `max_cap_fn()` returns 64; we reject N > cap with a clear error
+///   so the user picks an explicit value instead of silently clamping.
+/// - Anything else raises `InvalidJson`.
+pub fn parallel_count_from_env_and_flag(
+  flag : String,
+  nproc_fn : () -> Int,
+  max_cap_fn : () -> Int,
+  env_lookup : (String) -> String?,
+) -> Int raise NashCliError {
+  if flag == "1" {
+    return 1
+  }
+  if flag == "auto" {
+    match env_lookup("PKDX_NO_PARALLEL") {
+      Some("1") => return 1
+      _ => ()
+    }
+    let n = nproc_fn()
+    let cap = max_cap_fn()
+    let clamped = if n > cap { cap } else { n }
+    return if clamped < 1 { 1 } else { clamped }
+  }
+  let n = try @strconv.parse_int(flag) catch {
+    _ =>
+      raise InvalidJson(
+        "--parallel must be a positive integer, \"1\", or \"auto\" (got: \"" +
+        flag +
+        "\")",
+      )
+  }
+  if n < 1 {
+    raise InvalidJson("--parallel must be a positive integer (got: " + flag + ")")
+  }
+  let cap = max_cap_fn()
+  if n > cap {
+    raise InvalidJson(
+      "--parallel=" +
+      n.to_string() +
+      " exceeds the platform limit of " +
+      cap.to_string() +
+      " (Windows MAXIMUM_WAIT_OBJECTS). Use --parallel=auto for an automatic cap, or pick a value <= " +
+      cap.to_string() +
+      ".",
+    )
+  }
+  n
+}
+
+///|
+/// Convenience for production callers. Wires the pure parser above to
+/// `@process.nproc`, `@process.max_parallel_shards`, and
+/// `moonbitlang/x/sys::get_env_var`.
+pub fn resolve_parallel(flag : String) -> Int raise NashCliError {
+  parallel_count_from_env_and_flag(
+    flag, @process.nproc, @process.max_parallel_shards, get_env_var_default,
+  )
+}
+
+///|
+/// Indirection for env access so the production path can be swapped in
+/// without bringing `moonbitlang/x/sys` into the `@payoff` import block
+/// of every test file.
+fn get_env_var_default(key : String) -> String? {
+  @sys.get_env_var(key)
+}
+
+///|
 /// `SwitchingGame(N)` で N が閾値以上なら `ScreenedSwitchingGame` に自動昇格する。
 /// ユーザーが `screened_switching_game:...` を明示したケースは match されず
 /// そのまま通る。閾値・既定 MC パラメータは `semantics.mbt` の定数に集約。
@@ -703,6 +779,8 @@ pub fn compute_select_with_team_model(
   disk~ : @damage_cache.DamageDiskCache? = None,
   progress~ : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every~ : Int = 0,
+  parallel~ : Int = 1,
+  input_path~ : String = "",
 ) -> SelectResult raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
@@ -717,21 +795,41 @@ pub fn compute_select_with_team_model(
   }
   let (matrix, retained_rows, retained_cols) = match team_model {
     ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) => {
-      let (m, rows, cols) = try team_payoff_matrix_screened(
-          team,
-          opponent,
-          format,
-          trials,
-          seed,
-          keep_top,
-          refine_turn_limit=refine_tl,
-          disk~,
-          progress~,
-          dp_log_every~,
-        ) catch {
-        err => raise InnerError(err.to_string())
+      if parallel > 1 && input_path.length() > 0 {
+        // Parallel fan-out path. `input_path` carries the raw JSON the
+        // worker re-reads; the parent owns its lifetime.
+        let (m, rows, cols) = try team_payoff_matrix_screened_parallel(
+            team,
+            opponent,
+            format,
+            trials,
+            seed,
+            keep_top,
+            parallel,
+            input_path,
+            refine_turn_limit=refine_tl,
+            progress~,
+          ) catch {
+          err => raise InnerError(err.to_string())
+        }
+        (m, Some(rows), Some(cols))
+      } else {
+        let (m, rows, cols) = try team_payoff_matrix_screened(
+            team,
+            opponent,
+            format,
+            trials,
+            seed,
+            keep_top,
+            refine_turn_limit=refine_tl,
+            disk~,
+            progress~,
+            dp_log_every~,
+          ) catch {
+          err => raise InnerError(err.to_string())
+        }
+        (m, Some(rows), Some(cols))
       }
-      (m, Some(rows), Some(cols))
     }
     _ => {
       let m = try team_payoff_matrix_with_team_model(
@@ -880,6 +978,7 @@ pub fn run_select(
   disk~ : @damage_cache.DamageDiskCache? = None,
   progress~ : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every~ : Int = 0,
+  parallel~ : Int = 1,
 ) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
     err => raise InvalidJson(err.to_string())
@@ -922,9 +1021,49 @@ pub fn run_select(
       )
     _ => ()
   }
-  let r = compute_select_with_team_model(
-    team, opp, format, team_model, disk~, progress~, dp_log_every~,
-  )
+  // For the parallel path the children re-read the same raw JSON
+  // (`team_payoff_model` is the auto-upgraded form by then, so the
+  // worker also runs auto_upgrade and lands on the same params).
+  // `mkstemp_file` returns an empty path on failure; we fall back to
+  // the in-process path rather than crash.
+  let input_path = if parallel > 1 {
+    match @process.mkstemp_file("pkdx_select_input") {
+      Some(p) => {
+        match @db.write_file_str(p, input_json) {
+          Ok(_) => p
+          Err(_) => {
+            let _ = @db.unlink_file(p)
+            ""
+          }
+        }
+      }
+      None => ""
+    }
+  } else {
+    ""
+  }
+  let effective_parallel = if input_path.length() == 0 { 1 } else { parallel }
+  let r = try compute_select_with_team_model(
+      team,
+      opp,
+      format,
+      team_model,
+      disk~,
+      progress~,
+      dp_log_every~,
+      parallel=effective_parallel,
+      input_path~,
+    ) catch {
+    err => {
+      if input_path.length() > 0 {
+        let _ = @db.unlink_file(input_path)
+      }
+      raise err
+    }
+  }
+  if input_path.length() > 0 {
+    let _ = @db.unlink_file(input_path)
+  }
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()
@@ -936,6 +1075,142 @@ pub fn run_select(
   out = out + ",\"row_strategy\":" + fmt_double_array(r.row_strategy)
   out = out + ",\"col_strategy\":" + fmt_double_array(r.col_strategy)
   out + "}"
+}
+
+///|
+/// Render a 2D `Array[Array[Double]]` payoff sub-matrix as JSON. Used by
+/// the `__select-shard` worker to ship its row-range output to the
+/// parent orchestrator.
+fn fmt_double_2d(rows : Array[Array[Double]]) -> String {
+  let mut s = "["
+  for i in 0..<rows.length() {
+    if i > 0 {
+      s = s + ","
+    }
+    s = s + fmt_double_array(rows[i])
+  }
+  s + "]"
+}
+
+///|
+/// Parse a CSV of integer indices (e.g. "0,3,7,12"). An empty string
+/// yields an empty array.
+fn parse_int_csv(s : String) -> Array[Int] raise NashCliError {
+  if s.length() == 0 {
+    return []
+  }
+  let parts = s.split(",")
+  let out : Array[Int] = []
+  for p in parts {
+    let token = p.trim(chars=" \t\n\r").to_string()
+    if token.length() == 0 {
+      continue
+    }
+    let n = try @strconv.parse_int(token) catch {
+      _ =>
+        raise InvalidJson(
+          "expected an integer in CSV but got \"" + token + "\"",
+        )
+    }
+    out.push(n)
+  }
+  out
+}
+
+///|
+/// `pkdx __select-shard` worker entry point. Reads team JSON from
+/// `input_path`, computes the Phase-A or Phase-C sub-matrix for the
+/// given `[row_start, row_end)` range, and writes the result JSON to
+/// `output_path`. The parent orchestrator concatenates output files
+/// from N shards to reproduce the full matrix; bit-exact parity with
+/// the in-process path is guaranteed by `screen_phase_rows` /
+/// `refine_phase_rows` (see `parallel_select_test.mbt`).
+///
+/// `--row-keep` / `--col-keep` are required for phase=refine and
+/// ignored for phase=screen. Both default to empty strings at the CLI
+/// level.
+pub fn run_select_shard(
+  input_path : String,
+  output_path : String,
+  phase : String,
+  row_start : Int,
+  row_end : Int,
+  row_keep_csv : String,
+  col_keep_csv : String,
+) -> Unit raise NashCliError {
+  let input_json = match @db.read_file(input_path) {
+    Some(s) => s
+    None => raise InvalidJson("could not read --input file: " + input_path)
+  }
+  let root = try @json.parse(input_json) catch {
+    err => raise InvalidJson(err.to_string())
+  }
+  let obj = match root {
+    Object(m) => m
+    _ => raise InvalidJson("top-level must be an object")
+  }
+  let stat_system = match obj.get("stat_system") {
+    Some(String(s)) => parse_stat_system_field(s)
+    Some(_) => raise InvalidJson("stat_system must be a string")
+    None => @model.Champions
+  }
+  let team = match obj.get("team") {
+    Some(j) => parse_team_array(j, "team", stat_system=stat_system)
+    None => raise MissingField("team")
+  }
+  let opp = match obj.get("opponent") {
+    Some(j) => parse_team_array(j, "opponent", stat_system=stat_system)
+    None => raise MissingField("opponent")
+  }
+  let format = match obj.get("format") {
+    Some(String(s)) => parse_format(s)
+    _ => Single
+  }
+  let raw_team_model = match obj.get("team_payoff_model") {
+    Some(String(s)) => parse_team_payoff_model(s)
+    Some(_) => raise InvalidJson("team_payoff_model must be a string")
+    None => SwitchingGame(DP_TURN_LIMIT)
+  }
+  let team_model = auto_upgrade_team_model(raw_team_model)
+  let (mc_trials, mc_seed, refine_tl) = match team_model {
+    ScreenedSwitchingGame(trials, seed, _, tl) => (trials, seed, tl)
+    SwitchingGame(_) =>
+      raise InvalidJson(
+        "__select-shard requires a ScreenedSwitchingGame team_payoff_model; got plain SwitchingGame. The orchestrator should auto-upgrade before fanning out.",
+      )
+  }
+  let matrix = match phase {
+    "screen" => {
+      try screen_phase_rows(
+        team, opp, format, mc_trials, mc_seed, row_start, row_end,
+      ) catch {
+        err => raise InnerError(err.to_string())
+      }
+    }
+    "refine" => {
+      let row_keep = parse_int_csv(row_keep_csv)
+      let col_keep = parse_int_csv(col_keep_csv)
+      try refine_phase_rows(
+        team, opp, format, refine_tl, row_keep, col_keep, row_start, row_end,
+      ) catch {
+        err => raise InnerError(err.to_string())
+      }
+    }
+    _ =>
+      raise InvalidJson(
+        "--phase must be \"screen\" or \"refine\" (got \"" + phase + "\")",
+      )
+  }
+  let mut out = "{"
+  out = out + "\"row_start\":" + row_start.to_string()
+  out = out + ",\"row_end\":" + row_end.to_string()
+  out = out + ",\"matrix\":" + fmt_double_2d(matrix)
+  out = out + "}"
+  match @db.write_file_str(output_path, out) {
+    Ok(_) => ()
+    Err(e) =>
+      raise InnerError("failed to write --output file " + output_path + ": " + e)
+  }
 }
 
 ///|

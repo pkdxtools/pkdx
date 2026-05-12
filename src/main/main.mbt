@@ -196,6 +196,7 @@ fn build_cli() -> @admiral.CliApp {
       cmd_learners(),
       cmd_nash(),
       cmd_select(),
+      cmd_select_shard_internal(),
       cmd_meta_divergence(),
       cmd_migrate(),
       cmd_cache_clear(),
@@ -2938,6 +2939,11 @@ fn cmd_select() -> @admiral.CommandDef {
         description="Emit a DP-node checkpoint every N cache misses (only with --progress)",
         default=Some(50000),
       ),
+      @admiral.string(
+        "parallel",
+        description="Parallel shards. \"auto\" = nproc (Windows clamped to 64). Default \"1\" (in-process, preserves existing test determinism). PKDX_NO_PARALLEL=1 forces 1.",
+        default=Some("1"),
+      ),
     ],
     run=Some(fn(ctx) { run_select_cmd(ctx) }),
   )
@@ -3086,9 +3092,83 @@ fn format_progress_json(event : @payoff.ProgressEvent) -> String {
 }
 
 ///|
+/// `pkdx __select-shard` — internal worker for `pkdx select --parallel=N`.
+/// Each invocation reads team JSON from `--input`, computes the
+/// `[row_start, row_end)` slice of either the Phase A (MC screening) or
+/// Phase C (DP refine) sub-matrix, and writes the result JSON to
+/// `--output`. Direct use is supported but unstable; the flag surface
+/// may change between releases.
+fn cmd_select_shard_internal() -> @admiral.CommandDef {
+  @admiral.command(
+    name="__select-shard",
+    description="INTERNAL: parallel select worker, orchestrated by `pkdx select`. Direct invocation is unstable.",
+    options=[
+      @admiral.string(
+        "phase",
+        description="\"screen\" (Phase A MC) or \"refine\" (Phase C DP)",
+        required=true,
+      ),
+      @admiral.string(
+        "input", description="Path to team JSON input file", required=true,
+      ),
+      @admiral.string(
+        "output", description="Path to write result JSON to", required=true,
+      ),
+      @admiral.int(
+        "row-start",
+        description="Inclusive start of row range (per-shard slice)",
+        required=true,
+      ),
+      @admiral.int(
+        "row-end",
+        description="Exclusive end of row range (per-shard slice)",
+        required=true,
+      ),
+      @admiral.string(
+        "row-keep",
+        description="(refine only) CSV of retained row indices from Phase B",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "col-keep",
+        description="(refine only) CSV of retained col indices from Phase B",
+        default=Some(""),
+      ),
+    ],
+    run=Some(fn(ctx) { run_select_shard_cmd(ctx) }),
+  )
+}
+
+///|
+fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
+  let phase = ctx_str(ctx, "phase")
+  let input_path = ctx_str(ctx, "input")
+  let output_path = ctx_str(ctx, "output")
+  let row_start = ctx_int(ctx, "row-start")
+  let row_end = ctx_int(ctx, "row-end")
+  let row_keep = ctx_str(ctx, "row-keep")
+  let col_keep = ctx_str(ctx, "col-keep")
+  try @payoff.run_select_shard(
+    input_path, output_path, phase, row_start, row_end, row_keep, col_keep,
+  ) catch {
+    err => {
+      exit_error(nash_cli_error_message(err))
+      return
+    }
+  }
+}
+
+///|
 fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   let mode = ctx_str(ctx, "progress")
   let log_every = ctx_int(ctx, "progress-every")
+  let parallel_flag = ctx_str(ctx, "parallel")
+  let parallel = try @payoff.resolve_parallel(parallel_flag) catch {
+    err => {
+      exit_error(nash_cli_error_message(err))
+      return
+    }
+  }
   let (progress, dp_log_every) : ((@payoff.ProgressEvent) -> Unit, Int) = match mode {
     "off" => (fn(_e) { () }, 0)
     "stderr" =>
@@ -3121,7 +3201,17 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
       None
     }
   }
-  let out = try @payoff.run_select(raw, disk~, progress~, dp_log_every~) catch {
+  // Parallel children open damage_cache themselves; the parent's disk
+  // is dropped for the parallel path so SQLite write contention does
+  // not happen. (The shard worker passes disk=None internally.)
+  let parent_disk = if parallel > 1 { None } else { disk }
+  let out = try @payoff.run_select(
+      raw,
+      disk=parent_disk,
+      progress~,
+      dp_log_every~,
+      parallel~,
+    ) catch {
     err => {
       match disk {
         Some(c) => @damage_cache.close(c)

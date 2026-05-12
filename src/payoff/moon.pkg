@@ -5,14 +5,16 @@ import {
   "pkdxtools/pkdx/src/damage_cache" @damage_cache,
   "pkdxtools/pkdx/src/cli" @cli,
   "pkdxtools/pkdx/src/types" @types,
+  "pkdxtools/pkdx/src/process" @process,
+  "pkdxtools/pkdx/src/db" @db,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/random" @random,
   "moonbitlang/core/strconv" @strconv,
   "moonbitlang/core/hashmap" @hashmap,
+  "moonbitlang/x/sys" @sys,
 }
 
 import {
-  "pkdxtools/pkdx/src/db" @db,
   "moonbitlang/core/math" @math,
 } for "test"
 

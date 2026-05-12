@@ -97,6 +97,40 @@ pub fn combinations_with_lead(n : Int, k : Int) -> Array[Array[Int]] {
 }
 
 ///|
+/// Build a row-range slice of an `Array[Array[Double]]` payoff matrix by
+/// invoking `cell_fn(i_global, j)` for every cell in `[row_start, row_end)
+/// × [0, size_b)`. Shared by `screen_phase_rows` (Phase A) and
+/// `refine_phase_rows` (Phase C); the same helper will fit a future
+/// shard-parallelised `team_payoff_matrix_switching` without changes.
+///
+/// The closure is given `i_global` (already offset by `row_start`) so
+/// callers do not need to translate indices manually; the parent
+/// orchestrator can fan out non-overlapping row ranges and concatenate
+/// the returned sub-matrices to reproduce the full matrix bit-exactly,
+/// as long as `cell_fn` itself is pure and deterministic.
+pub fn build_row_shard(
+  size_b : Int,
+  row_start : Int,
+  row_end : Int,
+  cell_fn : (Int, Int) -> Double,
+) -> Array[Array[Double]] {
+  if row_end <= row_start {
+    return []
+  }
+  let n_rows = row_end - row_start
+  let result = Array::make(n_rows, ([] : Array[Double]))
+  for i in 0..<n_rows {
+    let i_global = row_start + i
+    let row = Array::make(size_b, 0.0)
+    for j in 0..<size_b {
+      row[j] = cell_fn(i_global, j)
+    }
+    result[i] = row
+  }
+  result
+}
+
+///|
 /// Pick the combatants at `indices` from `team`, preserving order.
 fn pick_combatants(
   team : Array[Combatant],

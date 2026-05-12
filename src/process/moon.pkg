@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/buffer",
+}
+
+import {
+  "pkdxtools/pkdx/src/db" @db,
+  "moonbitlang/x/sys" @sys,
+} for "test"
+
+options(
+  "supported-targets": "native",
+  "native-stub": [ "process_ffi.c" ],
+)

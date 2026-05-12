@@ -195,6 +195,95 @@ test "query_moves: ガブリアス champions" {
 }
 
 ///|
+/// ロトムのフォーム別 learnset がフォルム固有技を返すこと。
+/// 旧実装は globalNo → `<gno>000` (base) しか引かず、ハイドロポンプ等の
+/// フォルム固有技が引けない回帰を起こしていた。
+test "query_champions_moves: ロトム全フォルムの固有技" {
+  let db = match open_test_champions_db() {
+    Some(d) => d
+    None => return
+  }
+  let cases = [
+    ("ウォッシュロトム", "ハイドロポンプ"),
+    ("ヒートロトム", "オーバーヒート"),
+    ("フロストロトム", "ふぶき"),
+    ("スピンロトム", "エアスラッシュ"),
+    ("カットロトム", "リーフストーム"),
+  ]
+  for i = 0; i < cases.length(); i = i + 1 {
+    let (pokemon, signature) = cases[i]
+    let id = match query_champions_pokemon_id_by_name(db, pokemon) {
+      Ok(s) => s
+      Err(e) => {
+        fail(pokemon + ": id resolve failed: " + e)
+        close(db)
+        return
+      }
+    }
+    let moves = match query_champions_moves(db, id) {
+      Ok(ms) => ms
+      Err(e) => {
+        fail(pokemon + ": learnset failed: " + e)
+        close(db)
+        return
+      }
+    }
+    let mut found = false
+    for j = 0; j < moves.length(); j = j + 1 {
+      if moves[j].name == signature {
+        found = true
+        break
+      }
+    }
+    if not(found) {
+      fail(pokemon + " should learn " + signature)
+      close(db)
+      return
+    }
+  }
+  close(db)
+}
+
+///|
+/// base 形態ロトム (form 空) はフォルム固有技をいずれも学習しないこと。
+/// CLI が name → id 解決で誤って base に落ちる回帰を防ぐ negative test。
+test "query_champions_moves: base ロトムは固有技を持たない" {
+  let db = match open_test_champions_db() {
+    Some(d) => d
+    None => return
+  }
+  let id = match query_champions_pokemon_id_by_name(db, "ロトム") {
+    Ok(s) => s
+    Err(e) => {
+      fail("ロトム id resolve failed: " + e)
+      close(db)
+      return
+    }
+  }
+  inspect(id, content="0479000")
+  let moves = match query_champions_moves(db, id) {
+    Ok(ms) => ms
+    Err(e) => {
+      fail("base ロトム learnset failed: " + e)
+      close(db)
+      return
+    }
+  }
+  close(db)
+  let forbidden = [
+    "ハイドロポンプ", "オーバーヒート", "ふぶき", "エアスラッシュ", "リーフストーム",
+  ]
+  for i = 0; i < moves.length(); i = i + 1 {
+    for j = 0; j < forbidden.length(); j = j + 1 {
+      if moves[i].name == forbidden[j] {
+        fail("base ロトム should not learn " + forbidden[j])
+        return
+      }
+    }
+  }
+}
+
+///|
 /// 外部番号体系と globalNo が異なる Gen9 ポケモンが正しい globalNo で登録されていること。
 test "query_pokemon: スコヴィラン champions globalNo" {
   let db = match open_test_champions_db() {

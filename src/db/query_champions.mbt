@@ -240,6 +240,34 @@ pub fn query_champions_move(
 }
 
 ///|
+/// 名前 (jpn) から champions pokemon の 7 桁 id を直接解決。form 込みの
+/// learnset を引く前段で使う。
+///
+/// `query_champions_pokemon` が `@model.Pokemon` を返すのに対し、本関数は
+/// id (= `<globalNo:4><form:3>`) だけを返す。CLI の moves サブコマンドが
+/// `query_champions_moves(db, id)` に直接渡して、ロトム各フォルムの固有技
+/// (ハイドロポンプ / オーバーヒート / ふぶき / エアスラッシュ /
+/// リーフストーム) や、メガ等のフォーム別 learnset を取り出すために使用。
+pub fn query_champions_pokemon_id_by_name(
+  db : Db,
+  name : String,
+) -> Result[String, String] {
+  let sql =
+    #|SELECT pn.id
+    #|FROM pokemon_name pn
+    #|WHERE pn.language = 'jpn' AND pn.name = ?
+    #|LIMIT 1
+  let rows = match query(db, sql, [name]) {
+    Ok(r) => r
+    Err(e) => return Err(e)
+  }
+  if rows.length() == 0 {
+    return Err("Pokemon not found: " + name)
+  }
+  Ok(rows[0][0])
+}
+
+///|
 /// pokemon.global_no + form (空 = base) から id を解決。caller が globalNo
 /// しか持たないとき、Champions の learnset などを引く前段で id を取り出す。
 pub fn resolve_champions_pokemon_id(

@@ -1716,21 +1716,41 @@ fn run_moves(
   include_inactive : Bool,
 ) -> Unit {
   with_db(version=game.version, fn(db) {
-    let global_no = if is_numeric(target) {
-      @db.normalize_global_no(target)
+    if game.version == "champions" {
+      // Champions では learnset を 7 桁 `<globalNo><form>` の id で引く必要が
+      // あるため、名前指定では pokemon_name から id を直接解決する。
+      // globalNo (数字) 指定のときはフォーム不明なので base (`<gno>000`) に
+      // フォールバックする。
+      let id_res = if is_numeric(target) {
+        Ok(@db.normalize_global_no(target) + "000")
+      } else {
+        @db.query_champions_pokemon_id_by_name(db, target)
+      }
+      match id_res {
+        Ok(id) =>
+          match @db.query_champions_moves(db, id) {
+            Ok(moves) => println(@cli.format_moves(moves, format))
+            Err(e) => println("Error: " + e)
+          }
+        Err(e) => println("Error: " + e)
+      }
     } else {
-      match @db.query_pokemon(db, target, game.version) {
-        Ok(p) => p.global_no
-        Err(e) => {
-          println("Error: " + e)
-          return
+      let global_no = if is_numeric(target) {
+        @db.normalize_global_no(target)
+      } else {
+        match @db.query_pokemon(db, target, game.version) {
+          Ok(p) => p.global_no
+          Err(e) => {
+            println("Error: " + e)
+            return
+          }
         }
       }
-    }
-    let r = @db.query_moves(db, global_no, game.version, include_inactive~)
-    match r {
-      Ok(moves) => println(@cli.format_moves(moves, format))
-      Err(e) => println("Error: " + e)
+      let r = @db.query_moves(db, global_no, game.version, include_inactive~)
+      match r {
+        Ok(moves) => println(@cli.format_moves(moves, format))
+        Err(e) => println("Error: " + e)
+      }
     }
   })
 }

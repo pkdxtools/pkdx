@@ -17,7 +17,7 @@ PKDX=$REPO_ROOT/bin/pkdx
 VIZ=$REPO_ROOT/scripts/select_grid_viz.sh   # pkdx select の進捗可視化
 ```
 
-`$VIZ` は `pkdx select --progress=json` の stderr (JSON Lines) を受け取り、stdout が TTY なら 60×60 グリッドを live 描画、TTY 以外 (Claude Code の Bash ツール / CI / リダイレクト) では phase 境界 + dp ノードサマリの数行ログに自動切替する。`pkdx select` を呼ぶときは原則として `2> >($VIZ)` を付ける。
+`$VIZ` は `pkdx select --progress=json` の stderr (JSON Lines) を受け取り、stdout が TTY なら 60×60 グリッドを live 描画、TTY 以外では phase 境界 + dp ノードサマリの数行ログに自動切替する。`pkdx select` を呼ぶときは原則として `2> >($VIZ)` を付ける。Phase 2b では実行主体 (エージェント / ユーザー手動) を AskUserQuestion で選ばせる。
 
 ## 用語
 
@@ -187,16 +187,12 @@ ls box/teams/*.meta.json
 
 ### 実行
 
+#### 1. 入力 JSON をファイルへ保存
+
+実行主体に関わらず、入力 JSON はまず `/tmp/pkdx_select_input.json` に書き出す (ユーザー手動ルートでも同じファイルを参照させるため heredoc ではなくファイル経由に統一する)。技の priority / stat_effects は `pkdx moves` 出力をそのまま流せる。省略時はデフォルト (priority=0 / stat_effects=[]) 扱い。
+
 ```bash
-# 技の priority / stat_effects は `pkdx moves` の出力にそのまま乗ってくる
-# ので、stdin JSON にはそのままコピペすれば DB 由来の情報が伝わる。
-# 省略した場合はデフォルト (priority=0 / stat_effects=[]) で扱われる。
-#
-# 進捗フィードバック: 必ず --progress=json と 2> >($VIZ) をセットで付ける。
-# - ユーザー TTY 上: 60×60 グリッドが live 描画される
-# - 非 TTY (agent / CI): "[viz] phase ... done (cells=N | dp samples=...)" の数行
-# 結果 JSON は stdout (> result.json でファイル保存) に出るので select の挙動は不変。
-cat <<'JSON' | $PKDX select --progress=json 2> >($VIZ) > /tmp/select_result.json
+cat > /tmp/pkdx_select_input.json <<'JSON'
 {
   "team": [
     {"name":"P0","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":80,"spa":80,"spd":80,"spe":100,
@@ -210,12 +206,56 @@ cat <<'JSON' | $PKDX select --progress=json 2> >($VIZ) > /tmp/select_result.json
   "team_payoff_model": "switching_game:<N>"
 }
 JSON
-cat /tmp/select_result.json   # ← 結果整形フェーズで使う
+```
+
+`<N>` は直前の AskUserQuestion で得た値を埋める (おまかせ=5 / じっくり読む=10 / サクッと=3、Other 入力時はその正整数)。`screened_switching_game` を選んだ場合は `"screened_switching_game:1000:42:0.3:<N>"` のように 4 番目のフィールドとして同じ値を付ける。
+
+#### 2. 実行主体の決定 (AskUserQuestion)
+
+| # | 質問 | header | オプション |
+|---|------|--------|-----------|
+| 1 | 計算を誰が実行しますか？ | 実行主体 | エージェントが実行（結果だけ受け取る）, ターミナルで自分で実行（計算過程をグリッドで見たい） |
+
+ユーザー視点の言い換え（質問・選択肢の文面はこちら、内部分岐は下記）:
+
+| ラベル | 挙動 | こう案内する |
+|---|---|---|
+| エージェントが実行 | skill が直接 Bash 実行 | サクッと結果だけ欲しいとき。進捗は `[viz] phase ... done` の数行ログのみ |
+| ターミナルで自分で実行 | コマンドを提示してユーザーが別ターミナルで実行 | 計算過程を 60×60 グリッドで眺めたいとき。長めの計算で進捗を視覚的に追える |
+
+#### 3a. 「エージェントが実行」を選んだ場合
+
+```bash
+$PKDX select --progress=json 2> >($VIZ) > /tmp/pkdx_select_result.json < /tmp/pkdx_select_input.json
+cat /tmp/pkdx_select_result.json   # ← 結果整形フェーズで使う
 ```
 
 **進捗フィードバックを止めたい場合**: `--progress=off` (既定値) を明示するか、`2> >($VIZ)` を外す。長い `--progress-every` を渡せば dp ノードサンプル頻度を間引ける (例: `--progress-every=5000`)。
 
-`<N>` は直前の AskUserQuestion で得た値を埋める (おまかせ=5 / じっくり読む=10 / サクッと=3、Other 入力時はその正整数)。`screened_switching_game` を選んだ場合は `"screened_switching_game:1000:42:0.3:<N>"` のように 4 番目のフィールドとして同じ値を付ける。
+#### 3b. 「ターミナルで自分で実行」を選んだ場合
+
+1. ユーザーへコマンドを提示する。`<REPO_ROOT>` は `pwd` で取得した実体パス (例: `/Users/.../pkdx`) に展開し、コードブロックでそのままコピペできる形で渡すこと:
+
+   ````markdown
+   別ターミナルで以下を実行してください。完了したら次の選択肢で教えてください。
+
+   ```bash
+   cd <REPO_ROOT> && cat /tmp/pkdx_select_input.json \
+     | bin/pkdx select --progress=json 2> >(scripts/select_grid_viz.sh) \
+     > /tmp/pkdx_select_result.json
+   ```
+   ````
+
+2. 提示後、AskUserQuestion で完了確認を取る:
+
+   | # | 質問 | header | オプション |
+   |---|------|--------|-----------|
+   | 1 | 実行は完了しましたか？ | 実行状況 | 完了したので結果を見せて, やっぱりエージェントに実行させる, キャンセル |
+
+3. 分岐:
+   - **完了したので結果を見せて**: `/tmp/pkdx_select_result.json` を Read で読み込み、結果整形フェーズへ進む。ファイル不在 / 空 / `value` キー欠落のときはエラーを伝えて再実行 or フォールバックを促す
+   - **やっぱりエージェントに実行させる**: 3a へフォールバック
+   - **キャンセル**: スキルを終了
 
 出力:
 ```json

@@ -100,4 +100,9 @@ pub suberror PayoffError {
   EmptyCombatants
   EmptyMoves(String)
   UnsupportedFormat(String)
+  // Subprocess fan-out failure (exit code, signal/timeout, or missing
+  // output file). The string preserves the originating shard's identity
+  // and failure mode so CLI users do not see a misleading "empty
+  // combatants" message for a transport-layer error.
+  ShardError(String)
 } derive(Show)

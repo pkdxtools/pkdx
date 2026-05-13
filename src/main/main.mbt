@@ -3134,6 +3134,20 @@ fn cmd_select_shard_internal() -> @admiral.CommandDef {
         description="(refine only) CSV of retained col indices from Phase B",
         default=Some(""),
       ),
+      // -1 sentinel = "not provided"; the worker falls back to the
+      // JSON-derived value (refine) or MC_TURN_LIMIT default (screen).
+      // The orchestrator always passes positive integers, but direct
+      // invocation may omit them.
+      @admiral.int(
+        "mc-turn-limit",
+        description="MC screening turn limit override (-1 = use input default)",
+        default=Some(-1),
+      ),
+      @admiral.int(
+        "refine-turn-limit",
+        description="DP refine turn limit override (-1 = use input default)",
+        default=Some(-1),
+      ),
     ],
     run=Some(fn(ctx) { run_select_shard_cmd(ctx) }),
   )
@@ -3148,8 +3162,20 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
   let row_end = ctx_int(ctx, "row-end")
   let row_keep = ctx_str(ctx, "row-keep")
   let col_keep = ctx_str(ctx, "col-keep")
+  let mc_tl_raw = ctx_int(ctx, "mc-turn-limit")
+  let refine_tl_raw = ctx_int(ctx, "refine-turn-limit")
+  let mc_override = if mc_tl_raw > 0 { Some(mc_tl_raw) } else { None }
+  let refine_override = if refine_tl_raw > 0 { Some(refine_tl_raw) } else { None }
   try @payoff.run_select_shard(
-    input_path, output_path, phase, row_start, row_end, row_keep, col_keep,
+    input_path,
+    output_path,
+    phase,
+    row_start,
+    row_end,
+    row_keep,
+    col_keep,
+    mc_turn_limit_override=mc_override,
+    refine_turn_limit_override=refine_override,
   ) catch {
     err => {
       exit_error(nash_cli_error_message(err))

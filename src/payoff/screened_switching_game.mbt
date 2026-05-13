@@ -412,6 +412,57 @@ fn parse_shard_output(
 }
 
 ///|
+/// Pure builder for the `__select-shard` argv. Extracted from
+/// `run_shards_collect` so the wire format (and the turn-limit
+/// propagation in particular) can be unit-tested without spawning
+/// subprocesses. Any change to the CLI flag surface must be mirrored
+/// in `cmd_select_shard_internal` (see `src/main/main.mbt`).
+pub fn build_shard_argv(
+  exe_path : String,
+  phase : String,
+  input_path : String,
+  output_path : String,
+  row_start : Int,
+  row_end : Int,
+  row_keep_csv : String,
+  col_keep_csv : String,
+  mc_turn_limit : Int,
+  refine_turn_limit : Int,
+) -> Array[String] {
+  let argv = [
+    exe_path,
+    "__select-shard",
+    "--phase",
+    phase,
+    "--input",
+    input_path,
+    "--output",
+    output_path,
+    "--row-start",
+    row_start.to_string(),
+    "--row-end",
+    row_end.to_string(),
+    // Turn limits resolved by the orchestrator are passed through
+    // explicitly so the worker never has to re-derive them from the
+    // input JSON. Keeps parallel and serial bit-exact even when the
+    // caller overrides defaults via the public API.
+    "--mc-turn-limit",
+    mc_turn_limit.to_string(),
+    "--refine-turn-limit",
+    refine_turn_limit.to_string(),
+  ]
+  if row_keep_csv.length() > 0 {
+    argv.push("--row-keep")
+    argv.push(row_keep_csv)
+  }
+  if col_keep_csv.length() > 0 {
+    argv.push("--col-keep")
+    argv.push(col_keep_csv)
+  }
+  argv
+}
+
+///|
 /// Spawn `n_shards` child workers via `@process.run_parallel_shards`,
 /// each invoking `__select-shard` with the given phase / row range /
 /// retained indices. The parent reads every child's `--output` file
@@ -432,6 +483,8 @@ fn run_shards_collect(
   col_keep_csv : String,
   out_n_rows : Int,
   timeout_ms : Int,
+  mc_turn_limit : Int,
+  refine_turn_limit : Int,
 ) -> Array[Array[Double]] raise PayoffError {
   let n_shards = row_ranges.length()
   // Per-shard output files. Created up front so we can clean up reliably.
@@ -440,39 +493,31 @@ fn run_shards_collect(
     let p = @process.mkstemp_file("pkdx_shard_" + phase + "_out_" + i.to_string())
     output_paths[i] = match p {
       Some(s) => s
-      None => raise EmptyCombatants
+      None =>
+        raise ShardError(
+          "failed to allocate output temp file for shard " + i.to_string(),
+        )
     }
   }
   // Build per-shard argv.
   let argvs : Array[Array[String]] = Array::make(n_shards, [])
   for i in 0..<n_shards {
     let (row_start, row_end) = row_ranges[i]
-    let argv = [
+    argvs[i] = build_shard_argv(
       exe_path,
-      "__select-shard",
-      "--phase",
       phase,
-      "--input",
       input_path,
-      "--output",
       output_paths[i],
-      "--row-start",
-      row_start.to_string(),
-      "--row-end",
-      row_end.to_string(),
-    ]
-    if row_keep_csv.length() > 0 {
-      argv.push("--row-keep")
-      argv.push(row_keep_csv)
-    }
-    if col_keep_csv.length() > 0 {
-      argv.push("--col-keep")
-      argv.push(col_keep_csv)
-    }
-    argvs[i] = argv
+      row_start,
+      row_end,
+      row_keep_csv,
+      col_keep_csv,
+      mc_turn_limit,
+      refine_turn_limit,
+    )
   }
   let results = try @process.run_parallel_shards(argvs, timeout_ms~) catch {
-    _ => raise EmptyCombatants
+    e => raise ShardError("run_parallel_shards failed: " + e.to_string())
   }
   // Stitch.
   let assembled = Array::make(out_n_rows, ([] : Array[Double]))
@@ -511,7 +556,7 @@ fn run_shards_collect(
     let _ = @db.unlink_file(output_paths[i])
   }
   match shard_err {
-    Some(_) => raise EmptyCombatants
+    Some(msg) => raise ShardError(msg)
     None => ()
   }
   assembled
@@ -566,13 +611,17 @@ pub fn team_payoff_matrix_screened_parallel(
   let exe_path = match @process.self_exec_path() {
     Some(p) => p
     None =>
-      raise EmptyCombatants
+      raise ShardError(
+        "could not resolve current executable path for shard spawn",
+      )
   }
-  // (mc_trials / mc_seed are intentionally re-read by the child from
-  //  the JSON file; only the row range is shard-specific.)
+  // mc_trials / mc_seed are intentionally re-read by the child from the
+  // JSON file (the input JSON is the source of truth for those). The
+  // turn limits, however, must round-trip through CLI flags so the
+  // public API parameters are honored even when the input JSON encodes
+  // a different value (or no value at all).
   let _ = mc_trials
   let _ = mc_seed
-  let _ = mc_turn_limit
 
   // ---- Phase A: MC screening fan-out -----------------------------------
   let phase_a_total = size_a * size_b
@@ -587,6 +636,8 @@ pub fn team_payoff_matrix_screened_parallel(
     "",
     size_a,
     shard_timeout_ms,
+    mc_turn_limit,
+    refine_turn_limit,
   )
   progress(PhaseEnd("screening"))
 
@@ -612,10 +663,11 @@ pub fn team_payoff_matrix_screened_parallel(
     col_keep_csv,
     row_keep.length(),
     shard_timeout_ms,
+    mc_turn_limit,
+    refine_turn_limit,
   )
   progress(PhaseEnd("dp-refine"))
 
-  let _ = refine_turn_limit
   let m = match @nash.FiniteMatrix::new(refined) {
     Ok(m) => m
     Err(_) => raise EmptyCombatants

@@ -1137,6 +1137,8 @@ pub fn run_select_shard(
   row_end : Int,
   row_keep_csv : String,
   col_keep_csv : String,
+  mc_turn_limit_override~ : Int? = None,
+  refine_turn_limit_override~ : Int? = None,
 ) -> Unit raise NashCliError {
   let input_json = match @db.read_file(input_path) {
     Some(s) => s
@@ -1172,17 +1174,37 @@ pub fn run_select_shard(
     None => SwitchingGame(DP_TURN_LIMIT)
   }
   let team_model = auto_upgrade_team_model(raw_team_model)
-  let (mc_trials, mc_seed, refine_tl) = match team_model {
+  let (mc_trials, mc_seed, json_refine_tl) = match team_model {
     ScreenedSwitchingGame(trials, seed, _, tl) => (trials, seed, tl)
     SwitchingGame(_) =>
       raise InvalidJson(
         "__select-shard requires a ScreenedSwitchingGame team_payoff_model; got plain SwitchingGame. The orchestrator should auto-upgrade before fanning out.",
       )
   }
+  // CLI overrides win when present. The orchestrator passes them so that
+  // the public API parameters (`mc_turn_limit~`, `refine_turn_limit~`) are
+  // honored even if they differ from what the input JSON encodes. When
+  // absent (direct invocation, legacy callers) we fall back to the JSON
+  // for refine and to MC_TURN_LIMIT for screen.
+  let mc_tl = match mc_turn_limit_override {
+    Some(n) => n
+    None => MC_TURN_LIMIT
+  }
+  let refine_tl = match refine_turn_limit_override {
+    Some(n) => n
+    None => json_refine_tl
+  }
   let matrix = match phase {
     "screen" => {
       try screen_phase_rows(
-        team, opp, format, mc_trials, mc_seed, row_start, row_end,
+        team,
+        opp,
+        format,
+        mc_trials,
+        mc_seed,
+        row_start,
+        row_end,
+        mc_turn_limit=mc_tl,
       ) catch {
         err => raise InnerError(err.to_string())
       }

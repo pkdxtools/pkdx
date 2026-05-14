@@ -130,12 +130,13 @@ if [ "$MODE" = tty ]; then
   }
 
   /"event":"phase_end"/ {
-    # Sanity sweep: any cell still marked "prog:<phase>" (e.g. shard crashed
-    # between cell_start and cell_done) is upgraded so the grid does not
-    # leave stray yellow `o`s after the phase boundary. The originating
-    # phase is read from the cell's own state, not from the surrounding
-    # phase_end marker — under parallel fan-out the parent's phase_end
-    # could arrive before some child cell_done events.
+    # Sanity sweep: any cell still marked "prog:<phase>" (e.g. shard
+    # crashed between cell_start and cell_done) is upgraded so the grid
+    # does not leave stray yellow `o` marks after the phase boundary.
+    # The originating phase is read from the per-cell state, not from
+    # the surrounding phase_end marker, because under parallel fan-out
+    # the parents phase_end can arrive before some child cell_done
+    # events do.
     for (key in grid) {
       st = grid[key]
       if (substr(st, 1, 5) == "prog:") {

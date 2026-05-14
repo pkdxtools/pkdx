@@ -1224,7 +1224,9 @@ pub fn run_select_shard(
         let i_global = row_start + i
         let row = Array::make(size_b, 0.0)
         for j in 0..<size_b {
-          progress(CellStart(sel_a[i_global], sel_b[j], i_global, j))
+          progress(
+            CellStart(sel_a[i_global], sel_b[j], i_global, j, "screening"),
+          )
           row[j] = screen_one_cell(
             team,
             opp,
@@ -1235,7 +1237,9 @@ pub fn run_select_shard(
             i_global * size_b + j,
             mc_tl,
           )
-          progress(CellDone(sel_a[i_global], sel_b[j], i_global, j))
+          progress(
+            CellDone(sel_a[i_global], sel_b[j], i_global, j, "screening"),
+          )
         }
         out[i] = row
       }
@@ -1271,6 +1275,7 @@ pub fn run_select_shard(
               sel_b[col_keep[j]],
               row_keep[i_global],
               col_keep[j],
+              "dp-refine",
             ),
           )
           row[j] = refine_one_cell(
@@ -1286,6 +1291,7 @@ pub fn run_select_shard(
               sel_b[col_keep[j]],
               row_keep[i_global],
               col_keep[j],
+              "dp-refine",
             ),
           )
         }

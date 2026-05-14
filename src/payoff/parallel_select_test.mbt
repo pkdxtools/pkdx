@@ -644,11 +644,11 @@ test "run_select_shard: emits one CellStart and one CellDone per cell, in order"
   let order : Array[String] = []
   let collector : (ProgressEvent) -> Unit = fn(e) {
     match e {
-      CellStart(_, _, r, c) => {
+      CellStart(_, _, r, c, _) => {
         starts.push((r, c))
         order.push("S:" + r.to_string() + "," + c.to_string())
       }
-      CellDone(_, _, r, c) => {
+      CellDone(_, _, r, c, _) => {
         dones.push((r, c))
         order.push("D:" + r.to_string() + "," + c.to_string())
       }

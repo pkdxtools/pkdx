@@ -86,7 +86,7 @@ pub fn team_payoff_matrix_screened(
   for i in 0..<size_a {
     let row = Array::make(size_b, 0.0)
     for j in 0..<size_b {
-      progress(CellStart(sel_a[i], sel_b[j], i, j))
+      progress(CellStart(sel_a[i], sel_b[j], i, j, "screening"))
       let cell_idx = (i * size_b + j).to_uint64()
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
@@ -94,7 +94,7 @@ pub fn team_payoff_matrix_screened(
         picked_a, picked_b, mc_trials, mc_seed ^ cell_idx,
         turn_limit=mc_turn_limit,
       )
-      progress(CellDone(sel_a[i], sel_b[j], i, j))
+      progress(CellDone(sel_a[i], sel_b[j], i, j, "screening"))
       progress(PhaseProgress("screening", i * size_b + j + 1, phase_a_total))
     }
     screen[i] = row
@@ -122,6 +122,7 @@ pub fn team_payoff_matrix_screened(
       progress(
         CellStart(
           sel_a[row_keep[i]], sel_b[col_keep[j]], row_keep[i], col_keep[j],
+          "dp-refine",
         ),
       )
       let picked_a = pick_combatants(team_a, sel_a[row_keep[i]])
@@ -137,6 +138,7 @@ pub fn team_payoff_matrix_screened(
       progress(
         CellDone(
           sel_a[row_keep[i]], sel_b[col_keep[j]], row_keep[i], col_keep[j],
+          "dp-refine",
         ),
       )
       progress(

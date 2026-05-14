@@ -181,13 +181,13 @@ pub fn team_payoff_matrix_switching(
   for i in 0..<size_a {
     let row = Array::make(size_b, 0.0)
     for j in 0..<size_b {
-      progress(CellStart(sel_a[i], sel_b[j], i, j))
+      progress(CellStart(sel_a[i], sel_b[j], i, j, "dp-full"))
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
       row[j] = switching_game_winrate(
         picked_a, picked_b, turn_limit, disk~, progress~, dp_log_every~,
       )
-      progress(CellDone(sel_a[i], sel_b[j], i, j))
+      progress(CellDone(sel_a[i], sel_b[j], i, j, "dp-full"))
       progress(PhaseProgress("dp-full", i * size_b + j + 1, total))
     }
     data[i] = row

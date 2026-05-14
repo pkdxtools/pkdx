@@ -1125,17 +1125,21 @@ pub(all) enum ActionKind {
 ///   count for the phase (cells for A/C, 1 for B).
 /// - `PhaseProgress(name, current, total)` — increment marker within a phase.
 /// - `PhaseEnd(name)` — phase completion.
-/// - `CellStart(team_indices, opp_indices, row, col)` — entering a selection
-///   cell of the team-payoff matrix. `row` / `col` are the indices in the
-///   original `combinations_with_lead(n, k)` enumeration (0..size_a × 0..size_b),
-///   so a visualiser can paint a fixed grid (e.g. 60×60 for 6-vs-6 single)
-///   regardless of whether the screened pipeline has dropped some cells.
-/// - `CellDone(team_indices, opp_indices, row, col)` — paired completion
-///   event for `CellStart`. Emitted when the per-cell compute finishes,
-///   regardless of phase. Required because parallel shards interleave
-///   cell events, so a visualiser can no longer rely on "next `CellStart`
-///   means previous cell is done". Phase colour is tracked by the
-///   visualiser through the enclosing `PhaseStart` / `PhaseEnd` brackets.
+/// - `CellStart(team_indices, opp_indices, row, col, phase)` — entering a
+///   selection cell of the team-payoff matrix. `row` / `col` are the indices
+///   in the original `combinations_with_lead(n, k)` enumeration
+///   (0..size_a × 0..size_b), so a visualiser can paint a fixed grid (e.g.
+///   60×60 for 6-vs-6 single) regardless of whether the screened pipeline
+///   has dropped some cells. `phase` carries the originating phase name
+///   ("screening" / "dp-refine" / "dp-full") so a visualiser can colour the
+///   cell without consulting the surrounding `PhaseStart` / `PhaseEnd`
+///   brackets — under parallel fan-out, child shards write to the parent's
+///   inherited stderr, and the kernel pipe does not guarantee ordering
+///   between a child's last `CellDone` and the parent's next `PhaseStart`,
+///   so phase has to travel with the event.
+/// - `CellDone(team_indices, opp_indices, row, col, phase)` — paired
+///   completion event for `CellStart`. Emitted when the per-cell compute
+///   finishes; carries the same `phase` string as its matching `CellStart`.
 /// - `DpNode(visited, hits, depth, rows, cols, outcomes, classification)` —
 ///   DP recursion checkpoint (emitted from `value()` every
 ///   `ValueStats::log_every` cache misses). `visited` is the running miss
@@ -1147,8 +1151,8 @@ pub(all) enum ProgressEvent {
   PhaseStart(String, Int)
   PhaseProgress(String, Int, Int)
   PhaseEnd(String)
-  CellStart(Array[Int], Array[Int], Int, Int)
-  CellDone(Array[Int], Array[Int], Int, Int)
+  CellStart(Array[Int], Array[Int], Int, Int, String)
+  CellDone(Array[Int], Array[Int], Int, Int, String)
   DpNode(Int, Int, Int, Int, Int, Int, String)
 } derive(Debug)
 

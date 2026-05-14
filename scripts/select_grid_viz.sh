@@ -57,8 +57,13 @@ if [ "$MODE" = tty ]; then
     # Per-cell state map. Keys are "r,c" strings, values "prog" / "done".
     # Used by phase_end sanity sweep to upgrade any still-in-progress cells
     # (e.g. a child that crashed between cell_start and cell_done).
+    # Per-cell state. Keys are "r,c", values "prog:<phase>" / "done:<phase>".
+    # The phase part is recorded so phase_end sanity sweep and reordering-
+    # tolerant painting both colour the cell against its originating phase,
+    # not the most-recent phase_start marker (which races with child stderr
+    # under parallel fan-out).
     delete grid
-    current_phase = ""
+    status_phase = ""
   }
 
   function get_phase(line,    _) {
@@ -74,10 +79,10 @@ if [ "$MODE" = tty ]; then
   # Glyphs are ASCII (width 1 on every terminal/locale) so the cursor-move
   # `paint(r, c)` lands on the right visual column in CJK / East Asian width
   # environments too.
-  function done_mark() {
-    if (current_phase == "screening")      return "\033[36m#\033[0m"
-    if (current_phase == "dp-refine")      return "\033[1;35m#\033[0m"
-    if (current_phase == "dp-full")        return "\033[1;32m#\033[0m"
+  function done_mark(phase) {
+    if (phase == "screening")      return "\033[36m#\033[0m"
+    if (phase == "dp-refine")      return "\033[1;35m#\033[0m"
+    if (phase == "dp-full")        return "\033[1;32m#\033[0m"
     return "\033[37m?\033[0m"
   }
 
@@ -98,7 +103,8 @@ if [ "$MODE" = tty ]; then
     row = substr($0, RSTART + 6, RLENGTH - 6) + 0
     if (match($0, /"col":[0-9]+/) == 0) next
     col = substr($0, RSTART + 6, RLENGTH - 6) + 0
-    grid[row "," col] = "prog"
+    phase = get_phase($0)
+    grid[row "," col] = "prog:" phase
     paint(row, col, in_progress_mark())
     fflush()
     next
@@ -109,28 +115,34 @@ if [ "$MODE" = tty ]; then
     row = substr($0, RSTART + 6, RLENGTH - 6) + 0
     if (match($0, /"col":[0-9]+/) == 0) next
     col = substr($0, RSTART + 6, RLENGTH - 6) + 0
-    grid[row "," col] = "done"
-    paint(row, col, done_mark())
+    phase = get_phase($0)
+    grid[row "," col] = "done:" phase
+    paint(row, col, done_mark(phase))
     fflush()
     next
   }
 
   /"event":"phase_start"/ {
-    current_phase = get_phase($0)
-    status("Phase: " current_phase " starting")
+    status_phase = get_phase($0)
+    status("Phase: " status_phase " starting")
     fflush()
     next
   }
 
   /"event":"phase_end"/ {
-    # Sanity sweep: any cell still marked "prog" (e.g. shard crashed
+    # Sanity sweep: any cell still marked "prog:<phase>" (e.g. shard crashed
     # between cell_start and cell_done) is upgraded so the grid does not
-    # leave stray yellow `o`s after the phase boundary.
+    # leave stray yellow `o`s after the phase boundary. The originating
+    # phase is read from the cell's own state, not from the surrounding
+    # phase_end marker — under parallel fan-out the parent's phase_end
+    # could arrive before some child cell_done events.
     for (key in grid) {
-      if (grid[key] == "prog") {
+      st = grid[key]
+      if (substr(st, 1, 5) == "prog:") {
+        ph = substr(st, 6)
         split(key, idx, ",")
-        paint(idx[1] + 0, idx[2] + 0, done_mark())
-        grid[key] = "done"
+        paint(idx[1] + 0, idx[2] + 0, done_mark(ph))
+        grid[key] = "done:" ph
       }
     }
     status("Phase: " get_phase($0) " done")

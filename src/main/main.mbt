@@ -2976,8 +2976,10 @@ fn format_progress_stderr(event : @payoff.ProgressEvent) -> String {
       "/" +
       total.to_string()
     PhaseEnd(name) => "[progress] phase=" + name + " end"
-    CellStart(team_sel, opp_sel, row, col) =>
-      "[progress] cell row=" +
+    CellStart(team_sel, opp_sel, row, col, phase) =>
+      "[progress] cell phase=" +
+      phase +
+      " row=" +
       row.to_string() +
       " col=" +
       col.to_string() +
@@ -2985,8 +2987,10 @@ fn format_progress_stderr(event : @payoff.ProgressEvent) -> String {
       format_int_array(team_sel) +
       " opp=" +
       format_int_array(opp_sel)
-    CellDone(team_sel, opp_sel, row, col) =>
-      "[progress] cell-done row=" +
+    CellDone(team_sel, opp_sel, row, col, phase) =>
+      "[progress] cell-done phase=" +
+      phase +
+      " row=" +
       row.to_string() +
       " col=" +
       col.to_string() +
@@ -3071,8 +3075,10 @@ fn format_progress_json(event : @payoff.ProgressEvent) -> String {
       "}"
     PhaseEnd(name) =>
       "{\"event\":\"phase_end\",\"phase\":\"" + json_escape_string(name) + "\"}"
-    CellStart(team_sel, opp_sel, row, col) =>
-      "{\"event\":\"cell_start\",\"row\":" +
+    CellStart(team_sel, opp_sel, row, col, phase) =>
+      "{\"event\":\"cell_start\",\"phase\":\"" +
+      json_escape_string(phase) +
+      "\",\"row\":" +
       row.to_string() +
       ",\"col\":" +
       col.to_string() +
@@ -3081,8 +3087,10 @@ fn format_progress_json(event : @payoff.ProgressEvent) -> String {
       ",\"opp_indices\":" +
       format_int_array(opp_sel) +
       "}"
-    CellDone(team_sel, opp_sel, row, col) =>
-      "{\"event\":\"cell_done\",\"row\":" +
+    CellDone(team_sel, opp_sel, row, col, phase) =>
+      "{\"event\":\"cell_done\",\"phase\":\"" +
+      json_escape_string(phase) +
+      "\",\"row\":" +
       row.to_string() +
       ",\"col\":" +
       col.to_string() +

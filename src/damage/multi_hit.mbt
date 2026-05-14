@@ -18,7 +18,7 @@ pub(all) enum HitSpec {
   Random2to5
   // #91: per-hit 90% continuation, 1..10 hits. ネズミざん (Population Bomb).
   PopulationBomb
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum HitPlan {
@@ -37,7 +37,7 @@ pub(all) enum HitPlan {
   // conditioned on the move connecting at all. Hit count distribution:
   // p(N) = 0.9^(N-1) * 0.1 for N=1..9, p(10) = 0.9^9. Σ = 1.0.
   PopulationBomb(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Moves that always hit exactly twice.

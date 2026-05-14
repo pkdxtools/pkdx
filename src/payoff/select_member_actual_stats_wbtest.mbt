@@ -37,15 +37,15 @@ test "parse_combatant_json: nature and actual_stats are lifted into Combatant" {
     #|}
   let c = parse_single_combatant(src)
   match c.nature {
-    Some(n) => assert_eq(n.name_ja, "ようき")
+    Some(n) => @debug.assert_eq(n.name_ja, "ようき")
     None => fail("nature must be parsed")
   }
   match c.actual_stats {
     Some(arr) => {
-      assert_eq(arr.length(), 6)
-      assert_eq(arr[0], 205) // HP
-      assert_eq(arr[1], 181) // Atk
-      assert_eq(arr[5], 124) // Spe
+      @debug.assert_eq(arr.length(), 6)
+      @debug.assert_eq(arr[0], 205) // HP
+      @debug.assert_eq(arr[1], 181) // Atk
+      @debug.assert_eq(arr[5], 124) // Spe
     }
     None => fail("actual_stats must be parsed")
   }
@@ -126,15 +126,15 @@ test "build_input_with_ranks: physical attacker routes actual_stats[1] to atk_st
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   // 物理技なので attacker Atk (index 1) / defender Def (index 2)
-  assert_eq(input.atk_stat_override, 181)
-  assert_eq(input.def_stat_override, 160)
-  assert_eq(input.def_hp_override, 180)
+  @debug.assert_eq(input.atk_stat_override, 181)
+  @debug.assert_eq(input.def_stat_override, 160)
+  @debug.assert_eq(input.def_hp_override, 180)
   match input.atk_nature {
-    Some(n) => assert_eq(n.name_ja, "ようき")
+    Some(n) => @debug.assert_eq(n.name_ja, "ようき")
     None => fail("atk_nature must be propagated")
   }
   match input.def_nature {
-    Some(n) => assert_eq(n.name_ja, "ずぶとい")
+    Some(n) => @debug.assert_eq(n.name_ja, "ずぶとい")
     None => fail("def_nature must be propagated")
   }
 }
@@ -184,9 +184,9 @@ test "build_input_with_ranks: special move routes to SpA (3) / SpD (4)" {
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   // 特殊技: attacker SpA (index 3) / defender SpD (index 4)
-  assert_eq(input.atk_stat_override, 205)
-  assert_eq(input.def_stat_override, 177)
-  assert_eq(input.def_hp_override, 180)
+  @debug.assert_eq(input.atk_stat_override, 205)
+  @debug.assert_eq(input.def_stat_override, 177)
+  @debug.assert_eq(input.def_hp_override, 180)
 }
 
 ///|
@@ -220,9 +220,9 @@ test "build_input_with_ranks: missing actual_stats falls back to zero override" 
     recharge: false,
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
-  assert_eq(input.atk_stat_override, 0)
-  assert_eq(input.def_stat_override, 0)
-  assert_eq(input.def_hp_override, 0)
+  @debug.assert_eq(input.atk_stat_override, 0)
+  @debug.assert_eq(input.def_stat_override, 0)
+  @debug.assert_eq(input.def_hp_override, 0)
   match input.atk_nature {
     None => ()
     Some(_) => fail("atk_nature should fall back to None (engine default +10%)")
@@ -280,9 +280,9 @@ test "build_input_with_ranks: body press picks Def (index 2) as atk stat" {
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   // ボディプレス: 攻撃側 Def = 222, 防御側 Def = 144
-  assert_eq(input.atk_stat_override, 222)
-  assert_eq(input.def_stat_override, 144)
-  assert_eq(input.def_hp_override, 180)
+  @debug.assert_eq(input.atk_stat_override, 222)
+  @debug.assert_eq(input.def_stat_override, 144)
+  @debug.assert_eq(input.def_hp_override, 180)
 }
 
 ///|
@@ -593,10 +593,10 @@ test "parse_combatant_json: stat_points is lifted into Combatant" {
   let c = parse_single_combatant(src)
   match c.stat_points {
     Some(sp) => {
-      assert_eq(sp.length(), 6)
-      assert_eq(sp[0], 0)
-      assert_eq(sp[3], 32) // C
-      assert_eq(sp[5], 32) // S
+      @debug.assert_eq(sp.length(), 6)
+      @debug.assert_eq(sp[0], 0)
+      @debug.assert_eq(sp[3], 32) // C
+      @debug.assert_eq(sp[5], 32) // S
     }
     None => fail("stat_points must be parsed")
   }
@@ -636,23 +636,23 @@ test "effective_combatant: mega recomputes actual_stats from stat_points/nature"
   let post = effective_combatant(pre, true)
   // mega_form / nature / stat_points はすべて伝搬する。
   match post.nature {
-    Some(n) => assert_eq(n.name_ja, "ようき")
+    Some(n) => @debug.assert_eq(n.name_ja, "ようき")
     None => fail("post-mega nature must be preserved")
   }
   match post.stat_points {
-    Some(sp) => assert_eq(sp[3], 32)
+    Some(sp) => @debug.assert_eq(sp[3], 32)
     None => fail("post-mega stat_points must be preserved")
   }
   match post.actual_stats {
     Some(arr) => {
-      assert_eq(arr.length(), 6)
+      @debug.assert_eq(arr.length(), 6)
       // HP は mega で不変。pre-mega actual_stats[0] (= 153) を引き継ぐ。
-      assert_eq(arr[0], 153)
+      @debug.assert_eq(arr[0], 153)
       // SpA: post-mega base 159 + SP 32 + Champions オフセット 20 に
       // ようき (SpA 下降 9/10) を掛けて 189。
-      assert_eq(arr[3], 189)
+      @debug.assert_eq(arr[3], 189)
       // Spe: post-mega base 100 + SP 32 + 20 にようき (Spe 上昇 11/10) = 167。
-      assert_eq(arr[5], 167)
+      @debug.assert_eq(arr[5], 167)
     }
     None =>
       fail(
@@ -693,7 +693,7 @@ test "effective_combatant: mega without stat_points drops actual_stats" {
   }
   // nature は引き続き伝搬 (engine は nature + 既定投資で再計算できる)。
   match post.nature {
-    Some(n) => assert_eq(n.name_ja, "ひかえめ")
+    Some(n) => @debug.assert_eq(n.name_ja, "ひかえめ")
     None => fail("post-mega nature must still be preserved")
   }
 }
@@ -802,10 +802,10 @@ test "parse_combatant_json: ivs field is lifted into Combatant" {
   let c = parse_combatant_json(j, "test", stat_system=@model.Standard)
   match c.ivs {
     Some(arr) => {
-      assert_eq(arr.length(), 6)
-      assert_eq(arr[0], 31)
-      assert_eq(arr[1], 0) // 0 Atk IV (混乱自傷ケア想定)
-      assert_eq(arr[5], 31)
+      @debug.assert_eq(arr.length(), 6)
+      @debug.assert_eq(arr[0], 31)
+      @debug.assert_eq(arr[1], 0) // 0 Atk IV (混乱自傷ケア想定)
+      @debug.assert_eq(arr[5], 31)
     }
     None => fail("ivs must be parsed")
   }
@@ -875,22 +875,22 @@ test "effective_combatant: mega honors non-31 Standard IVs in post-mega recomput
   let post = effective_combatant(pre, true)
   match post.actual_stats {
     Some(arr) => {
-      assert_eq(arr.length(), 6)
+      @debug.assert_eq(arr.length(), 6)
       // HP は mega で不変。pre-mega actual_stats[0] (=153) を引き継ぐ。
-      assert_eq(arr[0], 153)
+      @debug.assert_eq(arr[0], 153)
       // Atk: IV 0 が尊重されれば 98。IV 31 ハードコードだと 111 になる (= 回帰)。
-      assert_eq(arr[1], 98)
+      @debug.assert_eq(arr[1], 98)
       // SpA: IV 31 / EV 252 / neutral nature / post-mega base 159
       // = floor((159*2+31+63)*50/100+5) = 211。
-      assert_eq(arr[3], 211)
+      @debug.assert_eq(arr[3], 211)
       // Spe: IV 31 / EV 252 / +10% / post-mega base 100 変化なしなので 167。
-      assert_eq(arr[5], 167)
+      @debug.assert_eq(arr[5], 167)
     }
     None => fail("post-mega actual_stats must be recomputed")
   }
   match post.ivs {
     Some(arr) => {
-      assert_eq(arr[1], 0)
+      @debug.assert_eq(arr[1], 0)
     }
     None => fail("ivs must be preserved through effective_combatant")
   }
@@ -924,7 +924,7 @@ test "effective_combatant: mega defaults IVs to 31 when ivs is missing (Standard
   match post.actual_stats {
     Some(arr) => {
       // IV 31 デフォルト + 0.9 nature の post-mega Atk = 111。
-      assert_eq(arr[1], 111)
+      @debug.assert_eq(arr[1], 111)
     }
     None => fail("post-mega actual_stats must be recomputed")
   }

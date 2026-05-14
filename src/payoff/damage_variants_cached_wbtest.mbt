@@ -86,7 +86,7 @@ test "compute_damage_variants: single-hit move returns 1 outcome with probabilit
   let atk = dvc_combatant("attacker", mv)
   let dfn = dvc_combatant("defender", mv)
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let o = outcomes[0]
   assert_true(dvc_approx(o.probability, 1.0, 1.0e-12))
   assert_true(o.hits_count == 1)
@@ -99,7 +99,7 @@ test "compute_damage_variants: Triple Axel returns 3 outcomes with hits_count {1
   let atk = dvc_combatant("attacker", mv)
   let dfn = dvc_combatant("defender", mv)
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
-  inspect(outcomes.length(), content="3")
+  @debug.debug_inspect(outcomes.length(), content="3")
   assert_true(outcomes[0].hits_count == 1 && dvc_approx(outcomes[0].probability, 0.10, 1.0e-12))
   assert_true(outcomes[1].hits_count == 2 && dvc_approx(outcomes[1].probability, 0.09, 1.0e-12))
   assert_true(outcomes[2].hits_count == 3 && dvc_approx(outcomes[2].probability, 0.81, 1.0e-12))
@@ -114,7 +114,7 @@ test "compute_damage_variants: Skill Link rocket blast returns 1 outcome with hi
   }
   let dfn = dvc_combatant("defender", mv)
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(dvc_approx(outcomes[0].probability, 1.0, 1.0e-12))
   assert_true(outcomes[0].hits_count == 5)
 }
@@ -125,7 +125,7 @@ test "compute_damage_variants: PopulationBomb (ネズミざん) returns 10 outco
   let atk = dvc_combatant("attacker", mv)
   let dfn = dvc_combatant("defender", mv)
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
-  inspect(outcomes.length(), content="10")
+  @debug.debug_inspect(outcomes.length(), content="10")
   let mut total = 0.0
   for i = 0; i < 10; i = i + 1 {
     assert_true(outcomes[i].hits_count == i + 1)
@@ -180,7 +180,7 @@ test "compute_damage_variants: immune matchup returns one outcome with mean_dama
     ivs: None,
   }
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(outcomes[0].mean_damage == 0)
   assert_true(dvc_approx(outcomes[0].probability, 1.0, 1.0e-12))
 }
@@ -213,8 +213,8 @@ test "compute_damage_variants: burn halves Physical mean per variant" {
   let normal = compute_damage_variants(atk, dfn, mv, 0, 0)
   let burned = compute_damage_variants(atk, dfn, mv, 0, 0, atk_burn=true)
   // burn halves Physical → roughly 2x ratio (allow integer-division slack).
-  inspect(normal.length(), content="1")
-  inspect(burned.length(), content="1")
+  @debug.debug_inspect(normal.length(), content="1")
+  @debug.debug_inspect(burned.length(), content="1")
   let n = normal[0].mean_damage
   let b = burned[0].mean_damage
   assert_true(n > 0)

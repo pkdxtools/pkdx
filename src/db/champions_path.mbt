@@ -61,7 +61,7 @@ pub fn resolve_champions_db_path_from(pokedex_path : String) -> String {
       }
     }
     if tail_match {
-      return pokedex_path[0:len - suffix_len].to_string() + "champions.db"
+      return pokedex_path[0:len - suffix_len].to_owned() + "champions.db"
     }
   }
   // Custom POKEDEX_DB path that doesn't end in `pokedex.db`. Place the
@@ -77,7 +77,7 @@ pub fn resolve_champions_db_path_from(pokedex_path : String) -> String {
   if last_sep < 0 {
     "champions.db"
   } else {
-    pokedex_path[0:last_sep + 1].to_string() + "champions.db"
+    pokedex_path[0:last_sep + 1].to_owned() + "champions.db"
   }
 }
 
@@ -122,7 +122,7 @@ fn escape_sqlite_string(s : String) -> String {
       // single quote → doubled
       out = out + "''"
     } else {
-      out = out + s[i:i + 1].to_string()
+      out = out + s[i:i + 1].to_owned()
     }
   }
   out
@@ -177,7 +177,7 @@ pub fn open_for(
 ) -> Result[Db, String] {
   if version == "champions" {
     let champions_path = resolve_champions_db_path_from(pokedex_path)
-    if not(file_exists(champions_path)) {
+    if !(file_exists(champions_path)) {
       // champions.db 未生成 (setup.sh 未実行 / 旧 install): pokedex.db
       // のみ open。Champions レギュレーションのクエリは空結果になる。
       open(pokedex_path)
@@ -214,7 +214,7 @@ pub fn validate_champions_schema(db : Db) -> Result[Unit, String] {
   let required : Array[String] = []
   let missing : Array[String] = []
   for i = 0; i < required.length(); i = i + 1 {
-    if not(table_exists(db, required[i])) {
+    if !(table_exists(db, required[i])) {
       missing.push(required[i])
     }
   }

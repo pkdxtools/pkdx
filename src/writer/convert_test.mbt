@@ -59,7 +59,7 @@ test "migrate_pokemon_meta_v011: full conversion" {
   let expected = @json.parse(expected_src)
   let result = migrate_pokemon_meta_v011(old)
   guard result is Ok(converted) else { fail("Expected Ok") }
-  assert_eq(converted, expected)
+  @debug.assert_eq(converted, expected)
 }
 
 ///|
@@ -85,7 +85,7 @@ test "migrate_pokemon_meta_v011: idempotent on new-format input" {
   let new_input = @json.parse(src)
   let result = migrate_pokemon_meta_v011(new_input)
   guard result is Ok(converted) else { fail("Expected Ok") }
-  assert_eq(converted, new_input)
+  @debug.assert_eq(converted, new_input)
 }
 
 ///|
@@ -121,8 +121,8 @@ test "migrate_pokemon_meta_v011: single-type pokemon without type2 key" {
   guard pokemon.get("types") is Some(Array(types)) else {
     fail("types[] missing")
   }
-  assert_eq(types.length(), 1)
-  assert_eq(types[0], "でんき".to_json())
+  @debug.assert_eq(types.length(), 1)
+  @debug.assert_eq(types[0], "でんき".to_json())
   assert_true(pokemon.get("type1") is None)
   assert_true(pokemon.get("type2") is None)
 }
@@ -158,7 +158,7 @@ test "migrate_pokemon_meta_v011: type2 is null" {
   guard pokemon.get("types") is Some(Array(types)) else {
     fail("types[] missing")
   }
-  assert_eq(types.length(), 1)
+  @debug.assert_eq(types.length(), 1)
 }
 
 ///|
@@ -195,9 +195,9 @@ test "migrate_pokemon_meta_v011: abilities canonical order with nulls filtered" 
   guard pokemon.get("abilities") is Some(Array(abilities)) else {
     fail("abilities[] missing")
   }
-  assert_eq(abilities.length(), 2)
-  assert_eq(abilities[0], "あついしぼう".to_json())
-  assert_eq(abilities[1], "ちからもち".to_json())
+  @debug.assert_eq(abilities.length(), 2)
+  @debug.assert_eq(abilities[0], "あついしぼう".to_json())
+  @debug.assert_eq(abilities[1], "ちからもち".to_json())
 }
 
 ///|
@@ -260,7 +260,7 @@ test "migrate_pokemon_meta_v011: preserves role on new-format input" {
   guard root.get("build") is Some(Object(build)) else {
     fail("build section missing")
   }
-  assert_eq(build.get("role"), Some("物理アタッカー".to_json()))
+  @debug.assert_eq(build.get("role"), Some("物理アタッカー".to_json()))
 }
 
 ///|
@@ -296,7 +296,7 @@ test "migrate_team_meta_v011: members long-key stats are shortened" {
   let result = migrate_team_meta_v011(old)
   guard result is Ok(converted) else { fail("Expected Ok") }
   // 変換後は validate を通過する必要がある (legacy 誘導エラーが消えている)。
-  inspect(validate_team_json(converted), content="Ok(())")
+  {let _r = validate_team_json(converted); assert_true(_r is Ok(_))}
   // members[0].base_stats が short key になっている。
   guard converted is Object(root) else { fail("root not object") }
   guard root.get("members") is Some(Array(members)) else {
@@ -306,14 +306,14 @@ test "migrate_team_meta_v011: members long-key stats are shortened" {
   guard m0.get("base_stats") is Some(Object(bs)) else {
     fail("base_stats not object")
   }
-  assert_eq(bs.get("h"), Some((108 : Int).to_json()))
-  assert_eq(bs.get("s"), Some((102 : Int).to_json()))
+  @debug.assert_eq(bs.get("h"), Some((108 : Int).to_json()))
+  @debug.assert_eq(bs.get("s"), Some((102 : Int).to_json()))
   assert_true(bs.get("hp") is None)
   assert_true(bs.get("spe") is None)
   guard m0.get("stat_points") is Some(Object(sp)) else {
     fail("stat_points not object")
   }
-  assert_eq(sp.get("s"), Some((252 : Int).to_json()))
+  @debug.assert_eq(sp.get("s"), Some((252 : Int).to_json()))
   assert_true(sp.get("spe") is None)
 }
 
@@ -353,7 +353,7 @@ test "migrate_team_meta_v011: idempotent on new-format input" {
       fail("migrate failed on new-format input: \{e}")
     }
   }
-  assert_eq(once, twice)
+  @debug.assert_eq(once, twice)
 }
 
 ///|
@@ -383,7 +383,7 @@ test "migrate_team_meta_v011: passthrough for new-format team cache" {
   let input = @json.parse(src)
   let result = migrate_team_meta_v011(input)
   guard result is Ok(converted) else { fail("Expected Ok") }
-  assert_eq(converted, input)
+  @debug.assert_eq(converted, input)
 }
 
 ///|

@@ -57,7 +57,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 下流の ability / item / wall / weather / ruin 分岐は必ず sr.effective_physical
   // 由来のこのフラグを参照すること (mv.category を直接参照してはならない)。
   let is_physical = sr.effective_physical
-  let is_special = not(sr.effective_physical)
+  let is_special = !(sr.effective_physical)
   // ボディプレスは攻撃側のDefenseを攻撃値として使う物理技。
   // Attack系の補正（ちからもち・はりきり・ハチマキ等）は適用されず、
   // Defense系の補正（ファーコート・しんかのきせき等）が適用される。
@@ -167,7 +167,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 2b-2-atk. Atk-side ruin (defender's ability lowers attacker's stat).
   // ボディプレスは攻撃値として自分の Defense を使うため、わざわいのおふだ
   // / うつわ の影響を受けない。
-  if not(is_body_press) {
+  if !(is_body_press) {
     match def_ability {
       "わざわいのおふだ" => if is_physical { atk_stat = atk_stat * 3 / 4 }
       "わざわいのうつわ" => if !is_physical { atk_stat = atk_stat * 3 / 4 }
@@ -419,9 +419,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       // and mold-breaker-family abilities each skip the multiplier
       // independently.
       let wall_ok = wall_applies(input.wall, is_physical) &&
-        not(input.critical) &&
-        not(input.screen_pierce) &&
-        not(is_wall_bypass_ability(atk_ability))
+        !(input.critical) &&
+        !(input.screen_pierce) &&
+        !(is_wall_bypass_ability(atk_ability))
       if wall_ok {
         let wall_mod = if input.is_double { 2732 } else { 2048 }
         dmg = round5(dmg, wall_mod)

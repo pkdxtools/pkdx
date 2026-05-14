@@ -5,7 +5,7 @@
 pub(all) struct HbdWeights {
   phys : Int
   spec : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A single optimization candidate.
@@ -16,7 +16,7 @@ pub(all) struct HbdCandidate {
   def_ : Int
   spd : Int
   score : Double
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Result of `optimize_hbd` / `optimize_hbd_topn`.
@@ -24,7 +24,7 @@ pub(all) struct HbdCandidate {
 pub(all) struct HbdResult {
   candidates : Array[HbdCandidate]
   warning : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Bulk index objective: f = H · B · D / (s·B + p·D).
@@ -123,9 +123,9 @@ pub fn optimize_hbd_impl(
     points[i] = if fixed_points[i] >= 0 { fixed_points[i] } else { 0 }
   }
   // Snap pre-adjustment — guarantee greedy loop starts from a feasible state.
-  if not(h_fixed) && snap != @model.HpSnap::NoSnap {
+  if !(h_fixed) && snap != @model.HpSnap::NoSnap {
     let h0 = model.calc_hp(pokemon.hp, points[0])
-    if not(@model.matches_snap(h0, snap)) {
+    if !(@model.matches_snap(h0, snap)) {
       let target = next_snap_hp(h0 - 1, snap)
       let needed = model.point_for_hp(pokemon.hp, target)
       let mut fixed_used = 0
@@ -182,15 +182,15 @@ pub fn optimize_hbd_impl(
     let next_d_pt = model.point_for_other(
       4, pokemon.spd, cur_d + 1, nd_num, nd_den,
     )
-    let valid_h = not(h_fixed) &&
+    let valid_h = !(h_fixed) &&
       next_h_pt > points[0] &&
       next_h_pt <= max_per &&
       next_h_pt - points[0] <= free
-    let valid_b = not(b_fixed) &&
+    let valid_b = !(b_fixed) &&
       next_b_pt > points[2] &&
       next_b_pt <= max_per &&
       next_b_pt - points[2] <= free
-    let valid_d = not(d_fixed) &&
+    let valid_d = !(d_fixed) &&
       next_d_pt > points[4] &&
       next_d_pt <= max_per &&
       next_d_pt - points[4] <= free
@@ -225,7 +225,7 @@ pub fn optimize_hbd_impl(
   let final_b = model.calc_other(2, pokemon.def_, points[2], nb_num, nb_den)
   let final_d = model.calc_other(4, pokemon.spd, points[4], nd_num, nd_den)
   let warning = if snap != @model.HpSnap::NoSnap &&
-    not(@model.matches_snap(final_h, snap)) {
+    !(@model.matches_snap(final_h, snap)) {
     Some("hp-snap unreachable; constraint ignored")
   } else {
     None

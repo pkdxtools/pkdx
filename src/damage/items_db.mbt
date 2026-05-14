@@ -48,7 +48,7 @@ pub fn get_atk_item_final_db(
     match e.kind {
       @db.FinalMod =>
         if polarity_matches(e.is_physical, is_physical) {
-          if e.super_effective_only && not(is_super_effective) {
+          if e.super_effective_only && !(is_super_effective) {
             // skip
           } else {
             return e.num
@@ -83,7 +83,7 @@ fn polarity_matches(filter : Int?, is_physical : Bool) -> Bool {
   match filter {
     None => true
     Some(1) => is_physical
-    Some(0) => not(is_physical)
+    Some(0) => !(is_physical)
     Some(_) => true
   }
 }

@@ -20,9 +20,13 @@ test "query_learners: じしん scarlet_violet" {
       for i = 0; i < results.length(); i = i + 1 {
         if results[i].name_ja == "ガブリアス" {
           found = true
-          inspect(results[i].type1, content="じめん")
-          inspect(results[i].type2, content="ドラゴン")
-          inspect(results[i].bst, content="600")
+          @debug.debug_inspect(results[i].type1, content=(
+            #|"じめん"
+          ))
+          @debug.debug_inspect(results[i].type2, content=(
+            #|"ドラゴン"
+          ))
+          @debug.debug_inspect(results[i].bst, content="600")
         }
       }
       assert_true(found)
@@ -74,7 +78,7 @@ test "query_learners: nonexistent move returns empty" {
   let result = query_learners(db, "そんざいしないわざ", "scarlet_violet")
   close(db)
   match result {
-    Ok(results) => inspect(results.length(), content="0")
+    Ok(results) => @debug.debug_inspect(results.length(), content="0")
     Err(e) => fail("query_learners failed: " + e)
   }
 }

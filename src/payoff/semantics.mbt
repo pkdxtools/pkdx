@@ -54,7 +54,7 @@ pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 pub(all) enum TeamPayoffModel {
   SwitchingGame(Int)
   ScreenedSwitchingGame(Int, UInt64, Double, Int)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A single-Pokemon combatant with moves and equipment. The underlying
@@ -93,7 +93,7 @@ pub(all) struct Combatant {
   stat_points : Array[Int]?
   actual_stats : Array[Int]?
   ivs : Array[Int]?
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub suberror PayoffError {
@@ -105,4 +105,4 @@ pub suberror PayoffError {
   // and failure mode so CLI users do not see a misleading "empty
   // combatants" message for a transport-layer error.
   ShardError(String)
-} derive(Show)
+} derive(Debug)

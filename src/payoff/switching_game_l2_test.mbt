@@ -31,7 +31,7 @@ test "switching_game_winrate: L2 disk cache survives across DamageCache instance
     team_a, team_b, 3, disk=Some(disk),
   )
   assert_true(dmg1.disk_misses > 0)
-  assert_eq(dmg1.disk_hits, 0)
+  @debug.assert_eq(dmg1.disk_hits, 0)
 
   // Second run: fresh L1 but L2 persists in the SQLite file → disk
   // lookups hit for the same matchups.

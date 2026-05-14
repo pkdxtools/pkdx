@@ -63,7 +63,7 @@ test "team_monte_carlo_value_returns_plus_one_when_own_dominates" {
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
   let v = team_monte_carlo_value(own, opp, 1, 123UL)
-  assert_eq(v, 1.0)
+  @debug.assert_eq(v, 1.0)
 }
 
 ///|
@@ -71,7 +71,7 @@ test "team_monte_carlo_value_returns_minus_one_when_opponent_dominates" {
   let own = build_fragile_team("F")
   let opp = build_dominant_team("D")
   let v = team_monte_carlo_value(own, opp, 1, 123UL)
-  assert_eq(v, -1.0)
+  @debug.assert_eq(v, -1.0)
 }
 
 ///|
@@ -88,7 +88,7 @@ test "team_monte_carlo_value_is_deterministic_for_same_seed" {
   let opp = build_fragile_team("F")
   let v1 = team_monte_carlo_value(own, opp, 16, 7UL)
   let v2 = team_monte_carlo_value(own, opp, 16, 7UL)
-  assert_eq(v1, v2)
+  @debug.assert_eq(v1, v2)
 }
 
 ///|
@@ -96,7 +96,7 @@ test "team_monte_carlo_value_zero_trials_returns_zero" {
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
   let v = team_monte_carlo_value(own, opp, 0, 42UL)
-  assert_eq(v, 0.0)
+  @debug.assert_eq(v, 0.0)
 }
 
 ///|
@@ -107,7 +107,7 @@ test "team_rollout_single_trial_matches_monte_carlo_value_for_trivial_case" {
   let rng = seeded_rng(99UL)
   let v_rollout = team_rollout(own, opp, rng)
   let v_mc = team_monte_carlo_value(own, opp, 1, 99UL)
-  assert_eq(v_rollout, v_mc)
+  @debug.assert_eq(v_rollout, v_mc)
 }
 
 ///|
@@ -134,7 +134,7 @@ test "team_rollout: faster Spore prevents slower target from attacking on the tu
   // counter decrement. Both sides end at full HP, giving a clean 0.0 draw.
   // Without the fix, opp's turn-1 tackle resolves before the sleep fan-out
   // runs, so own takes damage and the rollout value is strictly negative.
-  assert_eq(v, 0.0)
+  @debug.assert_eq(v, 0.0)
 }
 
 ///|

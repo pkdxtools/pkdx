@@ -280,5 +280,5 @@ test "cache key: two identical matchup calls produce identical keys" {
   let a = base_atk()
   let b = base_def()
   let mv = base_move()
-  assert_eq(key_of(a, b, mv), key_of(a, b, mv))
+  @debug.assert_eq(key_of(a, b, mv), key_of(a, b, mv))
 }

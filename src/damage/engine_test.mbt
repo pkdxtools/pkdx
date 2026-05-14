@@ -20,7 +20,7 @@ test "calc_damage: baseline (no rank)" {
     fixture_earthquake(),
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|117
   ))
 }
@@ -34,7 +34,7 @@ test "calc_damage: atk_rank +2 doubles damage" {
     atk_rank=2,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|232
   ))
 }
@@ -48,7 +48,7 @@ test "calc_damage: def_rank +2 halves damage" {
     def_rank=2,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|60
   ))
 }
@@ -71,7 +71,7 @@ test "calc_damage: crit ignores atk negative rank" {
   )
   let r1 = calc_damage(with_neg)
   let r2 = calc_damage(without_neg)
-  inspect(r1.max_damage == r2.max_damage, content="true")
+  assert_true(r1.max_damage == r2.max_damage)
 }
 
 ///|
@@ -92,7 +92,7 @@ test "calc_damage: crit ignores def positive rank" {
   )
   let r1 = calc_damage(with_pos)
   let r2 = calc_damage(without_pos)
-  inspect(r1.max_damage == r2.max_damage, content="true")
+  assert_true(r1.max_damage == r2.max_damage)
 }
 
 ///|
@@ -113,7 +113,7 @@ test "calc_damage: crit preserves atk positive rank" {
   )
   let r1 = calc_damage(with_rank)
   let r2 = calc_damage(without_rank)
-  inspect(r1.max_damage != r2.max_damage, content="true")
+  assert_true(r1.max_damage != r2.max_damage)
 }
 
 ///|
@@ -134,7 +134,7 @@ test "calc_damage: crit preserves def negative rank" {
   )
   let r1 = calc_damage(with_rank)
   let r2 = calc_damage(without_rank)
-  inspect(r1.max_damage != r2.max_damage, content="true")
+  assert_true(r1.max_damage != r2.max_damage)
 }
 
 ///|
@@ -158,7 +158,7 @@ test "calc_damage: atk_stat_override + rank applies rank on top" {
   )
   let r1 = calc_damage(with_rank)
   let r2 = calc_damage(without_rank)
-  inspect(r1.max_damage > r2.max_damage, content="true")
+  assert_true(r1.max_damage > r2.max_damage)
 }
 
 ///|
@@ -181,7 +181,7 @@ test "calc_damage: def_stat_override + rank applies rank on top" {
   let r1 = calc_damage(with_rank)
   let r2 = calc_damage(without_rank)
   // def_rank+2 は damage を約半分にする
-  inspect(r1.max_damage < r2.max_damage, content="true")
+  assert_true(r1.max_damage < r2.max_damage)
 }
 
 ///|
@@ -206,7 +206,7 @@ test "calc_damage: mega-gyarados waterfall vs kingambit rank+1 regression" {
   )
   let result = calc_damage(input)
   // rank+1 で atk 207->310、STAB 1.5x、等倍、rand 100/100 で max≈121
-  inspect(result.max_damage > 100, content="true")
+  assert_true(result.max_damage > 100)
 }
 
 // --- Nature (--atk-nature / --def-nature) ---
@@ -236,7 +236,7 @@ test "calc_damage: atk_nature adamant > serious on physical" {
       )
       let r1 = calc_damage(with_adamant)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage > r2.max_damage, content="true")
+      assert_true(r1.max_damage > r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -270,7 +270,7 @@ test "calc_damage: atk_nature modest > serious on special" {
       )
       let r1 = calc_damage(with_modest)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage > r2.max_damage, content="true")
+      assert_true(r1.max_damage > r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -298,7 +298,7 @@ test "calc_damage: atk_nature jolly equals serious on physical (both neutral for
       )
       let r1 = calc_damage(with_jolly)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage == r2.max_damage, content="true")
+      assert_true(r1.max_damage == r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -334,7 +334,7 @@ test "calc_damage: atk_nature bold boosts body press (Def+ applies)" {
       )
       let r1 = calc_damage(with_bold)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage > r2.max_damage, content="true")
+      assert_true(r1.max_damage > r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -364,7 +364,7 @@ test "calc_damage: def_nature bold reduces physical damage" {
       )
       let r1 = calc_damage(with_bold)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage < r2.max_damage, content="true")
+      assert_true(r1.max_damage < r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -384,7 +384,7 @@ test "calc_damage: rank order matters with ability (ちからもち + rank +1)" 
     atk_ability="ちからもち",
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|346
   ))
 }
@@ -411,7 +411,7 @@ test "calc_damage: nature + rank + ability 3-way interaction (golden)" {
         stat_system=@model.Champions,
       )
       let result = calc_damage(input)
-      inspect(result.max_damage, content=(
+      @debug.debug_inspect(result.max_damage, content=(
         #|315
       ))
     }
@@ -444,7 +444,7 @@ test "calc_damage: atk_nature applies in Standard mode" {
       )
       let r1 = calc_damage(with_adamant)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage > r2.max_damage, content="true")
+      assert_true(r1.max_damage > r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -474,7 +474,7 @@ test "calc_damage: def_nature applies in Standard mode" {
       )
       let r1 = calc_damage(with_bold)
       let r2 = calc_damage(with_serious)
-      inspect(r1.max_damage < r2.max_damage, content="true")
+      assert_true(r1.max_damage < r2.max_damage)
     }
     _ => fail("nature not found")
   }
@@ -502,7 +502,7 @@ test "calc_damage: atk_stat_override + critical ignores negative rank" {
   )
   let r1 = calc_damage(with_neg)
   let r2 = calc_damage(without_rank)
-  inspect(r1.max_damage == r2.max_damage, content="true")
+  assert_true(r1.max_damage == r2.max_damage)
 }
 
 ///|
@@ -527,7 +527,7 @@ test "calc_damage: atk_stat_override + critical preserves positive rank" {
   )
   let r1 = calc_damage(with_pos)
   let r2 = calc_damage(without_rank)
-  inspect(r1.max_damage > r2.max_damage, content="true")
+  assert_true(r1.max_damage > r2.max_damage)
 }
 
 // --- そうだいしょう ---
@@ -542,7 +542,7 @@ test "calc_damage: そうだいしょう no boost (fainted_count=0)" {
     fainted_count=0,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|117
   ))
 }
@@ -558,7 +558,7 @@ test "calc_damage: そうだいしょう fainted_count=1 (x1.1)" {
   )
   let result = calc_damage(input)
   // round5(84, 4506) = (84*4506+2047)/4096 = 92
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|129
   ))
 }
@@ -574,7 +574,7 @@ test "calc_damage: そうだいしょう fainted_count=2 (x1.2)" {
   )
   let result = calc_damage(input)
   // round5(84, 4915) = (84*4915+2047)/4096 = 101
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|140
   ))
 }
@@ -589,7 +589,7 @@ test "calc_damage: そうだいしょう fainted_count=3 (x1.3)" {
     fainted_count=3,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|152
   ))
 }
@@ -604,7 +604,7 @@ test "calc_damage: そうだいしょう fainted_count=4 (x1.4)" {
     fainted_count=4,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|164
   ))
 }
@@ -620,7 +620,7 @@ test "calc_damage: そうだいしょう fainted_count=5 (x1.5)" {
   )
   let result = calc_damage(input)
   // round5(84, 6144) = (84*6144+2047)/4096 = 126
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|175
   ))
 }
@@ -643,7 +643,7 @@ test "calc_damage: そうだいしょう clamps fainted_count > 5" {
   )
   let r5 = calc_damage(input5)
   let r99 = calc_damage(input99)
-  inspect(r5.max_damage == r99.max_damage, content="true")
+  assert_true(r5.max_damage == r99.max_damage)
 }
 
 ///|
@@ -664,7 +664,7 @@ test "calc_damage: そうだいしょう clamps negative fainted_count" {
   )
   let r_neg = calc_damage(input_neg)
   let r0 = calc_damage(input0)
-  inspect(r_neg.max_damage == r0.max_damage, content="true")
+  assert_true(r_neg.max_damage == r0.max_damage)
 }
 
 // --- おはかまいり ---
@@ -683,7 +683,7 @@ test "calc_damage: おはかまいり base (fainted_count=0, power=50)" {
     fainted_count=0,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|40
   ))
 }
@@ -697,7 +697,7 @@ test "calc_damage: おはかまいり fainted_count=1 (power=100)" {
     fainted_count=1,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|78
   ))
 }
@@ -711,7 +711,7 @@ test "calc_damage: おはかまいり fainted_count=2 (power=150)" {
     fainted_count=2,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|116
   ))
 }
@@ -725,7 +725,7 @@ test "calc_damage: おはかまいり fainted_count=5 (power=300)" {
     fainted_count=5,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|231
   ))
 }
@@ -747,7 +747,7 @@ test "calc_damage: おはかまいり clamps fainted_count > 100" {
   let r100 = calc_damage(input100)
   let r999 = calc_damage(input999)
   // 両方 power=5050
-  inspect(r100.max_damage == r999.max_damage, content="true")
+  assert_true(r100.max_damage == r999.max_damage)
 }
 
 // --- ダブルバトル全体技補正 ---
@@ -762,7 +762,7 @@ test "calc_damage: spread move in double applies 0.75x" {
   )
   let result = calc_damage(input)
   // baseline max_damage=84, round5(base, 3072) で 0.75倍
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|87
   ))
 }
@@ -783,7 +783,7 @@ test "calc_damage: single-target move in double has no spread penalty" {
   )
   let r1 = calc_damage(input)
   let r2 = calc_damage(baseline)
-  inspect(r1.max_damage == r2.max_damage, content="true")
+  assert_true(r1.max_damage == r2.max_damage)
 }
 
 ///|
@@ -795,7 +795,7 @@ test "calc_damage: spread move in single has no penalty" {
     is_double=false,
   )
   let result = calc_damage(input)
-  inspect(result.max_damage, content=(
+  @debug.debug_inspect(result.max_damage, content=(
     #|117
   ))
 }
@@ -820,7 +820,7 @@ test "calc_damage: spread + sand weather in double" {
     weather=@model.Weather::Sand,
   )
   let r_single = calc_damage(single)
-  inspect(result.max_damage < r_single.max_damage, content="true")
+  assert_true(result.max_damage < r_single.max_damage)
 }
 
 // --- そうだいしょう + おはかまいり 併用 ---
@@ -843,7 +843,7 @@ test "calc_damage: そうだいしょう + おはかまいり (fainted_count=3)"
   let r_combo = calc_damage(input_combo)
   let r_move = calc_damage(input_move_only)
   // そうだいしょう x1.3 がさらに乗るので、技威力だけより大きい
-  inspect(r_combo.max_damage > r_move.max_damage, content="true")
+  assert_true(r_combo.max_damage > r_move.max_damage)
 }
 
 // ──────────────────────────────────────────────
@@ -868,10 +868,10 @@ test "calc_damage: champions mode dispatches correctly" {
   )
   let r_champ = calc_damage(input_champ)
   let r_standard = calc_damage(input_standard)
-  inspect(r_champ.max_damage, content=(
+  @debug.debug_inspect(r_champ.max_damage, content=(
     #|117
   ))
-  inspect(r_champ.max_damage == r_standard.max_damage, content="true")
+  assert_true(r_champ.max_damage == r_standard.max_damage)
 }
 
 ///|
@@ -891,7 +891,7 @@ test "calc_damage: champions with rank modifier" {
   )
   let r = calc_damage(input)
   let r_no = calc_damage(no_rank)
-  inspect(r.max_damage > r_no.max_damage, content="true")
+  assert_true(r.max_damage > r_no.max_damage)
 }
 
 ///|
@@ -915,7 +915,7 @@ test "calc_damage: Champions defender defaults to 0 SP / neutral nature" {
     stat_system=@model.Champions,
   )
   let r = calc_damage(input)
-  inspect(r.min_damage, content="156")
-  inspect(r.max_damage, content="186")
-  inspect(r.defender_hp, content="153")
+  @debug.debug_inspect(r.min_damage, content="156")
+  @debug.debug_inspect(r.max_damage, content="186")
+  @debug.debug_inspect(r.defender_hp, content="153")
 }

@@ -20,7 +20,7 @@
 pub(all) struct MatchupVector {
   x : Double
   y : Double
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// 2-D cross product: `self × other = self.x · other.y − self.y · other.x`.
@@ -36,7 +36,7 @@ pub(all) struct Character {
   label : String
   power : Double
   v : MatchupVector
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Apply the equal-power coordinate transform with origin shift `a`.
@@ -53,7 +53,7 @@ pub fn Character::convert(self : Character, a : MatchupVector) -> Character {
 ///|
 pub suberror CharacterError {
   EmptyCharacters
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Build the zero-sum payoff matrix `A[i, j] = (pᵢ − pⱼ) + vᵢ × vⱼ` from a

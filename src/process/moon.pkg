@@ -5,9 +5,11 @@ import {
 import {
   "pkdxtools/pkdx/src/db" @db,
   "moonbitlang/x/sys" @sys,
+  "moonbitlang/core/debug" @debug,
 } for "test"
 
+supported_targets = "native"
+
 options(
-  "supported-targets": "native",
   "native-stub": [ "process_ffi.c" ],
 )

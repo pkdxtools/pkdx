@@ -61,11 +61,11 @@ test "shadow: こだわりハチマキ stat mod matches hardcode (physical and s
   // Physical: hardcoded multiplies by 3/2; DB should match.
   let hardcode_phys = apply_atk_item_stat("こだわりハチマキ", true, "0445", 200)
   let db_phys = apply_atk_item_stat_db(effects, true, 200)
-  inspect(hardcode_phys == db_phys, content="true")
+  assert_true(hardcode_phys == db_phys)
   // Special: hardcoded leaves stat unchanged; DB should match.
   let hardcode_spec = apply_atk_item_stat("こだわりハチマキ", false, "0445", 200)
   let db_spec = apply_atk_item_stat_db(effects, false, 200)
-  inspect(hardcode_spec == db_spec, content="true")
+  assert_true(hardcode_spec == db_spec)
   @db.close(db)
 }
 
@@ -85,13 +85,13 @@ test "shadow: いのちのたま final mod matches hardcode (any category)" {
   // Hardcode: 5324 regardless of physical/SE flags.
   let h_phys_se = get_atk_item_final("いのちのたま", true, true)
   let d_phys_se = get_atk_item_final_db(effects, true, true)
-  inspect(h_phys_se == d_phys_se, content="true")
+  assert_true(h_phys_se == d_phys_se)
   let h_phys_nse = get_atk_item_final("いのちのたま", true, false)
   let d_phys_nse = get_atk_item_final_db(effects, true, false)
-  inspect(h_phys_nse == d_phys_nse, content="true")
+  assert_true(h_phys_nse == d_phys_nse)
   let h_spec = get_atk_item_final("いのちのたま", false, true)
   let d_spec = get_atk_item_final_db(effects, false, true)
-  inspect(h_spec == d_spec, content="true")
+  assert_true(h_spec == d_spec)
   @db.close(db)
 }
 
@@ -110,8 +110,10 @@ test "shadow: オッカのみ resist berry type matches hardcode" {
   }
   let hardcode_type = get_resist_berry_type("オッカのみ")
   let db_type = get_resist_berry_type_db(effects)
-  inspect(hardcode_type == db_type, content="true")
-  inspect(db_type, content="ほのお")
+  assert_true(hardcode_type == db_type)
+  @debug.debug_inspect(db_type, content=(
+    #|"ほのお"
+  ))
   @db.close(db)
 }
 
@@ -129,10 +131,12 @@ test "shadow: unknown item returns no-op (no effects from DB)" {
     }
   }
   // Empty effects list ⇒ all helpers return identity.
-  inspect(effects.length(), content="0")
-  inspect(apply_atk_item_stat_db(effects, true, 100), content="100")
-  inspect(get_atk_item_final_db(effects, true, true), content="0")
-  inspect(get_resist_berry_type_db(effects), content="")
+  @debug.debug_inspect(effects.length(), content="0")
+  @debug.debug_inspect(apply_atk_item_stat_db(effects, true, 100), content="100")
+  @debug.debug_inspect(get_atk_item_final_db(effects, true, true), content="0")
+  @debug.debug_inspect(get_resist_berry_type_db(effects), content=(
+    #|""
+  ))
   @db.close(db)
 }
 
@@ -149,8 +153,8 @@ test "shadow: empty item name returns no-op" {
       return
     }
   }
-  inspect(effects.length(), content="0")
-  inspect(apply_atk_item_stat("", true, "0445", 100), content="100")
-  inspect(apply_atk_item_stat_db(effects, true, 100), content="100")
+  @debug.debug_inspect(effects.length(), content="0")
+  @debug.debug_inspect(apply_atk_item_stat("", true, "0445", 100), content="100")
+  @debug.debug_inspect(apply_atk_item_stat_db(effects, true, 100), content="100")
   @db.close(db)
 }

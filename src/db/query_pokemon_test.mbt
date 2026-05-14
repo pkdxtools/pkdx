@@ -51,7 +51,7 @@ fn open_test_champions_db() -> Db? {
     None => return None
   }
   let champions_path = resolve_champions_db_path_from(pokedex_path)
-  if not(file_exists(champions_path)) {
+  if !(file_exists(champions_path)) {
     return None
   }
   match open_for(pokedex_path, "champions") {
@@ -78,12 +78,20 @@ test "query_pokemon: カイリュー legendsza (rc-bug regression)" {
   match result {
     Ok(p) => {
       // HP が 91 のままであること（バグ時は 81 になっていた）
-      inspect(p.hp, content="91")
+      @debug.debug_inspect(p.hp, content="91")
       // type1 が ひこう のままであること（バグ時は ぱこう / ばこう などに化けていた）
-      inspect(p.type1, content="ひこう")
-      inspect(p.type2, content="ドラゴン")
-      inspect(p.name_ja, content="カイリュー")
-      inspect(p.global_no, content="0149")
+      @debug.debug_inspect(p.type1, content=(
+        #|"ひこう"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"ドラゴン"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"カイリュー"
+      ))
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0149"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -104,10 +112,16 @@ test "query_pokemon: リザードン scarlet_violet" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.hp, content="78")
-      inspect(p.type1, content="ほのお")
-      inspect(p.type2, content="ひこう")
-      inspect(p.name_ja, content="リザードン")
+      @debug.debug_inspect(p.hp, content="78")
+      @debug.debug_inspect(p.type1, content=(
+        #|"ほのお"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"ひこう"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"リザードン"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -128,17 +142,25 @@ test "query_pokemon: メガピクシー champions" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.hp, content="95")
-      inspect(p.atk, content="80")
-      inspect(p.def_, content="93")
-      inspect(p.spa, content="135")
-      inspect(p.spd, content="110")
-      inspect(p.spe, content="70")
-      inspect(p.bst, content="583")
-      inspect(p.type1, content="フェアリー")
-      inspect(p.type2, content="ひこう")
-      inspect(p.name_ja, content="メガピクシー")
-      inspect(p.global_no, content="0036")
+      @debug.debug_inspect(p.hp, content="95")
+      @debug.debug_inspect(p.atk, content="80")
+      @debug.debug_inspect(p.def_, content="93")
+      @debug.debug_inspect(p.spa, content="135")
+      @debug.debug_inspect(p.spd, content="110")
+      @debug.debug_inspect(p.spe, content="70")
+      @debug.debug_inspect(p.bst, content="583")
+      @debug.debug_inspect(p.type1, content=(
+        #|"フェアリー"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"ひこう"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"メガピクシー"
+      ))
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0036"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -155,14 +177,18 @@ test "query_pokemon: ガブリアス champions stats" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.hp, content="108")
-      inspect(p.atk, content="130")
-      inspect(p.def_, content="95")
-      inspect(p.spa, content="80")
-      inspect(p.spd, content="85")
-      inspect(p.spe, content="102")
-      inspect(p.type1, content="ドラゴン")
-      inspect(p.type2, content="じめん")
+      @debug.debug_inspect(p.hp, content="108")
+      @debug.debug_inspect(p.atk, content="130")
+      @debug.debug_inspect(p.def_, content="95")
+      @debug.debug_inspect(p.spa, content="80")
+      @debug.debug_inspect(p.spd, content="85")
+      @debug.debug_inspect(p.spe, content="102")
+      @debug.debug_inspect(p.type1, content=(
+        #|"ドラゴン"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"じめん"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -185,7 +211,9 @@ test "query_moves: ガブリアス champions" {
       for i = 0; i < moves.length(); i = i + 1 {
         if moves[i].name == "じしん" {
           found_eq = true
-          inspect(moves[i].type_, content="じめん")
+          @debug.debug_inspect(moves[i].type_, content=(
+            #|"じめん"
+          ))
         }
       }
       assert_true(found_eq)
@@ -235,7 +263,7 @@ test "query_champions_moves: ロトム全フォルムの固有技" {
         break
       }
     }
-    if not(found) {
+    if !(found) {
       fail(pokemon + " should learn " + signature)
       close(db)
       return
@@ -260,7 +288,9 @@ test "query_champions_moves: base ロトムは固有技を持たない" {
       return
     }
   }
-  inspect(id, content="0479000")
+  @debug.debug_inspect(id, content=(
+    #|"0479000"
+  ))
   let moves = match query_champions_moves(db, id) {
     Ok(ms) => ms
     Err(e) => {
@@ -295,8 +325,12 @@ test "query_pokemon: スコヴィラン champions globalNo" {
   match result {
     Ok(p) => {
       // 外部番号 939 と混同されがちだが正しい globalNo は 0952
-      inspect(p.global_no, content="0952")
-      inspect(p.name_ja, content="スコヴィラン")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0952"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"スコヴィラン"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -316,15 +350,19 @@ test "query_pokemon: ガブリアス scarlet_violet stats" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.hp, content="108")
-      inspect(p.atk, content="130")
-      inspect(p.def_, content="95")
-      inspect(p.spa, content="80")
-      inspect(p.spd, content="85")
-      inspect(p.spe, content="102")
-      inspect(p.bst, content="600")
-      inspect(p.type1, content="じめん")
-      inspect(p.type2, content="ドラゴン")
+      @debug.debug_inspect(p.hp, content="108")
+      @debug.debug_inspect(p.atk, content="130")
+      @debug.debug_inspect(p.def_, content="95")
+      @debug.debug_inspect(p.spa, content="80")
+      @debug.debug_inspect(p.spd, content="85")
+      @debug.debug_inspect(p.spe, content="102")
+      @debug.debug_inspect(p.bst, content="600")
+      @debug.debug_inspect(p.type1, content=(
+        #|"じめん"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"ドラゴン"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -345,15 +383,25 @@ test "query_pokemon: ウォッシュロトム champions (direct form alias)" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0479")
-      inspect(p.name_ja, content="ウォッシュロトム")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0479"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"ウォッシュロトム"
+      ))
       // champions.db (champout SSoT) には英語名行を持たない。多言語対応は後続。
-      inspect(p.name_en, content="")
-      inspect(p.type1, content="でんき")
-      inspect(p.type2, content="みず")
-      inspect(p.spa, content="105")
+      @debug.debug_inspect(p.name_en, content=(
+        #|""
+      ))
+      @debug.debug_inspect(p.type1, content=(
+        #|"でんき"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"みず"
+      ))
+      @debug.debug_inspect(p.spa, content="105")
       // フォーム直引きは forms[] 非表示 (原種に戻ってから見る導線)
-      inspect(p.forms.length(), content="0")
+      @debug.debug_inspect(p.forms.length(), content="0")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -375,12 +423,20 @@ test "query_pokemon: キュウコン（アローラ） scarlet_violet (composed 
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0038")
-      inspect(p.name_ja, content="キュウコン（アローラ）")
-      inspect(p.name_en, content="Ninetales (Alolan)")
-      inspect(p.type1, content="こおり")
-      inspect(p.atk, content="67")
-      inspect(p.forms.length(), content="0")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0038"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"キュウコン（アローラ）"
+      ))
+      @debug.debug_inspect(p.name_en, content=(
+        #|"Ninetales (Alolan)"
+      ))
+      @debug.debug_inspect(p.type1, content=(
+        #|"こおり"
+      ))
+      @debug.debug_inspect(p.atk, content="67")
+      @debug.debug_inspect(p.forms.length(), content="0")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -399,8 +455,12 @@ test "query_pokemon: ロトム champions + forms list (discoverability)" {
   match result {
     Ok(p) => {
       // 原種は base 情報を返す (既存動作の回帰チェックも兼ねる)
-      inspect(p.name_ja, content="ロトム")
-      inspect(p.type2, content="ゴースト")
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"ロトム"
+      ))
+      @debug.debug_inspect(p.type2, content=(
+        #|"ゴースト"
+      ))
       let mut found_wash = false
       let mut found_heat = false
       let mut found_frost = false
@@ -441,7 +501,9 @@ test "query_pokemon: キュウコン scarlet_violet + forms list (regional)" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.name_ja, content="キュウコン")
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"キュウコン"
+      ))
       let mut found = false
       for i = 0; i < p.forms.length(); i = i + 1 {
         if p.forms[i] == "キュウコン（アローラ）" {
@@ -470,9 +532,13 @@ test "query_pokemon: トリミアン champions (cosmetic forms listed)" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0676")
-      inspect(p.name_ja, content="トリミアン")
-      inspect(p.forms.length(), content="9")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0676"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"トリミアン"
+      ))
+      @debug.debug_inspect(p.forms.length(), content="9")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -495,14 +561,20 @@ test "query_pokemon: イダイトウ（オス） scarlet_violet (gender alias jp
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0902")
-      inspect(p.name_ja, content="イダイトウ（オス）")
-      inspect(p.name_en, content="Basculegion (Male)")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0902"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"イダイトウ（オス）"
+      ))
+      @debug.debug_inspect(p.name_en, content=(
+        #|"Basculegion (Male)"
+      ))
       // M ステ (atk 112)
-      inspect(p.atk, content="112")
-      inspect(p.spa, content="80")
+      @debug.debug_inspect(p.atk, content="112")
+      @debug.debug_inspect(p.spa, content="80")
       // alias 直引きは forms[] 非表示 (base id 共有でも form 列が非空なので除外)
-      inspect(p.forms.length(), content="0")
+      @debug.debug_inspect(p.forms.length(), content="0")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -524,12 +596,18 @@ test "query_pokemon: Basculegion (Male) scarlet_violet (gender alias eng → jpn
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0902")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0902"
+      ))
       // English 引きでも name_ja は jpn 行から取れること (本 PR の主目的)
-      inspect(p.name_ja, content="イダイトウ（オス）")
-      inspect(p.name_en, content="Basculegion (Male)")
-      inspect(p.atk, content="112")
-      inspect(p.forms.length(), content="0")
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"イダイトウ（オス）"
+      ))
+      @debug.debug_inspect(p.name_en, content=(
+        #|"Basculegion (Male)"
+      ))
+      @debug.debug_inspect(p.atk, content="112")
+      @debug.debug_inspect(p.forms.length(), content="0")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -551,13 +629,19 @@ test "query_pokemon: Basculegion (Female) scarlet_violet (eng alias → jpn name
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0902")
-      inspect(p.name_ja, content="イダイトウ（メス）")
-      inspect(p.name_en, content="Basculegion (Female)")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0902"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"イダイトウ（メス）"
+      ))
+      @debug.debug_inspect(p.name_en, content=(
+        #|"Basculegion (Female)"
+      ))
       // F ステ (atk 92)
-      inspect(p.atk, content="92")
-      inspect(p.spa, content="100")
-      inspect(p.forms.length(), content="0")
+      @debug.debug_inspect(p.atk, content="92")
+      @debug.debug_inspect(p.spa, content="100")
+      @debug.debug_inspect(p.forms.length(), content="0")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -580,15 +664,23 @@ test "query_pokemon: イダイトウ scarlet_violet (base form discovery)" {
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0902")
-      inspect(p.name_ja, content="イダイトウ")
-      inspect(p.name_en, content="Basculegion")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0902"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"イダイトウ"
+      ))
+      @debug.debug_inspect(p.name_en, content=(
+        #|"Basculegion"
+      ))
       // base = M ステ (atk 112 / spa 80)
-      inspect(p.atk, content="112")
-      inspect(p.spa, content="80")
+      @debug.debug_inspect(p.atk, content="112")
+      @debug.debug_inspect(p.spa, content="80")
       // forms[] には F alias のみ
-      inspect(p.forms.length(), content="1")
-      inspect(p.forms[0], content="イダイトウ（メス）")
+      @debug.debug_inspect(p.forms.length(), content="1")
+      @debug.debug_inspect(p.forms[0], content=(
+        #|"イダイトウ（メス）"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -610,11 +702,19 @@ test "query_pokemon: ニャオニクス（オス） scarlet_violet (gender alias
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0678")
-      inspect(p.name_ja, content="ニャオニクス（オス）")
-      inspect(p.name_en, content="Meowstic (Male)")
-      inspect(p.dream_ability, content="いたずらごころ")
-      inspect(p.forms.length(), content="0")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0678"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"ニャオニクス（オス）"
+      ))
+      @debug.debug_inspect(p.name_en, content=(
+        #|"Meowstic (Male)"
+      ))
+      @debug.debug_inspect(p.dream_ability, content=(
+        #|"いたずらごころ"
+      ))
+      @debug.debug_inspect(p.forms.length(), content="0")
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }
@@ -634,12 +734,18 @@ test "query_pokemon: イダイトウ（オス） champions (gender alias version
   close(db)
   match result {
     Ok(p) => {
-      inspect(p.global_no, content="0902")
-      inspect(p.name_ja, content="イダイトウ（オス）")
-      inspect(p.atk, content="112")
-      inspect(p.spa, content="80")
-      inspect(p.forms.length(), content="1")
-      inspect(p.forms[0], content="イダイトウ（メス）")
+      @debug.debug_inspect(p.global_no, content=(
+        #|"0902"
+      ))
+      @debug.debug_inspect(p.name_ja, content=(
+        #|"イダイトウ（オス）"
+      ))
+      @debug.debug_inspect(p.atk, content="112")
+      @debug.debug_inspect(p.spa, content="80")
+      @debug.debug_inspect(p.forms.length(), content="1")
+      @debug.debug_inspect(p.forms[0], content=(
+        #|"イダイトウ（メス）"
+      ))
     }
     Err(e) => fail("query_pokemon failed: " + e)
   }

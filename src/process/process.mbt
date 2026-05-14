@@ -54,12 +54,12 @@ pub(all) enum ShardResult {
   Ok
   Exit(Int)     // non-zero exit code
   Failed       // spawn / signal / timeout
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub suberror RunShardsError {
   InvalidInput(String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Spawn `argvs.length()` child processes, each invoking the running

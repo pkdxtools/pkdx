@@ -12,7 +12,7 @@ pub(all) enum MultiHit {
   Auto
   Fixed(Int)
   Expected
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// CLI parser. Accepts "auto" / "expected" / "<int>". Integer out of 1..=5 is
@@ -37,7 +37,7 @@ pub fn multi_hit_from_str(s : String) -> MultiHit {
           }
           n = n * 10 + (c - 0x30)
         }
-        if not(ok) {
+        if !(ok) {
           Auto
         } else if n < 1 {
           Fixed(1)

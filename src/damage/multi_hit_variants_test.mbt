@@ -104,14 +104,14 @@ test "triple-axel: 3 variants with probabilities 0.10 / 0.09 / 0.81" {
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("トリプルアクセル")
   let r = calc_damage(mhv_input(atk, dfn, mv))
-  inspect(r.variants.length(), content="3")
+  @debug.debug_inspect(r.variants.length(), content="3")
   // 1 hit, 2 hit, 3 hit (in order) — 途中外れ仕様
   assert_true(approx_eq(r.variants[0].probability, 0.10))
   assert_true(approx_eq(r.variants[1].probability, 0.09))
   assert_true(approx_eq(r.variants[2].probability, 0.81))
-  inspect(r.variants[0].hits.length(), content="1")
-  inspect(r.variants[1].hits.length(), content="2")
-  inspect(r.variants[2].hits.length(), content="3")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="1")
+  @debug.debug_inspect(r.variants[1].hits.length(), content="2")
+  @debug.debug_inspect(r.variants[2].hits.length(), content="3")
 }
 
 ///|
@@ -120,15 +120,15 @@ test "fury attack (みだれづき): 4 variants with probabilities 0.375/0.375/0
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("みだれづき")
   let r = calc_damage(mhv_input(atk, dfn, mv))
-  inspect(r.variants.length(), content="4")
+  @debug.debug_inspect(r.variants.length(), content="4")
   assert_true(approx_eq(r.variants[0].probability, 0.375))
   assert_true(approx_eq(r.variants[1].probability, 0.375))
   assert_true(approx_eq(r.variants[2].probability, 0.125))
   assert_true(approx_eq(r.variants[3].probability, 0.125))
-  inspect(r.variants[0].hits.length(), content="2")
-  inspect(r.variants[1].hits.length(), content="3")
-  inspect(r.variants[2].hits.length(), content="4")
-  inspect(r.variants[3].hits.length(), content="5")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="2")
+  @debug.debug_inspect(r.variants[1].hits.length(), content="3")
+  @debug.debug_inspect(r.variants[2].hits.length(), content="4")
+  @debug.debug_inspect(r.variants[3].hits.length(), content="5")
 }
 
 ///|
@@ -137,9 +137,9 @@ test "Skill Link + fury attack: variants=1, hits=5" {
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("みだれづき")
   let r = calc_damage(mhv_input(atk, dfn, mv, atk_ability="スキルリンク"))
-  inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants.length(), content="1")
   assert_true(approx_eq(r.variants[0].probability, 1.0))
-  inspect(r.variants[0].hits.length(), content="5")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="5")
 }
 
 ///|
@@ -150,8 +150,8 @@ test "fixed-3 non-variant move (すいりゅうれんだ): variants=1, hits=3" {
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("すいりゅうれんだ")
   let r = calc_damage(mhv_input(atk, dfn, mv))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="3")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="3")
 }
 
 ///|
@@ -160,8 +160,8 @@ test "fixed-2 move (にどげり): variants=1, hits=2" {
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("にどげり")
   let r = calc_damage(mhv_input(atk, dfn, mv))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="2")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="2")
 }
 
 ///|
@@ -170,8 +170,8 @@ test "single hit (たいあたり): variants=1, hits=1" {
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("たいあたり")
   let r = calc_damage(mhv_input(atk, dfn, mv))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="1")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="1")
 }
 
 ///|
@@ -180,8 +180,8 @@ test "ParentalBond on single-hit base: variants=1, hits=2" {
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("たいあたり")
   let r = calc_damage(mhv_input(atk, dfn, mv, atk_ability="おやこあい"))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="2")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="2")
 }
 
 ///|
@@ -212,7 +212,7 @@ test "triple-axel: per-hit power ramps base × hit_index" {
   let r = calc_damage(mhv_input(atk, dfn, mv))
   // 3-hit variant の hits[0] / hits[1] / hits[2] を比較する。
   let three = r.variants[2]
-  inspect(three.hits.length(), content="3")
+  @debug.debug_inspect(three.hits.length(), content="3")
   let hit1 = three.hits[0].damage_per_roll[0]
   let hit2 = three.hits[1].damage_per_roll[0]
   let hit3 = three.hits[2].damage_per_roll[0]

@@ -23,7 +23,7 @@
 /// 期待形式と異なる行は黙ってスキップする (champout の生 JSON は
 /// LabelName / OriginalText 以外にも m_GameObject などのメタを含むため)。
 pub fn build_label_index(json : Json) -> Map[String, String] {
-  let out : Map[String, String] = Map::new()
+  let out : Map[String, String] = Map([])
   let root = match json {
     Object(o) => o
     _ => return out

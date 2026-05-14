@@ -1,36 +1,36 @@
 ///|
 test "calc_hp_full: ガブリアス HP108, IV31, EV0" {
-  inspect(calc_hp_full(108, 31, 0), content="183")
+  @debug.debug_inspect(calc_hp_full(108, 31, 0), content="183")
 }
 
 ///|
 test "calc_hp_full: ガブリアス HP108, IV31, EV252" {
-  inspect(calc_hp_full(108, 31, 252), content="215")
+  @debug.debug_inspect(calc_hp_full(108, 31, 252), content="215")
 }
 
 ///|
 test "calc_hp_full: IV0, EV0" {
   // floor((108*2 + 0 + 0) * 50 / 100) + 60 = 108 + 60 = 168
-  inspect(calc_hp_full(108, 0, 0), content="168")
+  @debug.debug_inspect(calc_hp_full(108, 0, 0), content="168")
 }
 
 ///|
 test "calc_hp_full: ヌケニン base=1" {
   // floor((1*2 + 31 + 0) * 50 / 100) + 60 = floor(16.5) + 60 = 16 + 60 = 76
   // But Shedinja always has 1 HP — handled at caller level
-  inspect(calc_hp_full(1, 31, 0), content="76")
+  @debug.debug_inspect(calc_hp_full(1, 31, 0), content="76")
 }
 
 ///|
 test "calc_other_full: ガブリアス Atk130, IV31, EV252, nature up" {
-  inspect(calc_other_full(130, 31, 252, 11, 10), content="200")
+  @debug.debug_inspect(calc_other_full(130, 31, 252, 11, 10), content="200")
 }
 
 ///|
 test "calc_other_full: ガブリアス Spe102, IV31, EV252, neutral" {
   // floor((102*2 + 31 + 63) * 50 / 100) + 5 = floor(148.5) + 5 = 148 + 5 = 153
   // neutral: 153 * 1 / 1 = 153
-  inspect(calc_other_full(102, 31, 252, 1, 1), content="154")
+  @debug.debug_inspect(calc_other_full(102, 31, 252, 1, 1), content="154")
 }
 
 ///|
@@ -38,21 +38,21 @@ test "calc_other_full: nature down" {
   // base=130, iv=31, ev=252: raw = floor((130*2+31+63)*50/100)+5 = 182+5 = 182
   // Wait: (260+31+63)=354, 354*50/100=177, +5=182
   // down: 182 * 9 / 10 = 163
-  inspect(calc_other_full(130, 31, 252, 9, 10), content="163")
+  @debug.debug_inspect(calc_other_full(130, 31, 252, 9, 10), content="163")
 }
 
 ///|
 test "calc_other_full: IV0, EV0, neutral" {
   // (130*2+0+0)*50/100+5 = 130+5 = 135
-  inspect(calc_other_full(130, 0, 0, 1, 1), content="135")
+  @debug.debug_inspect(calc_other_full(130, 0, 0, 1, 1), content="135")
 }
 
 ///|
 test "calc_stat refactor: HP matches calc_hp_full" {
   // existing calc_stat with is_hp=true uses base+107 (IV31, EV252)
   // calc_hp_full(108, 31, 252) should equal 108+107=215
-  inspect(calc_hp_full(108, 31, 252), content="215")
-  inspect(calc_stat(108, is_hp=true), content="215")
+  @debug.debug_inspect(calc_hp_full(108, 31, 252), content="215")
+  @debug.debug_inspect(calc_stat(108, is_hp=true), content="215")
 }
 
 ///|
@@ -61,14 +61,14 @@ test "calc_stat refactor: Atk matches calc_other_full with nature boost" {
   // calc_other_full(130, 31, 252, 11, 10) should match
   let old_result = calc_stat(130)
   let new_result = calc_other_full(130, 31, 252, 11, 10)
-  inspect(old_result == new_result, content="true")
+  assert_true(old_result == new_result)
 }
 
 ///|
 test "calc_stat refactor: no nature boost" {
   let old_result = calc_stat(130, nature_num=1, nature_den=1)
   let new_result = calc_other_full(130, 31, 252, 1, 1)
-  inspect(old_result == new_result, content="true")
+  assert_true(old_result == new_result)
 }
 
 ///|
@@ -97,12 +97,12 @@ test "calc_all_stats: ガブリアス いじっぱり AS252 D4" {
   match @model.nature_from_ja("いじっぱり") {
     Some(nature) => {
       let stats = calc_all_stats(pokemon, ivs, evs, nature)
-      inspect(stats[0], content="183") // HP
-      inspect(stats[1], content="200") // Atk (↑)
-      inspect(stats[2], content="115") // Def
-      inspect(stats[3], content="90") // SpA (↓)
-      inspect(stats[4], content="106") // SpD
-      inspect(stats[5], content="154") // Spe (neutral, EV252)
+      @debug.debug_inspect(stats[0], content="183") // HP
+      @debug.debug_inspect(stats[1], content="200") // Atk (↑)
+      @debug.debug_inspect(stats[2], content="115") // Def
+      @debug.debug_inspect(stats[3], content="90") // SpA (↓)
+      @debug.debug_inspect(stats[4], content="106") // SpD
+      @debug.debug_inspect(stats[5], content="154") // Spe (neutral, EV252)
     }
     None => fail("nature not found")
   }
@@ -110,12 +110,12 @@ test "calc_all_stats: ガブリアス いじっぱり AS252 D4" {
 
 ///|
 test "reverse_base_from_stat: Atk 200 → base 130" {
-  inspect(reverse_base_from_stat(200, 31, 252, false, 11, 10), content="130")
+  @debug.debug_inspect(reverse_base_from_stat(200, 31, 252, false, 11, 10), content="130")
 }
 
 ///|
 test "reverse_base_from_stat: HP 183 → base 108" {
-  inspect(reverse_base_from_stat(183, 31, 0, true, 1, 1), content="108")
+  @debug.debug_inspect(reverse_base_from_stat(183, 31, 0, true, 1, 1), content="108")
 }
 
 ///|
@@ -126,14 +126,14 @@ test "reverse_base_from_stat: round-trip various bases" {
     let base = bases[i]
     let actual = calc_hp_full(base, 31, 0)
     let recovered = reverse_base_from_stat(actual, 31, 0, true, 1, 1)
-    inspect(recovered == base, content="true")
+    assert_true(recovered == base)
   }
   // Test other stat round-trip (nature up)
   for i = 0; i < bases.length(); i = i + 1 {
     let base = bases[i]
     let actual = calc_other_full(base, 31, 252, 11, 10)
     let recovered = reverse_base_from_stat(actual, 31, 252, false, 11, 10)
-    inspect(recovered == base, content="true")
+    assert_true(recovered == base)
   }
 }
 
@@ -184,24 +184,24 @@ test "reverse_spread: ガブリアス 183/200/115/90/106/154" {
 ///|
 test "ev_for_hp: ガブリアス HP108 target=183 (=EV0 value)" {
   // calc_hp_full(108, 31, 0) == 183, so target 183 should need EV 0
-  inspect(ev_for_hp(108, 31, 183), content="0")
+  @debug.debug_inspect(ev_for_hp(108, 31, 183), content="0")
 }
 
 ///|
 test "ev_for_hp: ガブリアス target=184 one above baseline" {
   // inner(0)=247 → 247*50/100=123 → HP 183
   // inner(4 EV, f(4/4)=1)=248 → 124 → HP 184
-  inspect(ev_for_hp(108, 31, 184), content="4")
+  @debug.debug_inspect(ev_for_hp(108, 31, 184), content="4")
 }
 
 ///|
 test "ev_for_hp: ガブリアス target=215 (=EV252 value)" {
-  inspect(ev_for_hp(108, 31, 215), content="252")
+  @debug.debug_inspect(ev_for_hp(108, 31, 215), content="252")
 }
 
 ///|
 test "ev_for_hp: target unreachable → 256 sentinel" {
-  inspect(ev_for_hp(108, 31, 999), content="256")
+  @debug.debug_inspect(ev_for_hp(108, 31, 999), content="256")
 }
 
 ///|
@@ -219,30 +219,30 @@ test "ev_for_hp: monotonic forward↔reverse" {
 ///|
 test "ev_for_non_hp: neutral nature" {
   // base=95 iv=31 ev=0: inner=221, floor(221/2)=110, raw=115
-  inspect(calc_other_full(95, 31, 0, 1, 1), content="115")
-  inspect(ev_for_non_hp(95, 31, 115, 1, 1), content="0")
+  @debug.debug_inspect(calc_other_full(95, 31, 0, 1, 1), content="115")
+  @debug.debug_inspect(ev_for_non_hp(95, 31, 115, 1, 1), content="0")
   // ev=4: inner=222, floor=111, raw=116
-  inspect(calc_other_full(95, 31, 4, 1, 1), content="116")
-  inspect(ev_for_non_hp(95, 31, 116, 1, 1), content="4")
+  @debug.debug_inspect(calc_other_full(95, 31, 4, 1, 1), content="116")
+  @debug.debug_inspect(ev_for_non_hp(95, 31, 116, 1, 1), content="4")
 }
 
 ///|
 test "ev_for_non_hp: +10% nature" {
   // calc_other_full(108, 31, 252, 11, 10): raw=(108*2+31+63)*50/100+5=floor(310/2)+5=155+5=160, then 160*11/10=176
-  inspect(calc_other_full(108, 31, 252, 11, 10), content="176")
-  inspect(ev_for_non_hp(108, 31, 176, 11, 10), content="252")
+  @debug.debug_inspect(calc_other_full(108, 31, 252, 11, 10), content="176")
+  @debug.debug_inspect(ev_for_non_hp(108, 31, 176, 11, 10), content="252")
 }
 
 ///|
 test "ev_for_non_hp: -10% nature" {
   // calc_other_full(95, 31, 0, 9, 10): raw=115, 115*9/10=103
-  inspect(calc_other_full(95, 31, 0, 9, 10), content="103")
-  inspect(ev_for_non_hp(95, 31, 103, 9, 10), content="0")
+  @debug.debug_inspect(calc_other_full(95, 31, 0, 9, 10), content="103")
+  @debug.debug_inspect(ev_for_non_hp(95, 31, 103, 9, 10), content="0")
 }
 
 ///|
 test "ev_for_non_hp: unreachable → 256" {
-  inspect(ev_for_non_hp(95, 31, 9999, 11, 10), content="256")
+  @debug.debug_inspect(ev_for_non_hp(95, 31, 9999, 11, 10), content="256")
 }
 
 ///|
@@ -271,52 +271,52 @@ test "ev_for_non_hp: monotonic forward↔reverse (+10%)" {
 
 ///|
 test "apply_rank: stage 0" {
-  inspect(apply_rank(100, 0), content="100")
+  @debug.debug_inspect(apply_rank(100, 0), content="100")
 }
 
 ///|
 test "apply_rank: stage +1" {
-  inspect(apply_rank(100, 1), content="150")
+  @debug.debug_inspect(apply_rank(100, 1), content="150")
 }
 
 ///|
 test "apply_rank: stage +2" {
-  inspect(apply_rank(100, 2), content="200")
+  @debug.debug_inspect(apply_rank(100, 2), content="200")
 }
 
 ///|
 test "apply_rank: stage +6" {
-  inspect(apply_rank(100, 6), content="400")
+  @debug.debug_inspect(apply_rank(100, 6), content="400")
 }
 
 ///|
 test "apply_rank: stage -1" {
-  inspect(apply_rank(100, -1), content="66")
+  @debug.debug_inspect(apply_rank(100, -1), content="66")
 }
 
 ///|
 test "apply_rank: stage -2" {
-  inspect(apply_rank(100, -2), content="50")
+  @debug.debug_inspect(apply_rank(100, -2), content="50")
 }
 
 ///|
 test "apply_rank: stage -6" {
-  inspect(apply_rank(100, -6), content="25")
+  @debug.debug_inspect(apply_rank(100, -6), content="25")
 }
 
 ///|
 test "apply_rank: floor -1 on 133" {
-  inspect(apply_rank(133, -1), content="88")
+  @debug.debug_inspect(apply_rank(133, -1), content="88")
 }
 
 ///|
 test "apply_rank: clamp upper" {
-  inspect(apply_rank(100, 10), content="400")
+  @debug.debug_inspect(apply_rank(100, 10), content="400")
 }
 
 ///|
 test "apply_rank: clamp lower" {
-  inspect(apply_rank(100, -10), content="25")
+  @debug.debug_inspect(apply_rank(100, -10), content="25")
 }
 
 // ──────────────────────────────────────────────
@@ -325,60 +325,60 @@ test "apply_rank: clamp lower" {
 
 ///|
 test "calc_hp_champions: ガブリアス HP108, SP=0" {
-  inspect(calc_hp_champions(108, 0), content="183")
+  @debug.debug_inspect(calc_hp_champions(108, 0), content="183")
 }
 
 ///|
 test "calc_hp_champions: ガブリアス HP108, SP=32" {
   // 108 + 32 + 75 = 215
   // (same result as traditional IV31/EV252, different formula)
-  inspect(calc_hp_champions(108, 32), content="215")
+  @debug.debug_inspect(calc_hp_champions(108, 32), content="215")
 }
 
 ///|
 test "calc_hp_champions: base=1, SP=0" {
-  inspect(calc_hp_champions(1, 0), content="76")
+  @debug.debug_inspect(calc_hp_champions(1, 0), content="76")
 }
 
 ///|
 test "calc_other_champions: ガブリアス Atk130, SP=32, nature up" {
   // (130 + 32 + 20) * 11 / 10 = 182 * 11 / 10 = 200
-  inspect(calc_other_champions(130, 32, 11, 10), content="200")
+  @debug.debug_inspect(calc_other_champions(130, 32, 11, 10), content="200")
 }
 
 ///|
 test "calc_other_champions: ガブリアス SpA80, SP=0, nature down" {
   // (80 + 0 + 20) * 9 / 10 = 100 * 9 / 10 = 90
-  inspect(calc_other_champions(80, 0, 9, 10), content="90")
+  @debug.debug_inspect(calc_other_champions(80, 0, 9, 10), content="90")
 }
 
 ///|
 test "calc_other_champions: ガブリアス Def95, SP=0, neutral" {
   // (95 + 0 + 20) * 1 / 1 = 115
-  inspect(calc_other_champions(95, 0, 1, 1), content="115")
+  @debug.debug_inspect(calc_other_champions(95, 0, 1, 1), content="115")
 }
 
 ///|
 test "calc_other_champions: nature up +2 at 11n boundary" {
   // (102 + 32 + 20) = 154, 154 * 11 / 10 = 1694 / 10 = 169
-  inspect(calc_other_champions(102, 32, 11, 10), content="169")
+  @debug.debug_inspect(calc_other_champions(102, 32, 11, 10), content="169")
   // SP=31: (102 + 31 + 20) = 153, 153 * 11 / 10 = 1683 / 10 = 168
-  inspect(calc_other_champions(102, 31, 11, 10), content="168")
+  @debug.debug_inspect(calc_other_champions(102, 31, 11, 10), content="168")
 }
 
 ///|
 test "calc_stat_champions: HP shortcut (SP=32)" {
-  inspect(calc_stat_champions(108, is_hp=true), content="215")
+  @debug.debug_inspect(calc_stat_champions(108, is_hp=true), content="215")
 }
 
 ///|
 test "calc_stat_champions: Atk shortcut with nature boost" {
-  inspect(calc_stat_champions(130), content="200")
+  @debug.debug_inspect(calc_stat_champions(130), content="200")
 }
 
 ///|
 test "calc_stat_champions: custom override" {
-  inspect(calc_stat_champions(130, custom=999), content="999")
+  @debug.debug_inspect(calc_stat_champions(130, custom=999), content="999")
 }
 
 ///|
@@ -388,12 +388,12 @@ test "calc_all_stats_champions: ガブリアス ようき SP=[0,32,0,0,0,32]" {
   match @model.nature_from_ja("ようき") {
     Some(nature) => {
       let stats = calc_all_stats_champions(pokemon, sps, nature)
-      inspect(stats[0], content="183") // HP: 108+0+75
-      inspect(stats[1], content="182") // Atk: (130+32+20)*1/1 (ようき neutral for Atk)
-      inspect(stats[2], content="115") // Def: (95+0+20)*1/1
-      inspect(stats[3], content="90") // SpA: (80+0+20)*9/10 (↓)
-      inspect(stats[4], content="105") // SpD: (85+0+20)*1/1
-      inspect(stats[5], content="169") // Spe: (102+32+20)*11/10 (↑)
+      @debug.debug_inspect(stats[0], content="183") // HP: 108+0+75
+      @debug.debug_inspect(stats[1], content="182") // Atk: (130+32+20)*1/1 (ようき neutral for Atk)
+      @debug.debug_inspect(stats[2], content="115") // Def: (95+0+20)*1/1
+      @debug.debug_inspect(stats[3], content="90") // SpA: (80+0+20)*9/10 (↓)
+      @debug.debug_inspect(stats[4], content="105") // SpD: (85+0+20)*1/1
+      @debug.debug_inspect(stats[5], content="169") // Spe: (102+32+20)*11/10 (↑)
     }
     None => fail("nature not found")
   }
@@ -401,51 +401,51 @@ test "calc_all_stats_champions: ガブリアス ようき SP=[0,32,0,0,0,32]" {
 
 ///|
 test "sp_for_hp_champions: target=183 (SP=0)" {
-  inspect(sp_for_hp_champions(108, 183), content="0")
+  @debug.debug_inspect(sp_for_hp_champions(108, 183), content="0")
 }
 
 ///|
 test "sp_for_hp_champions: target=215 (SP=32)" {
-  inspect(sp_for_hp_champions(108, 215), content="32")
+  @debug.debug_inspect(sp_for_hp_champions(108, 215), content="32")
 }
 
 ///|
 test "sp_for_hp_champions: unreachable → 33 sentinel" {
-  inspect(sp_for_hp_champions(108, 999), content="33")
+  @debug.debug_inspect(sp_for_hp_champions(108, 999), content="33")
 }
 
 ///|
 test "sp_for_hp_champions: target below minimum → 0" {
   // target = 100 < 108+0+75=183, sp would be negative → clamp to 0
-  inspect(sp_for_hp_champions(108, 100), content="0")
+  @debug.debug_inspect(sp_for_hp_champions(108, 100), content="0")
 }
 
 ///|
 test "sp_for_non_hp_champions: neutral, target=115 (SP=0)" {
-  inspect(sp_for_non_hp_champions(95, 115, 1, 1), content="0")
+  @debug.debug_inspect(sp_for_non_hp_champions(95, 115, 1, 1), content="0")
 }
 
 ///|
 test "sp_for_non_hp_champions: neutral, target=147 (SP=32)" {
   // (95+32+20)*1/1 = 147
-  inspect(sp_for_non_hp_champions(95, 147, 1, 1), content="32")
+  @debug.debug_inspect(sp_for_non_hp_champions(95, 147, 1, 1), content="32")
 }
 
 ///|
 test "sp_for_non_hp_champions: nature up, target=200" {
   // (130+sp+20)*11/10 >= 200 → sp+150 >= ceil(200*10/11)=182 → sp >= 32
-  inspect(sp_for_non_hp_champions(130, 200, 11, 10), content="32")
+  @debug.debug_inspect(sp_for_non_hp_champions(130, 200, 11, 10), content="32")
 }
 
 ///|
 test "sp_for_non_hp_champions: nature down, target=90" {
   // (80+sp+20)*9/10 >= 90 → sp+100 >= ceil(90*10/9)=100 → sp >= 0
-  inspect(sp_for_non_hp_champions(80, 90, 9, 10), content="0")
+  @debug.debug_inspect(sp_for_non_hp_champions(80, 90, 9, 10), content="0")
 }
 
 ///|
 test "sp_for_non_hp_champions: unreachable → 33 sentinel" {
-  inspect(sp_for_non_hp_champions(95, 9999, 11, 10), content="33")
+  @debug.debug_inspect(sp_for_non_hp_champions(95, 9999, 11, 10), content="33")
 }
 
 ///|
@@ -461,12 +461,12 @@ test "sp_for_non_hp_champions: round-trip all SP values" {
 
 ///|
 test "reverse_base_from_stat_champions: HP 183 → base 108" {
-  inspect(reverse_base_from_stat_champions(183, 0, true, 1, 1), content="108")
+  @debug.debug_inspect(reverse_base_from_stat_champions(183, 0, true, 1, 1), content="108")
 }
 
 ///|
 test "reverse_base_from_stat_champions: Atk 200, SP=32, nature up → base 130" {
-  inspect(
+  @debug.debug_inspect(
     reverse_base_from_stat_champions(200, 32, false, 11, 10), content="130",
   )
 }
@@ -480,12 +480,12 @@ test "reverse_base_from_stat_champions: round-trip" {
     let recovered_hp = reverse_base_from_stat_champions(
       actual_hp, 16, true, 1, 1,
     )
-    inspect(recovered_hp == base, content="true")
+    assert_true(recovered_hp == base)
     let actual_other = calc_other_champions(base, 16, 11, 10)
     let recovered_other = reverse_base_from_stat_champions(
       actual_other, 16, false, 11, 10,
     )
-    inspect(recovered_other == base, content="true")
+    assert_true(recovered_other == base)
   }
 }
 
@@ -662,22 +662,22 @@ test "StatModel: Champions methods equal primitives across (sp, base, idx, natur
 test "StatModel limits: Standard values pinned" {
   let std : StatModel = Standard(ivs=FixedArray::make(6, 31))
   let limits = std.limits()
-  inspect(limits.step, content="4")
-  inspect(limits.max_per_stat, content="252")
-  inspect(limits.sentinel, content="256")
-  inspect(limits.step_cap, content="600")
-  inspect(limits.hbd_budget, content="508")
-  inspect(limits.full_budget, content="510")
+  @debug.debug_inspect(limits.step, content="4")
+  @debug.debug_inspect(limits.max_per_stat, content="252")
+  @debug.debug_inspect(limits.sentinel, content="256")
+  @debug.debug_inspect(limits.step_cap, content="600")
+  @debug.debug_inspect(limits.hbd_budget, content="508")
+  @debug.debug_inspect(limits.full_budget, content="510")
 }
 
 ///|
 test "StatModel limits: Champions values pinned" {
   let champ : StatModel = Champions
   let limits = champ.limits()
-  inspect(limits.step, content="1")
-  inspect(limits.max_per_stat, content="32")
-  inspect(limits.sentinel, content="33")
-  inspect(limits.step_cap, content="200")
-  inspect(limits.hbd_budget, content="66")
-  inspect(limits.full_budget, content="66")
+  @debug.debug_inspect(limits.step, content="1")
+  @debug.debug_inspect(limits.max_per_stat, content="32")
+  @debug.debug_inspect(limits.sentinel, content="33")
+  @debug.debug_inspect(limits.step_cap, content="200")
+  @debug.debug_inspect(limits.hbd_budget, content="66")
+  @debug.debug_inspect(limits.full_budget, content="66")
 }

@@ -7,7 +7,7 @@
 
 ///|
 test "SCHEMA_VERSION is 3 (bumped for #91 payoff variants[] reroute)" {
-  inspect(SCHEMA_VERSION, content="3")
+  @debug.debug_inspect(SCHEMA_VERSION, content="3")
 }
 
 ///|
@@ -24,13 +24,13 @@ test "parse_variants_from_json: extracts probability and hits length" {
   let result = parse_variants_from_json(json_str)
   match result {
     Some(variants) => {
-      inspect(variants.length(), content="3")
+      @debug.debug_inspect(variants.length(), content="3")
       // probability shape preserved
       let p0 = variants[0].probability
       let delta = if p0 > 0.2 { p0 - 0.2 } else { 0.2 - p0 }
       assert_true(delta < 1.0e-9)
-      inspect(variants[0].hits_count, content="1")
-      inspect(variants[2].hits_count, content="3")
+      @debug.debug_inspect(variants[0].hits_count, content="1")
+      @debug.debug_inspect(variants[2].hits_count, content="3")
     }
     None => fail("expected Some(variants)")
   }

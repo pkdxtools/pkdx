@@ -24,7 +24,7 @@ test "validate_team_json: valid minimal input" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_team_json(json), content="Ok(())")
+  {let _r = validate_team_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -36,7 +36,7 @@ test "validate_team_json: missing fields reports all errors" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(errors.length() >= 5, content="true")
+  assert_true(errors.length() >= 5)
 }
 
 ///|
@@ -69,7 +69,7 @@ test "validate_team_json: invalid battle_format" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("battle_format") }),
     content="true",
   )
@@ -107,7 +107,7 @@ test "validate_team_json: too many moves rejected" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("moves") || e.contains("Items") }),
     content="true",
   )
@@ -139,7 +139,7 @@ test "validate_team_json: fewer than 4 moves accepted" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_team_json(json), content="Ok(())")
+  {let _r = validate_team_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -171,7 +171,7 @@ test "validate_pokemon_json: valid cache input" {
     #|  "updated_at": "2026-04-06T00:00:00Z"
     #|}
   let json = @json.parse(src)
-  inspect(validate_pokemon_json(json), content="Ok(())")
+  {let _r = validate_pokemon_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -202,7 +202,7 @@ test "validate_pokemon_json: stat_points over 510 rejected on sv" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("must be <= 510") }),
     content="true",
   )
@@ -224,7 +224,7 @@ test "validate_pokemon_json: missing build" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("build") }),
     content="true",
   )
@@ -257,7 +257,7 @@ test "validate_pokemon_json: empty move name rejected" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("move name must not be empty") }),
     content="true",
   )
@@ -290,7 +290,7 @@ test "validate_pokemon_json: empty string nature rejected by strict schema" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("nature") }),
     content="true",
   )
@@ -323,7 +323,7 @@ test "validate_team_json: with regulation field" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_team_json(json), content="Ok(())")
+  {let _r = validate_team_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -353,7 +353,7 @@ test "validate_team_json: regulation null is valid (backward compat)" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_team_json(json), content="Ok(())")
+  {let _r = validate_team_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -381,7 +381,7 @@ test "validate_pokemon_json: champions sp total 66 boundary passes" {
     #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_pokemon_json(json), content="Ok(())")
+  {let _r = validate_pokemon_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -413,7 +413,7 @@ test "validate_pokemon_json: champions sp total 67 boundary fails" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("Champions SP total") }),
     content="true",
   )
@@ -444,7 +444,7 @@ test "validate_pokemon_json: champions sp each stat 32 boundary passes" {
     #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_pokemon_json(json), content="Ok(())")
+  {let _r = validate_pokemon_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -476,7 +476,7 @@ test "validate_pokemon_json: champions sp each stat 33 boundary fails" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("Champions SP") && e.contains("/h") }),
     content="true",
   )
@@ -511,7 +511,7 @@ test "validate_pokemon_json: champions sp negative value fails" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("Champions SP") && e.contains("negative") }),
     content="true",
   )
@@ -541,7 +541,7 @@ test "validate_pokemon_json: sp rule not applied when version is sv" {
     #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
-  inspect(validate_pokemon_json(json), content="Ok(())")
+  {let _r = validate_pokemon_json(json); assert_true(_r is Ok(_))}
 }
 
 ///|
@@ -574,11 +574,11 @@ test "validate_pokemon_json: 510 rule not applied when version is champions" {
     fail("Expected Err but got Ok")
   }
   // Champions では「合計 > 66」エラーのみ発生し、「合計 > 510」エラーは起きない。
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("Champions SP total") }),
     content="true",
   )
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) { e.contains("must be <= 510") }),
     content="false",
   )
@@ -611,7 +611,7 @@ test "validate_pokemon_json: legacy schema detection for build.evs" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) {
       e.contains("legacy schema detected") && e.contains("pkdx convert meta")
     }),
@@ -648,7 +648,7 @@ test "validate_pokemon_json: legacy detection for long-key base_stats" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) {
       e.contains("#/pokemon/base_stats") &&
       e.contains("legacy schema detected") &&
@@ -686,7 +686,7 @@ test "validate_pokemon_json: legacy detection for long-key stat_points" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) {
       e.contains("#/build/stat_points") &&
       e.contains("legacy schema detected")
@@ -723,7 +723,7 @@ test "validate_pokemon_json: legacy detection for long-key actual_stats" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) {
       e.contains("#/build/actual_stats") &&
       e.contains("legacy schema detected")
@@ -764,7 +764,7 @@ test "validate_team_json: legacy detection for long-key stat_points on member" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) {
       e.contains("#/members/0/stat_points") &&
       e.contains("legacy schema detected")
@@ -803,7 +803,7 @@ test "validate_team_json: legacy schema detection for long stat keys" {
   guard result is Err(errors) else {
     fail("Expected Err but got Ok")
   }
-  inspect(
+  @debug.debug_inspect(
     errors.iter().any(fn(e) {
       e.contains("legacy schema detected") && e.contains("pkdx convert meta")
     }),

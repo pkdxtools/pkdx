@@ -24,7 +24,7 @@ pub(all) enum ImportCheckResult {
   Skip(String) // matched_file
   Diff(String, Array[String]) // matched_file, differing_fields
   New
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub fn import_check_result_to_json(r : ImportCheckResult) -> Json {
@@ -73,7 +73,7 @@ pub(all) struct PokemonTuple {
   item : String
   stat_points : Array[Int]
   moves : Array[String]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Team cache JSON から比較用タプルを抽出
@@ -106,7 +106,7 @@ pub(all) struct TeamTuple {
   battle_format : String
   version : String
   members : Array[TeamMemberTuple]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct TeamMemberTuple {
@@ -114,7 +114,7 @@ pub(all) struct TeamMemberTuple {
   ability : String
   item : String
   moves : Array[String]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Pokemon タプル差分を検出。一致なら空配列、差分あればフィールド名列挙

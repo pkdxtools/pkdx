@@ -41,21 +41,21 @@ test "team_payoff_matrix_screened_bit_exact_when_keep_top_one" {
   let oracle = team_payoff_matrix_with_team_model(
     team, opp, Single, SwitchingGame(1),
   )
-  assert_eq(screened.rows(), oracle.rows())
-  assert_eq(screened.cols(), oracle.cols())
+  @debug.assert_eq(screened.rows(), oracle.rows())
+  @debug.assert_eq(screened.cols(), oracle.cols())
   for i in 0..<screened.rows() {
     for j in 0..<screened.cols() {
-      assert_eq(screened.at(i, j), oracle.at(i, j))
+      @debug.assert_eq(screened.at(i, j), oracle.at(i, j))
     }
   }
   // Full retention: retained indices are the identity.
-  assert_eq(rows.length(), oracle.rows())
-  assert_eq(cols.length(), oracle.cols())
+  @debug.assert_eq(rows.length(), oracle.rows())
+  @debug.assert_eq(cols.length(), oracle.cols())
   for i in 0..<rows.length() {
-    assert_eq(rows[i], i)
+    @debug.assert_eq(rows[i], i)
   }
   for j in 0..<cols.length() {
-    assert_eq(cols[j], j)
+    @debug.assert_eq(cols[j], j)
   }
 }
 
@@ -68,8 +68,8 @@ test "team_payoff_matrix_screened_retained_count_matches_ceil_of_quantile" {
   let (_, rows, cols) = team_payoff_matrix_screened(
     team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
-  assert_eq(rows.length(), 6)
-  assert_eq(cols.length(), 6)
+  @debug.assert_eq(rows.length(), 6)
+  @debug.assert_eq(cols.length(), 6)
 }
 
 ///|
@@ -107,7 +107,7 @@ test "team_payoff_matrix_screened_keeps_nash_weighted_rows" {
   let (_, retained_rows, _) = team_payoff_matrix_screened(
     team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
   )
-  assert_eq(retained_rows.length(), 6)
+  @debug.assert_eq(retained_rows.length(), 6)
 }
 
 ///|

@@ -36,7 +36,7 @@ pub fn map_move_entries(
       Some(String(s)) => s == "1"
       _ => false
     }
-    if not(available) {
+    if !(available) {
       continue
     }
     let id = match m.get("id") {

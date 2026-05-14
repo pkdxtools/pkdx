@@ -42,7 +42,7 @@ pub fn run_for(
   repo_root : String,
   migrations~ : Array[Migration],
 ) -> Result[Report, String] {
-  if not(@db.file_exists(db_path)) {
+  if !(@db.file_exists(db_path)) {
     return Err(db_path + " not found. Run ./setup.sh first.")
   }
   let db = match @db.open_rw(db_path) {

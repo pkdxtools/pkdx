@@ -41,7 +41,7 @@ test "end_to_end_select_with_switching_game_model_returns_valid_distribution" {
   let lp = @nash.solve_zero_sum(team_m)
   match lp {
     Optimal(row_strategy~, value~, ..) => {
-      assert_true(value.is_nan() == false)
+      assert_true(!(value.is_nan()))
       let arr = row_strategy.to_array()
       assert_true(arr.length() == 60)
       let mut total = 0.0
@@ -174,7 +174,7 @@ test "end_to_end_switching_game_reproducibility_same_inputs" {
   )
   for i in 0..<20 {
     for j in 0..<20 {
-      assert_eq(m1.at(i, j), m2.at(i, j))
+      @debug.assert_eq(m1.at(i, j), m2.at(i, j))
     }
   }
   let r1 = @nash.solve_zero_sum(m1)

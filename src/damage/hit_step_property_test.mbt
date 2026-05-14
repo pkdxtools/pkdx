@@ -148,8 +148,8 @@ test "Skill Link + Random2to5 degenerates to variants=1 hits=5" {
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("みだれづき")
   let r = calc_damage(hsp_input(atk, dfn, mv, atk_ability="スキルリンク"))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="5")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="5")
 }
 
 ///|
@@ -160,12 +160,12 @@ test "Random2to5 and TripleVariant are mutually exclusive on resolve_auto_hits" 
   let triple_set = ["トリプルアクセル", "トリプルキック"]
   for i = 0; i < triple_set.length(); i = i + 1 {
     let spec = resolve_auto_hits(triple_set[i])
-    inspect(spec, content="FixedHit(3)")
+    @debug.debug_inspect(spec, content="FixedHit(3)")
   }
   let random_2_5 = ["みだれづき", "ロックブラスト", "みずしゅりけん"]
   for i = 0; i < random_2_5.length(); i = i + 1 {
     let spec = resolve_auto_hits(random_2_5[i])
-    inspect(spec, content="Random2to5")
+    @debug.debug_inspect(spec, content="Random2to5")
   }
 }
 
@@ -175,8 +175,8 @@ test "single-hit move produces variants[0].hits.length == 1" {
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("じしん")
   let r = calc_damage(hsp_input(atk, dfn, mv))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="1")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="1")
 }
 
 ///|
@@ -185,6 +185,6 @@ test "ParentalBond produces variants=1 hits=2" {
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("じしん")
   let r = calc_damage(hsp_input(atk, dfn, mv, atk_ability="おやこあい"))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="2")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="2")
 }

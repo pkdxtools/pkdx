@@ -55,19 +55,19 @@ pub fn run_003(db : @db.Db, _repo_root : String) -> Result[String, String] {
       Err(e) => return Err(e)
       Ok(o) => o
     }
-    if not(orphans.is_empty()) {
+    if !(orphans.is_empty()) {
       mismatches.push(version + ": " + orphans.join(", "))
     }
   }
-  if not(missing.is_empty()) || not(mismatches.is_empty()) {
+  if !(missing.is_empty()) || !(mismatches.is_empty()) {
     let mut msg = "Mega-form data integrity check FAILED."
-    if not(missing.is_empty()) {
+    if !(missing.is_empty()) {
       msg = msg + "\n    Below minimum count:"
       for m in missing {
         msg = msg + "\n      " + m
       }
     }
-    if not(mismatches.is_empty()) {
+    if !(mismatches.is_empty()) {
       msg = msg + "\n    Orphan mega rows (missing status/type/ability pair):"
       for m in mismatches {
         msg = msg + "\n      " + m
@@ -112,7 +112,7 @@ fn count_mega(db : @db.Db, table : String, version : String) -> Result[Int, Stri
   }
   match rows.get(0).bind(fn(row) { row.get(0) }) {
     Some(Some(s)) => {
-      let n = try @strconv.parse_int(s) catch {
+      let n = try @string.parse_int(s) catch {
         _ => return Ok(0)
       }
       Ok(n)

@@ -10,10 +10,10 @@ test "run_bench: fixed-key counts — miss=1, hit=I-1" {
   let report = run_bench(cache, "fixed-key", 5, fn() { "{\"ok\":1}" })
   close(cache)
   let _ = @db.unlink_file(path)
-  assert_eq(report.miss_count, 1)
-  assert_eq(report.hit_count, 4)
-  assert_eq(report.full_miss.count, 1)
-  assert_eq(report.full_hit.count, 4)
+  @debug.assert_eq(report.miss_count, 1)
+  @debug.assert_eq(report.hit_count, 4)
+  @debug.assert_eq(report.full_miss.count, 1)
+  @debug.assert_eq(report.full_hit.count, 4)
 }
 
 ///|
@@ -50,5 +50,5 @@ test "run_bench: TSV formatter emits 7 lines (1 header + 6 phases)" {
   let _ = @db.unlink_file(path)
   let tsv = format_bench_report_tsv(report)
   let lines = tsv.split("\n").collect()
-  assert_eq(lines.length(), 7)
+  @debug.assert_eq(lines.length(), 7)
 }

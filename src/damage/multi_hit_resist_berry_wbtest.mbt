@@ -109,8 +109,8 @@ test "Skill Link みだれづき + オッカのみ: only hit 0 halved (5-hit ほ
     rb_input(atk, dfn, mv, atk_ability="スキルリンク"),
   )
   // 5 hits guaranteed under Skill Link.
-  inspect(with_berry.variants.length(), content="1")
-  inspect(with_berry.variants[0].hits.length(), content="5")
+  @debug.debug_inspect(with_berry.variants.length(), content="1")
+  @debug.debug_inspect(with_berry.variants[0].hits.length(), content="5")
   // First hit alone should be halved. Pre-fix: total ≈ no_berry / 2.
   // Post-fix: total ≈ no_berry - hit0_no_berry / 2 (i.e. 4 of 5 hits at full).
   // Lower-bound check: the new total must be strictly greater than
@@ -128,14 +128,14 @@ test "fixed-3 すいりゅうれんだ + オッカのみ: hit 0 halved, hits 1-2
   let dfn = rb_pokemon("defender", "くさ")
   let mv = rb_move("すいりゅうれんだ", "ほのお")
   let r = calc_damage(rb_input(atk, dfn, mv, def_item="オッカのみ"))
-  inspect(r.variants.length(), content="1")
-  inspect(r.variants[0].hits.length(), content="3")
+  @debug.debug_inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants[0].hits.length(), content="3")
   let h0 = r.variants[0].hits[0].damage_per_roll[8]
   let h1 = r.variants[0].hits[1].damage_per_roll[8]
   let h2 = r.variants[0].hits[2].damage_per_roll[8]
   // Hit 0 must be ≈ half of hit 1 / hit 2 (within integer-rounding slack).
   // Hits 1 and 2 must be equal (no berry reduction either).
-  inspect(h1 == h2, content="true")
+  assert_true(h1 == h2)
   // Pre-fix h0 == h1 (all halved); post-fix h0 ≈ h1 / 2.
   assert_true(h0 < h1)
   assert_true(h0 * 2 >= h1 - 2 && h0 * 2 <= h1 + 2)

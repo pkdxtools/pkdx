@@ -254,17 +254,17 @@ test "parse_move_json_reads_priority_and_stat_effects" {
       return
     }
   }
-  assert_eq(parsed[0].moves[0].priority, 1)
-  assert_eq(parsed[1].moves[0].priority, 0)
-  assert_eq(parsed[1].moves[0].stat_effects.length(), 1)
+  @debug.assert_eq(parsed[0].moves[0].priority, 1)
+  @debug.assert_eq(parsed[1].moves[0].priority, 0)
+  @debug.assert_eq(parsed[1].moves[0].stat_effects.length(), 1)
   let eff = parsed[1].moves[0].stat_effects[0]
-  assert_eq(eff.stat, 0)
-  assert_eq(eff.delta, 2)
+  @debug.assert_eq(eff.stat, 0)
+  @debug.assert_eq(eff.delta, 2)
   // Legacy 2-element form parses as self-target (0).
-  assert_eq(eff.target, 0)
+  @debug.assert_eq(eff.target, 0)
   // Missing optional fields default to 0 / []
-  assert_eq(parsed[2].moves[0].priority, 0)
-  assert_eq(parsed[2].moves[0].stat_effects.length(), 0)
+  @debug.assert_eq(parsed[2].moves[0].priority, 0)
+  @debug.assert_eq(parsed[2].moves[0].stat_effects.length(), 0)
 }
 
 ///|
@@ -301,20 +301,20 @@ test "parse_move_json_3elem_stat_effects_and_posthit_fields" {
   }
   // Amaeru: opp-target -2 Atk
   let amaeru_eff = parsed[0].moves[0].stat_effects[0]
-  assert_eq(amaeru_eff.stat, 0)
-  assert_eq(amaeru_eff.delta, -2)
-  assert_eq(amaeru_eff.target, 1)
+  @debug.assert_eq(amaeru_eff.stat, 0)
+  @debug.assert_eq(amaeru_eff.delta, -2)
+  @debug.assert_eq(amaeru_eff.target, 1)
   // Head Smash: 1/2 recoil
-  assert_eq(parsed[1].moves[0].recoil_num, 1)
-  assert_eq(parsed[1].moves[0].recoil_den, 2)
-  assert_eq(parsed[1].moves[0].self_ko, false)
-  assert_eq(parsed[1].moves[0].recharge, false)
+  @debug.assert_eq(parsed[1].moves[0].recoil_num, 1)
+  @debug.assert_eq(parsed[1].moves[0].recoil_den, 2)
+  @debug.assert_eq(parsed[1].moves[0].self_ko, false)
+  @debug.assert_eq(parsed[1].moves[0].recharge, false)
   // Self-destruct
-  assert_eq(parsed[2].moves[0].self_ko, true)
-  assert_eq(parsed[2].moves[0].recoil_num, 0)
+  @debug.assert_eq(parsed[2].moves[0].self_ko, true)
+  @debug.assert_eq(parsed[2].moves[0].recoil_num, 0)
   // Hyper Beam
-  assert_eq(parsed[3].moves[0].recharge, true)
-  assert_eq(parsed[3].moves[0].self_ko, false)
+  @debug.assert_eq(parsed[3].moves[0].recharge, true)
+  @debug.assert_eq(parsed[3].moves[0].self_ko, false)
 }
 
 ///|
@@ -361,10 +361,10 @@ test "run_select_with_screened_switching_game_returns_retained_shape" {
     }
   }
   // 60 selections × keep_top=0.5 → ceil(60 * 0.5) = 30 retained on each axis.
-  assert_eq(selections.length(), 30)
-  assert_eq(opp_selections.length(), 30)
+  @debug.assert_eq(selections.length(), 30)
+  @debug.assert_eq(opp_selections.length(), 30)
   // row_strategy must track retained selection shape.
-  assert_eq(row_strategy.length(), selections.length())
+  @debug.assert_eq(row_strategy.length(), selections.length())
 }
 
 ///|
@@ -403,7 +403,7 @@ test "run_select_rejects_team_size_other_than_six" {
     ""
   } catch {
     InvalidJson(msg) => msg
-    e => e.to_string()
+    e => @debug.to_string(e)
   }
   assert_true(undersized_msg.contains("exactly 6"))
   assert_true(undersized_msg.contains("team=5"))
@@ -419,7 +419,7 @@ test "run_select_rejects_team_size_other_than_six" {
     ""
   } catch {
     InvalidJson(msg) => msg
-    e => e.to_string()
+    e => @debug.to_string(e)
   }
   assert_true(oversized_msg.contains("exactly 6"))
   assert_true(oversized_msg.contains("opponent=7"))

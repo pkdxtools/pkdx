@@ -7,28 +7,28 @@
 test "champions_ddl returns the expected number of statements" {
   let stmts = champions_ddl()
   // 7 tables + 3 indexes = 10 statements
-  inspect(stmts.length(), content="10")
+  @debug.debug_inspect(stmts.length(), content="10")
 }
 
 ///|
 test "apply_ddl is idempotent on in-memory DB" {
   let db = match @db.open_rwc(":memory:") {
     Err(e) => {
-      inspect(e, content="open succeeds")
+      @debug.debug_inspect(e, content="open succeeds")
       return
     }
     Ok(d) => d
   }
   match apply_ddl(db) {
     Err(e) => {
-      inspect(e, content="first apply_ddl Ok")
+      @debug.debug_inspect(e, content="first apply_ddl Ok")
       return
     }
     Ok(_) => ()
   }
   match apply_ddl(db) {
     Err(e) => {
-      inspect(e, content="second apply_ddl Ok")
+      @debug.debug_inspect(e, content="second apply_ddl Ok")
       return
     }
     Ok(_) => ()
@@ -62,18 +62,24 @@ test "parse_pokemon_entries accepts a minimal valid record" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match parse_pokemon_entries(json) {
-    Err(e) => inspect(e, content="parse ok")
+    Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
-      inspect(entries.length(), content="1")
-      inspect(entries[0].id, content="0959000")
-      inspect(entries[0].hp, content="85")
-      inspect(entries[0].type1, content="フェアリー")
-      inspect(entries[0].form, content="")
+      @debug.debug_inspect(entries.length(), content="1")
+      @debug.debug_inspect(entries[0].id, content=(
+        #|"0959000"
+      ))
+      @debug.debug_inspect(entries[0].hp, content="85")
+      @debug.debug_inspect(entries[0].type1, content=(
+        #|"フェアリー"
+      ))
+      @debug.debug_inspect(entries[0].form, content=(
+        #|""
+      ))
     }
   }
 }
@@ -94,13 +100,13 @@ test "parse_pokemon_entries rejects missing required string field" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match parse_pokemon_entries(json) {
-    Ok(_) => inspect("expected err", content="missing type1 should fail")
-    Err(e) => inspect(e.contains("type1"), content="true")
+    Ok(_) => @debug.debug_inspect("expected err", content="missing type1 should fail")
+    Err(e) => assert_true(e.contains("type1"))
   }
 }
 
@@ -113,15 +119,17 @@ test "parse_move_entries accepts power as a non-numeric token" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match parse_move_entries(json) {
-    Err(e) => inspect(e, content="parse ok")
+    Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
-      inspect(entries.length(), content="1")
-      inspect(entries[0].power, content="-")
+      @debug.debug_inspect(entries.length(), content="1")
+      @debug.debug_inspect(entries[0].power, content=(
+        #|"-"
+      ))
     }
   }
 }
@@ -134,15 +142,17 @@ test "parse_learnset_entries minimal record" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match parse_learnset_entries(json) {
-    Err(e) => inspect(e, content="parse ok")
+    Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
-      inspect(entries.length(), content="1")
-      inspect(entries[0].waza, content="ねこだまし")
+      @debug.debug_inspect(entries.length(), content="1")
+      @debug.debug_inspect(entries[0].waza, content=(
+        #|"ねこだまし"
+      ))
     }
   }
 }
@@ -156,15 +166,17 @@ test "parse_item_entries minimal record" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match parse_item_entries(json) {
-    Err(e) => inspect(e, content="parse ok")
+    Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
-      inspect(entries.length(), content="1")
-      inspect(entries[0].name_ja, content="こだわりハチマキ")
+      @debug.debug_inspect(entries.length(), content="1")
+      @debug.debug_inspect(entries[0].name_ja, content=(
+        #|"こだわりハチマキ"
+      ))
     }
   }
 }

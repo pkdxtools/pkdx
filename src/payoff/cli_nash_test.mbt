@@ -138,10 +138,10 @@ test "nash_graph_outputs_dot_with_threshold_filter" {
   let out = run_nash_graph(janken_json(), 0.5)
   assert_true(out.contains("digraph payoff"))
   // All RPS off-diagonal entries are ±1, which exceed 0.5 → 6 edges.
-  inspect(count_arrows(out), content="6")
+  @debug.debug_inspect(count_arrows(out), content="6")
   // With a threshold above max entry magnitude, no edges remain.
   let sparse = run_nash_graph(janken_json(), 2.0)
-  inspect(count_arrows(sparse), content="0")
+  @debug.debug_inspect(count_arrows(sparse), content="0")
 }
 
 ///|
@@ -263,7 +263,7 @@ test "nash_graph_team_builds_antisymmetric_fast_path" {
   let input = build_team_graph_json([100, 100], [100, 100], "")
   let out = run_nash_graph(input, 1.0e-6)
   // Threshold above any possible 0-difference value, so no arrows.
-  inspect(count_arrows(out), content="0")
+  @debug.debug_inspect(count_arrows(out), content="0")
 }
 
 ///|
@@ -282,7 +282,7 @@ test "nash_graph_team_emits_arrows_when_score_differs" {
   let input = "{\"team\":" + strong + ",\"opponent\":" + weak + "}"
   let out = run_nash_graph(input, 0.01)
   // strong → weak arrow exists, weak → strong arrow exists (antisymmetric).
-  inspect(count_arrows(out), content="2")
+  @debug.debug_inspect(count_arrows(out), content="2")
   assert_true(out.contains("team_0 -> opp_0"))
   assert_true(out.contains("opp_0 -> team_0"))
 }
@@ -300,7 +300,7 @@ test "nash_graph_team_accepts_asymmetric_sizes" {
   // 5 nodes total, intra-side blocks are zero (2x2 + 3x3 = 13 zeros plus
   // diagonal). All pairwise cross-side scores are 0 in this symmetric
   // damage setup, so no arrow exceeds threshold > 0.
-  inspect(count_arrows(out), content="0")
+  @debug.debug_inspect(count_arrows(out), content="0")
 }
 
 ///|
@@ -325,7 +325,7 @@ test "nash_graph_team_handles_support_only_combatant" {
   let input = "{\"team\":" + support + ",\"opponent\":" + support + "}"
   let out = run_nash_graph(input, 0.0)
   assert_true(out.contains("digraph payoff"))
-  inspect(count_arrows(out), content="0")
+  @debug.debug_inspect(count_arrows(out), content="0")
 }
 
 ///|

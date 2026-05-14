@@ -21,7 +21,7 @@ test "generate_pokemon_placeholder: roundtrip relaxed schema accepts" {
   let schema = pokemon_schema(b, strict=false)
   let placeholder = generate_pokemon_placeholder()
   let errors = validate_with_schema(schema, placeholder)
-  inspect(errors.is_empty(), content="true")
+  assert_true(errors.is_empty())
 }
 
 ///|
@@ -30,7 +30,7 @@ test "generate_pokemon_placeholder: strict schema rejects" {
   let schema = pokemon_schema(b, strict=true)
   let placeholder = generate_pokemon_placeholder()
   let errors = validate_with_schema(schema, placeholder)
-  inspect(errors.is_empty(), content="false")
+  assert_true(!(errors.is_empty()))
 }
 
 ///|
@@ -39,7 +39,7 @@ test "generate_team_placeholder: roundtrip relaxed schema accepts" {
   let schema = team_schema(b, strict=false)
   let placeholder = generate_team_placeholder()
   let errors = validate_with_schema(schema, placeholder)
-  inspect(errors.is_empty(), content="true")
+  assert_true(errors.is_empty())
 }
 
 ///|
@@ -48,7 +48,7 @@ test "generate_team_placeholder: strict schema rejects" {
   let schema = team_schema(b, strict=true)
   let placeholder = generate_team_placeholder()
   let errors = validate_with_schema(schema, placeholder)
-  inspect(errors.is_empty(), content="false")
+  assert_true(!(errors.is_empty()))
 }
 
 ///|
@@ -58,11 +58,11 @@ test "generate_pokemon_placeholder: nullable fields are null" {
   guard root.get("build") is Some(Object(build)) else {
     fail("expected build object")
   }
-  inspect(build.get("nature"), content="Some(Null)")
-  inspect(build.get("ability"), content="Some(Null)")
-  inspect(build.get("item"), content="Some(Null)")
+  @debug.debug_inspect(build.get("nature"), content="Some(Null)")
+  @debug.debug_inspect(build.get("ability"), content="Some(Null)")
+  @debug.debug_inspect(build.get("item"), content="Some(Null)")
   // role は optional nullable なので null placeholder
-  inspect(build.get("role"), content="Some(Null)")
+  @debug.debug_inspect(build.get("role"), content="Some(Null)")
 }
 
 ///|
@@ -75,8 +75,8 @@ test "generate_pokemon_placeholder: numeric fields are zero" {
   guard build.get("stat_points") is Some(Object(sp)) else {
     fail("expected stat_points object")
   }
-  inspect(sp.get("h"), content="Some(Number(0))")
-  inspect(sp.get("a"), content="Some(Number(0))")
+  @debug.debug_inspect(sp.get("h"), content="Some(Number(0))")
+  @debug.debug_inspect(sp.get("a"), content="Some(Number(0))")
 }
 
 ///|
@@ -86,7 +86,7 @@ test "generate_pokemon_placeholder: arrays default to empty" {
   guard root.get("damage_calcs") is Some(Array(arr)) else {
     fail("expected damage_calcs array")
   }
-  inspect(arr.length(), content="0")
+  @debug.debug_inspect(arr.length(), content="0")
 }
 
 ///|
@@ -99,10 +99,10 @@ test "generate_pokemon_placeholder: moves has 4 null-name slots" {
   guard build.get("moves") is Some(Array(moves)) else {
     fail("expected moves array")
   }
-  inspect(moves.length(), content="4")
+  @debug.debug_inspect(moves.length(), content="4")
   for mv in moves {
     guard mv is Object(mv_obj) else { fail("expected move object") }
-    inspect(mv_obj.get("name"), content="Some(Null)")
+    @debug.debug_inspect(mv_obj.get("name"), content="Some(Null)")
   }
 }
 
@@ -110,9 +110,9 @@ test "generate_pokemon_placeholder: moves has 4 null-name slots" {
 test "generate_team_placeholder: nullable fields are null" {
   let json = generate_team_placeholder()
   guard json is Object(root) else { fail("expected object") }
-  inspect(root.get("battle_format"), content="Some(Null)")
-  inspect(root.get("mechanics"), content="Some(Null)")
-  inspect(root.get("version"), content="Some(Null)")
+  @debug.debug_inspect(root.get("battle_format"), content="Some(Null)")
+  @debug.debug_inspect(root.get("mechanics"), content="Some(Null)")
+  @debug.debug_inspect(root.get("version"), content="Some(Null)")
 }
 
 ///|
@@ -122,7 +122,7 @@ test "generate_team_placeholder: members is empty array" {
   guard root.get("members") is Some(Array(members)) else {
     fail("expected members array")
   }
-  inspect(members.length(), content="0")
+  @debug.debug_inspect(members.length(), content="0")
 }
 
 ///|
@@ -151,7 +151,7 @@ test "pokemon_schema: types[] accepts 1..=2 japanese type strings" {
     #|}
   let json = @json.parse(src)
   let errors = validate_with_schema(schema, json)
-  inspect(errors.is_empty(), content="true")
+  assert_true(errors.is_empty())
 }
 
 ///|
@@ -181,7 +181,7 @@ test "pokemon_schema: abilities[] accepts 1..=3 entries" {
     #|}
   let json = @json.parse(src)
   let errors = validate_with_schema(schema, json)
-  inspect(errors.is_empty(), content="true")
+  assert_true(errors.is_empty())
 }
 
 ///|
@@ -215,5 +215,5 @@ test "team_schema: member moves accuracy optional is accepted" {
     #|}
   let json = @json.parse(src)
   let errors = validate_with_schema(schema, json)
-  inspect(errors.is_empty(), content="true")
+  assert_true(errors.is_empty())
 }

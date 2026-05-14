@@ -51,7 +51,7 @@ test "convert_smoke: legacy pokemon fixture migrates then renders md" {
       fail("migrate failed: \{e}")
     }
   }
-  inspect(validate_pokemon_json(migrated), content="Ok(())")
+  {let _r = validate_pokemon_json(migrated); assert_true(_r is Ok(_))}
 
   // md 出力が期待される内容を含む。
   let doc = build_pokemon_document(migrated, "マンムー")
@@ -99,5 +99,5 @@ test "convert_smoke: migration is idempotent" {
       fail("migrate failed on new-format input: \{e}")
     }
   }
-  assert_eq(once, twice)
+  @debug.assert_eq(once, twice)
 }

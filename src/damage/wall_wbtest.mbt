@@ -4,39 +4,39 @@
 
 ///|
 test "wall_applies: NoWall never applies" {
-  inspect(wall_applies(@model.Wall::NoWall, true), content="false")
-  inspect(wall_applies(@model.Wall::NoWall, false), content="false")
+  assert_true(!(wall_applies(@model.Wall::NoWall, true)))
+  assert_true(!(wall_applies(@model.Wall::NoWall, false)))
 }
 
 ///|
 test "wall_applies: Reflect only on physical" {
-  inspect(wall_applies(@model.Wall::Reflect, true), content="true")
-  inspect(wall_applies(@model.Wall::Reflect, false), content="false")
+  assert_true(wall_applies(@model.Wall::Reflect, true))
+  assert_true(!(wall_applies(@model.Wall::Reflect, false)))
 }
 
 ///|
 test "wall_applies: LightScreen only on special" {
-  inspect(wall_applies(@model.Wall::LightScreen, true), content="false")
-  inspect(wall_applies(@model.Wall::LightScreen, false), content="true")
+  assert_true(!(wall_applies(@model.Wall::LightScreen, true)))
+  assert_true(wall_applies(@model.Wall::LightScreen, false))
 }
 
 ///|
 test "wall_applies: AuroraVeil on both categories" {
-  inspect(wall_applies(@model.Wall::AuroraVeil, true), content="true")
-  inspect(wall_applies(@model.Wall::AuroraVeil, false), content="true")
+  assert_true(wall_applies(@model.Wall::AuroraVeil, true))
+  assert_true(wall_applies(@model.Wall::AuroraVeil, false))
 }
 
 ///|
 test "wall bypass: mold breaker family flags" {
-  inspect(is_wall_bypass_ability("かたやぶり"), content="true")
-  inspect(is_wall_bypass_ability("すりぬけ"), content="true")
-  inspect(is_wall_bypass_ability("ターボブレイズ"), content="true")
-  inspect(is_wall_bypass_ability("テラボルテージ"), content="true")
+  assert_true(is_wall_bypass_ability("かたやぶり"))
+  assert_true(is_wall_bypass_ability("すりぬけ"))
+  assert_true(is_wall_bypass_ability("ターボブレイズ"))
+  assert_true(is_wall_bypass_ability("テラボルテージ"))
 }
 
 ///|
 test "wall bypass: unrelated abilities do not bypass" {
-  inspect(is_wall_bypass_ability(""), content="false")
-  inspect(is_wall_bypass_ability("いかく"), content="false")
-  inspect(is_wall_bypass_ability("マルチスケイル"), content="false")
+  assert_true(!(is_wall_bypass_ability("")))
+  assert_true(!(is_wall_bypass_ability("いかく")))
+  assert_true(!(is_wall_bypass_ability("マルチスケイル")))
 }

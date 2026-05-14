@@ -101,14 +101,14 @@ fn st_input(
 
 ///|
 test "is_stamina_ability: recognises じきゅうりょく" {
-  inspect(is_stamina_ability("じきゅうりょく"), content="true")
+  assert_true(is_stamina_ability("じきゅうりょく"))
 }
 
 ///|
 test "is_stamina_ability: rejects unrelated abilities" {
-  inspect(is_stamina_ability("もふもふ"), content="false")
-  inspect(is_stamina_ability("いかく"), content="false")
-  inspect(is_stamina_ability(""), content="false")
+  assert_true(!(is_stamina_ability("もふもふ")))
+  assert_true(!(is_stamina_ability("いかく")))
+  assert_true(!(is_stamina_ability("")))
 }
 
 ///|
@@ -120,14 +120,14 @@ test "stamina + Skill Link rock blast: def_stage_after ramps 1..5" {
     st_input(atk, dfn, mv, atk_ability="スキルリンク", def_ability="じきゅうりょく"),
   )
   // Skill Link → 1 variant with 5 hits.
-  inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants.length(), content="1")
   let v = r.variants[0]
-  inspect(v.hits.length(), content="5")
-  inspect(v.hits[0].def_stage_after, content="1")
-  inspect(v.hits[1].def_stage_after, content="2")
-  inspect(v.hits[2].def_stage_after, content="3")
-  inspect(v.hits[3].def_stage_after, content="4")
-  inspect(v.hits[4].def_stage_after, content="5")
+  @debug.debug_inspect(v.hits.length(), content="5")
+  @debug.debug_inspect(v.hits[0].def_stage_after, content="1")
+  @debug.debug_inspect(v.hits[1].def_stage_after, content="2")
+  @debug.debug_inspect(v.hits[2].def_stage_after, content="3")
+  @debug.debug_inspect(v.hits[3].def_stage_after, content="4")
+  @debug.debug_inspect(v.hits[4].def_stage_after, content="5")
 }
 
 ///|
@@ -142,14 +142,14 @@ test "stamina + entry def_rank=+3 + 5 hit: clamps at +6 from hit 4 onward" {
     ),
   )
   let v = r.variants[0]
-  inspect(v.hits.length(), content="5")
+  @debug.debug_inspect(v.hits.length(), content="5")
   // Entry +3 → hit 1 lands at +4, hit 2 at +5, hit 3 at +6 (cap),
   // hit 4 / hit 5 stay at +6.
-  inspect(v.hits[0].def_stage_after, content="4")
-  inspect(v.hits[1].def_stage_after, content="5")
-  inspect(v.hits[2].def_stage_after, content="6")
-  inspect(v.hits[3].def_stage_after, content="6")
-  inspect(v.hits[4].def_stage_after, content="6")
+  @debug.debug_inspect(v.hits[0].def_stage_after, content="4")
+  @debug.debug_inspect(v.hits[1].def_stage_after, content="5")
+  @debug.debug_inspect(v.hits[2].def_stage_after, content="6")
+  @debug.debug_inspect(v.hits[3].def_stage_after, content="6")
+  @debug.debug_inspect(v.hits[4].def_stage_after, content="6")
 }
 
 ///|
@@ -161,9 +161,9 @@ test "stamina without ability: def_stage_after stays at entry value" {
     st_input(atk, dfn, mv, atk_ability="スキルリンク"),
   )
   let v = r.variants[0]
-  inspect(v.hits.length(), content="5")
+  @debug.debug_inspect(v.hits.length(), content="5")
   for i = 0; i < 5; i = i + 1 {
-    inspect(v.hits[i].def_stage_after, content="0")
+    @debug.debug_inspect(v.hits[i].def_stage_after, content="0")
   }
 }
 
@@ -175,11 +175,11 @@ test "stamina + ParentalBond + tackle: 2nd hit sees +1 def stage" {
   let r = @damage.calc_damage(
     st_input(atk, dfn, mv, atk_ability="おやこあい", def_ability="じきゅうりょく"),
   )
-  inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants.length(), content="1")
   let v = r.variants[0]
-  inspect(v.hits.length(), content="2")
-  inspect(v.hits[0].def_stage_after, content="1")
-  inspect(v.hits[1].def_stage_after, content="2")
+  @debug.debug_inspect(v.hits.length(), content="2")
+  @debug.debug_inspect(v.hits[0].def_stage_after, content="1")
+  @debug.debug_inspect(v.hits[1].def_stage_after, content="2")
 }
 
 ///|
@@ -190,10 +190,10 @@ test "stamina + single hit move: def_stage_after raises by 1" {
   let r = @damage.calc_damage(
     st_input(atk, dfn, mv, def_ability="じきゅうりょく"),
   )
-  inspect(r.variants.length(), content="1")
+  @debug.debug_inspect(r.variants.length(), content="1")
   let v = r.variants[0]
-  inspect(v.hits.length(), content="1")
-  inspect(v.hits[0].def_stage_after, content="1")
+  @debug.debug_inspect(v.hits.length(), content="1")
+  @debug.debug_inspect(v.hits[0].def_stage_after, content="1")
 }
 
 ///|
@@ -213,7 +213,7 @@ test "stamina hit damage scales with prior def_stage rises" {
   // Stamina ramp must reduce later-hit damage strictly below early-hit
   // damage on the same roll index — even with int rounding, +5 def stage
   // is a 7/2x divisor change, not a no-op.
-  inspect(h0 > h4, content="true")
+  assert_true(h0 > h4)
 }
 
 ///|
@@ -256,6 +256,6 @@ test "stamina + Eviolite recomputes def stat per-hit (no ratio scaling)" {
   for h = 0; h < v_ev.hits.length(); h = h + 1 {
     let with_ev = v_ev.hits[h].damage_per_roll[7]
     let without_ev = v_no.hits[h].damage_per_roll[7]
-    inspect(with_ev < without_ev, content="true")
+    assert_true(with_ev < without_ev)
   }
 }

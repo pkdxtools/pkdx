@@ -4,7 +4,7 @@ pub(all) enum MoveCategory {
   Physical
   Special
   Status
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Convert Japanese category name to MoveCategory enum.

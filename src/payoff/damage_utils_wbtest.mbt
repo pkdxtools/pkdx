@@ -51,14 +51,14 @@ test "avg_damage: standard mean over 16 rolls" {
   let r = mk_result(d, 160)
   let avg = avg_damage(r)
   // Double equality on integers is safe here.
-  inspect(avg, content="48")
+  @debug.debug_inspect(avg, content="48")
 }
 
 ///|
 test "avg_damage: immune matchup returns 0" {
   let d : FixedArray[Int] = FixedArray::make(16, 0)
   let r = mk_result(d, 160, is_immune=true)
-  inspect(avg_damage(r), content="0")
+  @debug.debug_inspect(avg_damage(r), content="0")
 }
 
 ///|
@@ -68,7 +68,7 @@ test "avg_damage: disguise_blocked adds 1/8 defender HP chip to zero mean" {
   let d : FixedArray[Int] = FixedArray::make(16, 0)
   let r = mk_result(d, 160, disguise_blocked=true)
   // 160 / 8 = 20
-  inspect(avg_damage(r), content="20")
+  @debug.debug_inspect(avg_damage(r), content="20")
 }
 
 ///|
@@ -76,5 +76,5 @@ test "avg_damage: disguise_blocked with fractional HP keeps double precision" {
   // HP=163 → 163/8 = 20.375. Verifies the chip is a Double divide, not int.
   let d : FixedArray[Int] = FixedArray::make(16, 0)
   let r = mk_result(d, 163, disguise_blocked=true)
-  inspect(avg_damage(r), content="20.375")
+  @debug.debug_inspect(avg_damage(r), content="20.375")
 }

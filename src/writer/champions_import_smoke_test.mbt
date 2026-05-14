@@ -34,7 +34,7 @@ test "champions_import_smoke: round_trip_vision_json_to_md" {
   let json = @json.parse(src)
 
   // Step 1: validate (Champions SP 合計 66, 各 ≤ 32 を通過)
-  inspect(validate_pokemon_json(json), content="Ok(())")
+  {let _r = validate_pokemon_json(json); assert_true(_r is Ok(_))}
 
   // Step 2: build_pokemon_document → markdown.serialize
   let doc = build_pokemon_document(json, "マンムー")
@@ -43,7 +43,7 @@ test "champions_import_smoke: round_trip_vision_json_to_md" {
   // Step 3: 決定論性 (同一入力 → 同一出力)
   let doc2 = build_pokemon_document(json, "マンムー")
   let md2 = @markdown.serialize(doc2)
-  assert_eq(md, md2)
+  @debug.assert_eq(md, md2)
 
   // Step 4: 必須情報が md に含まれる
   assert_true(md.contains("マンムー"))

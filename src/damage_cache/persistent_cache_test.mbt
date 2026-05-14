@@ -45,7 +45,7 @@ test "persistent_cache: existing cache with matching meta retains entries" {
   close(c2)
   cleanup(path)
   match v {
-    Some(s) => assert_eq(s, "{\"a\":1}")
+    Some(s) => @debug.assert_eq(s, "{\"a\":1}")
     None => fail("entry dropped despite matching meta")
   }
 }
@@ -134,7 +134,7 @@ test "persistent_cache: put/get round-trip preserves Japanese JSON" {
   close(cache)
   cleanup(path)
   match got {
-    Some(s) => assert_eq(s, value)
+    Some(s) => @debug.assert_eq(s, value)
     None => fail("entry lost after put")
   }
 }
@@ -155,7 +155,7 @@ test "persistent_cache: survives close/reopen" {
   close(c2)
   cleanup(path)
   match got {
-    Some(s) => assert_eq(s, "first")
+    Some(s) => @debug.assert_eq(s, "first")
     None => fail("entry not persisted across close/reopen")
   }
 }
@@ -203,7 +203,7 @@ test "persistent_cache: sync_meta_after_migrate updates meta without touching en
   close(c2)
   cleanup(path)
   match v {
-    Some(s) => assert_eq(s, "v1")
+    Some(s) => @debug.assert_eq(s, "v1")
     None => fail("sync_meta should preserve entries")
   }
 }

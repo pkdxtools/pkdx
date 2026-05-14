@@ -21,7 +21,7 @@
 /// alias 行を持てる。`INSERT OR IGNORE` で再適用時の重複を防止する。
 pub fn run_013(db : @db.Db, _repo_root : String) -> Result[String, String] {
   // species map: global_no → base 行の name
-  let species_map : Map[String, String] = Map::new()
+  let species_map : Map[String, String] = Map([])
   let species_rows = match
     @db.query(
       db,
@@ -155,7 +155,7 @@ fn strip_first_occurrence(s : String, needle : String) -> String {
   if idx < 0 {
     return ""
   }
-  let head = s[0:idx].to_string()
-  let tail = s[idx + m:n].to_string()
+  let head = s[0:idx].to_owned()
+  let tail = s[idx + m:n].to_owned()
   head + tail
 }

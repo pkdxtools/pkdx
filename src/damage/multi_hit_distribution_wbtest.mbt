@@ -49,7 +49,7 @@ test "PopulationBomb returns 10 variants (1..10), no 0-hit" {
   // expand_variants には現れないことを確定的に確認する。
   let plan = HitPlan::PopulationBomb("ネズミざん")
   let probs = expand_variants(plan)
-  inspect(probs.length(), content="10")
+  @debug.debug_inspect(probs.length(), content="10")
   for i = 0; i < probs.length(); i = i + 1 {
     let (h, _) = probs[i]
     assert_true(h == i + 1)
@@ -85,7 +85,7 @@ test "Triple Axel expand_variants unchanged: [(1,0.10),(2,0.09),(3,0.81)] (regre
   // 分布は move connecting 後の per-hit 90% 継続を表す (Σ=1.0)。
   let plan = TripleVariant("トリプルアクセル")
   let probs = expand_variants(plan)
-  inspect(probs.length(), content="3")
+  @debug.debug_inspect(probs.length(), content="3")
   let (h0, p0) = probs[0]
   let (h1, p1) = probs[1]
   let (h2, p2) = probs[2]
@@ -102,7 +102,7 @@ test "Triple Axel expand_variants unchanged: [(1,0.10),(2,0.09),(3,0.81)] (regre
 ///|
 test "expand_random_2_5_variants returns 4 variants summing to 1.0" {
   let probs = expand_random_2_5_variants()
-  inspect(probs.length(), content="4")
+  @debug.debug_inspect(probs.length(), content="4")
   let total = sum_int_double_probs(probs)
   assert_true(approx(total, 1.0, 1.0e-12))
   let (h0, p0) = probs[0]
@@ -126,7 +126,7 @@ test "Single / FixedHits / ParentalBond return 1 variant with prob 1.0" {
   for i = 0; i < cases.length(); i = i + 1 {
     let (plan, expected_hits) = cases[i]
     let probs = expand_variants(plan)
-    inspect(probs.length(), content="1")
+    @debug.debug_inspect(probs.length(), content="1")
     let (h, p) = probs[0]
     assert_true(h == expected_hits)
     assert_true(approx(p, 1.0, 1.0e-15))

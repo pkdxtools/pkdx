@@ -2,10 +2,10 @@
 test "nature_from_ja: いじっぱり" {
   match nature_from_ja("いじっぱり") {
     Some(nature) => {
-      inspect(nature.name_ja, content="いじっぱり")
-      inspect(nature.name_en, content="Adamant")
-      inspect(nature.up, content="Some(Atk)")
-      inspect(nature.down, content="Some(SpA)")
+      assert_true(nature.name_ja == "いじっぱり")
+      assert_true(nature.name_en == "Adamant")
+      assert_true(nature.up == Some(Atk))
+      assert_true(nature.down == Some(SpA))
     }
     None => fail("expected Some")
   }
@@ -15,8 +15,8 @@ test "nature_from_ja: いじっぱり" {
 test "nature_from_ja: ようき" {
   match nature_from_ja("ようき") {
     Some(nature) => {
-      inspect(nature.up, content="Some(Spe)")
-      inspect(nature.down, content="Some(SpA)")
+      assert_true(nature.up == Some(Spe))
+      assert_true(nature.down == Some(SpA))
     }
     None => fail("expected Some")
   }
@@ -26,8 +26,8 @@ test "nature_from_ja: ようき" {
 test "nature_from_ja: ひかえめ" {
   match nature_from_ja("ひかえめ") {
     Some(nature) => {
-      inspect(nature.up, content="Some(SpA)")
-      inspect(nature.down, content="Some(Atk)")
+      assert_true(nature.up == Some(SpA))
+      assert_true(nature.down == Some(Atk))
     }
     None => fail("expected Some")
   }
@@ -37,8 +37,8 @@ test "nature_from_ja: ひかえめ" {
 test "nature_from_ja: neutral nature まじめ" {
   match nature_from_ja("まじめ") {
     Some(nature) => {
-      inspect(nature.up, content="None")
-      inspect(nature.down, content="None")
+      assert_true(nature.up == None)
+      assert_true(nature.down == None)
     }
     None => fail("expected Some")
   }
@@ -51,7 +51,7 @@ test "nature_from_ja: unknown returns None" {
 
 ///|
 test "all_natures: count is 25" {
-  inspect(all_natures().length(), content="25")
+  @debug.debug_inspect(all_natures().length(), content="25")
 }
 
 ///|
@@ -68,8 +68,8 @@ test "nature_mult_int: boosted stat" {
   match nature_from_ja("いじっぱり") {
     Some(nature) => {
       let (num, den) = nature_mult_int(nature, Atk)
-      inspect(num, content="11")
-      inspect(den, content="10")
+      @debug.debug_inspect(num, content="11")
+      @debug.debug_inspect(den, content="10")
     }
     None => fail("expected Some")
   }
@@ -80,8 +80,8 @@ test "nature_mult_int: reduced stat" {
   match nature_from_ja("いじっぱり") {
     Some(nature) => {
       let (num, den) = nature_mult_int(nature, SpA)
-      inspect(num, content="9")
-      inspect(den, content="10")
+      @debug.debug_inspect(num, content="9")
+      @debug.debug_inspect(den, content="10")
     }
     None => fail("expected Some")
   }
@@ -92,8 +92,8 @@ test "nature_mult_int: neutral stat" {
   match nature_from_ja("いじっぱり") {
     Some(nature) => {
       let (num, den) = nature_mult_int(nature, HP)
-      inspect(num, content="1")
-      inspect(den, content="1")
+      @debug.debug_inspect(num, content="1")
+      @debug.debug_inspect(den, content="1")
     }
     None => fail("expected Some")
   }
@@ -101,11 +101,11 @@ test "nature_mult_int: neutral stat" {
 
 ///|
 test "stat_index_from_str: all variants" {
-  inspect(stat_index_from_str("hp"), content="Some(HP)")
-  inspect(stat_index_from_str("atk"), content="Some(Atk)")
-  inspect(stat_index_from_str("def"), content="Some(Def)")
-  inspect(stat_index_from_str("spa"), content="Some(SpA)")
-  inspect(stat_index_from_str("spd"), content="Some(SpD)")
-  inspect(stat_index_from_str("spe"), content="Some(Spe)")
-  inspect(stat_index_from_str("unknown"), content="None")
+  assert_true(stat_index_from_str("hp") == Some(HP))
+  assert_true(stat_index_from_str("atk") == Some(Atk))
+  assert_true(stat_index_from_str("def") == Some(Def))
+  assert_true(stat_index_from_str("spa") == Some(SpA))
+  assert_true(stat_index_from_str("spd") == Some(SpD))
+  assert_true(stat_index_from_str("spe") == Some(Spe))
+  assert_true(stat_index_from_str("unknown") == None)
 }

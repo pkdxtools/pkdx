@@ -23,7 +23,7 @@ pub(all) enum ItemEffectKind {
   // surfaced through num/den because all four フィラ-class berries share +1/3).
   HpThreshold
   Unknown(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct ItemEffect {
@@ -36,7 +36,7 @@ pub(all) struct ItemEffect {
   pokemon_filter : String
   is_physical : Int? // 1 = physical only, 0 = special only, None = either
   super_effective_only : Bool
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn parse_effect_kind(s : String) -> ItemEffectKind {

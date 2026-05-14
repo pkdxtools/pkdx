@@ -41,11 +41,11 @@ test "stat_resolution: default physical picks Atk vs Def" {
     atk_atk=120, atk_spa=100, def_def=100, def_spd=100,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="Atk")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="true")
-  inspect(sr.atk_rank_mask, content="false")
-  inspect(sr.def_rank_mask, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.effective_physical)
+  assert_true(!(sr.atk_rank_mask))
+  assert_true(!(sr.def_rank_mask))
 }
 
 ///|
@@ -56,9 +56,9 @@ test "stat_resolution: default special picks SpA vs SpD" {
     atk_atk=100, atk_spa=120, def_def=100, def_spd=100,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="SpA")
-  inspect(sr.def_stat_kind, content="SpD")
-  inspect(sr.effective_physical, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
+  @debug.debug_inspect(sr.def_stat_kind, content="SpD")
+  assert_true(!(sr.effective_physical))
 }
 
 ///|
@@ -69,9 +69,9 @@ test "stat_resolution: Body Press uses Def as attack stat" {
     atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="Def")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="true")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Def")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.effective_physical)
 }
 
 ///|
@@ -82,9 +82,9 @@ test "stat_resolution: Psyshock is special but hits physical Def" {
     atk_atk=100, atk_spa=120, def_def=80, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="SpA")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(!(sr.effective_physical))
 }
 
 ///|
@@ -95,8 +95,8 @@ test "stat_resolution: Psystrike same family as Psyshock" {
     atk_atk=100, atk_spa=140, def_def=80, def_spd=140,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="SpA")
-  inspect(sr.def_stat_kind, content="Def")
+  @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
 }
 
 ///|
@@ -107,7 +107,7 @@ test "stat_resolution: Mystical Sword same family as Psyshock" {
     atk_atk=100, atk_spa=130, def_def=80, def_spd=130,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.def_stat_kind, content="Def")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
 }
 
 ///|
@@ -119,13 +119,13 @@ test "stat_resolution: Secret Sword ignores defender +rank only" {
     atk_ability="", def_ability="", critical=false,
   )
   // Physical category preserved.
-  inspect(sr.atk_stat_kind, content="Atk")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="true")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.effective_physical)
   // Defender positive rank mask set; negative rank still applies.
-  inspect(sr.def_rank_positive_mask, content="true")
-  inspect(sr.def_rank_negative_mask, content="false")
-  inspect(sr.def_rank_mask, content="false")
+  assert_true(sr.def_rank_positive_mask)
+  assert_true(!(sr.def_rank_negative_mask))
+  assert_true(!(sr.def_rank_mask))
 }
 
 ///|
@@ -139,9 +139,9 @@ test "stat_resolution: Shell Side Arm strict > chooses physical" {
     atk_atk=120, atk_spa=100, def_def=100, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="Atk")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="true")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.effective_physical)
 }
 
 ///|
@@ -155,9 +155,9 @@ test "stat_resolution: Shell Side Arm tie falls to special" {
     atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="SpA")
-  inspect(sr.def_stat_kind, content="SpD")
-  inspect(sr.effective_physical, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
+  @debug.debug_inspect(sr.def_stat_kind, content="SpD")
+  assert_true(!(sr.effective_physical))
 }
 
 ///|
@@ -171,9 +171,9 @@ test "stat_resolution: Shell Side Arm < chooses special" {
     atk_atk=100, atk_spa=120, def_def=120, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="SpA")
-  inspect(sr.def_stat_kind, content="SpD")
-  inspect(sr.effective_physical, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
+  @debug.debug_inspect(sr.def_stat_kind, content="SpD")
+  assert_true(!(sr.effective_physical))
 }
 
 ///|
@@ -184,9 +184,9 @@ test "stat_resolution: Unaware on defender masks attacker's stages fully" {
     atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
     atk_ability="", def_ability="てんねん", critical=false,
   )
-  inspect(sr.atk_rank_mask, content="true")
+  assert_true(sr.atk_rank_mask)
   // Defender's own ranks still apply (Unaware is one-sided).
-  inspect(sr.def_rank_mask, content="false")
+  assert_true(!(sr.def_rank_mask))
 }
 
 ///|
@@ -197,8 +197,8 @@ test "stat_resolution: Unaware on attacker masks defender's stages fully" {
     atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
     atk_ability="てんねん", def_ability="", critical=false,
   )
-  inspect(sr.def_rank_mask, content="true")
-  inspect(sr.atk_rank_mask, content="false")
+  assert_true(sr.def_rank_mask)
+  assert_true(!(sr.atk_rank_mask))
 }
 
 ///|
@@ -211,10 +211,10 @@ test "stat_resolution: critical hit masks only harmful stages" {
   )
   // Critical: attacker's negative stages ignored, defender's positive stages
   // ignored. The other direction still applies.
-  inspect(sr.atk_rank_negative_mask, content="true")
-  inspect(sr.atk_rank_positive_mask, content="false")
-  inspect(sr.def_rank_positive_mask, content="true")
-  inspect(sr.def_rank_negative_mask, content="false")
+  assert_true(sr.atk_rank_negative_mask)
+  assert_true(!(sr.atk_rank_positive_mask))
+  assert_true(sr.def_rank_positive_mask)
+  assert_true(!(sr.def_rank_negative_mask))
 }
 
 ///|
@@ -226,9 +226,9 @@ test "stat_resolution: critical × Unaware composes orthogonally" {
     atk_ability="", def_ability="てんねん", critical=true,
   )
   // Unaware pulls atk_rank_mask all the way up.
-  inspect(sr.atk_rank_mask, content="true")
+  assert_true(sr.atk_rank_mask)
   // Critical's def_rank_positive_mask still fires independently of Unaware.
-  inspect(sr.def_rank_positive_mask, content="true")
+  assert_true(sr.def_rank_positive_mask)
 }
 
 ///|
@@ -240,9 +240,9 @@ test "stat_resolution: Shell Side Arm × Unaware composes" {
     atk_atk=150, atk_spa=100, def_def=80, def_spd=120,
     atk_ability="てんねん", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="Atk")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.def_rank_mask, content="true")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.def_rank_mask)
 }
 
 ///|
@@ -261,9 +261,9 @@ test "stat_resolution: Body Press keeps defender stat on default Def" {
     atk_atk=60, atk_spa=60, def_def=70, def_spd=200,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="Def")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="true")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Def")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.effective_physical)
 }
 
 ///|
@@ -276,9 +276,9 @@ test "stat_resolution: Psyshock keeps attacker stat on default SpA" {
     atk_atk=200, atk_spa=100, def_def=80, def_spd=200,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="SpA")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.effective_physical, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(!(sr.effective_physical))
 }
 
 ///|
@@ -291,9 +291,9 @@ test "stat_resolution: Psyshock × Unaware fully masks attacker stages" {
     atk_atk=100, atk_spa=140, def_def=80, def_spd=140,
     atk_ability="", def_ability="てんねん", critical=false,
   )
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.atk_rank_mask, content="true")
-  inspect(sr.def_rank_mask, content="false")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.atk_rank_mask)
+  assert_true(!(sr.def_rank_mask))
 }
 
 ///|
@@ -307,10 +307,10 @@ test "stat_resolution: Body Press × critical keeps Def-as-attack and sets masks
     atk_atk=80, atk_spa=60, def_def=150, def_spd=100,
     atk_ability="", def_ability="", critical=true,
   )
-  inspect(sr.atk_stat_kind, content="Def")
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.atk_rank_negative_mask, content="true")
-  inspect(sr.def_rank_positive_mask, content="true")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Def")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.atk_rank_negative_mask)
+  assert_true(sr.def_rank_positive_mask)
 }
 
 ///|
@@ -323,9 +323,9 @@ test "stat_resolution: Body Press × Unaware on attacker masks defender ranks" {
     atk_atk=80, atk_spa=60, def_def=150, def_spd=100,
     atk_ability="てんねん", def_ability="", critical=false,
   )
-  inspect(sr.atk_stat_kind, content="Def")
-  inspect(sr.def_rank_mask, content="true")
-  inspect(sr.atk_rank_mask, content="false")
+  @debug.debug_inspect(sr.atk_stat_kind, content="Def")
+  assert_true(sr.def_rank_mask)
+  assert_true(!(sr.atk_rank_mask))
 }
 
 ///|
@@ -339,9 +339,9 @@ test "stat_resolution: Psyshock × critical composes def_positive_mask" {
     atk_atk=100, atk_spa=130, def_def=80, def_spd=130,
     atk_ability="", def_ability="", critical=true,
   )
-  inspect(sr.def_stat_kind, content="Def")
-  inspect(sr.def_rank_positive_mask, content="true")
-  inspect(sr.atk_rank_negative_mask, content="true")
+  @debug.debug_inspect(sr.def_stat_kind, content="Def")
+  assert_true(sr.def_rank_positive_mask)
+  assert_true(sr.atk_rank_negative_mask)
 }
 
 ///|
@@ -354,7 +354,7 @@ test "stat_resolution: Shell Side Arm physical mode forces contact=true" {
     atk_atk=120, atk_spa=100, def_def=100, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.force_contact, content="Some(true)")
+  assert_true(sr.force_contact == Some(true))
 }
 
 ///|
@@ -367,7 +367,7 @@ test "stat_resolution: Shell Side Arm special mode forces contact=false" {
     atk_atk=100, atk_spa=120, def_def=120, def_spd=120,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.force_contact, content="Some(false)")
+  assert_true(sr.force_contact == Some(false))
 }
 
 ///|
@@ -380,7 +380,7 @@ test "stat_resolution: non-Shell-Side-Arm keeps force_contact None" {
     atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
     atk_ability="", def_ability="", critical=false,
   )
-  inspect(sr.force_contact, content="None")
+  assert_true(sr.force_contact == None)
 }
 
 ///|
@@ -396,7 +396,7 @@ test "stat_resolution: Secret Sword × Body Press does not apply (mutually exclu
     atk_ability="", def_ability="", critical=false,
   )
   // Body Press does NOT set def_rank_positive_mask.
-  inspect(sr_bp.def_rank_positive_mask, content="false")
+  assert_true(!(sr_bp.def_rank_positive_mask))
   let secret_sword = sr_move("せいなるつるぎ", @model.Physical, 85)
   let sr_ss = resolve_stat_resolution(
     secret_sword,
@@ -404,6 +404,6 @@ test "stat_resolution: Secret Sword × Body Press does not apply (mutually exclu
     atk_ability="", def_ability="", critical=false,
   )
   // Secret Sword does NOT remap atk_stat_kind.
-  inspect(sr_ss.atk_stat_kind, content="Atk")
-  inspect(sr_ss.def_rank_positive_mask, content="true")
+  @debug.debug_inspect(sr_ss.atk_stat_kind, content="Atk")
+  assert_true(sr_ss.def_rank_positive_mask)
 }

@@ -109,7 +109,7 @@ test "compute_mean_damage: burned attacker halves physical damage" {
   let normal = compute_mean_damage(atk, dfn, physical_move, 0, 0)
   let burned = compute_mean_damage(atk, dfn, physical_move, 0, 0, atk_burn=true)
   assert_true(normal > 0)
-  assert_eq(burned, normal / 2)
+  @debug.assert_eq(burned, normal / 2)
 }
 
 ///|
@@ -181,7 +181,7 @@ test "compute_mean_damage: burned special attacker unchanged" {
   let special_move = mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)
   let normal = compute_mean_damage(atk, dfn, special_move, 0, 0)
   let burned = compute_mean_damage(atk, dfn, special_move, 0, 0, atk_burn=true)
-  assert_eq(normal, burned)
+  @debug.assert_eq(normal, burned)
 }
 
 ///|
@@ -191,19 +191,19 @@ test "is_paralyzed / is_burned / sleep_turns: status predicates" {
   assert_false(is_paralyzed(@model.None))
   assert_true(is_burned(@model.Burn))
   assert_false(is_burned(@model.Paralyze))
-  assert_eq(sleep_turns(@model.Sleep(2)), Some(2))
-  assert_eq(sleep_turns(@model.Sleep(0)), Some(0))
-  assert_eq(sleep_turns(@model.None), None)
-  assert_eq(sleep_turns(@model.Paralyze), None)
+  @debug.assert_eq(sleep_turns(@model.Sleep(2)), Some(2))
+  @debug.assert_eq(sleep_turns(@model.Sleep(0)), Some(0))
+  @debug.assert_eq(sleep_turns(@model.None), None)
+  @debug.assert_eq(sleep_turns(@model.Paralyze), None)
 }
 
 ///|
 test "zero_status: builds None-filled array of given length" {
   let s = zero_status(3)
-  assert_eq(s.length(), 3)
-  assert_eq(s[0], @model.None)
-  assert_eq(s[1], @model.None)
-  assert_eq(s[2], @model.None)
+  @debug.assert_eq(s.length(), 3)
+  @debug.assert_eq(s[0], @model.None)
+  @debug.assert_eq(s[1], @model.None)
+  @debug.assert_eq(s[2], @model.None)
 }
 
 ///|
@@ -218,26 +218,26 @@ fn sum_probs(attempts : Array[SideAttempt]) -> Double {
 ///|
 test "per_side_attempt: Switch is always 1.0 regardless of status" {
   let out = per_side_attempt(@model.Paralyze, false, Switch(1), 100)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].prob, 1.0)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].prob, 1.0)
   assert_true(out[0].acts)
   let out2 = per_side_attempt(@model.Sleep(2), false, Switch(1), 100)
-  assert_eq(out2.length(), 1)
+  @debug.assert_eq(out2.length(), 1)
   assert_true(out2[0].acts)
 }
 
 ///|
 test "per_side_attempt: None + UseMove + acc=100 -> single act 1.0" {
   let out = per_side_attempt(@model.None, false, UseMove(0), 100)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].prob, 1.0)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].prob, 1.0)
   assert_true(out[0].acts)
 }
 
 ///|
 test "per_side_attempt: None + UseMove + acc=85 -> hit 0.85 / miss 0.15" {
   let out = per_side_attempt(@model.None, false, UseMove(0), 85)
-  assert_eq(out.length(), 2)
+  @debug.assert_eq(out.length(), 2)
   let total = sum_probs(out)
   assert_true((total - 1.0).abs() < 1.0e-9)
 }
@@ -245,7 +245,7 @@ test "per_side_attempt: None + UseMove + acc=85 -> hit 0.85 / miss 0.15" {
 ///|
 test "per_side_attempt: Paralyze + UseMove + acc=100 -> 0.125 skip / 0.875 act" {
   let out = per_side_attempt(@model.Paralyze, false, UseMove(0), 100)
-  assert_eq(out.length(), 2)
+  @debug.assert_eq(out.length(), 2)
   let total = sum_probs(out)
   assert_true((total - 1.0).abs() < 1.0e-9)
 }
@@ -253,27 +253,27 @@ test "per_side_attempt: Paralyze + UseMove + acc=100 -> 0.125 skip / 0.875 act" 
 ///|
 test "per_side_attempt: Sleep(n>0) always skips and decrements counter" {
   let out = per_side_attempt(@model.Sleep(2), false, UseMove(0), 100)
-  assert_eq(out.length(), 1)
+  @debug.assert_eq(out.length(), 1)
   assert_false(out[0].acts)
-  assert_eq(out[0].post_status, @model.Sleep(1))
+  @debug.assert_eq(out[0].post_status, @model.Sleep(1))
   let out2 = per_side_attempt(@model.Sleep(1), false, UseMove(0), 100)
-  assert_eq(out2.length(), 1)
+  @debug.assert_eq(out2.length(), 1)
   assert_false(out2[0].acts)
-  assert_eq(out2[0].post_status, @model.Sleep(0))
+  @debug.assert_eq(out2[0].post_status, @model.Sleep(0))
 }
 
 ///|
 test "per_side_attempt: Sleep(0) wakes up and acts (status -> None)" {
   let out = per_side_attempt(@model.Sleep(0), false, UseMove(0), 100)
-  assert_eq(out.length(), 1)
+  @debug.assert_eq(out.length(), 1)
   assert_true(out[0].acts)
-  assert_eq(out[0].post_status, @model.None)
+  @debug.assert_eq(out[0].post_status, @model.None)
 }
 
 ///|
 test "per_side_attempt: Paralyze + UseMove + acc=85 -> 3 branches sum to 1" {
   let out = per_side_attempt(@model.Paralyze, false, UseMove(0), 85)
-  assert_eq(out.length(), 3)
+  @debug.assert_eq(out.length(), 3)
   let total = sum_probs(out)
   assert_true((total - 1.0).abs() < 1.0e-9)
 }
@@ -281,100 +281,100 @@ test "per_side_attempt: Paralyze + UseMove + acc=85 -> 3 branches sum to 1" {
 ///|
 test "eot_slip_active: Burn subtracts 1/16 of max HP, status unchanged" {
   let (hp, st) = eot_slip_active(160, 160, @model.Burn)
-  assert_eq(hp, 150)
-  assert_eq(st, @model.Burn)
+  @debug.assert_eq(hp, 150)
+  @debug.assert_eq(st, @model.Burn)
 }
 
 ///|
 test "eot_slip_active: Poison subtracts 1/8 of max HP" {
   let (hp, st) = eot_slip_active(160, 160, @model.Poison)
-  assert_eq(hp, 140)
-  assert_eq(st, @model.Poison)
+  @debug.assert_eq(hp, 140)
+  @debug.assert_eq(st, @model.Poison)
 }
 
 ///|
 test "eot_slip_active: BadPoison increments counter and applies (n+1)/16" {
   let (hp, st) = eot_slip_active(160, 160, @model.BadPoison(0))
-  assert_eq(hp, 150) // 160 - 160*1/16 = 150
-  assert_eq(st, @model.BadPoison(1))
+  @debug.assert_eq(hp, 150) // 160 - 160*1/16 = 150
+  @debug.assert_eq(st, @model.BadPoison(1))
   let (hp2, st2) = eot_slip_active(160, 160, @model.BadPoison(1))
-  assert_eq(hp2, 140) // 160 - 160*2/16 = 140
-  assert_eq(st2, @model.BadPoison(2))
+  @debug.assert_eq(hp2, 140) // 160 - 160*2/16 = 140
+  @debug.assert_eq(st2, @model.BadPoison(2))
 }
 
 ///|
 test "eot_slip_active: BadPoison saturates at TOXIC_MAX_TICKS=15" {
   let (_, st) = eot_slip_active(200, 200, @model.BadPoison(15))
-  assert_eq(st, @model.BadPoison(15))
+  @debug.assert_eq(st, @model.BadPoison(15))
 }
 
 ///|
 test "eot_slip_active: None / Paralyze / Sleep are no-op for HP" {
   let (hp1, _) = eot_slip_active(100, 100, @model.None)
-  assert_eq(hp1, 100)
+  @debug.assert_eq(hp1, 100)
   let (hp2, _) = eot_slip_active(100, 100, @model.Paralyze)
-  assert_eq(hp2, 100)
+  @debug.assert_eq(hp2, 100)
   let (hp3, _) = eot_slip_active(100, 100, @model.Sleep(2))
-  assert_eq(hp3, 100)
+  @debug.assert_eq(hp3, 100)
 }
 
 ///|
 test "eot_slip_active: fainted (hp=0) never takes additional damage" {
   let (hp, st) = eot_slip_active(0, 160, @model.Burn)
-  assert_eq(hp, 0)
-  assert_eq(st, @model.Burn)
+  @debug.assert_eq(hp, 0)
+  @debug.assert_eq(st, @model.Burn)
 }
 
 ///|
 test "reset_toxic_counter_on_switch: BadPoison(n) -> BadPoison(0)" {
-  assert_eq(
+  @debug.assert_eq(
     reset_toxic_counter_on_switch(@model.BadPoison(7)),
     @model.BadPoison(0),
   )
-  assert_eq(
+  @debug.assert_eq(
     reset_toxic_counter_on_switch(@model.Poison),
     @model.Poison,
   )
-  assert_eq(reset_toxic_counter_on_switch(@model.None), @model.None)
+  @debug.assert_eq(reset_toxic_counter_on_switch(@model.None), @model.None)
 }
 
 ///|
 test "reset_toxic_counter_on_switch: Drowsy cleared to None on switch-out" {
-  assert_eq(reset_toxic_counter_on_switch(@model.Drowsy(1)), @model.None)
-  assert_eq(reset_toxic_counter_on_switch(@model.Drowsy(0)), @model.None)
+  @debug.assert_eq(reset_toxic_counter_on_switch(@model.Drowsy(1)), @model.None)
+  @debug.assert_eq(reset_toxic_counter_on_switch(@model.Drowsy(0)), @model.None)
 }
 
 ///|
 test "eot_slip_active: Drowsy(1) counts down to Drowsy(0)" {
   let (hp, st) = eot_slip_active(100, 100, @model.Drowsy(1))
-  assert_eq(hp, 100)
-  assert_eq(st, @model.Drowsy(0))
+  @debug.assert_eq(hp, 100)
+  @debug.assert_eq(st, @model.Drowsy(0))
 }
 
 ///|
 test "eot_slip_active: Drowsy(0) triggers Sleep(2) at EOT" {
   let (hp, st) = eot_slip_active(100, 100, @model.Drowsy(0))
-  assert_eq(hp, 100)
-  assert_eq(st, @model.Sleep(2))
+  @debug.assert_eq(hp, 100)
+  @debug.assert_eq(st, @model.Sleep(2))
 }
 
 ///|
 test "eot_leftovers_heal: たべのこし adds max/16, capped at max" {
   // 80/160 → +10 → 90
-  inspect(eot_leftovers_heal(80, 160, "たべのこし"), content="90")
+  @debug.debug_inspect(eot_leftovers_heal(80, 160, "たべのこし"), content="90")
   // 155/160 → +10 → cap at 160
-  inspect(eot_leftovers_heal(155, 160, "たべのこし"), content="160")
+  @debug.debug_inspect(eot_leftovers_heal(155, 160, "たべのこし"), content="160")
   // already at max → no-op
-  inspect(eot_leftovers_heal(160, 160, "たべのこし"), content="160")
+  @debug.debug_inspect(eot_leftovers_heal(160, 160, "たべのこし"), content="160")
   // fainted → no-op (たべのこし は瀕死では発動しない)
-  inspect(eot_leftovers_heal(0, 160, "たべのこし"), content="0")
+  @debug.debug_inspect(eot_leftovers_heal(0, 160, "たべのこし"), content="0")
 }
 
 ///|
 test "eot_leftovers_heal: non-leftovers items are no-op" {
-  inspect(eot_leftovers_heal(80, 160, ""), content="80")
-  inspect(eot_leftovers_heal(80, 160, "オボンのみ"), content="80")
-  inspect(eot_leftovers_heal(80, 160, "きあいのタスキ"), content="80")
+  @debug.debug_inspect(eot_leftovers_heal(80, 160, ""), content="80")
+  @debug.debug_inspect(eot_leftovers_heal(80, 160, "オボンのみ"), content="80")
+  @debug.debug_inspect(eot_leftovers_heal(80, 160, "きあいのタスキ"), content="80")
 }
 
 ///|
@@ -388,7 +388,7 @@ test "apply_eot: たべのこし heals before status slip" {
   let mut state = mk_test_state(1, 80, 80, @model.Burn, @model.None)
   state = { ..state, my_must_recharge: [false], opp_must_recharge: [false] }
   let after = apply_eot(state, team, team)
-  inspect(after.my_hps[0], content="80")
+  @debug.debug_inspect(after.my_hps[0], content="80")
 }
 
 ///|
@@ -478,8 +478,8 @@ test "maybe_apply_status_fanout: move with no status_effect returns single outco
   let target_team = [mk_test_combatant(mk_test_pokemon("A", "ノーマル"))]
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].0, 1.0)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].0, 1.0)
 }
 
 ///|
@@ -492,8 +492,8 @@ test "maybe_apply_status_fanout: Will-o-wisp (85% burn) fans out" {
   )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
   // chance = 100 → deterministic apply
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].1.opp_status[0], @model.Burn)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].1.opp_status[0], @model.Burn)
 }
 
 ///|
@@ -505,8 +505,8 @@ test "maybe_apply_status_fanout: fire-type immune to burn" {
     accuracy=85, status_effect=Some((@model.BurnKind, 100)),
   )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].1.opp_status[0], @model.None)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].1.opp_status[0], @model.None)
 }
 
 ///|
@@ -518,8 +518,8 @@ test "maybe_apply_status_fanout: already statused target is not re-infected" {
     accuracy=85, status_effect=Some((@model.BurnKind, 100)),
   )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].1.opp_status[0], @model.Paralyze)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].1.opp_status[0], @model.Paralyze)
 }
 
 ///|
@@ -545,53 +545,53 @@ fn run_no_overwrite_case(
 ///|
 test "already-statused guard blocks overwrite for every existing variant" {
   // Paralyze blocks Burn / Poison / BadPoison / Sleep / Drowsy
-  assert_eq(run_no_overwrite_case(@model.Paralyze, @model.BurnKind), @model.Paralyze)
-  assert_eq(run_no_overwrite_case(@model.Paralyze, @model.PoisonKind), @model.Paralyze)
-  assert_eq(run_no_overwrite_case(@model.Paralyze, @model.BadPoisonKind), @model.Paralyze)
-  assert_eq(run_no_overwrite_case(@model.Paralyze, @model.SleepKind), @model.Paralyze)
-  assert_eq(run_no_overwrite_case(@model.Paralyze, @model.DrowsyKind), @model.Paralyze)
+  @debug.assert_eq(run_no_overwrite_case(@model.Paralyze, @model.BurnKind), @model.Paralyze)
+  @debug.assert_eq(run_no_overwrite_case(@model.Paralyze, @model.PoisonKind), @model.Paralyze)
+  @debug.assert_eq(run_no_overwrite_case(@model.Paralyze, @model.BadPoisonKind), @model.Paralyze)
+  @debug.assert_eq(run_no_overwrite_case(@model.Paralyze, @model.SleepKind), @model.Paralyze)
+  @debug.assert_eq(run_no_overwrite_case(@model.Paralyze, @model.DrowsyKind), @model.Paralyze)
   // Burn blocks Paralyze / Poison / BadPoison / Sleep / Drowsy
-  assert_eq(run_no_overwrite_case(@model.Burn, @model.ParalyzeKind), @model.Burn)
-  assert_eq(run_no_overwrite_case(@model.Burn, @model.PoisonKind), @model.Burn)
-  assert_eq(run_no_overwrite_case(@model.Burn, @model.BadPoisonKind), @model.Burn)
-  assert_eq(run_no_overwrite_case(@model.Burn, @model.SleepKind), @model.Burn)
-  assert_eq(run_no_overwrite_case(@model.Burn, @model.DrowsyKind), @model.Burn)
+  @debug.assert_eq(run_no_overwrite_case(@model.Burn, @model.ParalyzeKind), @model.Burn)
+  @debug.assert_eq(run_no_overwrite_case(@model.Burn, @model.PoisonKind), @model.Burn)
+  @debug.assert_eq(run_no_overwrite_case(@model.Burn, @model.BadPoisonKind), @model.Burn)
+  @debug.assert_eq(run_no_overwrite_case(@model.Burn, @model.SleepKind), @model.Burn)
+  @debug.assert_eq(run_no_overwrite_case(@model.Burn, @model.DrowsyKind), @model.Burn)
   // Poison blocks Paralyze / Burn / BadPoison / Sleep / Drowsy
-  assert_eq(run_no_overwrite_case(@model.Poison, @model.ParalyzeKind), @model.Poison)
-  assert_eq(run_no_overwrite_case(@model.Poison, @model.BurnKind), @model.Poison)
-  assert_eq(run_no_overwrite_case(@model.Poison, @model.BadPoisonKind), @model.Poison)
-  assert_eq(run_no_overwrite_case(@model.Poison, @model.SleepKind), @model.Poison)
-  assert_eq(run_no_overwrite_case(@model.Poison, @model.DrowsyKind), @model.Poison)
+  @debug.assert_eq(run_no_overwrite_case(@model.Poison, @model.ParalyzeKind), @model.Poison)
+  @debug.assert_eq(run_no_overwrite_case(@model.Poison, @model.BurnKind), @model.Poison)
+  @debug.assert_eq(run_no_overwrite_case(@model.Poison, @model.BadPoisonKind), @model.Poison)
+  @debug.assert_eq(run_no_overwrite_case(@model.Poison, @model.SleepKind), @model.Poison)
+  @debug.assert_eq(run_no_overwrite_case(@model.Poison, @model.DrowsyKind), @model.Poison)
   // BadPoison(n) blocks; counter must also be preserved, not reset.
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.BadPoison(3), @model.BurnKind),
     @model.BadPoison(3),
   )
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.BadPoison(3), @model.DrowsyKind),
     @model.BadPoison(3),
   )
   // Sleep(n) blocks other statuses; remaining turns are preserved.
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.Sleep(1), @model.BurnKind),
     @model.Sleep(1),
   )
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.Sleep(2), @model.DrowsyKind),
     @model.Sleep(2),
   )
   // Drowsy blocks other status applications — matches gen-mechanics where
   // the target can't be newly poisoned/burned while a yawn marker is active
   // (they're considered "about to be statused").
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.Drowsy(1), @model.BurnKind),
     @model.Drowsy(1),
   )
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.Drowsy(1), @model.ParalyzeKind),
     @model.Drowsy(1),
   )
-  assert_eq(
+  @debug.assert_eq(
     run_no_overwrite_case(@model.Drowsy(0), @model.SleepKind),
     @model.Drowsy(0),
   )
@@ -606,8 +606,8 @@ test "maybe_apply_status_fanout: fainted target yields no status" {
     accuracy=85, status_effect=Some((@model.BurnKind, 100)),
   )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].1.opp_status[0], @model.None)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].1.opp_status[0], @model.None)
 }
 
 ///|
@@ -619,7 +619,7 @@ test "maybe_apply_status_fanout: thunder-wave 90% fans to 2 outcomes" {
     accuracy=90, status_effect=Some((@model.ParalyzeKind, 90)),
   )
   let out = maybe_apply_status_fanout(state, false, 0, target_team, mv)
-  assert_eq(out.length(), 2)
+  @debug.assert_eq(out.length(), 2)
   let total = out[0].0 + out[1].0
   assert_true((total - 1.0).abs() < 1.0e-9)
 }
@@ -745,11 +745,11 @@ test "resolve_moves: faster Will-O-Wisp halves slower target's physical damage s
     state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
   )
   // Deterministic: wowisp accuracy 100, burn chance 100, no speed tie.
-  assert_eq(outs.length(), 1)
+  @debug.assert_eq(outs.length(), 1)
   let (_p, ns) = outs[0]
-  assert_eq(ns.opp_status[0], @model.Burn)
+  @debug.assert_eq(ns.opp_status[0], @model.Burn)
   // Damage dealt to my active must be the burn-halved value, NOT the full one.
-  assert_eq(200 - ns.my_hps[0], halved)
+  @debug.assert_eq(200 - ns.my_hps[0], halved)
   assert_true(200 - ns.my_hps[0] != normal)
 }
 
@@ -777,12 +777,12 @@ test "resolve_moves: slower Will-O-Wisp does NOT halve the faster attacker's dam
   let outs = transition_with_cache(
     state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
   )
-  assert_eq(outs.length(), 1)
+  @debug.assert_eq(outs.length(), 1)
   let (_p, ns) = outs[0]
   // Burn still lands (wowisp executes after the hitter's move).
-  assert_eq(ns.opp_status[0], @model.Burn)
+  @debug.assert_eq(ns.opp_status[0], @model.Burn)
   // But the hitter already attacked at full damage this turn — not halved.
-  assert_eq(200 - ns.my_hps[0], normal)
+  @debug.assert_eq(200 - ns.my_hps[0], normal)
   assert_true(200 - ns.my_hps[0] != halved)
 }
 
@@ -804,14 +804,14 @@ test "resolve_moves: faster Spore locks slower target out of the same turn" {
   let outs = transition_with_cache(
     state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
   )
-  assert_eq(outs.length(), 1)
+  @debug.assert_eq(outs.length(), 1)
   let (_p, ns) = outs[0]
   // Target must now be asleep with the initial Sleep(2) counter.
-  assert_eq(ns.opp_status[0], @model.Sleep(2))
+  @debug.assert_eq(ns.opp_status[0], @model.Sleep(2))
   // Target did not act this turn: faster Spore user is still at full HP.
-  assert_eq(ns.my_hps[0], 200)
+  @debug.assert_eq(ns.my_hps[0], 200)
   // Spore does no damage; the target's HP is untouched too.
-  assert_eq(ns.opp_hps[0], 200)
+  @debug.assert_eq(ns.opp_hps[0], 200)
 }
 
 ///|
@@ -833,12 +833,12 @@ test "resolve_moves: faster Thunder Wave still lets slower target attack this tu
   let outs = transition_with_cache(
     state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
   )
-  assert_eq(outs.length(), 1)
+  @debug.assert_eq(outs.length(), 1)
   let (_p, ns) = outs[0]
-  assert_eq(ns.opp_status[0], @model.Paralyze)
+  @debug.assert_eq(ns.opp_status[0], @model.Paralyze)
   // Fresh paralysis does not block the current turn's action; the hitter's
   // physical damage lands at its full (non-burn) value.
-  assert_eq(200 - ns.my_hps[0], normal)
+  @debug.assert_eq(200 - ns.my_hps[0], normal)
 }
 
 ///|
@@ -851,7 +851,7 @@ test "apply_recoil: 1/2 ratio subtracts half of damage dealt" {
     100,
   )
   // 100 * 1 / 2 = 50 (above the 1-HP minimum, so used as-is).
-  assert_eq(hps[0], 150)
+  @debug.assert_eq(hps[0], 150)
 }
 
 ///|
@@ -862,7 +862,7 @@ test "apply_recoil: guaranteed minimum 1 HP when raw recoil rounds to 0" {
     hps, 0, mk_move("wild_charge", "でんき", @model.Physical, 90, recoil_num=1, recoil_den=4),
     3,
   )
-  assert_eq(hps[0], 199)
+  @debug.assert_eq(hps[0], 199)
 }
 
 ///|
@@ -872,14 +872,14 @@ test "apply_recoil: no loss when damage is zero (type-immune hit)" {
     hps, 0, mk_move("morohanozutsuki", "いわ", @model.Physical, 150, recoil_num=1, recoil_den=2),
     0,
   )
-  assert_eq(hps[0], 200)
+  @debug.assert_eq(hps[0], 200)
 }
 
 ///|
 test "apply_recoil: no-op for non-recoil move regardless of damage" {
   let hps = [200]
   apply_recoil(hps, 0, mk_move("tackle", "ノーマル", @model.Physical, 40), 100)
-  assert_eq(hps[0], 200)
+  @debug.assert_eq(hps[0], 200)
 }
 
 ///|
@@ -889,7 +889,7 @@ test "apply_recoil: HP clamps at 0 on overkill recoil" {
     hps, 0, mk_move("big_recoil", "いわ", @model.Physical, 150, recoil_num=1, recoil_den=1),
     9999,
   )
-  assert_eq(hps[0], 0)
+  @debug.assert_eq(hps[0], 0)
 }
 
 ///|
@@ -906,7 +906,7 @@ test "resolve_post_hit_effects: self_ko zeroes attacker HP even on 0-damage hit"
   resolve_post_hit_effects(
     atk_hps, 0, atk_ranks, def_hps, 0, def_ranks, atk_mr, mv, 0,
   )
-  assert_eq(atk_hps[0], 0)
+  @debug.assert_eq(atk_hps[0], 0)
 }
 
 ///|
@@ -925,8 +925,8 @@ test "apply_stat_effects: target=0 routes to self_ranks, target=1 to opp_ranks" 
     ],
   )
   apply_stat_effects(self_ranks, opp_ranks, true, mv)
-  assert_eq(self_ranks[0], 2)
-  assert_eq(opp_ranks[0], -2)
+  @debug.assert_eq(self_ranks[0], 2)
+  @debug.assert_eq(opp_ranks[0], -2)
 }
 
 ///|
@@ -938,7 +938,7 @@ test "apply_stat_effects: opp-target entries skipped when opp_alive=false" {
     stat_effects=[@model.StatEffect::{ stat: 0, delta: -2, target: 1 }],
   )
   apply_stat_effects(self_ranks, opp_ranks, false, mv)
-  assert_eq(opp_ranks[0], 0)
+  @debug.assert_eq(opp_ranks[0], 0)
 }
 
 ///|
@@ -953,11 +953,11 @@ test "apply_stat_effects: multi-stat opp-target (Namidame) drops both Atk and Sp
     ],
   )
   apply_stat_effects(self_ranks, opp_ranks, true, mv)
-  assert_eq(opp_ranks[0], -1)
-  assert_eq(opp_ranks[2], -1)
+  @debug.assert_eq(opp_ranks[0], -1)
+  @debug.assert_eq(opp_ranks[2], -1)
   // self unchanged.
   for i in 0..<5 {
-    assert_eq(self_ranks[i], 0)
+    @debug.assert_eq(self_ranks[i], 0)
   }
 }
 
@@ -970,8 +970,8 @@ test "apply_stat_effects: self-only setup move (つるぎのまい) leaves opp u
     stat_effects=[@model.StatEffect::{ stat: 0, delta: 2, target: 0 }],
   )
   apply_stat_effects(self_ranks, opp_ranks, true, mv)
-  assert_eq(self_ranks[0], 2)
-  assert_eq(opp_ranks[0], 0)
+  @debug.assert_eq(self_ranks[0], 2)
+  @debug.assert_eq(opp_ranks[0], 0)
 }
 
 ///|
@@ -986,7 +986,7 @@ test "resolve_post_hit_effects: recharge sets flag only when attacker survives" 
   resolve_post_hit_effects(
     hps_alive, 0, ranks_alive, def_hps, 0, def_ranks, mr_alive, mv, 40,
   )
-  assert_eq(mr_alive[0], true)
+  @debug.assert_eq(mr_alive[0], true)
   // Dead attacker (e.g. previously knocked to 0 by recoil) should not be
   // flagged for a recharge turn they can't take.
   let hps_dead = [0]
@@ -995,7 +995,7 @@ test "resolve_post_hit_effects: recharge sets flag only when attacker survives" 
   resolve_post_hit_effects(
     hps_dead, 0, ranks_dead, def_hps, 0, def_ranks, mr_dead, mv, 40,
   )
-  assert_eq(mr_dead[0], false)
+  @debug.assert_eq(mr_dead[0], false)
 }
 
 ///|
@@ -1012,9 +1012,9 @@ test "alive_actions: must_recharge forces a single placeholder action (no switch
   ]
   let hps = [100, 100]
   let actions = alive_actions(0, hps, team, true, must_recharge=true)
-  assert_eq(actions.length(), 1)
+  @debug.assert_eq(actions.length(), 1)
   match actions[0] {
-    UseMove(i) => assert_eq(i, 0)
+    UseMove(i) => @debug.assert_eq(i, 0)
     _ => abort("expected UseMove(0) placeholder")
   }
 }
@@ -1031,7 +1031,7 @@ test "alive_actions: recharge=false retains full enumeration (baseline)" {
   ]
   let hps = [100, 100]
   let actions = alive_actions(0, hps, team, true)
-  assert_eq(actions.length(), 2)
+  @debug.assert_eq(actions.length(), 2)
 }
 
 ///|
@@ -1044,24 +1044,24 @@ test "alive_actions: recharge=false retains full enumeration (baseline)" {
 /// side can replace its dead active instead of being stranded.
 test "per_side_attempt: Switch bypasses must_recharge (forced replacement)" {
   let out = per_side_attempt(@model.None, true, Switch(1), 100)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].prob, 1.0)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].prob, 1.0)
   assert_true(out[0].acts)
 }
 
 ///|
 test "per_side_attempt: UseMove still skipped by must_recharge" {
   let out = per_side_attempt(@model.None, true, UseMove(0), 100)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].prob, 1.0)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].prob, 1.0)
   assert_false(out[0].acts)
 }
 
 ///|
 test "per_side_attempt: Mega still skipped by must_recharge" {
   let out = per_side_attempt(@model.None, true, Mega(0), 100)
-  assert_eq(out.length(), 1)
-  assert_eq(out[0].prob, 1.0)
+  @debug.assert_eq(out.length(), 1)
+  @debug.assert_eq(out[0].prob, 1.0)
   assert_false(out[0].acts)
 }
 
@@ -1116,20 +1116,20 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
   let outs1 = attempt_turn_with_cache(
     s0, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
   )
-  assert_eq(outs1.length(), 1)
+  @debug.assert_eq(outs1.length(), 1)
   let (_, s1) = outs1[0]
   // Active died to the EOT poison tick but the recharge flag is still live
   // (set fresh this turn, so `clear_consumed_recharge` did not consume it).
-  assert_eq(s1.my_hps[0], 0)
-  assert_eq(s1.my_must_recharge[0], true)
+  @debug.assert_eq(s1.my_hps[0], 0)
+  @debug.assert_eq(s1.my_must_recharge[0], true)
   // alive_actions must now enumerate a forced Switch to slot 1.
   let forced = alive_actions(
     s1.my_active, s1.my_hps, my_team, s1.my_mega_used,
     must_recharge=s1.my_must_recharge[s1.my_active],
   )
-  assert_eq(forced.length(), 1)
+  @debug.assert_eq(forced.length(), 1)
   match forced[0] {
-    Switch(i) => assert_eq(i, 1)
+    Switch(i) => @debug.assert_eq(i, 1)
     _ => abort("expected forced Switch(1) after active KO")
   }
   // Turn 1 → 2: the forced Switch must execute even though the dead slot's
@@ -1138,12 +1138,12 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
   let outs2 = attempt_turn_with_cache(
     s1, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
   )
-  assert_eq(outs2.length(), 1)
+  @debug.assert_eq(outs2.length(), 1)
   let (_, s2) = outs2[0]
   // Switch completed: new active is slot 1, at full HP.
-  assert_eq(s2.my_active, 1)
+  @debug.assert_eq(s2.my_active, 1)
   assert_true(s2.my_hps[1] > 0)
   // Dead slot's stale recharge flag cleared by `clear_consumed_recharge`
   // (it was true at the start of turn 2).
-  assert_eq(s2.my_must_recharge[0], false)
+  @debug.assert_eq(s2.my_must_recharge[0], false)
 }

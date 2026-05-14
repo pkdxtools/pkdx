@@ -4,8 +4,13 @@ import {
   "moonbitlang/x/sys",
 }
 
+import {
+  "moonbitlang/core/debug" @debug,
+} for "test"
+
+supported_targets = "native"
+
 options(
-  "supported-targets": "native",
   "native-stub": [ "cwrap.c", "sqlite3.c" ],
   link: {
     "native": {

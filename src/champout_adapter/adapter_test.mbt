@@ -4,7 +4,7 @@
 
 ///|
 fn fake_bundle() -> LabelBundle {
-  let type_name : Map[String, String] = Map::new()
+  let type_name : Map[String, String] = Map([])
   // typename.json は Index 9 が欠番なので、TYPENAME_011 = みず, _012 = くさ
   type_name["TYPENAME_000"] = "ノーマル"
   type_name["TYPENAME_003"] = "どく"
@@ -12,18 +12,18 @@ fn fake_bundle() -> LabelBundle {
   type_name["TYPENAME_011"] = "みず"
   type_name["TYPENAME_012"] = "くさ"
   type_name["TYPENAME_018"] = "フェアリー"
-  let tokusei : Map[String, String] = Map::new()
+  let tokusei : Map[String, String] = Map([])
   tokusei["TOKUSEI_065"] = "しんりょく"
   tokusei["TOKUSEI_034"] = "ようりょくそ"
-  let monsname : Map[String, String] = Map::new()
+  let monsname : Map[String, String] = Map([])
   monsname["MONSNAME_003"] = "フシギバナ"
-  let wazaname : Map[String, String] = Map::new()
+  let wazaname : Map[String, String] = Map([])
   wazaname["WAZANAME_001"] = "はたく"
   wazaname["WAZANAME_014"] = "つるぎのまい"
   wazaname["WAZANAME_034"] = "のしかかり"
-  let itemname : Map[String, String] = Map::new()
+  let itemname : Map[String, String] = Map([])
   itemname["ITEMNAME_149"] = "オボンのみ"
-  let zkn_form : Map[String, String] = Map::new()
+  let zkn_form : Map[String, String] = Map([])
   zkn_form["ZKN_FORM_003_000"] = ""
   zkn_form["ZKN_FORM_003_001"] = "メガフシギバナ"
   { type_name, tokusei, monsname, wazaname, itemname, zkn_form }
@@ -33,29 +33,51 @@ fn fake_bundle() -> LabelBundle {
 test "resolve_type skips Index 9 in typename.json" {
   let b = fake_bundle()
   // type 値 11 はくさ (連続インデックス: 9 を飛ばして TYPENAME_012)
-  inspect(resolve_type(b, "11"), content="くさ")
+  @debug.debug_inspect(resolve_type(b, "11"), content=(
+    #|"くさ"
+  ))
   // type 値 3 はどく
-  inspect(resolve_type(b, "3"), content="どく")
+  @debug.debug_inspect(resolve_type(b, "3"), content=(
+    #|"どく"
+  ))
   // 範囲外は空文字
-  inspect(resolve_type(b, "99"), content="")
+  @debug.debug_inspect(resolve_type(b, "99"), content=(
+    #|""
+  ))
   // 不正な数値文字列は 0 扱い → ノーマル
-  inspect(resolve_type(b, ""), content="ノーマル")
+  @debug.debug_inspect(resolve_type(b, ""), content=(
+    #|"ノーマル"
+  ))
 }
 
 ///|
 test "resolve_ability returns empty for id 0" {
   let b = fake_bundle()
-  inspect(resolve_ability(b, "65"), content="しんりょく")
-  inspect(resolve_ability(b, "0"), content="")
-  inspect(resolve_ability(b, ""), content="")
+  @debug.debug_inspect(resolve_ability(b, "65"), content=(
+    #|"しんりょく"
+  ))
+  @debug.debug_inspect(resolve_ability(b, "0"), content=(
+    #|""
+  ))
+  @debug.debug_inspect(resolve_ability(b, ""), content=(
+    #|""
+  ))
 }
 
 ///|
 test "resolve_move_category maps 0/1/2 to physical/special/status" {
-  inspect(resolve_move_category("0"), content="物理")
-  inspect(resolve_move_category("1"), content="特殊")
-  inspect(resolve_move_category("2"), content="変化")
-  inspect(resolve_move_category("9"), content="")
+  @debug.debug_inspect(resolve_move_category("0"), content=(
+    #|"物理"
+  ))
+  @debug.debug_inspect(resolve_move_category("1"), content=(
+    #|"特殊"
+  ))
+  @debug.debug_inspect(resolve_move_category("2"), content=(
+    #|"変化"
+  ))
+  @debug.debug_inspect(resolve_move_category("9"), content=(
+    #|""
+  ))
 }
 
 ///|
@@ -75,30 +97,50 @@ test "map_pokemon_entries maps Venusaur grass/poison correctly" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match map_pokemon_entries(fake_bundle(), json) {
-    Err(e) => inspect(e, content="map ok")
+    Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
-      inspect(entries.length(), content="1")
+      @debug.debug_inspect(entries.length(), content="1")
       let e = entries[0]
-      inspect(e.id, content="0003000")
-      inspect(e.no, content="0003")
-      inspect(e.globalNo, content="0003")
-      inspect(e.type1, content="くさ")
-      inspect(e.type2, content="どく")
-      inspect(e.ability1, content="しんりょく")
+      @debug.debug_inspect(e.id, content=(
+        #|"0003000"
+      ))
+      @debug.debug_inspect(e.no, content=(
+        #|"0003"
+      ))
+      @debug.debug_inspect(e.globalNo, content=(
+        #|"0003"
+      ))
+      @debug.debug_inspect(e.type1, content=(
+        #|"くさ"
+      ))
+      @debug.debug_inspect(e.type2, content=(
+        #|"どく"
+      ))
+      @debug.debug_inspect(e.ability1, content=(
+        #|"しんりょく"
+      ))
       // ability2 は ability1 と同じ id なので空文字に正規化される
-      inspect(e.ability2, content="")
-      inspect(e.dream_ability, content="ようりょくそ")
-      inspect(e.hp, content="80")
-      inspect(e.attack, content="82")
-      inspect(e.special_attack, content="100")
-      inspect(e.speed, content="80")
-      inspect(e.form, content="")
-      inspect(e.name_jpn, content="フシギバナ")
+      @debug.debug_inspect(e.ability2, content=(
+        #|""
+      ))
+      @debug.debug_inspect(e.dream_ability, content=(
+        #|"ようりょくそ"
+      ))
+      @debug.debug_inspect(e.hp, content="80")
+      @debug.debug_inspect(e.attack, content="82")
+      @debug.debug_inspect(e.special_attack, content="100")
+      @debug.debug_inspect(e.speed, content="80")
+      @debug.debug_inspect(e.form, content=(
+        #|""
+      ))
+      @debug.debug_inspect(e.name_jpn, content=(
+        #|"フシギバナ"
+      ))
     }
   }
 }
@@ -119,13 +161,13 @@ test "map_pokemon_entries skips is_valid != 1" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match map_pokemon_entries(fake_bundle(), json) {
-    Err(e) => inspect(e, content="map ok")
-    Ok(entries) => inspect(entries.length(), content="0")
+    Err(e) => @debug.debug_inspect(e, content="map ok")
+    Ok(entries) => @debug.debug_inspect(entries.length(), content="0")
   }
 }
 
@@ -142,25 +184,47 @@ test "map_move_entries normalizes power/accuracy zero to dash and copies direct/
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match map_move_entries(fake_bundle(), json) {
-    Err(e) => inspect(e, content="map ok")
+    Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
-      inspect(entries.length(), content="2")
-      inspect(entries[0].waza, content="はたく")
-      inspect(entries[0].power, content="40")
-      inspect(entries[0].category, content="物理")
-      inspect(entries[0].direct, content="1")
-      inspect(entries[0].target, content="0")
-      inspect(entries[1].waza, content="つるぎのまい")
-      inspect(entries[1].power, content="-")
-      inspect(entries[1].accuracy, content="-")
-      inspect(entries[1].category, content="変化")
-      inspect(entries[1].direct, content="0")
-      inspect(entries[1].target, content="7")
+      @debug.debug_inspect(entries.length(), content="2")
+      @debug.debug_inspect(entries[0].waza, content=(
+        #|"はたく"
+      ))
+      @debug.debug_inspect(entries[0].power, content=(
+        #|"40"
+      ))
+      @debug.debug_inspect(entries[0].category, content=(
+        #|"物理"
+      ))
+      @debug.debug_inspect(entries[0].direct, content=(
+        #|"1"
+      ))
+      @debug.debug_inspect(entries[0].target, content=(
+        #|"0"
+      ))
+      @debug.debug_inspect(entries[1].waza, content=(
+        #|"つるぎのまい"
+      ))
+      @debug.debug_inspect(entries[1].power, content=(
+        #|"-"
+      ))
+      @debug.debug_inspect(entries[1].accuracy, content=(
+        #|"-"
+      ))
+      @debug.debug_inspect(entries[1].category, content=(
+        #|"変化"
+      ))
+      @debug.debug_inspect(entries[1].direct, content=(
+        #|"0"
+      ))
+      @debug.debug_inspect(entries[1].target, content=(
+        #|"7"
+      ))
     }
   }
 }
@@ -174,20 +238,28 @@ test "map_learnset_entries filters by valid_ids" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
-  let valid : Map[String, Bool] = Map::new()
+  let valid : Map[String, Bool] = Map([])
   valid["0003000"] = true
   match map_learnset_entries(fake_bundle(), json, valid) {
-    Err(e) => inspect(e, content="map ok")
+    Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
-      inspect(entries.length(), content="2")
-      inspect(entries[0].id, content="0003000")
-      inspect(entries[0].waza, content="はたく")
-      inspect(entries[0].conditions, content="基本")
-      inspect(entries[1].waza, content="つるぎのまい")
+      @debug.debug_inspect(entries.length(), content="2")
+      @debug.debug_inspect(entries[0].id, content=(
+        #|"0003000"
+      ))
+      @debug.debug_inspect(entries[0].waza, content=(
+        #|"はたく"
+      ))
+      @debug.debug_inspect(entries[0].conditions, content=(
+        #|"基本"
+      ))
+      @debug.debug_inspect(entries[1].waza, content=(
+        #|"つるぎのまい"
+      ))
     }
   }
 }
@@ -201,16 +273,20 @@ test "map_item_entries resolves id to name_ja" {
     #|]
   let json = try @json.parse(raw) catch {
     e => {
-      inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
       return
     }
   }
   match map_item_entries(fake_bundle(), json) {
-    Err(e) => inspect(e, content="map ok")
+    Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
-      inspect(entries.length(), content="1")
-      inspect(entries[0].name_ja, content="オボンのみ")
-      inspect(entries[0].category, content="6")
+      @debug.debug_inspect(entries.length(), content="1")
+      @debug.debug_inspect(entries[0].name_ja, content=(
+        #|"オボンのみ"
+      ))
+      @debug.debug_inspect(entries[0].category, content=(
+        #|"6"
+      ))
     }
   }
 }

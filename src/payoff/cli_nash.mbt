@@ -26,7 +26,7 @@ pub suberror NashCliError {
   InfeasibleGame
   UnboundedGame
   InnerError(String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parse one number (Double) from a Json node. `raise InvalidJson` if not a
@@ -159,7 +159,7 @@ fn parse_nash_input(
   input_json : String,
 ) -> (@nash.FiniteMatrix, Array[String]) raise NashCliError {
   let root = try @json.parse(input_json) catch {
-    err => raise InvalidJson(err.to_string())
+    err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
     Object(m) => m
@@ -170,7 +170,7 @@ fn parse_nash_input(
   if has_matrix && has_chars {
     raise ConflictingInputs
   }
-  if not(has_matrix) && not(has_chars) {
+  if !(has_matrix) && !(has_chars) {
     raise MissingField("matrix or characters")
   }
   let (data, labels) = if has_matrix {
@@ -187,7 +187,7 @@ fn parse_nash_input(
       Some(Array(arr)) => {
         let chars = parse_characters_input(arr)
         let m = try from_characters(chars) catch {
-          err => raise InnerError(err.to_string())
+          err => raise InnerError(@debug.to_string(err))
         }
         let labels = Array::make(chars.length(), "")
         for i in 0..<chars.length() {
@@ -388,17 +388,17 @@ pub fn run_nash_graph(
   threshold : Double,
 ) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
-    err => raise InvalidJson(err.to_string())
+    err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
     Object(m) => m
     _ => raise InvalidJson("top-level must be an object")
   }
   if obj.contains("team") || obj.contains("opponent") {
-    if not(obj.contains("opponent")) {
+    if !(obj.contains("opponent")) {
       raise MissingField("opponent")
     }
-    if not(obj.contains("team")) {
+    if !(obj.contains("team")) {
       raise MissingField("team")
     }
     return run_nash_graph_team(obj, threshold)

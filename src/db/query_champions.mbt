@@ -104,7 +104,7 @@ fn query_champions_forms(
   match query(db, sql, [global_no, self_id]) {
     Ok(rows) => {
       let out : Array[String] = []
-      let seen : Map[String, Bool] = Map::new()
+      let seen : Map[String, Bool] = Map([])
       for i = 0; i < rows.length(); i = i + 1 {
         let name = rows[i][0]
         if name.length() == 0 {

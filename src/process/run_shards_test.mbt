@@ -44,8 +44,8 @@ test "run_parallel_shards single shard exit 0" {
   }
   let argvs = [["sh", "-c", "true"]]
   let results = run_parallel_shards(argvs, timeout_ms=10_000)
-  assert_eq(results.length(), 1)
-  assert_eq(results[0], Ok)
+  @debug.assert_eq(results.length(), 1)
+  @debug.assert_eq(results[0], Ok)
 }
 
 ///|
@@ -61,11 +61,11 @@ test "run_parallel_shards mixed exit codes are reported per shard" {
     ["sh", "-c", "exit 0"],
   ]
   let results = run_parallel_shards(argvs, timeout_ms=10_000)
-  assert_eq(results.length(), 4)
-  assert_eq(results[0], Ok)
-  assert_eq(results[1], Exit(1))
-  assert_eq(results[2], Exit(2))
-  assert_eq(results[3], Ok)
+  @debug.assert_eq(results.length(), 4)
+  @debug.assert_eq(results[0], Ok)
+  @debug.assert_eq(results[1], Exit(1))
+  @debug.assert_eq(results[2], Exit(2))
+  @debug.assert_eq(results[3], Ok)
 }
 
 ///|
@@ -86,8 +86,8 @@ test "run_parallel_shards times out long-running shards" {
   let start_ms = monotonic_ms()
   let results = run_parallel_shards(argvs, timeout_ms=1_500)
   let elapsed_ms = monotonic_ms() - start_ms
-  assert_eq(results.length(), 4)
-  assert_eq(results[0], Ok)
+  @debug.assert_eq(results.length(), 4)
+  @debug.assert_eq(results[0], Ok)
   // The survivors should have been killed; result is Failed (signal /
   // -1 exit) — never Ok and never Exit(positive).
   for i in [1, 2, 3] {
@@ -99,7 +99,7 @@ test "run_parallel_shards times out long-running shards" {
           "expected Failed for shard " +
           i.to_string() +
           ", got " +
-          r.to_string(),
+          @debug.to_string(r),
         )
     }
   }

@@ -6,8 +6,7 @@ import {
 
 import {
   "moonbitlang/core/json",
+  "moonbitlang/core/debug" @debug,
 } for "test"
 
-options(
-  "supported-targets": "native",
-)
+supported_targets = "native"

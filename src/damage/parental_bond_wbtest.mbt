@@ -104,7 +104,7 @@ test "parental bond: hits_dealt=2 on single-hit move" {
   let mv = pb_move("たいあたり", "ノーマル", 40)
   let inp = pb_input(atk, dfn, mv, atk_ability="おやこあい")
   let r = calc_damage(inp)
-  inspect(r.hits_dealt, content="2")
+  @debug.debug_inspect(r.hits_dealt, content="2")
 }
 
 ///|
@@ -139,7 +139,7 @@ test "parental bond: 2nd hit equals an independent quarter-power calc" {
   let r_1 = calc_damage(inp_1)
   let r_2 = calc_damage(inp_2)
   for i = 0; i < 16; i = i + 1 {
-    assert_eq(r_pb.damages[i], r_1.damages[i] + r_2.damages[i])
+    @debug.assert_eq(r_pb.damages[i], r_1.damages[i] + r_2.damages[i])
   }
 }
 
@@ -153,7 +153,7 @@ test "parental bond: skipped on multi-hit base moves" {
   let inp = pb_input(atk, dfn, mv, atk_ability="おやこあい")
   let r = calc_damage(inp)
   // Random 2-5 auto-resolves to center 3 in the simplified PR-C routing.
-  inspect(r.hits_dealt, content="3")
+  @debug.debug_inspect(r.hits_dealt, content="3")
 }
 
 ///|
@@ -167,10 +167,10 @@ test "multi-hit: fixed 2 returns hits_dealt=2 and doubled damage" {
   let inp2 = pb_input(atk, dfn, mv, multi_hit_mode=Fixed(2))
   let r1 = calc_damage(inp1)
   let r2 = calc_damage(inp2)
-  inspect(r1.hits_dealt, content="1")
-  inspect(r2.hits_dealt, content="2")
+  @debug.debug_inspect(r1.hits_dealt, content="1")
+  @debug.debug_inspect(r2.hits_dealt, content="2")
   // Exact 2× because the 16-roll array is multiplied element-wise.
-  inspect(r2.max_damage, content=(r1.max_damage * 2).to_string())
+  @debug.debug_inspect(r2.max_damage, content=(r1.max_damage * 2).to_string())
 }
 
 ///|
@@ -180,7 +180,7 @@ test "multi-hit: explicit Fixed(5) forces 5 hits regardless of move" {
   let mv = pb_move("たいあたり", "ノーマル", 40)
   let inp = pb_input(atk, dfn, mv, multi_hit_mode=Fixed(5))
   let r = calc_damage(inp)
-  inspect(r.hits_dealt, content="5")
+  @debug.debug_inspect(r.hits_dealt, content="5")
 }
 
 ///|
@@ -195,5 +195,5 @@ test "multi-hit: Expected mode aborts pkdx damage" {
   let mv = pb_move("たいあたり", "ノーマル", 40)
   let inp = pb_input(atk, dfn, mv, multi_hit_mode=Auto)
   let r = calc_damage(inp)
-  inspect(r.hits_dealt, content="1")
+  @debug.debug_inspect(r.hits_dealt, content="1")
 }

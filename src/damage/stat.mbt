@@ -525,7 +525,7 @@ pub fn reverse_spread_with_model(
     let points : FixedArray[Int] = FixedArray::make(6, -1)
     let mut valid = true
     for si = 0; si < 6; si = si + 1 {
-      if not(valid) {
+      if !(valid) {
         break
       }
       let actual = actual_stats[si]

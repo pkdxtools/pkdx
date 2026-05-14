@@ -8,21 +8,37 @@ test "migrations() is the concatenation of pokedex + champions" {
   let pdx = migrations_pokedex()
   let cmp = migrations_champions()
   let all = migrations()
-  inspect(pdx.length() + cmp.length() == all.length(), content="true")
+  assert_true(pdx.length() + cmp.length() == all.length())
   let names : Array[String] = []
   for i = 0; i < all.length(); i = i + 1 {
     names.push(all[i].name)
   }
-  inspect(
+  @debug.debug_inspect(
     names,
-    content="[001_mega_legendsza, 002_move_meta, 003_mega_forms, 004_move_meta_ailment, 005_move_meta_posthit, 006_form_name_aliases, 007_gender_symbol_aliases, 008_champions_init_schema, 009_champions_pokemon, 010_champions_moves, 011_champions_learnset, 012_champions_items, 013_champions_form_aliases]",
+    content=(
+      #|[
+      #|  "001_mega_legendsza",
+      #|  "002_move_meta",
+      #|  "003_mega_forms",
+      #|  "004_move_meta_ailment",
+      #|  "005_move_meta_posthit",
+      #|  "006_form_name_aliases",
+      #|  "007_gender_symbol_aliases",
+      #|  "008_champions_init_schema",
+      #|  "009_champions_pokemon",
+      #|  "010_champions_moves",
+      #|  "011_champions_learnset",
+      #|  "012_champions_items",
+      #|  "013_champions_form_aliases",
+      #|]
+    ),
   )
 }
 
 ///|
 test "migrations_champions hosts the champions.db lineup" {
   let cmp = migrations_champions()
-  inspect(cmp.length(), content="6")
+  @debug.debug_inspect(cmp.length(), content="6")
   let expected = [
     "008_champions_init_schema",
     "009_champions_pokemon",
@@ -38,7 +54,7 @@ test "migrations_champions hosts the champions.db lineup" {
         found = true
       }
     }
-    inspect(found, content="true")
+    assert_true(found)
   }
 }
 
@@ -50,7 +66,7 @@ test "migrations_pokedex hosts the live pokedex-side entries" {
     "004_move_meta_ailment", "005_move_meta_posthit",
     "006_form_name_aliases", "007_gender_symbol_aliases",
   ]
-  inspect(pdx.length() == expected.length(), content="true")
+  assert_true(pdx.length() == expected.length())
   for i = 0; i < expected.length(); i = i + 1 {
     let mut found = false
     for j = 0; j < pdx.length(); j = j + 1 {
@@ -58,6 +74,6 @@ test "migrations_pokedex hosts the live pokedex-side entries" {
         found = true
       }
     }
-    inspect(found, content="true")
+    assert_true(found)
   }
 }

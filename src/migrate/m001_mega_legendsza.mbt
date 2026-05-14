@@ -87,7 +87,7 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
     }
     let names : Map[String, Json] = match mega.get("name") {
       Some(Object(m)) => m
-      _ => Map::new()
+      _ => Map([])
     }
     match names.get("jpn") {
       Some(String(n)) =>

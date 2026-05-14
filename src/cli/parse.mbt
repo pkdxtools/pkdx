@@ -2,7 +2,7 @@
 pub enum OutputFormat {
   Json
   Table
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Normalize the user-supplied CLI args (i.e. `argv` minus the program name)
@@ -45,13 +45,13 @@ fn split_string(s : String, sep : Char) -> Array[String] {
   for i = 0; i < s.length(); i = i + 1 {
     if s[i].to_int() == sep_int {
       if i > start {
-        parts.push(s[start:i].to_string())
+        parts.push(s[start:i].to_owned())
       }
       start = i + 1
     }
   }
   if start < s.length() {
-    parts.push(s[start:].to_string())
+    parts.push(s[start:].to_owned())
   }
   parts
 }
@@ -79,7 +79,7 @@ pub fn parse_hp_ratio(s : String) -> (Int, Int) {
   // "N%" form: drop the trailing '%' and parse as (N, 100).
   let last = s[s.length() - 1]
   if last == '%' {
-    let head = s[0:s.length() - 1].to_string()
+    let head = s[0:s.length() - 1].to_owned()
     let n = parse_int_str(head, -1)
     if n < 0 {
       return (2, 2)
@@ -97,8 +97,8 @@ pub fn parse_hp_ratio(s : String) -> (Int, Int) {
   if slash_idx <= 0 {
     return (2, 2)
   }
-  let num_str = s[0:slash_idx].to_string()
-  let den_str = s[slash_idx + 1:s.length()].to_string()
+  let num_str = s[0:slash_idx].to_owned()
+  let den_str = s[slash_idx + 1:s.length()].to_owned()
   let num = parse_int_str(num_str, -1)
   let den = parse_int_str(den_str, -1)
   if num < 0 || den <= 0 {
@@ -173,7 +173,7 @@ pub fn parse_csv_ints(
     for i = 0; i <= s.length(); i = i + 1 {
       if i == s.length() || s[i] == ',' {
         if idx < count && i > start {
-          result[idx] = parse_int_str(s[start:i].to_string(), default_val)
+          result[idx] = parse_int_str(s[start:i].to_owned(), default_val)
         }
         idx = idx + 1
         start = i + 1
@@ -213,7 +213,7 @@ pub fn parse_fixed_ev(s : String) -> Result[FixedArray[Int], String] {
           all_digits = false
         }
       }
-      if not(all_digits) {
+      if !(all_digits) {
         return Err("invalid --fixed-ev token: " + tok)
       }
       out[i] = parse_int_str(tok, 0)

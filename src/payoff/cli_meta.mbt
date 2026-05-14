@@ -25,7 +25,7 @@ pub suberror MetaCliError {
   MissingFieldMeta(String)
   UsageNotNormalised(Double)
   ShapeMismatch(Int, Int)
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn json_number_meta(j : Json, ctx : String) -> Double raise MetaCliError {
@@ -183,7 +183,7 @@ fn fmt_labels_meta(labels : Array[String], n : Int) -> Array[String] {
 /// string report.
 pub fn run_meta_divergence(input_json : String) -> String raise MetaCliError {
   let root = try @json.parse(input_json) catch {
-    err => raise InvalidJsonMeta(err.to_string())
+    err => raise InvalidJsonMeta(@debug.to_string(err))
   }
   let obj = match root {
     Object(m) => m

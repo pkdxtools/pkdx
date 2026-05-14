@@ -33,7 +33,7 @@ fn pad3(n : Int) -> String {
 /// 文字列を Int にパース。失敗時は 0 を返す (champout は数値も文字列で
 /// 表現するため、空文字や `-` も入り得る)。
 fn to_int_or_zero(s : String) -> Int {
-  try @strconv.parse_int(s) catch {
+  try @string.parse_int(s) catch {
     _ => 0
   }
 }

@@ -128,7 +128,7 @@ test "append_damage_calc: creates array when missing" {
   guard r.get("damage_calcs") is Some(Array(arr)) else {
     fail("expected damage_calcs array")
   }
-  inspect(arr.length(), content="1")
+  @debug.debug_inspect(arr.length(), content="1")
 }
 
 ///|
@@ -143,7 +143,7 @@ test "append_damage_calc: appends to existing array" {
   guard r.get("damage_calcs") is Some(Array(arr)) else {
     fail("expected damage_calcs array")
   }
-  inspect(arr.length(), content="3")
+  @debug.debug_inspect(arr.length(), content="3")
 }
 
 ///|
@@ -152,9 +152,9 @@ test "append_damage_calc: preserves other keys" {
   let entry : Json = { "title": "probe" }
   let result = append_damage_calc(meta, entry)
   guard result is Object(r) else { fail("expected object") }
-  inspect(r.get("battle_format") is Some(String("singles")), content="true")
+  assert_true(r.get("battle_format") is Some(String("singles")))
   guard r.get("members") is Some(Array(m)) else { fail("members lost") }
-  inspect(m.length(), content="3")
+  @debug.debug_inspect(m.length(), content="3")
 }
 
 ///|
@@ -163,7 +163,7 @@ test "append_damage_calc: non-object top-level returns as-is" {
   let entry : Json = { "title": "x" }
   let result = append_damage_calc(meta, entry)
   guard result is Array(arr) else { fail("expected array pass-through") }
-  inspect(arr.length(), content="3")
+  @debug.debug_inspect(arr.length(), content="3")
 }
 
 ///|
@@ -183,13 +183,13 @@ test "build_damage_calc_entry: physical move populates atk rank key" {
   guard e.get("guaranteed_hits") is Some(Number(n, ..)) else {
     fail("guaranteed_hits missing for kakutei 2")
   }
-  inspect(n.to_int(), content="2")
+  @debug.debug_inspect(n.to_int(), content="2")
   guard e.get("attacker") is Some(Object(a)) else { fail("attacker missing") }
   guard a.get("ranks") is Some(Object(rm)) else { fail("ranks missing") }
-  inspect(rm.get("atk") is Some(Number(_)), content="true")
-  inspect(rm.get("spa"), content="None")
+  assert_true(rm.get("atk") is Some(Number(_)))
+  assert_true(rm.get("spa") == None)
   guard e.get("move") is Some(Object(m)) else { fail("move missing") }
-  inspect(
+  @debug.debug_inspect(
     m.get("category") is Some(String("\u{7269}\u{7406}")),
     content="true",
   )
@@ -208,21 +208,21 @@ test "build_damage_calc_entry: ransuu omits guaranteed_hits" {
   )
   let entry = build_damage_calc_entry(input, result, "", "")
   guard entry is Object(e) else { fail("entry must be object") }
-  inspect(e.get("guaranteed_hits"), content="None")
+  assert_true(e.get("guaranteed_hits") == None)
   // Special は spa ranks key を使う (= 0 なのでランクは空だが key 選択だけ確認)
   guard e.get("attacker") is Some(Object(a)) else { fail("attacker missing") }
   guard a.get("ranks") is Some(Object(rm)) else { fail("ranks missing") }
-  inspect(rm.is_empty(), content="true")
+  assert_true(rm.is_empty())
   // 空 optional は key ごと省略する (FE schema の z.string().optional() 準拠)。
-  inspect(e.get("title"), content="None")
-  inspect(e.get("note"), content="None")
+  assert_true(e.get("title") == None)
+  assert_true(e.get("note") == None)
   guard e.get("attacker") is Some(Object(att)) else { fail("attacker missing") }
-  inspect(att.get("ability"), content="None")
-  inspect(att.get("item"), content="None")
-  inspect(att.get("nature"), content="None")
-  inspect(att.get("tera_type"), content="None")
+  assert_true(att.get("ability") == None)
+  assert_true(att.get("item") == None)
+  assert_true(att.get("nature") == None)
+  assert_true(att.get("tera_type") == None)
   guard e.get("defender") is Some(Object(defn)) else { fail("defender missing") }
-  inspect(defn.get("tera_type"), content="None")
+  assert_true(defn.get("tera_type") == None)
 }
 
 ///|
@@ -237,16 +237,16 @@ test "build_damage_calc_entry: 16 rolls populated" {
   guard e.get("rolls_percent") is Some(Array(rolls)) else {
     fail("rolls_percent missing")
   }
-  inspect(rolls.length(), content="16")
+  @debug.debug_inspect(rolls.length(), content="16")
 }
 
 ///|
 test "validate_attach_team_path: accepts canonical path" {
-  inspect(
+  @debug.debug_inspect(
     validate_attach_team_path("box/teams/garchomp-build-2026-04-20.meta.json"),
     content="Ok(())",
   )
-  inspect(
+  @debug.debug_inspect(
     validate_attach_team_path("./box/teams/x.meta.json"),
     content="Ok(())",
   )
@@ -309,14 +309,14 @@ test "build_damage_calc_entry: conditions propagated" {
   let entry = build_damage_calc_entry(input, result, "rain crit", "")
   guard entry is Object(e) else { fail("entry must be object") }
   guard e.get("conditions") is Some(Object(c)) else { fail("conditions") }
-  inspect(c.get("weather") is Some(String("\u{3042}\u{3081}")), content="true")
-  inspect(
+  assert_true(c.get("weather") is Some(String("\u{3042}\u{3081}")))
+  @debug.debug_inspect(
     c.get("field") is Some(String("\u{30B0}\u{30E9}\u{30B9}")),
     content="true",
   )
-  inspect(c.get("crit") is Some(True), content="true")
+  assert_true(c.get("crit") is Some(True))
   guard e.get("guaranteed_hits") is Some(Number(n, ..)) else {
     fail("guaranteed_hits missing")
   }
-  inspect(n.to_int(), content="1")
+  @debug.debug_inspect(n.to_int(), content="1")
 }

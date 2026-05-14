@@ -46,7 +46,7 @@ test "resolve_champions_db_path falls back to repo_root/pokedex/champions.db" {
       }
     }
   }
-  inspect(ok, content="true")
+  assert_true(ok)
 }
 
 ///|
@@ -55,7 +55,9 @@ test "resolve_champions_db_path_from swaps pokedex.db -> champions.db sibling" {
   let prev = @sys.get_env_var("CHAMPIONS_DB")
   @sys.unset_env_var("CHAMPIONS_DB")
   let p = resolve_champions_db_path_from("/srv/data/pokedex.db")
-  inspect(p, content="/srv/data/champions.db")
+  @debug.debug_inspect(p, content=(
+    #|"/srv/data/champions.db"
+  ))
   match prev {
     Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
     None => ()
@@ -69,7 +71,9 @@ test "resolve_champions_db_path_from puts champions.db next to a custom POKEDEX_
   // Custom POKEDEX_DB that doesn't end in `pokedex.db` must yield a
   // SIBLING `champions.db`, not `<file>.champions.db`.
   let p = resolve_champions_db_path_from("/srv/data/custom.db")
-  inspect(p, content="/srv/data/champions.db")
+  @debug.debug_inspect(p, content=(
+    #|"/srv/data/champions.db"
+  ))
   match prev {
     Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
     None => ()
@@ -81,7 +85,9 @@ test "resolve_champions_db_path_from honors CHAMPIONS_DB env override" {
   let prev = @sys.get_env_var("CHAMPIONS_DB")
   @sys.set_env_var("CHAMPIONS_DB", "/elsewhere/override.db")
   let p = resolve_champions_db_path_from("/srv/data/pokedex.db")
-  inspect(p, content="/elsewhere/override.db")
+  @debug.debug_inspect(p, content=(
+    #|"/elsewhere/override.db"
+  ))
   match prev {
     Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
     None => @sys.unset_env_var("CHAMPIONS_DB")
@@ -101,7 +107,7 @@ test "open_champions_rw + validate_champions_schema succeed after setup" {
     Some(p) => p
     None => return
   }
-  if not(file_exists(pokedex_path)) {
+  if !(file_exists(pokedex_path)) {
     return
   }
   match open_champions_rw(champions_path, pokedex_path) {
@@ -128,7 +134,7 @@ test "attach_pokedex makes pokedex.* tables visible inside a champions.db handle
     Some(p) => p
     None => return
   }
-  if not(file_exists(pokedex_path)) {
+  if !(file_exists(pokedex_path)) {
     return
   }
   match open_champions_rw(champions_path, pokedex_path) {

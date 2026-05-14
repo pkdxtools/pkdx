@@ -17,7 +17,7 @@ test "parallel_count: \"1\" returns 1 regardless of nproc" {
   let n = parallel_count_from_env_and_flag(
     "1", fn() { 16 }, fn() { 0x7FFFFFFF }, mock_env("", None),
   )
-  assert_eq(n, 1)
+  @debug.assert_eq(n, 1)
 }
 
 ///|
@@ -25,7 +25,7 @@ test "parallel_count: \"auto\" returns nproc on POSIX (no cap)" {
   let n = parallel_count_from_env_and_flag(
     "auto", fn() { 12 }, fn() { 0x7FFFFFFF }, mock_env("", None),
   )
-  assert_eq(n, 12)
+  @debug.assert_eq(n, 12)
 }
 
 ///|
@@ -33,7 +33,7 @@ test "parallel_count: \"auto\" clamps to Windows MAXIMUM_WAIT_OBJECTS (64)" {
   let n = parallel_count_from_env_and_flag(
     "auto", fn() { 128 }, fn() { 64 }, mock_env("", None),
   )
-  assert_eq(n, 64)
+  @debug.assert_eq(n, 64)
 }
 
 ///|
@@ -42,7 +42,7 @@ test "parallel_count: \"auto\" with PKDX_NO_PARALLEL=1 forces 1" {
     "auto", fn() { 16 }, fn() { 0x7FFFFFFF },
     mock_env("PKDX_NO_PARALLEL", Some("1")),
   )
-  assert_eq(n, 1)
+  @debug.assert_eq(n, 1)
 }
 
 ///|
@@ -50,7 +50,7 @@ test "parallel_count: explicit positive integer passes through (POSIX)" {
   let n = parallel_count_from_env_and_flag(
     "4", fn() { 16 }, fn() { 0x7FFFFFFF }, mock_env("", None),
   )
-  assert_eq(n, 4)
+  @debug.assert_eq(n, 4)
 }
 
 ///|

@@ -17,7 +17,7 @@ pub fn wall_applies(wall : @model.Wall, is_physical : Bool) -> Bool {
   match wall {
     @model.Wall::NoWall => false
     @model.Wall::Reflect => is_physical
-    @model.Wall::LightScreen => not(is_physical)
+    @model.Wall::LightScreen => !(is_physical)
     @model.Wall::AuroraVeil => true
   }
 }

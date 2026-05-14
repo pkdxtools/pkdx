@@ -27,9 +27,9 @@ test "team_apply_post_hit applies self-target stat drops on damaging moves" {
     defender_hps, 0, defender_ranks,
     overheat, 50,
   )
-  assert_eq(attacker_ranks[2], -2)
+  @debug.assert_eq(attacker_ranks[2], -2)
   // Defender ranks are untouched (no opp-target effect on this move).
-  assert_eq(defender_ranks[2], 0)
+  @debug.assert_eq(defender_ranks[2], 0)
 }
 
 ///|
@@ -53,7 +53,7 @@ test "team_apply_post_hit skips opp-target stat drops when defender faints" {
     mv, 120,
   )
   // Opp-target drop is gated out: defender ranks unchanged.
-  assert_eq(defender_ranks[1], 0)
+  @debug.assert_eq(defender_ranks[1], 0)
 }
 
 ///|
@@ -72,7 +72,7 @@ test "team_apply_post_hit applies opp-target stat drops when defender survives" 
     defender_hps, 0, defender_ranks,
     mv, 60,
   )
-  assert_eq(defender_ranks[1], -1)
+  @debug.assert_eq(defender_ranks[1], -1)
 }
 
 ///|
@@ -98,8 +98,8 @@ test "MC recharge cleanup targets start-of-turn slot, not post-switch slot" {
     must_recharge[start_active] = false
   }
   // Slot 0's penalty paid — cleared. Slot 1's fresh flag preserved.
-  assert_eq(must_recharge[0], false)
-  assert_eq(must_recharge[1], true)
+  @debug.assert_eq(must_recharge[0], false)
+  @debug.assert_eq(must_recharge[1], true)
 }
 
 ///|
@@ -121,5 +121,5 @@ test "team_apply_post_hit sets recharge flag after damaging recharge-move hit" {
     defender_hps, 0, defender_ranks,
     hyper_beam, 180,
   )
-  assert_eq(attacker_must_recharge[0], true)
+  @debug.assert_eq(attacker_must_recharge[0], true)
 }

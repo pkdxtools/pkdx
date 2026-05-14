@@ -112,13 +112,13 @@ test "contact_proc_fanout: ほのおのからだ vs contact move → 30% Burn" {
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // Expect 2 leaves: (0.7, no status) + (0.3, attacker burned)
-  inspect(outcomes.length(), content="2")
+  @debug.debug_inspect(outcomes.length(), content="2")
   let mut p_sum = 0.0
   for i = 0; i < outcomes.length(); i = i + 1 {
     p_sum = p_sum + outcomes[i].0
   }
   let drift = if p_sum > 1.0 { p_sum - 1.0 } else { 1.0 - p_sum }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -134,7 +134,7 @@ test "contact_proc_fanout: non-contact move → no fanout" {
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
 }
 
 ///|
@@ -149,9 +149,9 @@ test "contact_proc_fanout: defender has とびだすハバネロ → 100% Burn (
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let drift = if outcomes[0].0 > 1.0 { outcomes[0].0 - 1.0 } else { 1.0 - outcomes[0].0 }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -167,7 +167,7 @@ test "contact_proc_fanout: fire-type attacker is immune to burn proc" {
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // Fire types ignore Burn → no fanout, just (1.0, state)
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
 }
 
 ///|
@@ -180,7 +180,7 @@ test "contact_proc_fanout: defender has no proc ability/item → no fanout" {
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
 }
 
 ///|
@@ -228,7 +228,7 @@ test "contact_proc_fanout: skill-link 5-hit contact move → P(burn)=1-0.7^5" {
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="2")
+  @debug.debug_inspect(outcomes.length(), content="2")
   // outcomes[0] は no-proc, outcomes[1] が burn 状態。
   let q5 = 0.7 * 0.7 * 0.7 * 0.7 * 0.7
   let expected_burn = 1.0 - q5
@@ -254,7 +254,7 @@ test "contact_proc_fanout: ほうし produces 4 leaves (no-status / poison / par
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // [no-status, poison, paralyze, sleep] = 4 leaves
-  inspect(outcomes.length(), content="4")
+  @debug.debug_inspect(outcomes.length(), content="4")
   let mut p_sum = 0.0
   for i = 0; i < outcomes.length(); i = i + 1 {
     p_sum = p_sum + outcomes[i].0
@@ -280,7 +280,7 @@ test "contact_proc_fanout: ほうし vs poison-immune attacker keeps paralyze an
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // poison が immune fizzle するので [no-status, paralyze, sleep] の 3 leaves。
-  inspect(outcomes.length(), content="3")
+  @debug.debug_inspect(outcomes.length(), content="3")
   let mut p_sum = 0.0
   for i = 0; i < outcomes.length(); i = i + 1 {
     p_sum = p_sum + outcomes[i].0
@@ -310,7 +310,7 @@ test "contact_proc_fanout: ほうし × Skill-Link 5hit + poison-immune attacker
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // poison fizzle で [no-status, paralyze, sleep] の 3 leaves。
-  inspect(outcomes.length(), content="3")
+  @debug.debug_inspect(outcomes.length(), content="3")
   let mut p_sum = 0.0
   for i = 0; i < outcomes.length(); i = i + 1 {
     p_sum = p_sum + outcomes[i].0
@@ -355,7 +355,7 @@ test "contact_proc_fanout: mega-form attacker uses post-mega ability (Skill Link
     cp_state_attacker_megaed(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // Skill Link 5-hit → 単一 viable kind なので [no-status, burn] の 2 leaves。
-  inspect(outcomes.length(), content="2")
+  @debug.debug_inspect(outcomes.length(), content="2")
   let q5 = 0.7 * 0.7 * 0.7 * 0.7 * 0.7
   assert_true(approx_eq_cp(outcomes[0].0, q5))
   assert_true(approx_eq_cp(outcomes[1].0, 1.0 - q5))
@@ -378,7 +378,7 @@ test "contact_proc_fanout: non-mega attacker w/ pre-mega ability stays at base d
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="2")
+  @debug.debug_inspect(outcomes.length(), content="2")
   // Σ_n prob(n) × 0.7^n = 0.375×0.49 + 0.375×0.343 + 0.125×0.2401 + 0.125×0.16807
   //   ≈ 0.1838 + 0.1286 + 0.0300 + 0.0210 ≈ 0.3635
   let exp_no = 0.375 * 0.49 +
@@ -412,7 +412,7 @@ test "contact_proc_fanout: ability + item resolve sequentially per hit" {
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // [no-status (mass 0), paralyze, burn] = 3 leaves.
-  inspect(outcomes.length(), content="3")
+  @debug.debug_inspect(outcomes.length(), content="3")
   let mut p_sum = 0.0
   for i = 0; i < outcomes.length(); i = i + 1 {
     p_sum = p_sum + outcomes[i].0
@@ -443,7 +443,7 @@ test "contact_proc_fanout: ability + item with same kind collapse to one leaf" {
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // Single-kind 100% proc → fanout collapses to one leaf.
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
 
@@ -466,7 +466,7 @@ test "contact_proc_fanout: ability + item with attacker immune to one branch" {
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // Single viable kind (burn @100%) → 1 leaf via the deterministic fast path.
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
 
@@ -487,7 +487,7 @@ test "contact_proc_fanout: type-immune contact move suppresses fanout" {
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // 完全に immune なので fanout が起きず (1.0, state) の 1 leaf のみ。
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
 
@@ -515,7 +515,7 @@ test "contact_proc_fanout: ability-immune contact move suppresses fanout" {
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
 
@@ -539,7 +539,7 @@ test "contact_proc_fanout: フェアリースキン Normal contact vs Ghost stil
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
   // 30% burn × 1 hit → (0.7, no status) + (0.3, burn) の 2 leaves。
-  inspect(outcomes.length(), content="2")
+  @debug.debug_inspect(outcomes.length(), content="2")
   assert_true(approx_eq_cp(outcomes[0].0, 0.7))
   assert_true(approx_eq_cp(outcomes[1].0, 0.3))
 }
@@ -565,6 +565,6 @@ test "contact_proc_fanout: エレキスキン Normal contact vs ひらいしん 
   let outcomes = apply_contact_proc_fanout(
     cp_state(), true, 0, 0, attacker_team, defender_team, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }

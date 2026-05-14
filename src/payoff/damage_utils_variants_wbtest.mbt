@@ -98,9 +98,9 @@ test "expected_damage_variants: single hit move yields one (1.0, mean) pair" {
   let mv = dvt_move("じしん")
   let r = @damage.calc_damage(dvt_input(atk, dfn, mv))
   let pairs = expected_damage_variants(r)
-  inspect(pairs.length(), content="1")
+  @debug.debug_inspect(pairs.length(), content="1")
   let drift = if pairs[0].0 > 1.0 { pairs[0].0 - 1.0 } else { 1.0 - pairs[0].0 }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -110,13 +110,13 @@ test "expected_damage_variants: triple-axel yields 3 variants summing to 1.0" {
   let mv = dvt_move("トリプルアクセル")
   let r = @damage.calc_damage(dvt_input(atk, dfn, mv))
   let pairs = expected_damage_variants(r)
-  inspect(pairs.length(), content="3")
+  @debug.debug_inspect(pairs.length(), content="3")
   let mut s = 0.0
   for i = 0; i < pairs.length(); i = i + 1 {
     s = s + pairs[i].0
   }
   let drift = if s > 1.0 { s - 1.0 } else { 1.0 - s }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -126,13 +126,13 @@ test "expected_damage_variants: random 2-5 hit yields 4 variants summing to 1.0"
   let mv = dvt_move("みだれづき")
   let r = @damage.calc_damage(dvt_input(atk, dfn, mv))
   let pairs = expected_damage_variants(r)
-  inspect(pairs.length(), content="4")
+  @debug.debug_inspect(pairs.length(), content="4")
   let mut s = 0.0
   for i = 0; i < pairs.length(); i = i + 1 {
     s = s + pairs[i].0
   }
   let drift = if s > 1.0 { s - 1.0 } else { 1.0 - s }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -145,7 +145,7 @@ test "expected_damage: probability-weighted mean equals avg over single variant"
   let avg = avg_damage(r)
   let drift = if exp > avg { exp - avg } else { avg - exp }
   // Should be exactly equal modulo float bit drift (single variant collapses).
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -162,7 +162,7 @@ test "expected_damage: triple-axel weighted mean uses 0.81 weight on hits=3" {
     manual = manual + pairs[i].0 * pairs[i].1
   }
   let drift = if exp > manual { exp - manual } else { manual - exp }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -172,9 +172,9 @@ test "expected_damage: Skill Link + 2-5 hit collapses to single variant" {
   let mv = dvt_move("みだれづき")
   let r = @damage.calc_damage(dvt_input(atk, dfn, mv, atk_ability="スキルリンク"))
   let pairs = expected_damage_variants(r)
-  inspect(pairs.length(), content="1")
+  @debug.debug_inspect(pairs.length(), content="1")
   let drift = if pairs[0].0 > 1.0 { pairs[0].0 - 1.0 } else { 1.0 - pairs[0].0 }
-  inspect(drift < 1.0e-9, content="true")
+  assert_true(drift < 1.0e-9)
 }
 
 ///|
@@ -187,5 +187,5 @@ test "expected_damage_variants: immune matchup collapses to (1.0, 0.0)" {
   // the immune_result code path covered by hit_step_property_test.
   let _ = atk
   // Smoke: passing through the helpers shouldn't crash on edge inputs.
-  inspect(true, content="true")
+  assert_true(true)
 }

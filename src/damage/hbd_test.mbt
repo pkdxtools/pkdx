@@ -79,7 +79,7 @@ test "optimize_hbd: fixed S=252 reserves budget" {
     default_weights(),
   )
   let c = result.candidates[0]
-  inspect(c.evs[5], content="252")
+  @debug.debug_inspect(c.evs[5], content="252")
   let hbd_total = c.evs[0] + c.evs[2] + c.evs[4]
   assert_true(hbd_total <= 256) // 508 - 252
 }
@@ -96,7 +96,7 @@ test "optimize_hbd: HpSnap::Leftovers → H ≡ 1 (mod 16)" {
     default_weights(),
   )
   let c = result.candidates[0]
-  inspect(c.hp % 16, content="1")
+  @debug.debug_inspect(c.hp % 16, content="1")
 }
 
 ///|
@@ -111,7 +111,7 @@ test "optimize_hbd: HpSnap::Residual → H ≡ 15 (mod 16)" {
     default_weights(),
   )
   let c = result.candidates[0]
-  inspect(c.hp % 16, content="15")
+  @debug.debug_inspect(c.hp % 16, content="15")
 }
 
 ///|
@@ -158,7 +158,7 @@ test "optimize_hbd_topn: n=5 returns 5 candidates in descending order" {
     default_weights(),
     5,
   )
-  inspect(result.candidates.length(), content="5")
+  @debug.debug_inspect(result.candidates.length(), content="5")
   // Descending scores
   for i = 1; i < result.candidates.length(); i = i + 1 {
     assert_true(result.candidates[i - 1].score >= result.candidates[i].score)
@@ -318,7 +318,7 @@ test "optimize_hbd_champions: fixed S=32 reserves budget" {
     default_weights(),
   )
   let c = result.candidates[0]
-  inspect(c.evs[5], content="32")
+  @debug.debug_inspect(c.evs[5], content="32")
   let hbd_total = c.evs[0] + c.evs[2] + c.evs[4]
   assert_true(hbd_total <= 34) // 66 - 32
 }
@@ -360,5 +360,5 @@ test "optimize_hbd_champions: HpSnap::Leftovers" {
     default_weights(),
   )
   let c = result.candidates[0]
-  inspect(c.hp % 16, content="1")
+  @debug.debug_inspect(c.hp % 16, content="1")
 }

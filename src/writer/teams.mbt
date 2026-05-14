@@ -524,7 +524,7 @@ pub fn build_team_document(
   // 「vs 相手」カードを emit (既存 meta.json 取り込み向け)。
   let plans = json_array(json, "matchup_plans")
   let has_new = primary_blocks.length() > 0 || alternate_blocks.length() > 0
-  if not(has_new) && plans.length() > 0 {
+  if !(has_new) && plans.length() > 0 {
     blocks.push(heading(2, "選出パターン"))
     blocks.push_iter(build_matchup_plans(plans, battle_format).iter())
   }
@@ -642,7 +642,7 @@ fn yaml_string_array(items : Array[String]) -> String {
   buf.write_char('[')
   let mut first = true
   for item in items {
-    if not(first) {
+    if !(first) {
       buf.write_string(", ")
     }
     first = false

@@ -16,7 +16,7 @@ pub(all) struct HitStep {
   def_stage_after : Int
   contact : Bool
   event : StatusKind?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A probabilistic outcome of a multi-hit move. `probability` is the chance
@@ -39,7 +39,7 @@ pub(all) struct DamageVariant {
   min : Int
   max : Int
   ko_text : String
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct DamageCalcResult {
@@ -62,4 +62,4 @@ pub(all) struct DamageCalcResult {
   // The legacy fields (damages, hits_dealt, min_damage, max_damage, ko_text)
   // are derived from the most-likely variant for backward compatibility.
   variants : Array[DamageVariant]
-} derive(Show)
+} derive(Debug)

@@ -9,14 +9,17 @@ import {
   "pkdxtools/pkdx/src/db" @db,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/random" @random,
-  "moonbitlang/core/strconv" @strconv,
+  "moonbitlang/core/string" @string,
   "moonbitlang/core/hashmap" @hashmap,
   "moonbitlang/x/sys" @sys,
+  "moonbitlang/core/debug" @debug,
 }
 
 import {
   "moonbitlang/core/math" @math,
 } for "test"
+
+supported_targets = "native"
 
 // macOS-only default below is also passed at `moon build` time because
 // src/main depends on this package, so non-macOS local builds must rewrite
@@ -25,5 +28,4 @@ import {
 // real BLAS symbols. See nash/moon.pkg for the full rationale.
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
-  "supported-targets": "native",
 )

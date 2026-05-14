@@ -106,14 +106,16 @@ test "disguise active + ばけのかわ → all damages zero and disguise_blocke
   let mv = dg_move("たいあたり", "ノーマル", @model.Physical, 40)
   let inp = dg_input(atk, dfn, mv, def_ability="ばけのかわ", disguise_active=true)
   let r = calc_damage(inp)
-  inspect(r.disguise_blocked, content="true")
-  inspect(r.max_damage, content="0")
-  inspect(r.min_damage, content="0")
-  inspect(r.damages[0], content="0")
-  inspect(r.damages[15], content="0")
-  inspect(r.ko_text, content="けがわブロック")
+  assert_true(r.disguise_blocked)
+  @debug.debug_inspect(r.max_damage, content="0")
+  @debug.debug_inspect(r.min_damage, content="0")
+  @debug.debug_inspect(r.damages[0], content="0")
+  @debug.debug_inspect(r.damages[15], content="0")
+  @debug.debug_inspect(r.ko_text, content=(
+    #|"けがわブロック"
+  ))
   // is_immune stays false — disguise is a state transition, not type immunity.
-  inspect(r.is_immune, content="false")
+  assert_true(!(r.is_immune))
 }
 
 ///|
@@ -125,7 +127,7 @@ test "disguise inactive + ばけのかわ → damage as usual" {
   let mv = dg_move("たいあたり", "ノーマル", @model.Physical, 40)
   let inp = dg_input(atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false)
   let r = calc_damage(inp)
-  inspect(r.disguise_blocked, content="false")
+  assert_true(!(r.disguise_blocked))
   assert_true(r.max_damage > 0)
 }
 
@@ -137,6 +139,6 @@ test "disguise active + other ability → damage as usual (no spurious block)" {
   let inp = dg_input(atk, dfn, mv, def_ability="いかく", disguise_active=true)
   let r = calc_damage(inp)
   // disguise_active alone shouldn't trigger the block — only ばけのかわ does.
-  inspect(r.disguise_blocked, content="false")
+  assert_true(!(r.disguise_blocked))
   assert_true(r.max_damage > 0)
 }

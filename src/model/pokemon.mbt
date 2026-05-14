@@ -23,7 +23,7 @@ pub(all) struct Pokemon {
   // 空配列。SKILL が「原種→forms[]→特化名で再query」の発見フローで使う。
   // JSON 出力時は空配列ならキーごと省略される (pokemon_to_json 参照)。
   forms : Array[String]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// メガ進化後の差分を保持する。HP は進化で変化しないため含めない
@@ -38,4 +38,4 @@ pub(all) struct MegaForm {
   type2 : String
   ability : String
   name_ja : String
-} derive(Show, Eq)
+} derive(Debug, Eq)

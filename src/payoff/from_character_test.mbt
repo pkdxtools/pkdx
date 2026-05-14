@@ -16,7 +16,7 @@ test "from_characters_empty_list_errors" {
   ) catch {
     err => Err(err)
   }
-  inspect(res, content="Err(EmptyCharacters)")
+  assert_true(res is Err(EmptyCharacters))
 }
 
 ///|

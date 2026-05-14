@@ -46,7 +46,7 @@ test "build_cache_key: determinism across repeated calls" {
   guard build_cache_key(input) is Ok(first) else { fail("unexpected Err") }
   for i = 0; i < 100; i = i + 1 {
     guard build_cache_key(input) is Ok(next) else { fail("unexpected Err") }
-    assert_eq(next, first)
+    @debug.assert_eq(next, first)
     let _ = i
   }
 }

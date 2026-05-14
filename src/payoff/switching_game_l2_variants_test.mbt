@@ -61,10 +61,10 @@ test "mean_damage_cached: L2 hit on Triple Axel returns the variants-weighted me
   let populate_cache = new_damage_cache(disk=Some(disk))
   let populate_value = l2v_mean(populate_cache, my_team, opp_team)
   assert_true(populate_cache.disk_misses > 0)
-  assert_eq(populate_cache.disk_hits, 0)
+  @debug.assert_eq(populate_cache.disk_hits, 0)
   // Sanity: the populate path returns the same scalar — both must reduce
   // through `r.variants[]`, not `r.damages`.
-  assert_eq(populate_value, baseline)
+  @debug.assert_eq(populate_value, baseline)
 
   // Read L2: brand-new in-memory cache so L1 cannot serve the lookup; the
   // SQLite file persists across DamageCache instances.
@@ -75,7 +75,7 @@ test "mean_damage_cached: L2 hit on Triple Axel returns the variants-weighted me
   // `damages` field, so this would equal the 3-hit-only mean — distinct
   // from the variants-weighted baseline. Equality here is the regression
   // guard.
-  assert_eq(read_value, baseline)
+  @debug.assert_eq(read_value, baseline)
 
   @damage_cache.close(disk)
   let _ = @db.unlink_file(path)
@@ -116,7 +116,7 @@ test "mean_damage_cached: L2 hit on Random2to5 returns the variants-weighted mea
   let read_cache = new_damage_cache(disk=Some(disk))
   let read_value = l2v_mean(read_cache, my_team, opp_team)
   assert_true(read_cache.disk_hits > 0)
-  assert_eq(read_value, baseline)
+  @debug.assert_eq(read_value, baseline)
 
   @damage_cache.close(disk)
   let _ = @db.unlink_file(path)

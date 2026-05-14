@@ -14,9 +14,11 @@ import {
   "mizchi/admiral",
   "moonbitlang/core/json",
   "moonbitlang/x/sys",
+  "moonbitlang/core/debug" @debug,
 }
+
+supported_targets = "native"
 
 options(
   "is-main": true,
-  "supported-targets": "native",
 )

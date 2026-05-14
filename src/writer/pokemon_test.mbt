@@ -29,7 +29,7 @@ test "build_pokemon_document: deterministic output" {
   let md = @markdown.serialize(doc)
   let doc2 = build_pokemon_document(json, "ガブリアス")
   let md2 = @markdown.serialize(doc2)
-  assert_eq(md, md2)
+  @debug.assert_eq(md, md2)
   assert_true(md.contains("# ガブリアス 育成データ"))
   assert_true(md.contains("## 基本情報"))
   assert_true(md.contains("| ポケモン | ガブリアス |"))

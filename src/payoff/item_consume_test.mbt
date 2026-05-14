@@ -120,12 +120,12 @@ test "resist_berry: オッカのみ vs ほのお SE → consume (HP unchanged)" 
   let outcomes = apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (p, s) = outcomes[0]
   let drift = if p > 1.0 { p - 1.0 } else { 1.0 - p }
-  inspect(drift < 1.0e-9, content="true")
-  inspect(s.opp_hps[0], content="150")
-  inspect(s.opp_item_consumed[0], content="true")
+  assert_true(drift < 1.0e-9)
+  @debug.debug_inspect(s.opp_hps[0], content="150")
+  assert_true(s.opp_item_consumed[0])
 }
 
 ///|
@@ -140,10 +140,10 @@ test "resist_berry: オッカのみ vs ほのお non-SE (くさ resists) → no 
   let outcomes = apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="100")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="100")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -158,9 +158,9 @@ test "resist_berry: オッカのみ already consumed → no refund" {
   let outcomes = apply_item_pre_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="100")
+  @debug.debug_inspect(s.opp_hps[0], content="100")
 }
 
 ///|
@@ -174,9 +174,9 @@ test "resist_berry: defender holds no resist berry → no trigger" {
   let outcomes = apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="100")
+  @debug.debug_inspect(s.opp_hps[0], content="100")
 }
 
 // ─── consume_on_hit: きあいのタスキ ──────────────────────────────────────
@@ -195,10 +195,10 @@ test "focus_sash: full HP → KO 級 → HP=1 + consume" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="1")
-  inspect(s.opp_item_consumed[0], content="true")
+  @debug.debug_inspect(s.opp_hps[0], content="1")
+  assert_true(s.opp_item_consumed[0])
 }
 
 ///|
@@ -214,10 +214,10 @@ test "focus_sash: not at full HP → no trigger (still KO)" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="0")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -232,9 +232,9 @@ test "focus_sash: already consumed → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="0")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
 }
 
 // ─── hp_threshold: フィラのみ ──────────────────────────────────────────────
@@ -253,10 +253,10 @@ test "fila_berry: post HP <= max/2 → +max/3 heal + consume" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="146")
-  inspect(s.opp_item_consumed[0], content="true")
+  @debug.debug_inspect(s.opp_hps[0], content="146")
+  assert_true(s.opp_item_consumed[0])
 }
 
 ///|
@@ -271,10 +271,10 @@ test "fila_berry: post HP > max/2 → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 180, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="120")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="120")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -289,10 +289,10 @@ test "fila_berry: KO hit (HP=0) → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="0")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -310,10 +310,10 @@ test "fila_berry: zero-damage hit on already-low HP → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="80")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="80")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -331,10 +331,10 @@ test "fila_berry: damage that does not cross threshold → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="80")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="80")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 // ─── hp_threshold: オボンのみ ──────────────────────────────────────────────
@@ -353,10 +353,10 @@ test "sitrus_berry: post HP <= max/2 → +max/4 heal + consume" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="130")
-  inspect(s.opp_item_consumed[0], content="true")
+  @debug.debug_inspect(s.opp_hps[0], content="130")
+  assert_true(s.opp_item_consumed[0])
 }
 
 ///|
@@ -370,10 +370,10 @@ test "sitrus_berry: KO hit (HP=0) → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="0")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -389,10 +389,10 @@ test "sitrus_berry: damage that does not cross threshold → no trigger" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="80")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="80")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 // ─── probability mass conservation ─────────────────────────────────────────
@@ -415,7 +415,7 @@ test "probability mass: pre + post fanouts both sum to 1.0" {
     pre_sum = pre_sum + pre_outs[i].0
   }
   let pre_drift = if pre_sum > 1.0 { pre_sum - 1.0 } else { 1.0 - pre_sum }
-  inspect(pre_drift < 1.0e-9, content="true")
+  assert_true(pre_drift < 1.0e-9)
   let post_outs = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
@@ -424,7 +424,7 @@ test "probability mass: pre + post fanouts both sum to 1.0" {
     post_sum = post_sum + post_outs[i].0
   }
   let post_drift = if post_sum > 1.0 { post_sum - 1.0 } else { 1.0 - post_sum }
-  inspect(post_drift < 1.0e-9, content="true")
+  assert_true(post_drift < 1.0e-9)
 }
 
 // ─── PR feedback regressions (multi-hit + skin/weather rewrite + sash) ───
@@ -444,10 +444,10 @@ test "focus_sash: multi-hit KO does not save the defender" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="0")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -467,10 +467,10 @@ test "focus_sash: ParentalBond multi-hit KO does not save the defender" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="0")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -495,9 +495,9 @@ test "resist_berry: フェアリースキン Normal move triggers ロゼルの�
   let outcomes = apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_item_consumed[0], content="true")
+  assert_true(s.opp_item_consumed[0])
 }
 
 ///|
@@ -518,9 +518,9 @@ test "resist_berry: ホズのみ triggers on neutral Normal hit" {
   let outcomes = apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_item_consumed[0], content="true")
+  assert_true(s.opp_item_consumed[0])
 }
 
 // ─── #101 fix-on-fix: mega-aware fanout regressions ────────────────────────
@@ -559,9 +559,9 @@ test "resist_berry: mega-form フェアリースキン rewrites Normal → consu
   let outcomes = apply_item_pre_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_item_consumed[0], content="true")
+  assert_true(s.opp_item_consumed[0])
 }
 
 ///|
@@ -594,9 +594,9 @@ test "resist_berry: non-mega attacker w/ pre-mega Skin ability → no consume" {
   let outcomes = apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_item_consumed[0], content="false")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -632,11 +632,11 @@ test "focus_sash: mega-form おやこあい → no rescue on aggregate KO" {
   let outcomes = apply_item_post_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   // multi-hit と判定され Sash が gating されるので HP=0 のまま、consumed=false。
-  inspect(s.opp_hps[0], content="0")
-  inspect(s.opp_item_consumed[0], content="false")
+  @debug.debug_inspect(s.opp_hps[0], content="0")
+  assert_true(!(s.opp_item_consumed[0]))
 }
 
 ///|
@@ -669,8 +669,8 @@ test "focus_sash: non-mega base ability single move → Sash rescues to 1 HP" {
   let outcomes = apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
-  inspect(outcomes.length(), content="1")
+  @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  inspect(s.opp_hps[0], content="1")
-  inspect(s.opp_item_consumed[0], content="true")
+  @debug.debug_inspect(s.opp_hps[0], content="1")
+  assert_true(s.opp_item_consumed[0])
 }

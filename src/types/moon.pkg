@@ -1,3 +1,5 @@
-options(
-  "supported-targets": "native",
-)
+import {
+  "moonbitlang/core/debug" @debug,
+} for "test"
+
+supported_targets = "native"

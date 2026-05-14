@@ -19,7 +19,7 @@ pub enum PokemonType {
   Dark
   Steel
   Fairy
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// All 18 types in order.

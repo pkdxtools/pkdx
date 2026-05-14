@@ -144,7 +144,7 @@ fn asv_distinct_opp_hps(leaves : Array[(Double, SwitchingGameState)]) -> Int {
         break
       }
     }
-    if not(found) {
+    if !(found) {
       seen.push(hp)
     }
   }
@@ -291,7 +291,7 @@ test "Phase 2-E-5: SwitchingGameState cache key shape unchanged" {
     state, UseMove(0), UseMove(0), [attacker], [defender], new_damage_cache(),
   )
   // 各 leaf を HashMap に入れて Hash collision 無く 3 distinct entries あること
-  let map : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap::new()
+  let map : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   for i = 0; i < leaves.length(); i = i + 1 {
     let (p, s) = leaves[i]
     match map.get(s) {

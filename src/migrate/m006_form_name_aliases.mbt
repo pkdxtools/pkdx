@@ -239,7 +239,7 @@ fn count_diff(
       } else {
         match rows[0].get(0) {
           Some(Some(s)) => {
-            let n = try @strconv.parse_int(s) catch {
+            let n = try @string.parse_int(s) catch {
               _ => 0
             }
             Ok(n)
@@ -328,16 +328,16 @@ fn strip_noise_suffix(form : String) -> String {
   let nosugata = "のすがた"
   let forumu = "フォルム"
   if ends_with(s, nosugata) {
-    s = s[0:s.length() - nosugata.length()].to_string()
+    s = s[0:s.length() - nosugata.length()].to_owned()
   } else if ends_with(s, forumu) {
-    s = s[0:s.length() - forumu.length()].to_string()
+    s = s[0:s.length() - forumu.length()].to_owned()
   } else {
     // " Form" / " Forme" / "Form" / "Forme" (ケース非依存)
     s = strip_trailing_form(s)
   }
   // 末尾空白除去
   while s.length() > 0 && s[s.length() - 1] == ' ' {
-    s = s[0:s.length() - 1].to_string()
+    s = s[0:s.length() - 1].to_owned()
   }
   s
 }
@@ -362,7 +362,7 @@ fn strip_trailing_form(s : String) -> String {
   let variants = ["Forme", "Form", " Forme", " Form"]
   for v in variants {
     if ends_with_ci(s, v) {
-      return s[0:s.length() - v.length()].to_string()
+      return s[0:s.length() - v.length()].to_owned()
     }
   }
   s

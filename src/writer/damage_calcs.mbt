@@ -165,10 +165,10 @@ pub fn validate_attach_team_path(path : String) -> Result[Unit, String] {
   }
   let under_box = path.has_prefix("box/teams/") ||
     path.has_prefix("./box/teams/")
-  if not(under_box) {
+  if !(under_box) {
     return Err("path must be under box/teams/")
   }
-  if not(path.has_suffix(".meta.json")) {
+  if !(path.has_suffix(".meta.json")) {
     return Err("path must end in .meta.json")
   }
   Ok(())

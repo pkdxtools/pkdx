@@ -7,17 +7,17 @@
 ///|
 test "seed_to_bytes_encodes_uint64_little_endian_with_zero_padding" {
   let b = seed_to_bytes(0x0102030405060708UL)
-  assert_eq(b.length(), 32)
-  assert_eq(b[0], b'\x08')
-  assert_eq(b[1], b'\x07')
-  assert_eq(b[2], b'\x06')
-  assert_eq(b[3], b'\x05')
-  assert_eq(b[4], b'\x04')
-  assert_eq(b[5], b'\x03')
-  assert_eq(b[6], b'\x02')
-  assert_eq(b[7], b'\x01')
+  @debug.assert_eq(b.length(), 32)
+  @debug.assert_eq(b[0], b'\x08')
+  @debug.assert_eq(b[1], b'\x07')
+  @debug.assert_eq(b[2], b'\x06')
+  @debug.assert_eq(b[3], b'\x05')
+  @debug.assert_eq(b[4], b'\x04')
+  @debug.assert_eq(b[5], b'\x03')
+  @debug.assert_eq(b[6], b'\x02')
+  @debug.assert_eq(b[7], b'\x01')
   for i in 8..<32 {
-    assert_eq(b[i], b'\x00')
+    @debug.assert_eq(b[i], b'\x00')
   }
 }
 
@@ -33,7 +33,7 @@ test "seeded_rng_same_seed_same_int_sequence" {
   let rng1 = seeded_rng(42UL)
   let rng2 = seeded_rng(42UL)
   for _ in 0..<16 {
-    assert_eq(rng1.int(limit=16), rng2.int(limit=16))
+    @debug.assert_eq(rng1.int(limit=16), rng2.int(limit=16))
   }
 }
 
@@ -74,7 +74,7 @@ test "pick_best_move_selects_highest_average_damage_and_excludes_power_zero" {
     [mk_move("anything", "ノーマル", @model.Physical, 80)],
   )
   match pick_best_move(atk, dfn) {
-    Some(idx) => assert_eq(idx, 2)
+    Some(idx) => @debug.assert_eq(idx, 2)
     None => assert_true(false)
   }
 }
@@ -123,7 +123,7 @@ test "rollout_pick_move_epsilon_zero_always_picks_greedy_damaging_move" {
   let rng = seeded_rng(456UL)
   for _ in 0..<20 {
     match rollout_pick_move(atk, dfn, rng, 0.0) {
-      Some(i) => assert_eq(i, 2)
+      Some(i) => @debug.assert_eq(i, 2)
       None => assert_true(false)
     }
   }

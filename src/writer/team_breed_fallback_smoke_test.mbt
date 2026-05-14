@@ -35,7 +35,7 @@ test "team_breed_fallback_smoke: breed build subtree feeds into team member" {
   let breed = @json.parse(breed_src)
 
   // まず breed 単体で validate が通ること。
-  inspect(validate_pokemon_json(breed), content="Ok(())")
+  {let _r = validate_pokemon_json(breed); assert_true(_r is Ok(_))}
 
   // breed の build に pokemon.name / types / base_stats を添えて member を合成。
   guard breed is Object(breed_root) else { fail("unexpected shape") }
@@ -76,5 +76,5 @@ test "team_breed_fallback_smoke: breed build subtree feeds into team member" {
   let team = @json.parse(team_src)
   guard team is Object(team_root) else { fail("team parse failed") }
   team_root["members"] = [mem.to_json()].to_json()
-  inspect(validate_team_json(team.to_json()), content="Ok(())")
+  {let _r = validate_team_json(team.to_json()); assert_true(_r is Ok(_))}
 }

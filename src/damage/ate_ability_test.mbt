@@ -24,10 +24,12 @@ test "ate skin: フェアリースキン on ハイパーボイス matches Showdo
     is_double=true,
   )
   let r = calc_damage(inp)
-  inspect(r.is_immune, content="false")
-  inspect(r.min_damage, content="138")
-  inspect(r.max_damage, content="164")
-  inspect(r.ko_text, content="確定2発")
+  assert_true(!(r.is_immune))
+  @debug.debug_inspect(r.min_damage, content="138")
+  @debug.debug_inspect(r.max_damage, content="164")
+  @debug.debug_inspect(r.ko_text, content=(
+    #|"確定2発"
+  ))
 }
 
 ///|
@@ -48,9 +50,11 @@ test "ate skin: フェアリースキン crit on ハイパーボイス matches S
     critical=true,
   )
   let r = calc_damage(inp)
-  inspect(r.min_damage, content="206")
-  inspect(r.max_damage, content="246")
-  inspect(r.ko_text, content="確定1発")
+  @debug.debug_inspect(r.min_damage, content="206")
+  @debug.debug_inspect(r.max_damage, content="246")
+  @debug.debug_inspect(r.ko_text, content=(
+    #|"確定1発"
+  ))
 }
 
 ///|

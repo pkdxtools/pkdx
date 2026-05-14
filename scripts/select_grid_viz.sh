@@ -4,12 +4,13 @@
 # Reads JSON Lines on stdin (one event per line) and renders progress in one
 # of two modes:
 #
-# - **TTY mode** (stdout is a terminal): draws a fixed grid of cells, updates
-#   the cell at (row, col) on each `cell_start` event, and tags it as done
-#   when the next cell_start arrives or the phase ends. Phases are colour-
-#   coded so screening fill (cyan) and dp-refine fill (magenta) remain
-#   distinguishable. The current in-progress cell is rendered as `o` in
-#   yellow, completed cells as `#`. ASCII glyphs are used deliberately:
+# - **TTY mode** (stdout is a terminal): draws a fixed grid of cells. Each
+#   `cell_start` paints `o` (yellow) at (row, col); each `cell_done` paints
+#   `#` (phase-coloured) at (row, col). Painting is order-independent so the
+#   parallel `pkdx select --parallel=N` shards can interleave cell events
+#   without breaking the grid — every cell carries its own coordinates and
+#   does not depend on previous-cell state. Phase colour comes from the
+#   most recent `phase_start`. ASCII glyphs are used deliberately:
 #   East Asian / CJK locales render box-drawing characters (▢ / ■ / ·) as
 #   width 2, which breaks the column alignment of the 60×60 grid because
 #   the cursor-move (`paint`) is column-indexed under width-1 assumption.
@@ -53,7 +54,10 @@ if [ "$MODE" = tty ]; then
       printf "\n"
     }
     fflush()
-    prev_row = -1; prev_col = -1
+    # Per-cell state map. Keys are "r,c" strings, values "prog" / "done".
+    # Used by phase_end sanity sweep to upgrade any still-in-progress cells
+    # (e.g. a child that crashed between cell_start and cell_done).
+    delete grid
     current_phase = ""
   }
 
@@ -94,10 +98,19 @@ if [ "$MODE" = tty ]; then
     row = substr($0, RSTART + 6, RLENGTH - 6) + 0
     if (match($0, /"col":[0-9]+/) == 0) next
     col = substr($0, RSTART + 6, RLENGTH - 6) + 0
-
-    if (prev_row >= 0) paint(prev_row, prev_col, done_mark())
+    grid[row "," col] = "prog"
     paint(row, col, in_progress_mark())
-    prev_row = row; prev_col = col
+    fflush()
+    next
+  }
+
+  /"event":"cell_done"/ {
+    if (match($0, /"row":[0-9]+/) == 0) next
+    row = substr($0, RSTART + 6, RLENGTH - 6) + 0
+    if (match($0, /"col":[0-9]+/) == 0) next
+    col = substr($0, RSTART + 6, RLENGTH - 6) + 0
+    grid[row "," col] = "done"
+    paint(row, col, done_mark())
     fflush()
     next
   }
@@ -110,9 +123,15 @@ if [ "$MODE" = tty ]; then
   }
 
   /"event":"phase_end"/ {
-    if (prev_row >= 0) {
-      paint(prev_row, prev_col, done_mark())
-      prev_row = -1; prev_col = -1
+    # Sanity sweep: any cell still marked "prog" (e.g. shard crashed
+    # between cell_start and cell_done) is upgraded so the grid does not
+    # leave stray yellow `o`s after the phase boundary.
+    for (key in grid) {
+      if (grid[key] == "prog") {
+        split(key, idx, ",")
+        paint(idx[1] + 0, idx[2] + 0, done_mark())
+        grid[key] = "done"
+      }
     }
     status("Phase: " get_phase($0) " done")
     fflush()
@@ -125,7 +144,7 @@ else
   # consumers where in-place updates would be noise.
   awk '
   BEGIN {
-    current_phase = ""; cell_count = 0
+    current_phase = ""; done_count = 0
     saddle = 0; nash = 0; pruned = 0
     max_depth = 0; samples = 0
   }
@@ -146,7 +165,7 @@ else
 
   /"event":"phase_start"/ {
     ph = get_phase($0); total = get_total($0)
-    current_phase = ph; cell_count = 0
+    current_phase = ph; done_count = 0
     saddle = 0; nash = 0; pruned = 0; max_depth = 0; samples = 0
     if (total > 0) printf "[viz] phase %s start (cells=%d)\n", ph, total
     else           printf "[viz] phase %s start\n", ph
@@ -154,7 +173,7 @@ else
     next
   }
 
-  /"event":"cell_start"/ { cell_count = cell_count + 1; next }
+  /"event":"cell_done"/ { done_count = done_count + 1; next }
 
   /"event":"dp_node"/ {
     samples = samples + 1
@@ -174,8 +193,8 @@ else
   /"event":"phase_end"/ {
     ph = get_phase($0)
     parts = ""
-    if (cell_count > 0) {
-      parts = "cells=" cell_count
+    if (done_count > 0) {
+      parts = "cells=" done_count
     }
     if (samples > 0) {
       sep = (parts == "") ? "" : " | "

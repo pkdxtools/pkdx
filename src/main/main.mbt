@@ -16,7 +16,7 @@ fn main {
     app.run(argv=Some(argv))
   } catch {
     err => {
-      pkdx_eprintln(@db.to_c_bytes("Error: " + err.to_string()))
+      pkdx_eprintln(@db.to_c_bytes("Error: " + @debug.to_string(err)))
       pkdx_exit(1)
     }
   }
@@ -338,12 +338,12 @@ fn cmd_context() -> @admiral.CommandDef {
 struct BoxRegulation {
   version : String
   regulation : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn read_box_regulation_or_default() -> BoxRegulation {
   let path = box_regulation_path()
-  if not(@db.file_exists(path)) {
+  if !(@db.file_exists(path)) {
     return { version: "champions", regulation: "M-A" }
   }
   let raw = match @db.read_file(path) {
@@ -404,7 +404,7 @@ fn read_repo_pkdx_version() -> String {
     Some(p) => p
     None => "moon.mod.json"
   }
-  if not(@db.file_exists(path)) {
+  if !(@db.file_exists(path)) {
     return ""
   }
   let raw = match @db.read_file(path) {
@@ -432,7 +432,7 @@ fn count_champions_assets() -> (Int, Int) {
     Err(_) => return (0, 0)
   }
   let champions_path = resolve_champions_db_path_from(pokedex_path)
-  if not(@db.file_exists(champions_path)) {
+  if !(@db.file_exists(champions_path)) {
     return (0, 0)
   }
   let db = match @db.open_for(pokedex_path, "champions") {
@@ -863,7 +863,7 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
     Ok(v) => v
   }
   // valid_ids: pokemon_mapper の出力 id 集合 (= is_valid='1' で絞った後)
-  let valid_ids : Map[String, Bool] = Map::new()
+  let valid_ids : Map[String, Bool] = Map([])
   for i = 0; i < pokemons.length(); i = i + 1 {
     valid_ids[pokemons[i].id] = true
   }
@@ -1012,7 +1012,7 @@ fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Uni
     // Preserve the original content once (.bak 上書き防止) so the migration
     // is reversible for the user; subsequent runs become no-ops.
     let bak_path = in_path + ".bak"
-    if not(@db.file_exists(bak_path)) {
+    if !(@db.file_exists(bak_path)) {
       let rc_bak = pkdx_write_file(
         @db.to_c_bytes(bak_path),
         @db.to_c_bytes(raw),
@@ -1077,7 +1077,7 @@ fn run_migrate(repo_root : String) -> Unit {
   // Ensure champions.db exists — the runner refuses to open a missing
   // file. Bootstrap it lazily so first-time installs and existing
   // installs that pre-date the platform refactor both succeed.
-  if not(@db.file_exists(champions_path)) {
+  if !(@db.file_exists(champions_path)) {
     match @db.open_champions_rwc(champions_path) {
       Err(e) => {
         exit_error("failed to create champions.db at " + champions_path + ": " + e)
@@ -1648,7 +1648,7 @@ fn[T] with_db(f : (@db.Db) -> T, version~ : String = "") -> T {
   // 経路では呼び出さない (pokedex 側のテーブルは pokedex.* でアクセス可能)。
   let db = if version == "champions" {
     let champions_path = resolve_champions_db_path_from(db_path)
-    if not(@db.file_exists(champions_path)) {
+    if !(@db.file_exists(champions_path)) {
       println(
         "Error: champions.db not found at " +
         champions_path +
@@ -1827,7 +1827,7 @@ fn run_learners(
         // version=champions の DB はレギュレーション準拠サブセットそのもの
         // なので追加 filter 不要。他 version は --regulation を弾いている。
         let limited = if limit > 0 && results.length() > limit {
-          results[:limit].to_array()
+          results[:limit].to_owned()
         } else {
           results
         }
@@ -1969,7 +1969,7 @@ fn run_damage(
   // `--attach-team` もバイパス — attach 処理は DamageCalcInput / Result が
   // 必要で、cached JSON からは復元できないため、毎回 fresh に計算する。
   let use_cache = match format {
-    @cli.Json => not(no_cache) && attach_team.length() == 0
+    @cli.Json => !(no_cache) && attach_team.length() == 0
     _ => false
   }
   let cache_key_opt : String? = if use_cache {
@@ -2410,7 +2410,7 @@ fn run_write_teams(
       None => false
     }
   }
-  if not(skip_md) {
+  if !(skip_md) {
     let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
     if rc != 0 {
       exit_error("Failed to write " + md_path)
@@ -2869,14 +2869,14 @@ fn parse_double(s : String, default : Double) -> Double {
         result = result * 10.0 + d
       }
       has_digit = true
-    } else if c == 0x2E && not(in_frac) {
+    } else if c == 0x2E && !(in_frac) {
       in_frac = true
     } else {
       break
     }
     i = i + 1
   }
-  if not(has_digit) {
+  if !(has_digit) {
     return default
   }
   if negative {
@@ -2985,6 +2985,15 @@ fn format_progress_stderr(event : @payoff.ProgressEvent) -> String {
       format_int_array(team_sel) +
       " opp=" +
       format_int_array(opp_sel)
+    CellDone(team_sel, opp_sel, row, col) =>
+      "[progress] cell-done row=" +
+      row.to_string() +
+      " col=" +
+      col.to_string() +
+      " team=" +
+      format_int_array(team_sel) +
+      " opp=" +
+      format_int_array(opp_sel)
     DpNode(visited, hits, depth, rows, cols, outcomes, classification) =>
       "[progress] dp visited=" +
       visited.to_string() +
@@ -3030,7 +3039,7 @@ fn json_escape_string(s : String) -> String {
       let hex = "0123456789abcdef"
       let hi = (code >> 4) & 0xF
       let lo = code & 0xF
-      out = out + "\\u00" + hex[hi:hi + 1].to_string() + hex[lo:lo + 1].to_string()
+      out = out + "\\u00" + hex[hi:hi + 1].to_owned() + hex[lo:lo + 1].to_owned()
     } else {
       out = out + ch.to_string()
     }
@@ -3064,6 +3073,16 @@ fn format_progress_json(event : @payoff.ProgressEvent) -> String {
       "{\"event\":\"phase_end\",\"phase\":\"" + json_escape_string(name) + "\"}"
     CellStart(team_sel, opp_sel, row, col) =>
       "{\"event\":\"cell_start\",\"row\":" +
+      row.to_string() +
+      ",\"col\":" +
+      col.to_string() +
+      ",\"team_indices\":" +
+      format_int_array(team_sel) +
+      ",\"opp_indices\":" +
+      format_int_array(opp_sel) +
+      "}"
+    CellDone(team_sel, opp_sel, row, col) =>
+      "{\"event\":\"cell_done\",\"row\":" +
       row.to_string() +
       ",\"col\":" +
       col.to_string() +
@@ -3148,6 +3167,15 @@ fn cmd_select_shard_internal() -> @admiral.CommandDef {
         description="DP refine turn limit override (-1 = use input default)",
         default=Some(-1),
       ),
+      // Progress mode propagated from the parent. The orchestrator passes
+      // its own --progress value through so the shard emits matching
+      // JSON Lines (cell_start / cell_done) onto its inherited stderr,
+      // which surfaces as the parent's stderr stream for the grid viz.
+      @admiral.string(
+        "progress",
+        description="Progress emit mode: off|stderr|json (default: off)",
+        default=Some("off"),
+      ),
     ],
     run=Some(fn(ctx) { run_select_shard_cmd(ctx) }),
   )
@@ -3166,6 +3194,20 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
   let refine_tl_raw = ctx_int(ctx, "refine-turn-limit")
   let mc_override = if mc_tl_raw > 0 { Some(mc_tl_raw) } else { None }
   let refine_override = if refine_tl_raw > 0 { Some(refine_tl_raw) } else { None }
+  let mode = ctx_str(ctx, "progress")
+  let progress : (@payoff.ProgressEvent) -> Unit = match mode {
+    "off" => fn(_e) { () }
+    "stderr" => fn(e) {
+        pkdx_eprintln(@db.to_c_bytes(format_progress_stderr(e)))
+      }
+    "json" => fn(e) { pkdx_eprintln(@db.to_c_bytes(format_progress_json(e))) }
+    _ => {
+      exit_error(
+        "unknown --progress mode: " + mode + " (expected off|stderr|json)",
+      )
+      return
+    }
+  }
   try @payoff.run_select_shard(
     input_path,
     output_path,
@@ -3176,6 +3218,7 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
     col_keep,
     mc_turn_limit_override=mc_override,
     refine_turn_limit_override=refine_override,
+    progress~,
   ) catch {
     err => {
       exit_error(nash_cli_error_message(err))
@@ -3237,6 +3280,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
       progress~,
       dp_log_every~,
       parallel~,
+      child_progress_mode=mode,
     ) catch {
     err => {
       match disk {

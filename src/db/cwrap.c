@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 /* ---- UTF-8 -> UTF-16 conversion for Japanese text ---- */
 
@@ -576,7 +579,31 @@ void pkdx_exit(int32_t code) {
 
 MOONBIT_FFI_EXPORT
 void pkdx_eprintln(const uint8_t *msg) {
-    fprintf(stderr, "%s\n", (const char *)msg);
+    /* Build "<msg>\n" once and emit it in a single syscall so parallel
+     * `__select-shard` children (which inherit the parent's stderr) cannot
+     * interleave at sub-line granularity. POSIX `write(2)` is atomic for
+     * pipe writes up to PIPE_BUF (4096B on Linux, 512B on macOS). On
+     * Windows a single `WriteFile` on the inherited stderr handle is
+     * atomic for byte-mode pipes. `fprintf` cannot offer either guarantee
+     * because it pipes through stdio's internal buffer. */
+    const size_t in_len = strlen((const char *)msg);
+    const size_t total = in_len + 1;
+    char stack_buf[1024];
+    char *buf = (total <= sizeof(stack_buf)) ? stack_buf : (char *)malloc(total);
+    if (!buf) return;
+    memcpy(buf, msg, in_len);
+    buf[in_len] = '\n';
+#ifdef _WIN32
+    HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+    if (h != NULL && h != INVALID_HANDLE_VALUE) {
+        DWORD written;
+        WriteFile(h, buf, (DWORD)total, &written, NULL);
+    }
+#else
+    ssize_t n = write(STDERR_FILENO, buf, total);
+    (void)n;
+#endif
+    if (buf != stack_buf) free(buf);
 }
 
 /* 8 MiB is a safety cap for migration JSON inputs. LegendsZA.json is

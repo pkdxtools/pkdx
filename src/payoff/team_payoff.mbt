@@ -4,7 +4,7 @@
 pub(all) enum BattleFormat {
   Single
   Double
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn pick_count(format : BattleFormat) -> Int {
@@ -187,6 +187,7 @@ pub fn team_payoff_matrix_switching(
       row[j] = switching_game_winrate(
         picked_a, picked_b, turn_limit, disk~, progress~, dp_log_every~,
       )
+      progress(CellDone(sel_a[i], sel_b[j], i, j))
       progress(PhaseProgress("dp-full", i * size_b + j + 1, total))
     }
     data[i] = row

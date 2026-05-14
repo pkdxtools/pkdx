@@ -553,7 +553,7 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
   }
   match s.strip_prefix("switching_game:") {
     Some(rest) => {
-      let turn_limit = try @strconv.parse_int(rest.to_string()) catch {
+      let turn_limit = try @string.parse_int(rest.to_owned()) catch {
         _ =>
           raise InvalidJson(
             "switching_game turn_limit must be a positive integer",
@@ -569,7 +569,7 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
     None => ()
   }
   match s.strip_prefix("screened_switching_game:") {
-    Some(rest) => parse_screened_spec(rest.to_string())
+    Some(rest) => parse_screened_spec(rest.to_owned())
     None =>
       raise InvalidJson(
         "team_payoff_model must be 'switching_game' or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
@@ -583,34 +583,34 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
 /// `DP_TURN_LIMIT` is used. Enforces `trials > 0` and `0 < keep_top <= 1`.
 fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
   let (trials_str, after_trials) = match rest.split_once(":") {
-    Some((a, b)) => (a.to_string(), b.to_string())
+    Some((a, b)) => (a.to_owned(), b.to_owned())
     None =>
       raise InvalidJson(
         "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
   let (seed_str, keep_top_and_maybe_tl) = match after_trials.view().split_once(":") {
-    Some((a, b)) => (a.to_string(), b.to_string())
+    Some((a, b)) => (a.to_owned(), b.to_owned())
     None =>
       raise InvalidJson(
         "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
   let (keep_top_str, opt_tl_str) = match keep_top_and_maybe_tl.view().split_once(":") {
-    Some((a, b)) => (a.to_string(), Some(b.to_string()))
+    Some((a, b)) => (a.to_owned(), Some(b.to_owned()))
     None => (keep_top_and_maybe_tl, None)
   }
-  let trials = try @strconv.parse_int(trials_str) catch {
+  let trials = try @string.parse_int(trials_str) catch {
     _ =>
       raise InvalidJson("screened_switching_game trials must be a positive integer")
   }
   if trials <= 0 {
     raise InvalidJson("screened_switching_game trials must be a positive integer")
   }
-  let seed = try @strconv.parse_uint64(seed_str) catch {
+  let seed = try @string.parse_uint64(seed_str) catch {
     _ => raise InvalidJson("screened_switching_game seed must be a UInt64 literal")
   }
-  let keep_top = try @strconv.parse_double(keep_top_str) catch {
+  let keep_top = try @string.parse_double(keep_top_str) catch {
     _ =>
       raise InvalidJson(
         "screened_switching_game keep_top_quantile must be a number in (0, 1]",
@@ -623,7 +623,7 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
   }
   let refine_tl = match opt_tl_str {
     Some(s) => {
-      let tl = try @strconv.parse_int(s) catch {
+      let tl = try @string.parse_int(s) catch {
         _ =>
           raise InvalidJson(
             "screened_switching_game turn_limit must be a positive integer",
@@ -673,7 +673,7 @@ pub fn parallel_count_from_env_and_flag(
     let clamped = if n > cap { cap } else { n }
     return if clamped < 1 { 1 } else { clamped }
   }
-  let n = try @strconv.parse_int(flag) catch {
+  let n = try @string.parse_int(flag) catch {
     _ =>
       raise InvalidJson(
         "--parallel must be a positive integer, \"1\", or \"auto\" (got: \"" +
@@ -781,6 +781,7 @@ pub fn compute_select_with_team_model(
   dp_log_every~ : Int = 0,
   parallel~ : Int = 1,
   input_path~ : String = "",
+  child_progress_mode~ : String = "off",
 ) -> SelectResult raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
@@ -809,8 +810,9 @@ pub fn compute_select_with_team_model(
             input_path,
             refine_turn_limit=refine_tl,
             progress~,
+            child_progress_mode~,
           ) catch {
-          err => raise InnerError(err.to_string())
+          err => raise InnerError(@debug.to_string(err))
         }
         (m, Some(rows), Some(cols))
       } else {
@@ -826,7 +828,7 @@ pub fn compute_select_with_team_model(
             progress~,
             dp_log_every~,
           ) catch {
-          err => raise InnerError(err.to_string())
+          err => raise InnerError(@debug.to_string(err))
         }
         (m, Some(rows), Some(cols))
       }
@@ -841,7 +843,7 @@ pub fn compute_select_with_team_model(
           progress~,
           dp_log_every~,
         ) catch {
-        err => raise InnerError(err.to_string())
+        err => raise InnerError(@debug.to_string(err))
       }
       (m, None, None)
     }
@@ -979,9 +981,10 @@ pub fn run_select(
   progress~ : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every~ : Int = 0,
   parallel~ : Int = 1,
+  child_progress_mode~ : String = "off",
 ) -> String raise NashCliError {
   let root = try @json.parse(input_json) catch {
-    err => raise InvalidJson(err.to_string())
+    err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
     Object(m) => m
@@ -1053,6 +1056,7 @@ pub fn run_select(
       dp_log_every~,
       parallel=effective_parallel,
       input_path~,
+      child_progress_mode~,
     ) catch {
     err => {
       if input_path.length() > 0 {
@@ -1102,11 +1106,11 @@ fn parse_int_csv(s : String) -> Array[Int] raise NashCliError {
   let parts = s.split(",")
   let out : Array[Int] = []
   for p in parts {
-    let token = p.trim(chars=" \t\n\r").to_string()
+    let token = p.trim(chars=" \t\n\r").to_owned()
     if token.length() == 0 {
       continue
     }
-    let n = try @strconv.parse_int(token) catch {
+    let n = try @string.parse_int(token) catch {
       _ =>
         raise InvalidJson(
           "expected an integer in CSV but got \"" + token + "\"",
@@ -1139,13 +1143,14 @@ pub fn run_select_shard(
   col_keep_csv : String,
   mc_turn_limit_override~ : Int? = None,
   refine_turn_limit_override~ : Int? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
 ) -> Unit raise NashCliError {
   let input_json = match @db.read_file(input_path) {
     Some(s) => s
     None => raise InvalidJson("could not read --input file: " + input_path)
   }
   let root = try @json.parse(input_json) catch {
-    err => raise InvalidJson(err.to_string())
+    err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
     Object(m) => m
@@ -1194,29 +1199,99 @@ pub fn run_select_shard(
     Some(n) => n
     None => json_refine_tl
   }
+  // Per-shard cell loop. Unrolled here (instead of delegating to
+  // `screen_phase_rows` / `refine_phase_rows`) so the worker can emit a
+  // `CellStart` / `CellDone` pair around each per-cell compute. The
+  // resulting matrix is bit-exact with the pure helpers because both call
+  // the same `screen_one_cell` / `refine_one_cell` primitives.
   let matrix = match phase {
     "screen" => {
-      try screen_phase_rows(
-        team,
-        opp,
-        format,
-        mc_trials,
-        mc_seed,
-        row_start,
-        row_end,
-        mc_turn_limit=mc_tl,
-      ) catch {
-        err => raise InnerError(err.to_string())
+      let k = pick_count(format)
+      let na = team.length()
+      let nb = opp.length()
+      if na < k || nb < k {
+        raise InnerError(@debug.to_string(EmptyCombatants))
       }
+      let sel_a = combinations_with_lead(na, k)
+      let sel_b = combinations_with_lead(nb, k)
+      let size_b = sel_b.length()
+      if row_start < 0 || row_end > sel_a.length() {
+        raise InnerError(@debug.to_string(EmptyCombatants))
+      }
+      let n_rows = if row_end > row_start { row_end - row_start } else { 0 }
+      let out = Array::make(n_rows, ([] : Array[Double]))
+      for i in 0..<n_rows {
+        let i_global = row_start + i
+        let row = Array::make(size_b, 0.0)
+        for j in 0..<size_b {
+          progress(CellStart(sel_a[i_global], sel_b[j], i_global, j))
+          row[j] = screen_one_cell(
+            team,
+            opp,
+            sel_a[i_global],
+            sel_b[j],
+            mc_trials,
+            mc_seed,
+            i_global * size_b + j,
+            mc_tl,
+          )
+          progress(CellDone(sel_a[i_global], sel_b[j], i_global, j))
+        }
+        out[i] = row
+      }
+      out
     }
     "refine" => {
       let row_keep = parse_int_csv(row_keep_csv)
       let col_keep = parse_int_csv(col_keep_csv)
-      try refine_phase_rows(
-        team, opp, format, refine_tl, row_keep, col_keep, row_start, row_end,
-      ) catch {
-        err => raise InnerError(err.to_string())
+      let k = pick_count(format)
+      let na = team.length()
+      let nb = opp.length()
+      if na < k || nb < k {
+        raise InnerError(@debug.to_string(EmptyCombatants))
       }
+      let sel_a = combinations_with_lead(na, k)
+      let sel_b = combinations_with_lead(nb, k)
+      let n_cols = col_keep.length()
+      if row_start < 0 || row_end > row_keep.length() {
+        raise InnerError(@debug.to_string(EmptyCombatants))
+      }
+      let n_rows = if row_end > row_start { row_end - row_start } else { 0 }
+      let out = Array::make(n_rows, ([] : Array[Double]))
+      for i in 0..<n_rows {
+        let i_global = row_start + i
+        let row = Array::make(n_cols, 0.0)
+        for j in 0..<n_cols {
+          // Coordinates use original-grid indices (row_keep[i_global],
+          // col_keep[j]) so the visualiser paints the same fixed grid as
+          // the in-process path.
+          progress(
+            CellStart(
+              sel_a[row_keep[i_global]],
+              sel_b[col_keep[j]],
+              row_keep[i_global],
+              col_keep[j],
+            ),
+          )
+          row[j] = refine_one_cell(
+            team,
+            opp,
+            sel_a[row_keep[i_global]],
+            sel_b[col_keep[j]],
+            refine_tl,
+          )
+          progress(
+            CellDone(
+              sel_a[row_keep[i_global]],
+              sel_b[col_keep[j]],
+              row_keep[i_global],
+              col_keep[j],
+            ),
+          )
+        }
+        out[i] = row
+      }
+      out
     }
     _ =>
       raise InvalidJson(

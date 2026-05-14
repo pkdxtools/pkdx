@@ -63,7 +63,14 @@ if [ "$MODE" = tty ]; then
     # not the most-recent phase_start marker (which races with child stderr
     # under parallel fan-out).
     delete grid
-    status_phase = ""
+    # Per-phase progress counters so the status line can show
+    # "Phase: <name> N/M" once cell_done events arrive. `done_counts`
+    # is keyed by phase string so screening / dp-refine / dp-full all
+    # advance independently; `phase_total[<name>]` is grabbed from the
+    # PhaseStart `total` field.
+    delete done_counts
+    delete phase_total
+    last_phase = ""
   }
 
   function get_phase(line,    _) {
@@ -71,6 +78,23 @@ if [ "$MODE" = tty ]; then
       return substr(line, RSTART + 9, RLENGTH - 10)
     }
     return "?"
+  }
+
+  function get_total(line,    _) {
+    if (match(line, /"total":[0-9]+/) > 0) {
+      return substr(line, RSTART + 8, RLENGTH - 8) + 0
+    }
+    return 0
+  }
+
+  function update_status(phase) {
+    tot = phase_total[phase] + 0
+    done = done_counts[phase] + 0
+    if (tot > 0) {
+      status(sprintf("Phase: %s  %d/%d", phase, done, tot))
+    } else {
+      status("Phase: " phase)
+    }
   }
 
   # Coloured "done" mark for cells that completed under each phase.
@@ -106,6 +130,8 @@ if [ "$MODE" = tty ]; then
     phase = get_phase($0)
     grid[row "," col] = "prog:" phase
     paint(row, col, in_progress_mark())
+    last_phase = phase
+    update_status(phase)
     fflush()
     next
   }
@@ -118,13 +144,18 @@ if [ "$MODE" = tty ]; then
     phase = get_phase($0)
     grid[row "," col] = "done:" phase
     paint(row, col, done_mark(phase))
+    done_counts[phase] = (done_counts[phase] + 0) + 1
+    last_phase = phase
+    update_status(phase)
     fflush()
     next
   }
 
   /"event":"phase_start"/ {
-    status_phase = get_phase($0)
-    status("Phase: " status_phase " starting")
+    phase = get_phase($0)
+    phase_total[phase] = get_total($0)
+    last_phase = phase
+    update_status(phase)
     fflush()
     next
   }
@@ -144,9 +175,18 @@ if [ "$MODE" = tty ]; then
         split(key, idx, ",")
         paint(idx[1] + 0, idx[2] + 0, done_mark(ph))
         grid[key] = "done:" ph
+        done_counts[ph] = (done_counts[ph] + 0) + 1
       }
     }
-    status("Phase: " get_phase($0) " done")
+    phase = get_phase($0)
+    last_phase = phase
+    tot = phase_total[phase] + 0
+    done = done_counts[phase] + 0
+    if (tot > 0) {
+      status(sprintf("Phase: %s done  %d/%d", phase, done, tot))
+    } else {
+      status("Phase: " phase " done")
+    }
     fflush()
     next
   }

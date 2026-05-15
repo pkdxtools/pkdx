@@ -2,6 +2,7 @@ import {
   "pkdxtools/pkdx/src/model",
   "pkdxtools/pkdx/src/types",
   "pkdxtools/pkdx/src/db",
+  "moonbitlang/core/hashset" @hashset,
 }
 
 import {

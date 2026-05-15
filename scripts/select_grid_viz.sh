@@ -40,8 +40,10 @@ else
 fi
 
 if [ "$MODE" = tty ]; then
-  # Hide cursor while drawing; restore + park below grid on exit.
-  cleanup() { printf '\033[?25h\033[%d;1H\n' "$((ROWS + 4))"; }
+  # Hide cursor while drawing; restore + park below grid + summary area on
+  # exit. Layout: row 1 = status, row 2 = blank, rows 3..ROWS+2 = grid,
+  # rows ROWS+3..ROWS+5 = summary, ROWS+7 = parked cursor.
+  cleanup() { printf '\033[?25h\033[%d;1H\n' "$((ROWS + 7))"; }
   trap cleanup EXIT INT TERM
   printf '\033[?25l'
 
@@ -190,6 +192,39 @@ if [ "$MODE" = tty ]; then
     fflush()
     next
   }
+
+  # `summary` is the last stderr event emitted by `pkdx select`. Render it on
+  # the two lines directly below the grid so the user still sees value /
+  # best-selection even when stdout was redirected to a result file.
+  /"event":"summary"/ {
+    val = ""; expl = ""; mp = ""; op = ""
+    my_names = ""; opp_names = ""
+    if (match($0, /"value":-?[0-9.eE+-]+/) > 0) {
+      val = substr($0, RSTART + 8, RLENGTH - 8)
+    }
+    if (match($0, /"exploitability":-?[0-9.eE+-]+/) > 0) {
+      expl = substr($0, RSTART + 17, RLENGTH - 17)
+    }
+    if (match($0, /"my_best_p":-?[0-9.eE+-]+/) > 0) {
+      mp = substr($0, RSTART + 12, RLENGTH - 12)
+    }
+    if (match($0, /"opp_best_p":-?[0-9.eE+-]+/) > 0) {
+      op = substr($0, RSTART + 13, RLENGTH - 13)
+    }
+    if (match($0, /"my_best_names":\[[^]]*\]/) > 0) {
+      my_names = substr($0, RSTART + 17, RLENGTH - 18)
+    }
+    if (match($0, /"opp_best_names":\[[^]]*\]/) > 0) {
+      opp_names = substr($0, RSTART + 18, RLENGTH - 19)
+    }
+    # Park summary directly below the grid (row 3 + ROWS = first free line).
+    # Absolute cursor positioning is used so no trailing \n needed.
+    printf "\033[%d;1H\033[K\033[1mresult\033[0m  value=\033[36m%s\033[0m  exploitability=%s", 3 + ROWS, val, expl
+    printf "\033[%d;1H\033[K  my_best=\033[1;33m%s\033[0m (p=%s)", 4 + ROWS, my_names, mp
+    printf "\033[%d;1H\033[K  opp_best=\033[1;35m%s\033[0m (p=%s)", 5 + ROWS, opp_names, op
+    fflush()
+    next
+  }
   '
 else
   # Plain mode: one line per phase boundary + aggregated dp-node summary at
@@ -259,6 +294,30 @@ else
     } else {
       printf "[viz] phase %s done (%s)\n", ph, parts
     }
+    fflush()
+    next
+  }
+
+  /"event":"summary"/ {
+    val = ""; mp = ""; op = ""; my_names = ""; opp_names = ""
+    if (match($0, /"value":-?[0-9.eE+-]+/) > 0) {
+      val = substr($0, RSTART + 8, RLENGTH - 8)
+    }
+    if (match($0, /"my_best_p":-?[0-9.eE+-]+/) > 0) {
+      mp = substr($0, RSTART + 12, RLENGTH - 12)
+    }
+    if (match($0, /"opp_best_p":-?[0-9.eE+-]+/) > 0) {
+      op = substr($0, RSTART + 13, RLENGTH - 13)
+    }
+    if (match($0, /"my_best_names":\[[^]]*\]/) > 0) {
+      my_names = substr($0, RSTART + 17, RLENGTH - 18)
+    }
+    if (match($0, /"opp_best_names":\[[^]]*\]/) > 0) {
+      opp_names = substr($0, RSTART + 18, RLENGTH - 19)
+    }
+    printf "[viz] result value=%s\n", val
+    printf "[viz]        my_best=%s (p=%s)\n", my_names, mp
+    printf "[viz]        opp_best=%s (p=%s)\n", opp_names, op
     fflush()
     next
   }

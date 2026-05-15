@@ -1146,7 +1146,8 @@ pub(all) enum ActionKind {
 ///   count, `hits` the running cache-hit count, `depth` the recursion depth
 ///   of the sample node, `rows × cols` the per-turn action matrix at that
 ///   node, `outcomes` the stochastic edges walked from it, and
-///   `classification` one of `"saddle"` / `"nash"` / `"pruned"`.
+///   `classification` one of `"saddle"` / `"nash"` / `"pruned"` (β-cutoff) /
+///   `"alpha_pruned"` (α-cutoff at node level when `upper ≤ alpha + eps`).
 pub(all) enum ProgressEvent {
   PhaseStart(String, Int)
   PhaseProgress(String, Int, Int)
@@ -3537,7 +3538,6 @@ pub fn value(
   beta~ : Double = 1.0,
   depth~ : Int = 0,
 ) -> Double {
-  let _ = alpha // Reserved for future symmetric α-cutoff; see doc comment.
   match terminal_value(state, my_team, opp_team, turn_limit) {
     Some(v) => return v
     None => ()
@@ -3624,9 +3624,8 @@ pub fn value(
     maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "pruned")
     return lower
   }
-  // All rows filled: check for a pure saddle (maxmin == minmax within tolerance)
-  // and skip the LP if so. This both speeds up trivially-resolved subgames and
-  // avoids funnelling highly degenerate matrices into the simplex path.
+  // All rows filled: compute upper = min over j of col_max[j], which is now
+  // the tight minimax bound on this node's Nash value (Nash(A) ≤ upper).
   let mut upper = 2.0
   for j in 0..<cols {
     let mut col_max = -2.0
@@ -3640,6 +3639,18 @@ pub fn value(
       upper = col_max
     }
   }
+  // α-cutoff: caller's interest range is `[alpha, beta]`. If Nash ≤ upper ≤ α,
+  // we know the value is below the caller's threshold without solving the LP.
+  // Return `upper` as a valid upper bound; do NOT cache because a different
+  // caller with a tighter `α` would miss the true Nash. Symmetric to the
+  // β-cutoff above (which returns `lower` as a valid lower bound).
+  if upper <= alpha + VALUE_PRUNE_EPS {
+    maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "alpha_pruned")
+    return upper
+  }
+  // Pure saddle check: maxmin == minmax within tolerance ⇒ skip the LP. Speeds
+  // up trivially-resolved subgames and avoids funnelling highly degenerate
+  // matrices into the simplex path.
   if upper - lower <= VALUE_SADDLE_TOL {
     let saddle = (upper + lower) / 2.0
     cache.set(state, saddle)

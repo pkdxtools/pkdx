@@ -298,16 +298,25 @@ pub fn refine_phase_rows(
 /// inside `team_payoff_matrix_screened`'s Phase C loop and inside
 /// `refine_phase_rows`. Extracted so the shard worker can call it directly
 /// and emit `CellStart` / `CellDone` events around each call.
+///
+/// `progress` / `dp_log_every` forward to `switching_game_winrate` so a
+/// shard worker can request DP-node tracing without re-implementing the
+/// recursion. Default `dp_log_every=0` keeps the no-trace fast path
+/// unaffected (no DpNode events fire).
 pub fn refine_one_cell(
   team_a : Array[Combatant],
   team_b : Array[Combatant],
   sel_a_row : Array[Int],
   sel_b_col : Array[Int],
   refine_turn_limit : Int,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> Double {
   let picked_a = pick_combatants(team_a, sel_a_row)
   let picked_b = pick_combatants(team_b, sel_b_col)
-  switching_game_winrate(picked_a, picked_b, refine_turn_limit)
+  switching_game_winrate(
+    picked_a, picked_b, refine_turn_limit, progress~, dp_log_every~,
+  )
 }
 
 ///|
@@ -485,6 +494,7 @@ pub fn build_shard_argv(
   mc_turn_limit : Int,
   refine_turn_limit : Int,
   progress_mode~ : String = "off",
+  progress_every~ : Int = 0,
 ) -> Array[String] {
   let argv = [
     exe_path,
@@ -522,7 +532,40 @@ pub fn build_shard_argv(
     argv.push("--progress")
     argv.push(progress_mode)
   }
+  // `--progress-every` is meaningful only for the `refine` phase (the DP
+  // recursion is the source of dp_node events). For `screen` we still
+  // pass it through if non-zero so the child's admiral parser does not
+  // surprise on an unknown flag; the shard simply ignores it.
+  if progress_every > 0 {
+    argv.push("--progress-every")
+    argv.push(progress_every.to_string())
+  }
   argv
+}
+
+///|
+/// Defensive bounds check used by `run_shards_collect` before writing a
+/// shard-produced row into the assembled matrix. Returns `None` for valid
+/// indices; otherwise an error message describing the violation so the
+/// caller can surface it as `ShardError`.
+fn validate_stitch_index(
+  shard_id : Int,
+  global_row : Int,
+  out_n_rows : Int,
+) -> String? {
+  if global_row < 0 || global_row >= out_n_rows {
+    Some(
+      "shard " +
+      shard_id.to_string() +
+      " produced out-of-bounds row index " +
+      global_row.to_string() +
+      " (expected 0.." +
+      out_n_rows.to_string() +
+      ")",
+    )
+  } else {
+    None
+  }
 }
 
 ///|
@@ -549,6 +592,7 @@ fn run_shards_collect(
   mc_turn_limit : Int,
   refine_turn_limit : Int,
   progress_mode~ : String = "off",
+  progress_every~ : Int = 0,
 ) -> Array[Array[Double]] raise PayoffError {
   let n_shards = row_ranges.length()
   // Per-shard output files. Created up front so we can clean up reliably.
@@ -579,6 +623,7 @@ fn run_shards_collect(
       mc_turn_limit,
       refine_turn_limit,
       progress_mode=progress_mode,
+      progress_every=progress_every,
     )
   }
   let results = try @process.run_parallel_shards(argvs, timeout_ms~) catch {
@@ -598,8 +643,20 @@ fn run_shards_collect(
           }
         }
         let (row_start, _, matrix) = parse_shard_output(raw)
+        // Stitch: matrix row `r` belongs at global row `row_start + r`.
+        // validate_stitch_index guards against malformed shard output
+        // writing outside the assembled matrix (defence in depth — the
+        // parent owns the wire contract but a future stride scheme or a
+        // corrupted child should not silently corrupt neighbours).
         for r in 0..<matrix.length() {
-          assembled[row_start + r] = matrix[r]
+          let g = row_start + r
+          match validate_stitch_index(i, g, out_n_rows) {
+            Some(msg) => {
+              shard_err = Some(msg)
+              break
+            }
+            None => assembled[g] = matrix[r]
+          }
         }
       }
       Exit(code) =>
@@ -652,7 +709,8 @@ pub fn team_payoff_matrix_screened_parallel(
   mc_turn_limit~ : Int = MC_TURN_LIMIT,
   progress~ : (ProgressEvent) -> Unit = noop_progress,
   child_progress_mode~ : String = "off",
-  shard_timeout_ms~ : Int = 3_600_000,
+  child_progress_every~ : Int = 0,
+  shard_timeout_ms~ : Int = 7_200_000,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -709,6 +767,7 @@ pub fn team_payoff_matrix_screened_parallel(
     mc_turn_limit,
     refine_turn_limit,
     progress_mode=child_progress_mode,
+    progress_every=child_progress_every,
   )
   progress(PhaseEnd("screening"))
 
@@ -737,6 +796,7 @@ pub fn team_payoff_matrix_screened_parallel(
     mc_turn_limit,
     refine_turn_limit,
     progress_mode=child_progress_mode,
+    progress_every=child_progress_every,
   )
   progress(PhaseEnd("dp-refine"))
 

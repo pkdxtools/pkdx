@@ -782,6 +782,7 @@ pub fn compute_select_with_team_model(
   parallel~ : Int = 1,
   input_path~ : String = "",
   child_progress_mode~ : String = "off",
+  child_progress_every~ : Int = 0,
 ) -> SelectResult raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
@@ -811,6 +812,7 @@ pub fn compute_select_with_team_model(
             refine_turn_limit=refine_tl,
             progress~,
             child_progress_mode~,
+            child_progress_every~,
           ) catch {
           err => raise InnerError(@debug.to_string(err))
         }
@@ -970,19 +972,20 @@ fn parse_stat_system_field(s : String) -> @model.StatSystem raise NashCliError {
 }
 
 ///|
-/// Run `pkdx select`. Returns a JSON string with the Nash-equilibrium
-/// distribution over k-selections. Move priority / stat-boost metadata rides
-/// on each move's JSON entry (`priority`, `stat_effects`) — skills should
-/// take the fields straight from `pkdx moves` output, which JOINs
-/// `move_meta` and emits them.
-pub fn run_select(
+/// Run `pkdx select` and return the typed `SelectResult` directly.
+/// Callers that just need the JSON wire format should use `run_select`,
+/// which serialises the same value via `serialize_select_result`. Tests
+/// and CLI summary emission go through this typed entry point so they
+/// avoid an extra parse round-trip.
+pub fn run_select_typed(
   input_json : String,
   disk~ : @damage_cache.DamageDiskCache? = None,
   progress~ : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every~ : Int = 0,
   parallel~ : Int = 1,
   child_progress_mode~ : String = "off",
-) -> String raise NashCliError {
+  child_progress_every~ : Int = 0,
+) -> SelectResult raise NashCliError {
   let root = try @json.parse(input_json) catch {
     err => raise InvalidJson(@debug.to_string(err))
   }
@@ -1057,6 +1060,7 @@ pub fn run_select(
       parallel=effective_parallel,
       input_path~,
       child_progress_mode~,
+      child_progress_every~,
     ) catch {
     err => {
       if input_path.length() > 0 {
@@ -1068,6 +1072,15 @@ pub fn run_select(
   if input_path.length() > 0 {
     let _ = @db.unlink_file(input_path)
   }
+  r
+}
+
+///|
+/// Serialize a `SelectResult` into the JSON wire format that
+/// `pkdx select` writes to stdout. Field order matches the historical
+/// `run_select` output so downstream consumers and golden tests are
+/// not invalidated by the typed split.
+pub fn serialize_select_result(r : SelectResult) -> String {
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()
@@ -1079,6 +1092,31 @@ pub fn run_select(
   out = out + ",\"row_strategy\":" + fmt_double_array(r.row_strategy)
   out = out + ",\"col_strategy\":" + fmt_double_array(r.col_strategy)
   out + "}"
+}
+
+///|
+/// Backwards-compatible JSON-string entry point. Delegates to
+/// `run_select_typed` + `serialize_select_result` so tests that pin
+/// the JSON shape stay valid.
+pub fn run_select(
+  input_json : String,
+  disk~ : @damage_cache.DamageDiskCache? = None,
+  progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
+  parallel~ : Int = 1,
+  child_progress_mode~ : String = "off",
+  child_progress_every~ : Int = 0,
+) -> String raise NashCliError {
+  let r = run_select_typed(
+    input_json,
+    disk~,
+    progress~,
+    dp_log_every~,
+    parallel~,
+    child_progress_mode~,
+    child_progress_every~,
+  )
+  serialize_select_result(r)
 }
 
 ///|
@@ -1144,6 +1182,7 @@ pub fn run_select_shard(
   mc_turn_limit_override~ : Int? = None,
   refine_turn_limit_override~ : Int? = None,
   progress~ : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every~ : Int = 0,
 ) -> Unit raise NashCliError {
   let input_json = match @db.read_file(input_path) {
     Some(s) => s
@@ -1284,6 +1323,8 @@ pub fn run_select_shard(
             sel_a[row_keep[i_global]],
             sel_b[col_keep[j]],
             refine_tl,
+            progress~,
+            dp_log_every~,
           )
           progress(
             CellDone(

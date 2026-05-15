@@ -651,6 +651,19 @@ int64_t pkdx_monotonic_ns(void) {
     return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
 }
 
+/* Current process ID. Embedded in progress trace events so analysis can
+   distinguish parent vs. child shard streams when multiple `pkdx
+   __select-shard` processes emit interleaved JSON Lines onto the same
+   inherited stderr. */
+MOONBIT_FFI_EXPORT
+int32_t pkdx_pid(void) {
+#ifdef _WIN32
+    return (int32_t)GetCurrentProcessId();
+#else
+    return (int32_t)getpid();
+#endif
+}
+
 /* Remove a regular file at `path`. Returns 0 on success, errno-like on
    failure. Treats ENOENT as success so tests can call cleanup blindly. */
 MOONBIT_FFI_EXPORT

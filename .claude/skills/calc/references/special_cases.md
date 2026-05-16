@@ -413,6 +413,41 @@ pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version s
 | `is_immune` | `Bool` | タイプ相性 0 / 特性無効時 `true`。**ばけのかわの場合は `false`** |
 | `disguise_blocked` | `Bool` | ばけのかわで初撃が通らなかった時 `true` |
 | `hits_dealt` | `Int` | 実際の命中回数 (免疫時 1、Disguise 時 0、ParentalBond 時 2) |
+| `input` | `Object` | ダメ計に実際に渡した入力一式の echo (`cli/format.mbt` の `damage_input_to_json`)。下記 8.1 参照 |
+
+### 8.1 `input` フィールド
+
+LLM が `damages` / `percents` / `ko` だけを読んで前提を取り違えるのを防ぐため、エンジンに渡した `DamageCalcInput` を echo back する。Phase 3 の条件テーブルは **必ずここから引く**。エンジンは出力したそのままで計算しているため、`input.*` と乖離した値をユーザーへ提示してはならない。
+
+| パス | 型 | 意味 |
+|------|-----|------|
+| `input.attacker.name` / `defender.name` | `String` | DB から正規化された jpn 名 |
+| `input.attacker.types` / `defender.types` | `String[]` | 1 or 2 要素 (フォーム判別の根拠) |
+| `input.attacker.base_stats` / `defender.base_stats` | `{hp, atk, def, spa, spd, spe: Int}` | フォーム別の種族値 |
+| `input.attacker.ability` / `defender.ability` | `String` | 空文字 = 指定なし |
+| `input.attacker.item` / `defender.item` | `String` | 空文字 = 持ち物なし |
+| `input.attacker.nature` / `defender.nature` | `String` | 空文字 = 攻撃側「特化相当 +10%」/ 防御側「無補正」のデフォルト |
+| `input.attacker.rank` / `defender.rank` | `Int` | -6..+6 |
+| `input.attacker.stat_override` / `defender.stat_override` | `Int` | `0` = 未指定。非 0 ならユーザー指定の rank 前実数値 |
+| `input.defender.hp_override` | `Int` | `0` = 未指定。非 0 ならユーザー指定の HP 実数値 |
+| `input.attacker.status` / `defender.status` | `String` | `"none"`/`"paralyze"`/`"burn"`/`"poison"`/`"badpoison"`/`"sleep"`/`"drowsy"` |
+| `input.attacker.rank_up_count` / `defender.rank_up_count` | `Int` | アシストパワー / つけあがる用 |
+| `input.attacker.hp_num` / `hp_den` | `Int` | 攻撃側 HP 比 (やけっぱち)。デフォルトは `2/2` (満タン) |
+| `input.defender.item_removable` | `Bool` | はたきおとす倍率 (1.5x) 判定 |
+| `input.move.name` / `type` / `category` / `power` / `accuracy` | `String` / `Int` | DB から引いた技情報 |
+| `input.tera_type` | `String` | 空文字 = テラスタル無し |
+| `input.weather` | `String` | `"none"` / `"はれ"` / `"あめ"` / `"すなあらし"` / `"ゆき"` |
+| `input.field` | `String` | `"none"` / `"エレキ"` / `"グラス"` / `"サイコ"` / `"ミスト"` |
+| `input.critical` | `Bool` | 急所 |
+| `input.wall` | `String` | `"none"` / `"reflect"` / `"light-screen"` / `"aurora-veil"` |
+| `input.screen_pierce` | `Bool` | 壁貫通 move |
+| `input.fainted_count` | `Int` | そうだいしょう / おはかまいり 用 |
+| `input.is_double` | `Bool` | ダブル (spread 0.75x) |
+| `input.stat_system` | `String` | `"champions"` / `"standard"` |
+| `input.multi_hit_mode` | `String` | `"auto"` / `"fixed:N"` (1..5) / `"expected"` (damage CLI では発生しない) |
+| `input.disguise_active` | `Bool` | ばけのかわ初撃ガード |
+
+`status` は counter 値 (`BadPoison(n)` / `Sleep(n)` / `Drowsy(n)`) を握り潰して種別だけ返す。これはダメ計が counter に依存しない (たたりめ / からげんき判定は「ステータス異常がついているか」だけで足りる) ためで、ターン経過を追跡したい場合は payoff 層へ。
 
 ---
 

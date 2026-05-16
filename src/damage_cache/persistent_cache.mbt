@@ -13,7 +13,12 @@
 /// instead of the legacy most-likely-variant `damages` field. v2 cache
 /// entries computed under the legacy code path therefore disagree with
 /// v3 callers on multi-hit moves and must be recomputed.
-pub const SCHEMA_VERSION : Int = 3
+///
+/// v4: damage_to_json now embeds `input` (両側ポケモン / 特性 / 持ち物 /
+/// 性格 / ランク / 天候 / 各種フラグ) — LLM が damages/percents 単独で
+/// 推論を誤らないよう echo back する。v3 cache entries はこの field を
+/// 欠くため一括で再生成する。
+pub const SCHEMA_VERSION : Int = 4
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

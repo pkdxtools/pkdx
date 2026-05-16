@@ -402,6 +402,224 @@ fn variant_to_json(v : @model.DamageVariant) -> String {
 }
 
 ///|
+/// LLM が damages/percents/ko だけを見て前提を取り違えないよう、ダメ計に渡した
+/// 入力 (両側のポケモン・特性・持ち物・性格・ランク・天候・各種フラグ等) を
+/// JSON output の `input` フィールドに丸ごと echo back する。実数値再計算は
+/// せず、override が指定されていれば数値で、未指定 (engine デフォルト) なら 0
+/// を返す — 解釈は呼び出し側 (SKILL.md) に委ねる。
+fn damage_input_to_json(input : @model.DamageCalcInput) -> String {
+  let mv = input.move_
+  "{\"attacker\":" +
+  damage_input_attacker_to_json(input) +
+  ",\"defender\":" +
+  damage_input_defender_to_json(input) +
+  ",\"move\":{\"name\":\"" +
+  mv.name +
+  "\",\"type\":\"" +
+  mv.type_ +
+  "\",\"category\":\"" +
+  @model.category_to_jp(mv.category) +
+  "\",\"power\":" +
+  mv.power.to_string() +
+  ",\"accuracy\":" +
+  mv.accuracy.to_string() +
+  "}" +
+  ",\"tera_type\":\"" +
+  input.tera_type +
+  "\",\"weather\":\"" +
+  weather_to_canonical(input.weather) +
+  "\",\"field\":\"" +
+  field_to_canonical(input.field) +
+  "\",\"critical\":" +
+  bool_to_json(input.critical) +
+  ",\"wall\":\"" +
+  wall_to_canonical(input.wall) +
+  "\",\"screen_pierce\":" +
+  bool_to_json(input.screen_pierce) +
+  ",\"fainted_count\":" +
+  input.fainted_count.to_string() +
+  ",\"is_double\":" +
+  bool_to_json(input.is_double) +
+  ",\"stat_system\":\"" +
+  stat_system_to_canonical(input.stat_system) +
+  "\",\"multi_hit_mode\":\"" +
+  multi_hit_to_canonical(input.multi_hit_mode) +
+  "\",\"disguise_active\":" +
+  bool_to_json(input.disguise_active) +
+  "}"
+}
+
+///|
+fn damage_input_attacker_to_json(input : @model.DamageCalcInput) -> String {
+  let p = input.attacker
+  "{\"name\":\"" +
+  p.name_ja +
+  "\",\"types\":" +
+  types_to_json(p.type1, p.type2) +
+  ",\"base_stats\":" +
+  base_stats_to_json(p) +
+  ",\"ability\":\"" +
+  input.atk_ability +
+  "\",\"item\":\"" +
+  input.atk_item +
+  "\",\"nature\":\"" +
+  nature_name_or_empty(input.atk_nature) +
+  "\",\"rank\":" +
+  input.atk_rank.to_string() +
+  ",\"stat_override\":" +
+  input.atk_stat_override.to_string() +
+  ",\"status\":\"" +
+  status_to_canonical(input.atk_status_condition) +
+  "\",\"rank_up_count\":" +
+  input.atk_rank_up_count.to_string() +
+  ",\"hp_num\":" +
+  input.atk_hp_num.to_string() +
+  ",\"hp_den\":" +
+  input.atk_hp_den.to_string() +
+  "}"
+}
+
+///|
+fn damage_input_defender_to_json(input : @model.DamageCalcInput) -> String {
+  let p = input.defender
+  "{\"name\":\"" +
+  p.name_ja +
+  "\",\"types\":" +
+  types_to_json(p.type1, p.type2) +
+  ",\"base_stats\":" +
+  base_stats_to_json(p) +
+  ",\"ability\":\"" +
+  input.def_ability +
+  "\",\"item\":\"" +
+  input.def_item +
+  "\",\"nature\":\"" +
+  nature_name_or_empty(input.def_nature) +
+  "\",\"rank\":" +
+  input.def_rank.to_string() +
+  ",\"stat_override\":" +
+  input.def_stat_override.to_string() +
+  ",\"hp_override\":" +
+  input.def_hp_override.to_string() +
+  ",\"status\":\"" +
+  status_to_canonical(input.def_status_condition) +
+  "\",\"rank_up_count\":" +
+  input.def_rank_up_count.to_string() +
+  ",\"item_removable\":" +
+  bool_to_json(input.def_item_removable) +
+  "}"
+}
+
+///|
+fn types_to_json(type1 : String, type2 : String) -> String {
+  if type2.length() > 0 {
+    "[\"" + type1 + "\",\"" + type2 + "\"]"
+  } else {
+    "[\"" + type1 + "\"]"
+  }
+}
+
+///|
+fn base_stats_to_json(p : @model.Pokemon) -> String {
+  "{\"hp\":" +
+  p.hp.to_string() +
+  ",\"atk\":" +
+  p.atk.to_string() +
+  ",\"def\":" +
+  p.def_.to_string() +
+  ",\"spa\":" +
+  p.spa.to_string() +
+  ",\"spd\":" +
+  p.spd.to_string() +
+  ",\"spe\":" +
+  p.spe.to_string() +
+  "}"
+}
+
+///|
+fn nature_name_or_empty(n : @model.Nature?) -> String {
+  match n {
+    Some(nat) => nat.name_ja
+    None => ""
+  }
+}
+
+///|
+fn bool_to_json(b : Bool) -> String {
+  if b {
+    "true"
+  } else {
+    "false"
+  }
+}
+
+///|
+/// Canonical short forms used in `input.*` echo. CLI flag side accepts both
+/// English and Japanese spellings; the echoed value picks one canonical form
+/// (Japanese for weather/field to match `weather_from_jp` / `field_from_jp`,
+/// English for wall/status/multi_hit because they have counter-bearing
+/// variants that don't translate to the JP CLI shorthand).
+fn weather_to_canonical(w : @model.Weather) -> String {
+  match w {
+    None => "none"
+    Sun => "はれ"
+    Rain => "あめ"
+    Sand => "すなあらし"
+    Snow => "ゆき"
+  }
+}
+
+///|
+fn field_to_canonical(f : @model.Field) -> String {
+  match f {
+    None => "none"
+    Electric => "エレキ"
+    Grassy => "グラス"
+    Psychic => "サイコ"
+    Misty => "ミスト"
+  }
+}
+
+///|
+fn status_to_canonical(s : @model.StatusCondition) -> String {
+  match s {
+    None => "none"
+    Paralyze => "paralyze"
+    Burn => "burn"
+    Poison => "poison"
+    BadPoison(_) => "badpoison"
+    Sleep(_) => "sleep"
+    Drowsy(_) => "drowsy"
+  }
+}
+
+///|
+fn wall_to_canonical(w : @model.Wall) -> String {
+  match w {
+    NoWall => "none"
+    Reflect => "reflect"
+    LightScreen => "light-screen"
+    AuroraVeil => "aurora-veil"
+  }
+}
+
+///|
+fn multi_hit_to_canonical(m : @model.MultiHit) -> String {
+  match m {
+    Auto => "auto"
+    Fixed(n) => "fixed:" + n.to_string()
+    Expected => "expected"
+  }
+}
+
+///|
+fn stat_system_to_canonical(s : @model.StatSystem) -> String {
+  match s {
+    Champions => "champions"
+    Standard => "standard"
+  }
+}
+
+///|
 fn damage_to_json(
   r : @model.DamageCalcResult,
   input : @model.DamageCalcInput,
@@ -448,6 +666,8 @@ fn damage_to_json(
   double_field +
   ",\"variants\":" +
   variants_arr +
+  ",\"input\":" +
+  damage_input_to_json(input) +
   "}"
 }
 

@@ -220,15 +220,76 @@ $PKDX damage "ドリュウズ" "ナットレイ" "ロックブラスト" \
   "min": min_damage,
   "max": max_damage,
   "defender_hp": hp,
-  "ko": "確定数テキスト"
+  "hits_dealt": n,
+  "ko": "確定数テキスト",
+  "variants": [...],
+  "input": {
+    "attacker": {
+      "name": "...",
+      "types": ["type1", "type2"],
+      "base_stats": {"hp": n, "atk": n, "def": n, "spa": n, "spd": n, "spe": n},
+      "ability": "",          // 空文字 = 指定なし
+      "item": "",
+      "nature": "",           // 空文字 = 攻撃ステ特化相当 (+10%) を自動適用
+      "rank": 0,
+      "stat_override": 0,     // 0 = 未指定 (engine がデフォルトの実数値を計算)
+      "status": "none",       // none / paralyze / burn / poison / badpoison / sleep / drowsy
+      "rank_up_count": 0,
+      "hp_num": 2, "hp_den": 2  // 攻撃側 HP 比 (やけっぱち用)、満タン = 2/2
+    },
+    "defender": {
+      "name": "...",
+      "types": [...],
+      "base_stats": {...},
+      "ability": "", "item": "", "nature": "",  // 防御側 nature 空文字 = 無補正
+      "rank": 0,
+      "stat_override": 0,
+      "hp_override": 0,
+      "status": "none",
+      "rank_up_count": 0,
+      "item_removable": false
+    },
+    "move": {"name": "...", "type": "...", "category": "物理|特殊|変化", "power": n, "accuracy": n},
+    "tera_type": "",          // 空文字 = テラスタルなし
+    "weather": "none",        // none / はれ / あめ / すなあらし / ゆき
+    "field": "none",          // none / エレキ / グラス / サイコ / ミスト
+    "critical": false,
+    "wall": "none",           // none / reflect / light-screen / aurora-veil
+    "screen_pierce": false,
+    "fainted_count": 2,
+    "is_double": false,
+    "stat_system": "champions",  // champions / standard
+    "multi_hit_mode": "auto",    // auto / fixed:N / expected
+    "disguise_active": false
+  }
 }
 ```
+
+**重要**: `input` フィールドは pkdx がダメ計に実際に使用した条件を echo back する。Phase 3 のテーブル整形では **必ず `input.*` の値を引用**し、ユーザーへの問い合わせや AskUserQuestion で得た値を再現してはならない (typo や型違いで乖離する場合がある)。
+
+`input.*` の意味:
+- 文字列フィールドの空文字 (`""`) は「未指定」を意味する。攻撃側 `nature: ""` は engine が「攻撃ステ特化相当 +10%」を自動適用、防御側 `nature: ""` は「無補正」。
+- `stat_override`/`hp_override` の `0` は「未指定 (engine が SP/EV/性格からデフォルト実数値を計算)」。非 0 ならユーザーが渡した rank 前の実数値そのもの。
+- `weather`/`field` は `"none"` か canonical な JP 名 (はれ/あめ/...）。
+- `status` は canonical な英語短縮形 (`burn`/`paralyze`/...). counter 値 (BadPoison(n)/Sleep(n)/Drowsy(n)) は表現せず、種別のみ返す。
+- `multi_hit_mode` は `"auto"` (DB 参照), `"fixed:N"` (1..5), `"expected"` (payoff 専用、damage CLI では発生しない)。
 
 ---
 
 ## Phase 3: 結果出力
 
 スクリプト出力を以下のMarkdownテーブルに整形して提示する。
+
+**フィードバック前提**: 条件テーブルの値は **すべて `input.*` フィールドから引く**。`damages`/`percents`/`ko` だけを読んで「攻撃側は〇〇特化のはず」「天候ははれだったはず」と推論で補完してはならない (LLM が前提を取り違える典型箇所)。
+
+- 攻撃側名・タイプは `input.attacker.name` / `input.attacker.types`
+- 攻撃側 特性 / 持ち物 / 性格 / ランクは `input.attacker.ability` / `.item` / `.nature` / `.rank`
+- 防御側も同様に `input.defender.*` から引く
+- 技名・タイプ・分類・威力は `input.move.*`
+- 天候 / フィールド / テラスタル / 急所 / 壁は `input.weather` / `.field` / `.tera_type` / `.critical` / `.wall`
+- 連続技回数は `input.multi_hit_mode` (`"fixed:N"` なら N 回固定、`"auto"` なら DB 解決) と `hits_dealt` を併記
+
+空文字 (`""`) や `"none"` の項目は条件テーブル行ごと省略してよい。
 
 ```markdown
 ## ダメージ計算結果

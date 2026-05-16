@@ -6,8 +6,8 @@
 /// on multi-hit moves.
 
 ///|
-test "SCHEMA_VERSION is 3 (bumped for #91 payoff variants[] reroute)" {
-  @debug.debug_inspect(SCHEMA_VERSION, content="3")
+test "SCHEMA_VERSION is 4 (bumped for damage input echo in cli/format.mbt)" {
+  @debug.debug_inspect(SCHEMA_VERSION, content="4")
 }
 
 ///|

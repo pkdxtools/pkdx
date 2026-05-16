@@ -237,7 +237,7 @@ moonbit_string_t pkdx_mkstemp_file(const uint8_t *prefix) {
        prefix. Convert and truncate. */
     wchar_t wpfx[4] = {0, 0, 0, 0};
     int wn_pfx = MultiByteToWideChar(CP_UTF8, 0, pfx, -1, NULL, 0);
-    if (wn_pfx > 0) {
+    if (wn_pfx > 0 && (size_t)wn_pfx <= (size_t)-1 / sizeof(wchar_t)) {
         wchar_t *wpfx_full = (wchar_t *)malloc(sizeof(wchar_t) *
                                                (size_t)wn_pfx);
         if (wpfx_full) {
@@ -270,6 +270,9 @@ moonbit_string_t pkdx_mkstemp_file(const uint8_t *prefix) {
     size_t tlen = strlen(tmpdir);
     size_t plen = strlen(pfx);
     /* template: "<tmpdir>/<prefix>_XXXXXX\0" */
+    if (plen > (size_t)-1 - tlen - 9) {
+        return moonbit_make_string(0, 0);
+    }
     size_t bufsize = tlen + 1 + plen + 1 + 6 + 1;
     char *tmpl = (char *)malloc(bufsize);
     if (!tmpl) {
@@ -422,6 +425,7 @@ static wchar_t *pkdx_win_build_cmdline(const char *const *argv, int argc) {
 
     int wn = MultiByteToWideChar(CP_UTF8, 0, u8, -1, NULL, 0);
     if (wn <= 0) { free(u8); return NULL; }
+    if ((size_t)wn > (size_t)-1 / sizeof(wchar_t)) { free(u8); return NULL; }
     wchar_t *w = (wchar_t *)malloc(sizeof(wchar_t) * (size_t)wn);
     if (!w) { free(u8); return NULL; }
     MultiByteToWideChar(CP_UTF8, 0, u8, -1, w, wn);
@@ -459,6 +463,7 @@ int32_t pkdx_run_parallel_shards(
     for (int32_t i = 0; i < n_shards; i++) exit_codes[i] = -1;
 
     /* Walk argvs_flat once, building per-shard pointer arrays. */
+    if ((size_t)n_shards > (size_t)-1 / sizeof(const char *)) return -1;
     const char **arg_ptrs = (const char **)malloc(sizeof(const char *) *
         ((size_t)n_shards));
     if (!arg_ptrs) return -1;
@@ -473,6 +478,7 @@ int32_t pkdx_run_parallel_shards(
         total_args += shard_argc[i];
     }
 
+    if ((size_t)total_args > (size_t)-1 / sizeof(const char *)) { free(arg_ptrs); return -1; }
     const char **all_ptrs = (const char **)malloc(sizeof(const char *) *
         ((size_t)total_args));
     if (!all_ptrs) { free(arg_ptrs); return -1; }

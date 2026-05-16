@@ -258,7 +258,7 @@ SessionStart hook (`.claude/settings.json`) から呼ばれる 1-line JSON。
 - **`.claude/skills/team-builder/references/format_rules.md`** — メガ/ダイマ/Z/テラスタル等のメカニクス定義
 - **`.claude/skills/team-builder/references/stat_thresholds.md`** — 種族値ベンチマーク・素早さティア
 - **`.claude/skills/team-builder/references/items_abilities.md`** — 道具・特性の考察用データ
-- **`.claude/skills/calc/references/special_cases.md`** — ダメージ計算の特殊パターン網羅。おやこあい / ばけのかわ / てんねん / Psyshock 系 / シェルアームズ / ボディプレス / せいなるつるぎ / ウェザーボール / 可変威力技 / 壁 / 連続技 / 急所ランク無視 / JSON 出力フィールド。各項目に実装ファイル:行の根拠つき。`pkdx damage` のフラグが何をしているか迷ったらここを第一参照。
+- **`.claude/skills/calc/references/special_cases.md`** — ダメージ計算の特殊パターン網羅。おやこあい / ばけのかわ / てんねん / Psyshock 系 / シェルアームズ / ボディプレス / せいなるつるぎ / ウェザーボール / 可変威力技 / 天候 (--weather 値域・ダメ補正・ステ補正・天候依存特性) / 壁 / 連続技 / 急所ランク無視 / JSON 出力フィールド。各項目に実装ファイル:行の根拠つき。`pkdx damage` のフラグが何をしているか迷ったらここを第一参照。
 - **`.claude/skills/nash/references/theory.md`** — Layer 1 (零和 LP / Simplex / Fictitious play / MWU) は外部 repo `ushironoko/nash-mbt` (GitHub: pkdxtools/nash-mbt) に切り出し済み。pkdx 側からは shim として参照ポインタのみ残す。実装の正当性・数値安定性・退化ケースは新 repo の `docs/theory.md` を第一参照。
 - **`.claude/skills/nash/references/exploitability.md`** — Layer 1 (exploitability / NashConv / KL / L1) も同様に外部 repo へ移行。pkdx 側の shim は新 repo の `docs/exploitability.md` への参照ポインタ。
 - **`.claude/skills/nash/references/payoff_semantics.md`** — `TeamPayoffModel` (SwitchingGame / ScreenedSwitchingGame) の仕様・計算量・選択基準。pkdx ドメイン固有の Layer 2 のため pkdx 側に残す。選出最適化のどのモデルを使うべきか、廃止済みの pairwise 系に関する履歴もここ。

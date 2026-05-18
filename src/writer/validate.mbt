@@ -216,22 +216,26 @@ pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
         Some(Object(build)) =>
           match build.get("stat_points") {
             Some(Object(sp_obj)) =>
-              if version.is_champions() {
-                for err in validate_champions_sp(sp_obj) {
-                  result.push(err)
-                }
-              } else {
-                let mut total = 0
-                for _k, v in sp_obj {
-                  match v {
-                    Number(n, ..) => total = total + n.to_int()
-                    _ => ()
+              // SP/EV のビジネスルールが完全に異なるため、新 GameVersion
+              // variant 追加時に必ずどちらの validate を走らせるか宣言する。
+              match version {
+                @model.Champions =>
+                  for err in validate_champions_sp(sp_obj) {
+                    result.push(err)
                   }
-                }
-                if total > 510 {
-                  result.push(
-                    "#/build/stat_points: total is \{total}, must be <= 510",
-                  )
+                @model.Other(_) => {
+                  let mut total = 0
+                  for _k, v in sp_obj {
+                    match v {
+                      Number(n, ..) => total = total + n.to_int()
+                      _ => ()
+                    }
+                  }
+                  if total > 510 {
+                    result.push(
+                      "#/build/stat_points: total is \{total}, must be <= 510",
+                    )
+                  }
                 }
               }
             _ => ()

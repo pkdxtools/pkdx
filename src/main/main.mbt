@@ -139,7 +139,13 @@ pub(all) struct GameContext {
 fn ctx_game(ctx : @admiral.Context) -> GameContext {
   let version = @model.GameVersion::parse(ctx_str(ctx, "version"))
   let cli_regulation = ctx_str_opt(ctx, "regulation")
-  if cli_regulation != "" && !(version.is_champions()) {
+  // `--regulation` は Champions 専用フラグ。新しい GameVersion variant を
+  // 足したら必ずここで「regulation を受けるか」を明示的に決めること。
+  let regulation_applicable = match version {
+    @model.Champions => true
+    @model.Other(_) => false
+  }
+  if cli_regulation != "" && !regulation_applicable {
     pkdx_eprintln(
       @db.to_c_bytes(
         "Error: --regulation is only valid with --version champions",
@@ -166,10 +172,13 @@ fn ctx_game(ctx : @admiral.Context) -> GameContext {
         ""
       }
     }
-  } else if version.is_champions() {
-    read_box_regulation_or_default().regulation
   } else {
-    ""
+    // 永続化された regulation は Champions のみに適用。新しい variant を
+    // 足す際は、永続値を読むかどうかを variant 単位で再考すること。
+    match version {
+      @model.Champions => read_box_regulation_or_default().regulation
+      @model.Other(_) => ""
+    }
   }
   { version, regulation }
 }
@@ -1646,40 +1655,45 @@ fn[T] with_db(
   // attach AS pokedex) で開く。それ以外は従来通り pokedex.db のみ。
   // `validate_schema` は pokedex.db のテーブルを前提とするため、Champions
   // 経路では呼び出さない (pokedex 側のテーブルは pokedex.* でアクセス可能)。
-  let db = if version.is_champions() {
-    let champions_path = resolve_champions_db_path_from(db_path)
-    if !(@db.file_exists(champions_path)) {
-      println(
-        "Error: champions.db not found at " +
-        champions_path +
-        " — run ./setup.sh after the platform refactor lands.",
-      )
-      panic()
-    }
-    match @db.open_for(db_path, @model.Champions) {
-      Ok(d) => d
-      Err(e) => {
-        println("Error: " + e)
+  // GameVersion variant ごとに DB スキーマが異なるため、ここは exhaustive
+  // match にして新 variant 追加時にコンパイラが分岐を強制する。
+  let db = match version {
+    @model.Champions => {
+      let champions_path = resolve_champions_db_path_from(db_path)
+      if !(@db.file_exists(champions_path)) {
+        println(
+          "Error: champions.db not found at " +
+          champions_path +
+          " — run ./setup.sh after the platform refactor lands.",
+        )
         panic()
       }
-    }
-  } else {
-    let d = match @db.open(db_path) {
-      Ok(d) => d
-      Err(e) => {
-        println("Error: " + e)
-        panic()
+      match @db.open_for(db_path, @model.Champions) {
+        Ok(d) => d
+        Err(e) => {
+          println("Error: " + e)
+          panic()
+        }
       }
     }
-    match @db.validate_schema(d) {
-      Ok(_) => ()
-      Err(e) => {
-        println("Error: " + e)
-        @db.close(d)
-        panic()
+    @model.Other(_) => {
+      let d = match @db.open(db_path) {
+        Ok(d) => d
+        Err(e) => {
+          println("Error: " + e)
+          panic()
+        }
       }
+      match @db.validate_schema(d) {
+        Ok(_) => ()
+        Err(e) => {
+          println("Error: " + e)
+          @db.close(d)
+          panic()
+        }
+      }
+      d
     }
-    d
   }
   let result = f(db)
   @db.close(db)
@@ -1717,40 +1731,45 @@ fn run_moves(
   include_inactive : Bool,
 ) -> Unit {
   with_db(version=game.version, fn(db) {
-    if game.version.is_champions() {
-      // Champions では learnset を 7 桁 `<globalNo><form>` の id で引く必要が
-      // あるため、名前指定では pokemon_name から id を直接解決する。
-      // globalNo (数字) 指定のときはフォーム不明なので base (`<gno>000`) に
-      // フォールバックする。
-      let id_res = if is_numeric(target) {
-        Ok(@db.normalize_global_no(target) + "000")
-      } else {
-        @db.query_champions_pokemon_id_by_name(db, target)
-      }
-      match id_res {
-        Ok(id) =>
-          match @db.query_champions_moves(db, id) {
-            Ok(moves) => println(@cli.format_moves(moves, format))
-            Err(e) => println("Error: " + e)
-          }
-        Err(e) => println("Error: " + e)
-      }
-    } else {
-      let global_no = if is_numeric(target) {
-        @db.normalize_global_no(target)
-      } else {
-        match @db.query_pokemon(db, target, game.version) {
-          Ok(p) => p.global_no
-          Err(e) => {
-            println("Error: " + e)
-            return
-          }
+    // Champions と他 version で学習技テーブルのスキーマが完全に違う。
+    // 新 variant 追加時にどちらのクエリ経路を踏むかコンパイラが強制する。
+    match game.version {
+      @model.Champions => {
+        // Champions では learnset を 7 桁 `<globalNo><form>` の id で引く必要が
+        // あるため、名前指定では pokemon_name から id を直接解決する。
+        // globalNo (数字) 指定のときはフォーム不明なので base (`<gno>000`) に
+        // フォールバックする。
+        let id_res = if is_numeric(target) {
+          Ok(@db.normalize_global_no(target) + "000")
+        } else {
+          @db.query_champions_pokemon_id_by_name(db, target)
+        }
+        match id_res {
+          Ok(id) =>
+            match @db.query_champions_moves(db, id) {
+              Ok(moves) => println(@cli.format_moves(moves, format))
+              Err(e) => println("Error: " + e)
+            }
+          Err(e) => println("Error: " + e)
         }
       }
-      let r = @db.query_moves(db, global_no, game.version, include_inactive~)
-      match r {
-        Ok(moves) => println(@cli.format_moves(moves, format))
-        Err(e) => println("Error: " + e)
+      @model.Other(_) => {
+        let global_no = if is_numeric(target) {
+          @db.normalize_global_no(target)
+        } else {
+          match @db.query_pokemon(db, target, game.version) {
+            Ok(p) => p.global_no
+            Err(e) => {
+              println("Error: " + e)
+              return
+            }
+          }
+        }
+        let r = @db.query_moves(db, global_no, game.version, include_inactive~)
+        match r {
+          Ok(moves) => println(@cli.format_moves(moves, format))
+          Err(e) => println("Error: " + e)
+        }
       }
     }
   })

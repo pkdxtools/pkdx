@@ -19,20 +19,15 @@ fn avg_damage(r : @model.DamageCalcResult) -> Double {
 /// pair list sums to (probability, mean) over all chance-node outcomes
 /// surfaced by the engine's hit-by-hit `variants[]` payload.
 ///
-/// Disguise / immune still collapse to a single zero entry — the
-/// special chip add-on for ばけのかわ stays where `avg_damage` puts it
-/// (in the legacy scalar path) so #91's incremental rollout doesn't
-/// have to retune those edge cases.
+/// Immune は単一 0 エントリに畳む。ばけのかわは payoff 側で
+/// disguise_active=false 固定 (build_input_with_ranks) なので
+/// r.disguise_blocked は payoff 経路で立たない — 仮に立っていれば
+/// engine がすでに chip を total_damages に加算済みなので追加処理は不要。
 fn expected_damage_variants(
   r : @model.DamageCalcResult,
 ) -> Array[(Double, Double)] {
   if r.is_immune {
     return [(1.0, 0.0)]
-  }
-  if r.disguise_blocked {
-    // Disguise's intercepted hit deals 0 + chip; keep the legacy single
-    // outcome so callers reading expected_damage match avg_damage.
-    return [(1.0, r.defender_hp.to_double() / 8.0)]
   }
   let out : Array[(Double, Double)] = []
   for i = 0; i < r.variants.length(); i = i + 1 {

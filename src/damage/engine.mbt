@@ -463,12 +463,12 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
   let damages = compute_rolls(effective_power, def_stat, true)
 
-  // Disguise: ばけのかわ の初撃は実ダメージを素通し、状態遷移だけ行う。
-  // State transition precedes any multi-hit expansion — disguise absorbs the
-  // full move regardless of how many hits it would have landed.
-  if def_ability == "ばけのかわ" && input.disguise_active {
-    return disguise_blocked_result(def_hp)
-  }
+  // ばけのかわ chip: 初撃で剥がれるときの 1/8 HP を damages に加算するための
+  // 補正値。disguise_active=false なら 0 で、通常ダメージそのままを返す。
+  // 「ばけのかわ消費時のダメージ + 実ダメージ」を 1 つの数として出すための
+  // 単純化。hits_dealt や variants は move 視点の hit 数を保持する。
+  let disguise_chip_active = def_ability == "ばけのかわ" && input.disguise_active
+  let disguise_chip = if disguise_chip_active { def_hp / 8 } else { 0 }
 
   // Multi-hit post-processing. Parental Bond's 2nd hit re-runs the full
   // 16-roll pipeline at 1/4 base power (Gen7+ spec, Showdown-accurate).
@@ -604,6 +604,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
         cumulative[j] = cumulative[j] + this_damages[j]
       }
     }
+    if disguise_chip > 0 {
+      for j = 0; j < 16; j = j + 1 {
+        cumulative[j] = cumulative[j] + disguise_chip
+      }
+    }
     let v_min = cumulative[0]
     let v_max = cumulative[15]
     let v_ko = calc_ko_text(cumulative, def_hp)
@@ -650,7 +655,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     ko_text: chosen.ko_text,
     defender_hp: def_hp,
     is_immune: false,
-    disguise_blocked: false,
+    disguise_blocked: disguise_chip_active,
+    disguise_chip,
     hits_dealt: chosen.hits_count,
     variants,
   }
@@ -727,6 +733,7 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
     defender_hp: def_hp,
     is_immune: true,
     disguise_blocked: false,
+    disguise_chip: 0,
     hits_dealt: 1,
     // Single-variant payload preserves the invariant
     // `variants.length() >= 1` for downstream consumers.
@@ -739,40 +746,6 @@ fn immune_result(def_hp : Int) -> @model.DamageCalcResult {
         min: 0,
         max: 0,
         ko_text: "immune",
-      },
-    ],
-  }
-}
-
-///|
-/// Disguise initial hit: no damage dealt; state transition (1/8 max HP chip)
-/// is the caller's responsibility.
-fn disguise_blocked_result(def_hp : Int) -> @model.DamageCalcResult {
-  let zero_damages : FixedArray[Int] = FixedArray::make(16, 0)
-  // Disguise's intercepted hit deals no damage but the move did connect
-  // — represent it as a single variant with hits.length() == 0 to mark
-  // that no hit landed (hits_count == 0 also signals the absorbed hit).
-  @model.DamageCalcResult::{
-    damages: zero_damages,
-    percents: FixedArray::make(16, 0.0),
-    min_damage: 0,
-    max_damage: 0,
-    min_percent: 0.0,
-    max_percent: 0.0,
-    ko_text: "けがわブロック",
-    defender_hp: def_hp,
-    is_immune: false,
-    disguise_blocked: true,
-    hits_dealt: 0,
-    variants: [
-      {
-        probability: 1.0,
-        hits: [],
-        hits_count: 0,
-        total_damages: zero_damages,
-        min: 0,
-        max: 0,
-        ko_text: "けがわブロック",
       },
     ],
   }

@@ -52,13 +52,19 @@ pub(all) struct DamageCalcResult {
   ko_text : String
   defender_hp : Int
   is_immune : Bool
-  // rev2: ばけのかわ初撃ブロック時に true。damages は全 0、呼び出し側で HP 1/8
-  // の状態遷移を扱う。
+  // ばけのかわ chip 加算済みフラグ。disguise_active=true かつ防御側特性
+  // ばけのかわ のとき true。damages[] / variants[*].total_damages には
+  // すでに chip (def_hp / 8) が加算されている。chip 単体の値は disguise_chip。
   disguise_blocked : Bool
+  // ばけのかわ消費時の固定 chip ダメージ (def_hp / 8、整数床)。
+  // disguise_blocked=true のとき非 0、それ以外は 0。damages 内に含めて
+  // 「消費 + 実ダメージ」を 1 つの数として出すための内訳。
+  disguise_chip : Int
   // rev2: 連続技・おやこあいの実ヒット数。Single=1, Fixed(n)=n, ParentalBond=2。
   hits_dealt : Int
   // P1-A (issue #90): hit-by-hit chance-node representation. Always non-empty
-  // (immune/disguise produce a 1-element variants with probability 1.0).
+  // (immune は 1-element variants with probability 1.0)。 disguise 時は
+  // disguise_chip が variant の total_damages にも加算済み。
   // The legacy fields (damages, hits_dealt, min_damage, max_damage, ko_text)
   // are derived from the most-likely variant for backward compatibility.
   variants : Array[DamageVariant]

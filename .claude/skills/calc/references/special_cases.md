@@ -26,14 +26,16 @@ pkdx damage "メガガルーラ" "ハピナス" "すてみタックル" \
 ### ばけのかわ (Disguise)
 
 - **発動条件**: 防御側特性 `ばけのかわ` かつ `--disguise-active` (`disguise_active: true`)
-- **挙動**: 初撃として全 damages を 0 で返し、状態遷移を示すフラグを立てる (`damage/engine.mbt:441-443`, `560-580`)
+- **挙動**: 通常のダメージ計算結果に「ばけのかわ消費 chip = 防御側 HP / 8 (整数床)」を 16 段階の各ロールに加算して返す。これにより `damages[]` は「ばけのかわが剥がれる際の chip + 実際の技ダメージ」を一発で表す合算値になる (`damage/engine.mbt` の variants ループ末尾)
 - **JSON 出力**:
-  - `damages: [0]×16`, `percents: [0.0]×16`
-  - `disguise_blocked: true`
-  - `ko_text: "けがわブロック"`
-  - `is_immune: false` (**免疫ではない** ─ 1/8 HP チップは呼び出し側責任)
-  - `hits_dealt: 0`
+  - `damages[i] = base_damage[i] + chip` (chip = `def_hp / 8`)
+  - `disguise_blocked: true` (chip 加算済みフラグ)
+  - `disguise_chip: <chip 値>` (内訳)
+  - `ko_text` は加算後の値で再計算
+  - `is_immune: false`
+  - `hits_dealt`: 通常通り技の hit 数 (chip は ability proc であり hit ではない)
 - **2 撃目以降**: `--disguise-active` を外して再計算 (エンジンは状態を持たない)
+- **非 ばけのかわ防御側**: `--disguise-active` 指定でも chip は加算されない (通常ダメージ)
 
 ### てんねん (Unaware)
 
@@ -411,8 +413,9 @@ pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version s
 | `ko` / `ko_text` | `String` | 確定数テキスト (`"確定1発"` / `"乱数1発(X/16)"` / `"確定2発"` ...) |
 | `defender_hp` | `Int` | 防御側 HP 実数値 |
 | `is_immune` | `Bool` | タイプ相性 0 / 特性無効時 `true`。**ばけのかわの場合は `false`** |
-| `disguise_blocked` | `Bool` | ばけのかわで初撃が通らなかった時 `true` |
-| `hits_dealt` | `Int` | 実際の命中回数 (免疫時 1、Disguise 時 0、ParentalBond 時 2) |
+| `disguise_blocked` | `Bool` | ばけのかわ chip が `damages` に加算された時 `true` |
+| `disguise_chip` | `Int` | 加算された chip 値 (`def_hp / 8`、整数床)。0 なら未加算 |
+| `hits_dealt` | `Int` | 技の hit 数 (免疫時 1、Disguise 時も技の hit 数を保持、ParentalBond 時 2) |
 | `input` | `Object` | ダメ計に実際に渡した入力一式の echo (`cli/format.mbt` の `damage_input_to_json`)。下記 8.1 参照 |
 
 ### 8.1 `input` フィールド

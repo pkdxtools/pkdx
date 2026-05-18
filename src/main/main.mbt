@@ -1338,7 +1338,7 @@ fn cmd_damage() -> @admiral.CommandDef {
       ),
       @admiral.bool(
         "disguise-active",
-        description="ばけのかわ still intact (initial hit → damages=0, disguise_blocked=true)",
+        description="ばけのかわ still intact: adds 1/8 max-HP chip on top of normal damage (disguise_blocked=true, disguise_chip=def_hp/8)",
       ),
     ],
     positionals=[

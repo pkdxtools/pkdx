@@ -663,6 +663,10 @@ fn damage_to_json(
   ",\"ko\":\"" +
   r.ko_text +
   "\"" +
+  ",\"disguise_blocked\":" +
+  bool_to_json(r.disguise_blocked) +
+  ",\"disguise_chip\":" +
+  r.disguise_chip.to_string() +
   double_field +
   ",\"variants\":" +
   variants_arr +
@@ -695,6 +699,12 @@ fn damage_to_table(
     "%)\n"
   s = s + "HP: " + r.defender_hp.to_string() + "\n"
   s = s + "Result: " + r.ko_text + "\n"
+  if r.disguise_blocked {
+    s = s +
+      "ばけのかわ chip: " +
+      r.disguise_chip.to_string() +
+      " (各乱数値に加算済み)\n"
+  }
   // Full table
   s = s + "\n"
   let mut labels = ""

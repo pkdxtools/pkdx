@@ -2,7 +2,11 @@
 /// Whitebox tests for `avg_damage`. Covers:
 ///   - standard mean over the 16-roll array
 ///   - immune matchups short-circuit to 0
-///   - disguise_blocked adds the fixed 1/8 max-HP chip to the mean
+///
+/// payoff レイヤは build_input_with_ranks で disguise_active=false 固定なので
+/// disguise_blocked 経路はそもそも発生しない。仮に立っても engine が chip を
+/// total_damages に加算済みなので avg_damage は通常パスでそのまま正しい値を
+/// 返す。
 ///
 /// `avg_damage` is package-private, so the test lives next to it.
 
@@ -11,7 +15,6 @@ fn mk_result(
   damages : FixedArray[Int],
   def_hp : Int,
   is_immune~ : Bool = false,
-  disguise_blocked~ : Bool = false,
 ) -> @model.DamageCalcResult {
   let percents : FixedArray[Double] = FixedArray::make(16, 0.0)
   for i = 0; i < 16; i = i + 1 {
@@ -22,7 +25,7 @@ fn mk_result(
   let single_variant : @model.DamageVariant = {
     probability: 1.0,
     hits: [],
-    hits_count: if disguise_blocked { 0 } else { 1 },
+    hits_count: 1,
     total_damages: damages,
     min: damages[0],
     max: damages[15],
@@ -38,8 +41,9 @@ fn mk_result(
     ko_text: "",
     defender_hp: def_hp,
     is_immune,
-    disguise_blocked,
-    hits_dealt: if disguise_blocked { 0 } else { 1 },
+    disguise_blocked: false,
+    disguise_chip: 0,
+    hits_dealt: 1,
     variants: [single_variant],
   }
 }
@@ -59,22 +63,4 @@ test "avg_damage: immune matchup returns 0" {
   let d : FixedArray[Int] = FixedArray::make(16, 0)
   let r = mk_result(d, 160, is_immune=true)
   @debug.debug_inspect(avg_damage(r), content="0")
-}
-
-///|
-test "avg_damage: disguise_blocked adds 1/8 defender HP chip to zero mean" {
-  // engine returns damages=0 on the disguise-blocked initial hit; avg_damage
-  // folds in the 1/8 max-HP chip so payoff sees the true cost of the turn.
-  let d : FixedArray[Int] = FixedArray::make(16, 0)
-  let r = mk_result(d, 160, disguise_blocked=true)
-  // 160 / 8 = 20
-  @debug.debug_inspect(avg_damage(r), content="20")
-}
-
-///|
-test "avg_damage: disguise_blocked with fractional HP keeps double precision" {
-  // HP=163 → 163/8 = 20.375. Verifies the chip is a Double divide, not int.
-  let d : FixedArray[Int] = FixedArray::make(16, 0)
-  let r = mk_result(d, 163, disguise_blocked=true)
-  @debug.debug_inspect(avg_damage(r), content="20.375")
 }

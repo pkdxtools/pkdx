@@ -120,21 +120,26 @@ test "e2e: lash out doubles at half HP" {
 }
 
 ///|
-test "e2e: disguise initial hit blocks all damage and flags disguise_blocked" {
+test "e2e: disguise active adds 1/8 chip on top of normal damage" {
   let atk = e2e_pokemon("d-atk", "ノーマル", 100, 130, 80, 80, 80, 80)
   let dfn = e2e_pokemon("mimikyu", "ノーマル", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
-  let inp = mk_damage_input(
+  let inp_active = mk_damage_input(
     atk, dfn, mv, def_ability="ばけのかわ", disguise_active=true,
   )
-  let r = calc_damage(inp)
-  assert_true(r.disguise_blocked)
-  @debug.debug_inspect(r.max_damage, content="0")
-  @debug.debug_inspect(r.hits_dealt, content="0")
-  @debug.debug_inspect(r.ko_text, content=(
-    #|"けがわブロック"
-  ))
-  assert_true(!(r.is_immune))
+  let inp_inactive = mk_damage_input(
+    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false,
+  )
+  let r_active = calc_damage(inp_active)
+  let r_inactive = calc_damage(inp_inactive)
+  let chip = r_inactive.defender_hp / 8
+  assert_true(r_active.disguise_blocked)
+  assert_true(r_active.disguise_chip == chip)
+  assert_true(r_active.max_damage == r_inactive.max_damage + chip)
+  assert_true(r_active.min_damage == r_inactive.min_damage + chip)
+  // hits_dealt は move 視点の hit 数 (chip は ability proc で hit ではない)
+  assert_true(r_active.hits_dealt == r_inactive.hits_dealt)
+  assert_true(!(r_active.is_immune))
 }
 
 ///|

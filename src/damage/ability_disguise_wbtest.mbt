@@ -1,8 +1,8 @@
 ///|
-/// Integration Red tests for Disguise. Drives `calc_damage` end-to-end and
-/// expects the engine to short-circuit when `disguise_active=true` against a
-/// ばけのかわ defender. These fail until engine.mbt emits
-/// `disguise_blocked: true`.
+/// Integration tests for Disguise. Drives `calc_damage` end-to-end against a
+/// ばけのかわ defender. When `disguise_active=true`, engine adds a 1/8 max-HP
+/// chip on top of the move's normal damage and flags `disguise_blocked: true`
+/// with `disguise_chip = def_hp / 8`.
 
 ///|
 fn dg_pokemon(name : String, type1 : String) -> @model.Pokemon {
@@ -97,25 +97,32 @@ fn dg_input(
 }
 
 ///|
-test "disguise active + ばけのかわ → all damages zero and disguise_blocked" {
+test "disguise active + ばけのかわ → damages include 1/8 chip + base damage" {
   let atk = dg_pokemon("attacker", "ノーマル")
   // Normal type defender keeps the engine past the type-effectiveness check.
   // (Real Mimikyu is Ghost/Fairy, but that would short-circuit on Normal-vs-
   // Ghost immunity before the disguise check runs.)
   let dfn = dg_pokemon("mimikyu-normal", "ノーマル")
   let mv = dg_move("たいあたり", "ノーマル", @model.Physical, 40)
-  let inp = dg_input(atk, dfn, mv, def_ability="ばけのかわ", disguise_active=true)
-  let r = calc_damage(inp)
-  assert_true(r.disguise_blocked)
-  @debug.debug_inspect(r.max_damage, content="0")
-  @debug.debug_inspect(r.min_damage, content="0")
-  @debug.debug_inspect(r.damages[0], content="0")
-  @debug.debug_inspect(r.damages[15], content="0")
-  @debug.debug_inspect(r.ko_text, content=(
-    #|"けがわブロック"
-  ))
+  let inp_active = dg_input(
+    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=true,
+  )
+  let r_active = calc_damage(inp_active)
+  let inp_inactive = dg_input(
+    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false,
+  )
+  let r_inactive = calc_damage(inp_inactive)
+  let chip = r_inactive.defender_hp / 8
+  assert_true(r_active.disguise_blocked)
+  @debug.debug_inspect(r_active.disguise_chip, content=chip.to_string())
+  // 各ロールに chip が加算されているはず。
+  for i = 0; i < 16; i = i + 1 {
+    assert_true(r_active.damages[i] == r_inactive.damages[i] + chip)
+  }
+  assert_true(r_active.min_damage == r_inactive.min_damage + chip)
+  assert_true(r_active.max_damage == r_inactive.max_damage + chip)
   // is_immune stays false — disguise is a state transition, not type immunity.
-  assert_true(!(r.is_immune))
+  assert_true(!(r_active.is_immune))
 }
 
 ///|
@@ -128,6 +135,7 @@ test "disguise inactive + ばけのかわ → damage as usual" {
   let inp = dg_input(atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false)
   let r = calc_damage(inp)
   assert_true(!(r.disguise_blocked))
+  @debug.debug_inspect(r.disguise_chip, content="0")
   assert_true(r.max_damage > 0)
 }
 

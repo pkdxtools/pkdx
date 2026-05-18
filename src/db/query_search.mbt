@@ -23,10 +23,11 @@ pub fn search_by_type(
   type1 : String,
   type2 : String,
   min_speed : Int,
-  version : String,
+  version : @model.GameVersion,
 ) -> Result[Array[SearchResult], String] {
-  if version == "champions" {
-    return search_by_type_champions(db, type1, type2, min_speed)
+  let version = match version {
+    @model.Champions => return search_by_type_champions(db, type1, type2, min_speed)
+    @model.Other(v) => v
   }
   let type_cond = if type2.length() > 0 {
     "AND ((t.type1 = ? AND t.type2 = ?) OR (t.type1 = ? AND t.type2 = ?))"

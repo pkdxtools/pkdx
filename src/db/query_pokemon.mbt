@@ -7,10 +7,11 @@
 pub fn query_pokemon(
   db : Db,
   name : String,
-  version : String,
+  version : @model.GameVersion,
 ) -> Result[@model.Pokemon, String] {
-  if version == "champions" {
-    return query_champions_pokemon(db, name)
+  let version = match version {
+    @model.Champions => return query_champions_pokemon(db, name)
+    @model.Other(v) => v
   }
   // pokedex_name には base 行に加えて、011_form_name_aliases / 012_gender_symbol_aliases
   // で生成されたフォーム/性別別名 (ウォッシュロトム / キュウコン（アローラ） /

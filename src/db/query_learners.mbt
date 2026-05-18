@@ -7,13 +7,12 @@
 pub fn query_learners(
   db : Db,
   move_name : String,
-  version : String,
+  version : @model.GameVersion,
   include_inactive~ : Bool = false,
 ) -> Result[Array[SearchResult], String] {
-  if version == "champions" {
-    query_learners_champions(db, move_name, include_inactive)
-  } else {
-    query_learners_legacy(db, move_name, version)
+  match version {
+    @model.Champions => query_learners_champions(db, move_name, include_inactive)
+    @model.Other(v) => query_learners_legacy(db, move_name, v)
   }
 }
 

@@ -10,14 +10,14 @@ fn format_errors(
 }
 
 ///|
-fn extract_version(json : Json) -> String {
+fn extract_version(json : Json) -> @model.GameVersion {
   match json {
     Object(m) =>
       match m.get("version") {
-        Some(String(v)) => v
-        _ => ""
+        Some(String(v)) => @model.GameVersion::parse(v)
+        _ => @model.Other("")
       }
-    _ => ""
+    _ => @model.Other("")
   }
 }
 
@@ -216,7 +216,7 @@ pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
         Some(Object(build)) =>
           match build.get("stat_points") {
             Some(Object(sp_obj)) =>
-              if version == "champions" {
+              if version.is_champions() {
                 for err in validate_champions_sp(sp_obj) {
                   result.push(err)
                 }

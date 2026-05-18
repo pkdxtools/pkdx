@@ -10,7 +10,7 @@ test "query_learners: じしん scarlet_violet" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(db, "じしん", "scarlet_violet")
+  let result = query_learners(db, "じしん", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(results) => {
@@ -46,7 +46,7 @@ test "query_learners: だいちのちから champions" {
     Some(d) => d
     None => return
   }
-  let result = query_learners(db, "だいちのちから", "champions")
+  let result = query_learners(db, "だいちのちから", @model.Champions)
   close(db)
   match result {
     Ok(results) => {
@@ -75,7 +75,7 @@ test "query_learners: nonexistent move returns empty" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(db, "そんざいしないわざ", "scarlet_violet")
+  let result = query_learners(db, "そんざいしないわざ", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(results) => @debug.debug_inspect(results.length(), content="0")
@@ -94,7 +94,7 @@ test "query_learners: no duplicate globalNo" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(db, "じしん", "scarlet_violet")
+  let result = query_learners(db, "じしん", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(results) => {

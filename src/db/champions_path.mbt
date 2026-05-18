@@ -173,29 +173,30 @@ pub fn open_champions_rwc(champions_path : String) -> Result[Db, String] {
 /// 他の version は pokedex.db を main で開いて attach は行わない (旧挙動)。
 pub fn open_for(
   pokedex_path : String,
-  version : String,
+  version : @model.GameVersion,
 ) -> Result[Db, String] {
-  if version == "champions" {
-    let champions_path = resolve_champions_db_path_from(pokedex_path)
-    if !(file_exists(champions_path)) {
-      // champions.db 未生成 (setup.sh 未実行 / 旧 install): pokedex.db
-      // のみ open。Champions レギュレーションのクエリは空結果になる。
-      open(pokedex_path)
-    } else {
-      match open(champions_path) {
-        Err(e) => Err(e)
-        Ok(db) =>
-          match attach_pokedex(db, pokedex_path) {
-            Err(e) => {
-              close(db)
-              Err(e)
+  match version {
+    @model.Champions => {
+      let champions_path = resolve_champions_db_path_from(pokedex_path)
+      if !(file_exists(champions_path)) {
+        // champions.db 未生成 (setup.sh 未実行 / 旧 install): pokedex.db
+        // のみ open。Champions レギュレーションのクエリは空結果になる。
+        open(pokedex_path)
+      } else {
+        match open(champions_path) {
+          Err(e) => Err(e)
+          Ok(db) =>
+            match attach_pokedex(db, pokedex_path) {
+              Err(e) => {
+                close(db)
+                Err(e)
+              }
+              Ok(_) => Ok(db)
             }
-            Ok(_) => Ok(db)
-          }
+        }
       }
     }
-  } else {
-    open(pokedex_path)
+    @model.Other(_) => open(pokedex_path)
   }
 }
 

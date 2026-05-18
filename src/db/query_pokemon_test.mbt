@@ -54,7 +54,7 @@ fn open_test_champions_db() -> Db? {
   if !(file_exists(champions_path)) {
     return None
   }
-  match open_for(pokedex_path, "champions") {
+  match open_for(pokedex_path, @model.Champions) {
     Ok(db) => Some(db)
     Err(_) => None
   }
@@ -73,7 +73,7 @@ test "query_pokemon: カイリュー legendsza (rc-bug regression)" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "カイリュー", "legendsza")
+  let result = query_pokemon(db, "カイリュー", @model.Other("legendsza"))
   close(db)
   match result {
     Ok(p) => {
@@ -108,7 +108,7 @@ test "query_pokemon: リザードン scarlet_violet" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "リザードン", "scarlet_violet")
+  let result = query_pokemon(db, "リザードン", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -138,7 +138,7 @@ test "query_pokemon: メガピクシー champions" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "メガピクシー", "champions")
+  let result = query_pokemon(db, "メガピクシー", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -173,7 +173,7 @@ test "query_pokemon: ガブリアス champions stats" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "ガブリアス", "champions")
+  let result = query_pokemon(db, "ガブリアス", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -201,7 +201,7 @@ test "query_moves: ガブリアス champions" {
     Some(d) => d
     None => return
   }
-  let result = query_moves(db, "0445", "champions")
+  let result = query_moves(db, "0445", @model.Champions)
   close(db)
   match result {
     Ok(moves) => {
@@ -320,7 +320,7 @@ test "query_pokemon: スコヴィラン champions globalNo" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "スコヴィラン", "champions")
+  let result = query_pokemon(db, "スコヴィラン", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -346,7 +346,7 @@ test "query_pokemon: ガブリアス scarlet_violet stats" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "ガブリアス", "scarlet_violet")
+  let result = query_pokemon(db, "ガブリアス", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -379,7 +379,7 @@ test "query_pokemon: ウォッシュロトム champions (direct form alias)" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "ウォッシュロトム", "champions")
+  let result = query_pokemon(db, "ウォッシュロトム", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -419,7 +419,7 @@ test "query_pokemon: キュウコン（アローラ） scarlet_violet (composed 
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "キュウコン（アローラ）", "scarlet_violet")
+  let result = query_pokemon(db, "キュウコン（アローラ）", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -450,7 +450,7 @@ test "query_pokemon: ロトム champions + forms list (discoverability)" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "ロトム", "champions")
+  let result = query_pokemon(db, "ロトム", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -497,7 +497,7 @@ test "query_pokemon: キュウコン scarlet_violet + forms list (regional)" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "キュウコン", "scarlet_violet")
+  let result = query_pokemon(db, "キュウコン", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -528,7 +528,7 @@ test "query_pokemon: トリミアン champions (cosmetic forms listed)" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "トリミアン", "champions")
+  let result = query_pokemon(db, "トリミアン", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -557,7 +557,7 @@ test "query_pokemon: イダイトウ（オス） scarlet_violet (gender alias jp
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "イダイトウ（オス）", "scarlet_violet")
+  let result = query_pokemon(db, "イダイトウ（オス）", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -592,7 +592,7 @@ test "query_pokemon: Basculegion (Male) scarlet_violet (gender alias eng → jpn
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "Basculegion (Male)", "scarlet_violet")
+  let result = query_pokemon(db, "Basculegion (Male)", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -625,7 +625,7 @@ test "query_pokemon: Basculegion (Female) scarlet_violet (eng alias → jpn name
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "Basculegion (Female)", "scarlet_violet")
+  let result = query_pokemon(db, "Basculegion (Female)", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -660,7 +660,7 @@ test "query_pokemon: イダイトウ scarlet_violet (base form discovery)" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "イダイトウ", "scarlet_violet")
+  let result = query_pokemon(db, "イダイトウ", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -698,7 +698,7 @@ test "query_pokemon: ニャオニクス（オス） scarlet_violet (gender alias
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "ニャオニクス（オス）", "scarlet_violet")
+  let result = query_pokemon(db, "ニャオニクス（オス）", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(p) => {
@@ -730,7 +730,7 @@ test "query_pokemon: イダイトウ（オス） champions (gender alias version
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "イダイトウ（オス）", "champions")
+  let result = query_pokemon(db, "イダイトウ（オス）", @model.Champions)
   close(db)
   match result {
     Ok(p) => {
@@ -763,7 +763,7 @@ test "query_pokemon: Therian form absent in SV errors cleanly" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "ランドロス（れいじゅう）", "scarlet_violet")
+  let result = query_pokemon(db, "ランドロス（れいじゅう）", @model.Other("scarlet_violet"))
   close(db)
   match result {
     Ok(_) => fail("should have failed: therian not in SV")

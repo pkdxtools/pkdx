@@ -5,13 +5,12 @@
 pub fn query_moves(
   db : Db,
   global_no : String,
-  version : String,
+  version : @model.GameVersion,
   include_inactive~ : Bool = false,
 ) -> Result[Array[@model.Move], String] {
-  if version == "champions" {
-    query_moves_champions(db, global_no, include_inactive)
-  } else {
-    query_moves_legacy(db, global_no, version)
+  match version {
+    @model.Champions => query_moves_champions(db, global_no, include_inactive)
+    @model.Other(v) => query_moves_legacy(db, global_no, v)
   }
 }
 
@@ -218,4 +217,68 @@ fn parse_status_effect(
       Some((kind, chance))
     }
   }
+}
+
+///|
+/// Look up a move by name (Japanese) — single move lookup distinct from the
+/// learnset-oriented `query_moves`. Used by damage CLI and any caller that
+/// only needs the move metadata, not a learnset listing.
+///
+/// version="champions" は champions.db (新スキーマ) ルートに delegate する。
+pub fn query_move(
+  db : Db,
+  move_name : String,
+  version : @model.GameVersion,
+) -> Result[@model.Move, String] {
+  let version = match version {
+    @model.Champions => return query_champions_move(db, move_name)
+    @model.Other(v) => v
+  }
+  let waza_ver = to_waza_version(version)
+  let sql =
+    #|SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,
+    #|       COALESCE(mm.priority, 0) AS priority,
+    #|       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,
+    #|       COALESCE(mm.ailment_ja, '') AS ailment_ja,
+    #|       COALESCE(mm.ailment_chance, 100) AS ailment_chance
+    #|FROM local_waza_language wl
+    #|JOIN local_waza w ON wl.waza = w.waza AND w.version = ?
+    #|LEFT JOIN move_meta mm ON mm.name_ja = wl.name
+    #|WHERE wl.version = ? AND wl.language = 'jpn' AND wl.name = ?
+    #|LIMIT 1
+  let rows = match query(db, sql, [waza_ver, waza_ver, move_name]) {
+    Ok(r) => r
+    Err(e) => return Err(e)
+  }
+  if rows.length() == 0 {
+    return Err("Move not found: " + move_name)
+  }
+  let r = rows[0]
+  let priority = if r.length() > 6 { parse_int(r[6]) } else { 0 }
+  let stat_effects = if r.length() > 7 {
+    parse_stat_effects_json(r[7])
+  } else {
+    []
+  }
+  let status_effect = if r.length() > 9 {
+    parse_status_effect(r[8], r[9])
+  } else {
+    None
+  }
+  Ok(@model.Move::{
+    name: r[0],
+    type_: r[1],
+    category: @model.category_from_jp(r[2]),
+    power: parse_int(r[3]),
+    accuracy: parse_int(r[4]),
+    pp: parse_int(r[5]),
+    learn_method: "",
+    priority,
+    stat_effects,
+    status_effect,
+    recoil_num: 0,
+    recoil_den: 1,
+    self_ko: false,
+    recharge: false,
+  })
 }

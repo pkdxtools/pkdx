@@ -70,10 +70,10 @@ fn rf_input(
 ) -> @model.DamageCalcInput {
   {
     attacker: reflect_user,
-    // For reflect moves the "defender" in the outer input is unused for
-    // damage math (target_hp comes from incoming_attacker), but the engine
-    // still reads it briefly before the branch dispatch — we set it to the
-    // incoming attacker so any unrelated path sees a real Pokemon.
+    // The reflected target is whoever receives the reflect damage. In normal
+    // game mechanics this is the same Pokemon as the incoming attacker, so
+    // the fixture uses `incoming_attacker` here. target_hp / percent / KO
+    // context is computed from this Pokemon (post calc_def_stat).
     defender: incoming_attacker,
     move_: reflect_move,
     atk_ability: "",
@@ -141,8 +141,9 @@ test "reflect: Counter doubles Step1 damage at every roll" {
       content="true",
     )
   }
-  // defender_hp is the incoming attacker (= the one taking reflect damage).
-  @debug.debug_inspect(r.defender_hp == incoming.hp, content="true")
+  // defender_hp is the reflected target's actual HP via calc_def_stat:
+  //   (base*2 + IV31 + EV0) * 50 / 100 + 60 = (200*2+31)*50/100 + 60 = 275
+  @debug.debug_inspect(r.defender_hp, content="275")
   @debug.debug_inspect(r.is_immune, content="false")
 }
 
@@ -319,4 +320,78 @@ test "reflect: incoming unset → 0 (engine safe fallback)" {
   for i = 0; i < 16; i = i + 1 {
     @debug.debug_inspect(r.damages[i], content="0")
   }
+}
+
+///|
+/// Regression: outer atk_ability is the reflect user's ability and must
+/// drive Step1 defender-side immunity. Before the role-mapping fix, the
+/// engine read reflect-user defensive modifiers from `input.def_*`, so
+/// `--atk-ability ふゆう` (reflect user) was silently ignored against an
+/// incoming じめん move. After the fix, Step1 returns is_immune=true and
+/// reflect returns all-zero with ko_text="failed".
+test "reflect: outer atk_ability ふゆう blocks じしん incoming" {
+  // Reflect user (Normal type so it isn't immune by type; ability does it).
+  let reflect_user = rf_pokemon(
+    "user", "ノーマル", "", 200, 50, 100, 50, 100, 100,
+  )
+  let incoming = rf_pokemon(
+    "incoming", "じめん", "", 200, 200, 100, 50, 100, 100,
+  )
+  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let incoming_mv = rf_move("じしん", "じめん", @model.Physical, 100)
+  let mut input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
+  input = { ..input, atk_ability: "ふゆう" }
+  let r = calc_damage(input)
+  for i = 0; i < 16; i = i + 1 {
+    @debug.debug_inspect(r.damages[i], content="0")
+  }
+  @debug.debug_inspect(r.ko_text, content="\"failed\"")
+}
+
+///|
+/// Regression: outer def_ability must NOT be applied to the reflect user.
+/// `--def-ability ふゆう` is for the reflected target, not the reflect
+/// user, so an incoming じしん still lands on the reflect user. The
+/// converse of the previous test — defender ability does not grant Step1
+/// immunity to the reflect user.
+test "reflect: outer def_ability does not grant Step1 immunity to reflect user" {
+  let reflect_user = rf_pokemon(
+    "user", "ノーマル", "", 200, 50, 100, 50, 100, 100,
+  )
+  let incoming = rf_pokemon(
+    "incoming", "じめん", "", 200, 200, 100, 50, 100, 100,
+  )
+  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let incoming_mv = rf_move("じしん", "じめん", @model.Physical, 100)
+  let mut input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
+  input = { ..input, def_ability: "ふゆう" }
+  let r = calc_damage(input)
+  // Damage is non-zero because the reflected target's ふゆう has no effect
+  // on the reflect user's Step1 defensive context.
+  @debug.debug_inspect(r.max_damage > 0, content="true")
+}
+
+///|
+/// Regression: --def-hp affects percent / KO context for reflect results.
+/// Before the fix, target_hp came from `incoming_attacker.hp` (raw base)
+/// and ignored `def_hp_override` entirely. After the fix, target_hp is
+/// computed from `input.defender` via calc_def_stat with the override
+/// applied — identical semantics to non-reflect damage.
+test "reflect: def_hp_override drives reflect-target percent denominator" {
+  let reflect_user = rf_pokemon(
+    "user", "ノーマル", "", 200, 50, 100, 50, 100, 100,
+  )
+  let incoming = rf_pokemon(
+    "incoming", "ノーマル", "", 200, 200, 100, 50, 100, 100,
+  )
+  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let incoming_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let mut input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
+  // Override the reflect target's HP to a fixed value.
+  input = { ..input, def_hp_override: 100 }
+  let r = calc_damage(input)
+  @debug.debug_inspect(r.defender_hp, content="100")
+  // Percent denominator follows defender_hp.
+  let expected_pct = r.damages[0].to_double() / 100.0 * 100.0
+  @debug.debug_inspect(r.percents[0] == expected_pct, content="true")
 }

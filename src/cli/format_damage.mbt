@@ -141,7 +141,7 @@ fn reflect_section_or_empty(input : @model.DamageCalcInput) -> String {
       mult_num.to_string() +
       ",\"multiplier_den\":" +
       mult_den.to_string() +
-      ",\"incoming_assumption\":\"no ability/item/rank correction (MVP)\"}"
+      ",\"incoming_assumption\":\"incoming side defaults to neutral; reflect-user defensive context is sourced from outer atk_* fields\"}"
     }
     _ => ""
   }

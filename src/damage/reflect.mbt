@@ -80,29 +80,49 @@ pub fn reflect_accepts_category(
 
 ///|
 /// Two-step reflect damage calculation. Step 1 recurses into `calc_damage`
-/// with `incoming_attacker → input.attacker` (the reflect user is the
-/// defender) and `incoming_*: None` to prevent re-entry. Step 2 multiplies
-/// the resulting 16-roll table by the reflect kind's integer fraction.
-/// Type immunity (Counter→Ghost, MirrorCoat→Dark) is checked against the
-/// reflect move's own type vs the incoming attacker's defensive type.
+/// with the incoming attacker as Step1.attacker and the reflect user
+/// (= `input.attacker`) as Step1.defender, plus `incoming_*: None` to
+/// prevent re-entry. Step 2 multiplies the resulting 16-roll table by the
+/// reflect kind's integer fraction. Type immunity (Counter→Ghost,
+/// MirrorCoat→Dark) is checked against the reflect move's own type vs the
+/// incoming attacker's defensive type.
 ///
-/// `defender_hp` in the returned result is `incoming_attacker.hp` — reflect
-/// damage is dealt back to the attacker, so percent / KO context is theirs.
+/// CLI / model role mapping inside the recursive Step1 call:
+///   - The reflect user is the OUTER attacker (`input.attacker`), so all of
+///     its defensive-side modifiers must be sourced from `input.atk_*`
+///     fields (ability, item, nature, rank, status, rank-up count) and
+///     written into Step1's `def_*` slots. Reading from `input.def_*` here
+///     would silently apply the reflected target's modifiers to the reflect
+///     user — wrong role.
+///   - The incoming attacker has no dedicated CLI flags, so all Step1
+///     attacker-side modifiers default to neutral. A future PR can add
+///     explicit `--incoming-*` flags.
+///   - `wall`, `screen_pierce`, `def_item_removable`, `disguise_active` in
+///     the outer call apply to the reflected target / reflect-target
+///     interaction, not to the reflect user as Step1 defender, so they are
+///     intentionally NOT propagated. If reflect-user wall support is
+///     needed, surface a separate CLI flag.
 ///
-/// MVP simplifications (Step1 input construction):
-///   - incoming side ability / item / nature / rank / status / tera / crit
-///     all default to neutral. Future PR can surface them via dedicated
-///     CLI flags.
-///   - The reflect user's defensive stats (def_rank / def_ability / def_item
-///     / def_status / wall) ARE propagated so e.g. マルチスケイル / オボン /
-///     screen still affect the Step 1 damage.
+/// `defender_hp` / `target_hp` (the percent / KO denominator) is computed
+/// from `input.defender` (the reflected target) with `def_hp_override`
+/// applied, using the same `calc_def_stat[_champions]` path as the normal
+/// engine — so `--def-hp` behaves identically to non-reflect damage.
 pub fn calc_reflect_damage(
   kind : ReflectKind,
   input : @model.DamageCalcInput,
   incoming_attacker : @model.Pokemon,
   incoming_move : @model.Move,
 ) -> @model.DamageCalcResult {
-  let target_hp = if incoming_attacker.hp > 0 { incoming_attacker.hp } else { 1 }
+  // target_hp = reflected target's actual HP (post stat formula), with
+  // --def-hp override honored. This matches normal damage calc semantics.
+  let target_base_hp = if input.defender.hp > 0 { input.defender.hp } else { 1 }
+  let target_hp = if input.stat_system == @model.Champions {
+    calc_def_stat_champions(
+      target_base_hp, is_hp=true, custom=input.def_hp_override,
+    )
+  } else {
+    calc_def_stat(target_base_hp, is_hp=true, custom=input.def_hp_override)
+  }
 
   // Step 0: category acceptance. Counter rejects special, MirrorCoat rejects
   // physical, MetalBurst/Revenge reject only status.
@@ -113,34 +133,36 @@ pub fn calc_reflect_damage(
   // Step 1: compute the damage the reflect user would have taken from the
   // incoming attack. We reuse `calc_damage` with `incoming_*: None` so the
   // engine takes the normal power-based path and we cannot recurse.
+  // Outer `atk_*` = reflect user's modifiers → Step1's `def_*` slots
+  // (because the reflect user is Step1's defender).
   let step1_input : @model.DamageCalcInput = {
     attacker: incoming_attacker,
     defender: input.attacker,
     move_: incoming_move,
     atk_ability: "",
-    def_ability: input.def_ability,
+    def_ability: input.atk_ability,
     atk_item: "",
-    def_item: input.def_item,
+    def_item: input.atk_item,
     weather: input.weather,
     field: input.field,
     tera_type: "",
     critical: false,
     atk_nature: None,
-    def_nature: None,
+    def_nature: input.atk_nature,
     atk_stat_override: 0,
     def_stat_override: 0,
     def_hp_override: 0,
     atk_rank: 0,
-    def_rank: input.def_rank,
+    def_rank: input.atk_rank,
     fainted_count: 0,
     is_double: input.is_double,
     stat_system: input.stat_system,
-    wall: input.wall,
+    wall: @model.Wall::NoWall,
     screen_pierce: false,
     atk_status_condition: @model.StatusCondition::None,
-    def_status_condition: input.def_status_condition,
+    def_status_condition: input.atk_status_condition,
     atk_rank_up_count: 0,
-    def_rank_up_count: 0,
+    def_rank_up_count: input.atk_rank_up_count,
     atk_hp_num: 2,
     atk_hp_den: 2,
     def_item_removable: false,

@@ -592,6 +592,8 @@ fn run_damage_bench(
     def_item_removable: false,
     multi_hit_mode: "",
     disguise_active: false,
+    incoming_attacker: "",
+    incoming_move: "",
   }
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
@@ -660,6 +662,8 @@ fn run_damage_bench(
       def_item_removable: false,
       multi_hit_mode: @model.MultiHit::Auto,
       disguise_active: false,
+      incoming_attacker: None,
+      incoming_move: None,
     }
     let json_format = @cli.parse_output_format("json")
     let report = @damage_cache.run_bench(cache, key, iterations, fn() {
@@ -1346,6 +1350,21 @@ fn cmd_damage() -> @admiral.CommandDef {
         "disguise-active",
         description="ばけのかわ still intact: adds 1/8 max-HP chip on top of normal damage (disguise_blocked=true, disguise_chip=def_hp/8)",
       ),
+      // --- reflect moves (Counter / MirrorCoat / MetalBurst / Comeuppance) ---
+      // Both --incoming-attacker and --incoming-move are required together
+      // when --move is a reflect move; either alone (or supplied with a
+      // non-reflect move) is rejected by run_damage. MVP では incoming 側の
+      // ability/item/rank/nature/tera/crit は無補正 (空文字 / rank=0 / false)。
+      @admiral.string(
+        "incoming-attacker",
+        description="(反射技用) 自分を殴ってきた相手のポケモン名。--incoming-move と必ず併用 (incoming 側の補正は無効)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "incoming-move",
+        description="(反射技用) 相手が使った技名 (Step1 計算用)。--incoming-attacker と必ず併用",
+        default=Some(""),
+      ),
     ],
     positionals=[
       @admiral.positional("attacker", description="Attacker Pokemon name", required=true),
@@ -1423,6 +1442,8 @@ fn cmd_damage() -> @admiral.CommandDef {
         ctx_str(ctx, "attach-title"),
         ctx_str(ctx, "attach-note"),
         rev2,
+        ctx_str(ctx, "incoming-attacker"),
+        ctx_str(ctx, "incoming-move"),
       )
     }),
   )

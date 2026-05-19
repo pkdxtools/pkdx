@@ -39,6 +39,11 @@ pub(all) struct CacheKeyInput {
   def_item_removable : Bool
   multi_hit_mode : String
   disguise_active : Bool
+  // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) の Step1
+  // 入力。空文字 = 非反射技 (legacy)。schema_version bump (v2→v3) で既存
+  // damage_cache.sqlite は自動 invalidate される。
+  incoming_attacker : String
+  incoming_move : String
 }
 
 ///|
@@ -111,6 +116,8 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     ("atk_status", input.atk_status),
     ("def_status", input.def_status),
     ("multi_hit_mode", input.multi_hit_mode),
+    ("incoming_attacker", input.incoming_attacker),
+    ("incoming_move", input.incoming_move),
   ]
   for i = 0; i < string_fields.length(); i = i + 1 {
     let (name, value) = string_fields[i]
@@ -125,7 +132,7 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
   let def_item_removable_s = if input.def_item_removable { "1" } else { "0" }
   let disguise_active_s = if input.disguise_active { "1" } else { "0" }
   let parts : Array[String] = [
-    "v2",
+    "v3",
     input.version,
     input.regulation,
     input.attacker,
@@ -162,6 +169,12 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     def_item_removable_s,
     input.multi_hit_mode,
     disguise_active_s,
+    // 反射技セクション (v3 で追加)。incoming_attacker / incoming_move は CLI
+    // で渡されたポケモン名 / 技名 (英名・日本語名・空文字いずれも可)。空文字
+    // = 非反射技 (legacy) で v2 までの key 末尾と互換だが、version prefix が
+    // 既に v3 のため pre-v3 entries とは別キー扱いになる。
+    input.incoming_attacker,
+    input.incoming_move,
   ]
   Ok(parts.join("|"))
 }

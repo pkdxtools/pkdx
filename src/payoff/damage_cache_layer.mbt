@@ -178,6 +178,8 @@ fn combatant_to_cache_key_input(
     def_item_removable: false,
     multi_hit_mode: "",
     disguise_active: false,
+    incoming_attacker: "",
+    incoming_move: "",
   }
 }
 

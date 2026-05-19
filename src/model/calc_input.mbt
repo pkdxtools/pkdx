@@ -50,4 +50,9 @@ pub(all) struct DamageCalcInput {
   // ばけのかわ初撃フラグ。true のとき engine は damages=0 / disguise_blocked
   // を立てて早期 return する。
   disguise_active : Bool
+  // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) の Step1
+  // 入力。両方 Some のとき engine は反射経路に分岐 (受けたダメージ × 倍率)。
+  // None なら通常の威力ベース計算。
+  incoming_attacker : Pokemon?
+  incoming_move : Move?
 } derive(Debug)

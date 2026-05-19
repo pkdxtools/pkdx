@@ -622,6 +622,7 @@ fn compute_damage_variants(
   atk_rank : Int,
   def_rank : Int,
   atk_burn~ : Bool = false,
+  allow_reflect~ : Bool = true,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -631,6 +632,20 @@ fn compute_damage_variants(
     return [
       { probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] },
     ]
+  }
+  // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) は通常の
+  // 威力ベース計算を走らせず、相手の各候補攻撃技から「後手確率 × 命中確率 ×
+  // Step1 期待値」の平均 × 反射倍率として静的評価する。Step1 計算は反転再帰
+  // (defender→attacker) で行うため、再入を構造的に防ぐ `allow_reflect=false`
+  // を渡す。
+  if allow_reflect {
+    match @damage.is_reflect_move(mv.name) {
+      Some(kind) =>
+        return reflect_damage_outcomes(
+          kind, attacker, defender, atk_rank, def_rank, atk_burn~,
+        )
+      None => ()
+    }
   }
   let r = @damage.calc_damage(
     build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
@@ -646,6 +661,178 @@ fn compute_damage_variants(
     ]
   }
   outcomes_from_calc_result(r, mv.category, atk_burn)
+}
+
+///|
+/// Aggregate reflect-move outcomes for the nash payoff matrix.
+///
+/// `attacker` is the reflect user, `defender` is the opponent whose attacks
+/// are being reflected. We iterate the opponent's moves, keep only those the
+/// reflect kind accepts (Counter→physical, MirrorCoat→special, MetalBurst /
+/// Revenge→both), skip reflect moves (no double-reflect loops), compute each
+/// candidate's mean Step1 damage via reverse `compute_damage_variants`
+/// (`allow_reflect=false` to lock out further recursion), then weight by
+/// `p_slow_i × p_hit_i` and average.
+///
+/// MVP simplifications:
+///   - Speed ranks default to 0 (base speed comparison). Compute-time speed
+///     rank is not propagated through `compute_damage_variants` today.
+///   - Status / burn of the opponent side is not propagated into Step 1.
+fn reflect_damage_outcomes(
+  kind : @damage.ReflectKind,
+  attacker : Combatant,
+  defender : Combatant,
+  atk_rank : Int,
+  def_rank : Int,
+  atk_burn~ : Bool,
+) -> Array[@model.DamageOutcome] {
+  let _ = atk_burn
+  // Type immunity check: reflect move's own type vs the OPPONENT (defender,
+  // because the reflect damage is dealt back to them).
+  let reflect_type = @damage.reflect_move_type(kind)
+  let type_immune = match @types.type_from_jp(reflect_type) {
+    Some(rt) =>
+      match @types.type_from_jp(defender.pokemon.type1) {
+        Some(t1) => {
+          let t2 = if defender.pokemon.type2.length() > 0 {
+            @types.type_from_jp(defender.pokemon.type2)
+          } else {
+            None
+          }
+          @types.get_dual_effectiveness(rt, t1, t2) == 0.0
+        }
+        None => false
+      }
+    None => false
+  }
+  if type_immune {
+    return [
+      { probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] },
+    ]
+  }
+  // Filter candidate incoming moves: category accepted, non-zero power,
+  // and itself non-reflect (so a reflect-only defender produces 0).
+  let mut accumulator : Double = 0.0
+  let mut candidate_count = 0
+  for i = 0; i < defender.moves.length(); i = i + 1 {
+    let mv_i = defender.moves[i]
+    if mv_i.power <= 0 {
+      continue
+    }
+    if @damage.is_reflect_move(mv_i.name) is Some(_) {
+      continue
+    }
+    if !@damage.reflect_accepts_category(kind, mv_i.category) {
+      continue
+    }
+    // Step 1: reverse direction, allow_reflect=false to prevent re-entry.
+    let step1_outcomes = compute_damage_variants(
+      defender, attacker, mv_i, def_rank, atk_rank,
+      atk_burn=false,
+      allow_reflect=false,
+    )
+    let step1_mean = avg_mean_damage(step1_outcomes)
+    let p_slow_i = compute_p_slow(kind, mv_i, attacker, defender)
+    let p_hit_i = if mv_i.accuracy <= 0 {
+      1.0
+    } else if mv_i.accuracy >= 100 {
+      1.0
+    } else {
+      mv_i.accuracy.to_double() / 100.0
+    }
+    accumulator = accumulator + p_slow_i * p_hit_i * step1_mean.to_double()
+    candidate_count = candidate_count + 1
+  }
+  if candidate_count == 0 {
+    return [
+      { probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] },
+    ]
+  }
+  let (mult_num, mult_den) = @damage.reflect_multiplier(kind)
+  let expected = accumulator *
+    mult_num.to_double() /
+    mult_den.to_double() /
+    candidate_count.to_double()
+  [
+    {
+      probability: 1.0,
+      mean_damage: expected.to_int(),
+      hits_count: 1,
+      hit_steps: [],
+    },
+  ]
+}
+
+///|
+/// Mean of `DamageOutcome.mean_damage` weighted by probability.
+fn avg_mean_damage(outcomes : Array[@model.DamageOutcome]) -> Int {
+  if outcomes.is_empty() {
+    return 0
+  }
+  let mut weighted : Double = 0.0
+  let mut total_p : Double = 0.0
+  for i = 0; i < outcomes.length(); i = i + 1 {
+    let o = outcomes[i]
+    weighted = weighted + o.mean_damage.to_double() * o.probability
+    total_p = total_p + o.probability
+  }
+  if total_p <= 0.0 {
+    return 0
+  }
+  (weighted / total_p).to_int()
+}
+
+///|
+/// Probability that the reflect user goes AFTER the opponent's chosen move
+/// `mv` — required for the reflect to land at all. Counter / MirrorCoat have
+/// priority -5 (always go last among equal-priority brackets but still lose
+/// to opponent priority moves with priority >= -5). MetalBurst / Revenge
+/// have priority 0 and must lose the speed roll to land.
+///
+/// MVP: speed rank defaults to 0 since `compute_damage_variants` does not
+/// propagate speed rank. Item / ability modifiers (Scarf / Sand Rush etc.)
+/// are also not factored in for now; same-speed defaults to 0.5 per the
+/// in-game random tie-break.
+fn compute_p_slow(
+  kind : @damage.ReflectKind,
+  mv : @model.Move,
+  attacker : Combatant,
+  defender : Combatant,
+) -> Double {
+  let reflect_priority = match kind {
+    @damage.Counter => -5
+    @damage.MirrorCoat => -5
+    @damage.MetalBurst => 0
+    @damage.Revenge => 0
+  }
+  if mv.priority > reflect_priority {
+    // Opponent move has higher priority → always outspeeds the reflect.
+    return 1.0
+  }
+  if mv.priority < reflect_priority {
+    // Opponent priority < reflect priority → reflect actually goes first
+    // (very rare; would require opponent using a -6 priority move and
+    // reflect at -5). Reflect fails.
+    return 0.0
+  }
+  // Equal priority → base speed comparison. Use base speed (or actual_stats
+  // speed if provided) at rank 0 since compute_damage_variants does not
+  // currently propagate per-side speed ranks.
+  let atk_spe = match attacker.actual_stats {
+    Some(stats) => stats[5]
+    None => attacker.pokemon.spe
+  }
+  let def_spe = match defender.actual_stats {
+    Some(stats) => stats[5]
+    None => defender.pokemon.spe
+  }
+  if atk_spe < def_spe {
+    1.0
+  } else if atk_spe > def_spe {
+    0.0
+  } else {
+    0.5
+  }
 }
 
 ///|

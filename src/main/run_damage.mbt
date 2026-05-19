@@ -71,6 +71,8 @@ fn run_damage(
   attach_title : String,
   attach_note : String,
   rev2 : DamageRev2Opts,
+  incoming_attacker_name : String,
+  incoming_move_name : String,
 ) -> Unit {
   if atk_rank < -6 || atk_rank > 6 {
     println("Error: --atk-rank must be in [-6, 6]")
@@ -79,6 +81,35 @@ fn run_damage(
   if def_rank < -6 || def_rank > 6 {
     println("Error: --def-rank must be in [-6, 6]")
     return
+  }
+  // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) と
+  // --incoming-attacker / --incoming-move の整合性検証。両方そろっている
+  // か両方空のどちらか。片方欠損 / 非反射技に incoming 指定はエラー。
+  let reflect_kind = @damage.is_reflect_move(move_name)
+  let has_incoming = incoming_attacker_name.length() > 0 ||
+    incoming_move_name.length() > 0
+  let incoming_complete = incoming_attacker_name.length() > 0 &&
+    incoming_move_name.length() > 0
+  match (reflect_kind, has_incoming, incoming_complete) {
+    (Some(_), false, _) => {
+      println(
+        "Error: 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) には --incoming-attacker と --incoming-move を両方指定してください",
+      )
+      return
+    }
+    (Some(_), true, false) => {
+      println(
+        "Error: 反射技には --incoming-attacker と --incoming-move を両方指定してください (片方のみは不可)",
+      )
+      return
+    }
+    (None, true, _) => {
+      println(
+        "Error: --incoming-attacker / --incoming-move は反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) でのみ使用できます",
+      )
+      return
+    }
+    _ => ()
   }
   let atk_nature : @model.Nature? = if atk_nature_str.length() == 0 {
     None
@@ -146,6 +177,8 @@ fn run_damage(
       def_item_removable: rev2.def_item_removable,
       multi_hit_mode: rev2.multi_hit_str,
       disguise_active: rev2.disguise_active,
+      incoming_attacker: incoming_attacker_name,
+      incoming_move: incoming_move_name,
     }
     match @damage_cache.build_cache_key(key_input) {
       Ok(k) => Some(k)
@@ -219,6 +252,36 @@ fn run_damage(
         return
       }
     }
+    // 反射技 + 両方指定なら incoming side を query して DamageCalcInput に
+    // Some(...) で渡す。query_pokemon / query_move は同じ DB 接続を再利用。
+    let (incoming_attacker_opt, incoming_move_opt) = if incoming_complete {
+      let ia = match
+        @db.query_pokemon(db, incoming_attacker_name, game.version) {
+        Ok(p) => p
+        Err(e) => {
+          match cache_opt {
+            Some(c) => @damage_cache.close(c)
+            None => ()
+          }
+          println("Error (incoming-attacker): " + e)
+          return
+        }
+      }
+      let im = match @db.query_move(db, incoming_move_name, game.version) {
+        Ok(m) => m
+        Err(e) => {
+          match cache_opt {
+            Some(c) => @damage_cache.close(c)
+            None => ()
+          }
+          println("Error (incoming-move): " + e)
+          return
+        }
+      }
+      (Some(ia), Some(im))
+    } else {
+      (None, None)
+    }
     let input = @model.DamageCalcInput::{
       attacker: atk_pokemon,
       defender: def_pokemon,
@@ -253,6 +316,8 @@ fn run_damage(
       def_item_removable: rev2.def_item_removable,
       multi_hit_mode: rev2.multi_hit,
       disguise_active: rev2.disguise_active,
+      incoming_attacker: incoming_attacker_opt,
+      incoming_move: incoming_move_opt,
     }
     let result = @damage.calc_damage(input)
     let output = @cli.format_damage(result, input, format)

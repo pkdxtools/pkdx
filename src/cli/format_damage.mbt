@@ -106,7 +106,45 @@ fn damage_input_to_json(input : @model.DamageCalcInput) -> String {
   multi_hit_to_canonical(input.multi_hit_mode) +
   "\",\"disguise_active\":" +
   bool_to_json(input.disguise_active) +
+  reflect_section_or_empty(input) +
   "}"
+}
+
+///|
+/// 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) のとき
+/// だけ、入力 echo に `reflect` サブオブジェクトを追加する。incoming が
+/// None なら空文字を返し、既存 JSON 形状を完全に維持する (後方互換性)。
+fn reflect_section_or_empty(input : @model.DamageCalcInput) -> String {
+  match (input.incoming_attacker, input.incoming_move) {
+    (Some(ia), Some(im)) => {
+      let (kind_name, mult_num, mult_den) = match
+        @damage.is_reflect_move(input.move_.name) {
+        Some(k) => {
+          let name = match k {
+            @damage.Counter => "counter"
+            @damage.MirrorCoat => "mirror_coat"
+            @damage.MetalBurst => "metal_burst"
+            @damage.Revenge => "revenge"
+          }
+          let (n, d) = @damage.reflect_multiplier(k)
+          (name, n, d)
+        }
+        None => ("unknown", 1, 1)
+      }
+      ",\"reflect\":{\"incoming_attacker\":\"" +
+      ia.name_ja +
+      "\",\"incoming_move\":\"" +
+      im.name +
+      "\",\"kind\":\"" +
+      kind_name +
+      "\",\"multiplier_num\":" +
+      mult_num.to_string() +
+      ",\"multiplier_den\":" +
+      mult_den.to_string() +
+      ",\"incoming_assumption\":\"no ability/item/rank correction (MVP)\"}"
+    }
+    _ => ""
+  }
 }
 
 ///|

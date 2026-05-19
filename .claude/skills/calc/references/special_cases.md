@@ -78,6 +78,45 @@ pkdx damage "メガガルーラ" "ハピナス" "すてみタックル" \
 - **Wonder Room**: 上記すべて **未対応** (`WONDER_ROOM_NOT_SUPPORTED` コメント多数)。シングル前提で設計されているため、Wonder Room 下の Def/SpD 入れ替えは考慮していない
 - **ボディプレス時の `--atk-rank`**: B ランクを渡す (攻撃ランクではなく防御ランク)。SKILL.md 側でもユーザーに注記する
 
+### 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく)
+
+| 技 | 倍率 | 反射対象 | タイプ | 優先度 | タイプ無効 |
+|---|---|---|---|---|---|
+| カウンター | 2.0 | 物理のみ | かくとう | -5 | ゴースト |
+| ミラーコート | 2.0 | 特殊のみ | エスパー | -5 | あく |
+| メタルバースト | 1.5 | 物理 + 特殊 | はがね | 0 (後攻時) | (なし) |
+| ほうふく | 1.5 | 物理 + 特殊 | あく | 0 (後攻時) | (なし) |
+
+通常の威力ベース計算 (`base_power → effective_power → 16-roll`) は **走らない**。
+受けたダメージ × 倍率の固定計算 + 反射技自身のタイプ無効判定のみ適用される。
+急所・乱数は仕様上なしだが、CLI 出力では Step1 の 16 段乱数に倍率を乗算した
+配列を `damages[]` に返すので、相手側の乱数幅を継承した結果になる。
+
+**CLI 例** (`damage/reflect.mbt` / `damage/engine.mbt` の早期分岐):
+
+```bash
+bin/pkdx damage ハピナス カイリュー ミラーコート \
+  --incoming-attacker カイリュー \
+  --incoming-move りゅうせいぐん \
+  --format json --version scarlet_violet
+```
+
+- `--incoming-attacker` / `--incoming-move` は **反射技でのみ受理**。両方欠損で
+  反射技を指定するとエラー、非反射技に `--incoming-*` を渡してもエラー。
+- 反射ダメージは「相手 = `--incoming-attacker`」に与える。JSON の
+  `defender_hp` は反射先の HP (= incoming_attacker.hp) を返す。
+- JSON の `input.reflect` に `kind` / `multiplier_num,den` / `incoming_*` の
+  echo が付く (反射技以外では完全に省略され、既存 JSON 形状と互換)。
+
+**MVP の制約** (Open Questions):
+- incoming 側の ability / item / nature / rank / tera / crit は **無補正**。
+  反射する側の防御 ability / item / rank / status / wall は反映される。
+- nash 側 (`payoff/switching_game.mbt`) の反射評価は「相手の物理/特殊技の平均
+  ダメージ × 反射倍率 × p_slow × p_hit」で行う。メタルバースト / ほうふくは
+  base speed 比較で「明らかに先制する場合は 0」とし、相手の優先度技に対しては
+  p_slow=1 で必ず反射が成立する扱い。speed rank・スカーフ等の補正は MVP では
+  未反映 (compute_damage_variants が speed rank を伝播していないため)。
+
 ### ウェザーボール
 
 - **タイプ変化**: 晴 → ほのお / 雨 → みず / 砂 → いわ / 雪 → こおり (`damage/variable_power.mbt:20-35`)

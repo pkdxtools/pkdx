@@ -94,6 +94,8 @@ fn pb_input(
     def_item_removable: false,
     multi_hit_mode,
     disguise_active: false,
+    incoming_attacker: None,
+    incoming_move: None,
   }
 }
 

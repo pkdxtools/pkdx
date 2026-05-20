@@ -92,30 +92,43 @@ pkdx damage "メガガルーラ" "ハピナス" "すてみタックル" \
 急所・乱数は仕様上なしだが、CLI 出力では Step1 の 16 段乱数に倍率を乗算した
 配列を `damages[]` に返すので、相手側の乱数幅を継承した結果になる。
 
-**CLI 例** (`damage/reflect.mbt` / `damage/engine.mbt` の早期分岐):
+**CLI 例**:
 
 ```bash
+# 必須フラグ (両方欠損なら反射技指定はエラー、非反射技に --incoming-* 指定もエラー)
 bin/pkdx damage <reflect_user> <reflected_target> <反射技> \
   --incoming-attacker <reflected_target> \
   --incoming-move <相手の技> \
   --format json
+
+# Incoming 側の補正フラグ群 (全て任意、外側 --atk-* と対称)
+#   --incoming-atk-ability    特性 (もうか / すなのちから / いかく ...)
+#   --incoming-atk-item       持ち物 (こだわりハチマキ / いのちのたま / とつげきチョッキ ...)
+#   --incoming-atk-nature     性格 (いじっぱり / ようき / ひかえめ ...)
+#   --incoming-atk-rank       攻撃ランク段 (-6..+6)
+#   --incoming-atk-stat       攻撃stat実数値 override
+#   --incoming-atk-status     状態異常 (burn 等)
+#   --incoming-atk-rank-up-count  ランク上昇累計 (アシストパワー用)
+#   --incoming-atk-hp         HP 比 (やけっぱち用、例 1/2)
+#   --incoming-tera-type      テラスタイプ
+#   --incoming-critical       急所だった場合
 ```
 
-- `--incoming-attacker` / `--incoming-move` は **反射技でのみ受理**。両方欠損で
-  反射技を指定するとエラー、非反射技に `--incoming-*` を渡してもエラー。
-- 反射ダメージは「相手 = `--incoming-attacker`」に与える。JSON の
-  `defender_hp` は反射先の HP (= incoming_attacker.hp) を返す。
-- JSON の `input.reflect` に `kind` / `multiplier_num,den` / `incoming_*` の
-  echo が付く (反射技以外では完全に省略され、既存 JSON 形状と互換)。
+- 反射ダメージは「相手 = `--incoming-attacker`」に与える。JSON の `defender_hp`
+  は反射先の HP (`--def-hp` override 適用後)。
+- JSON の `input.reflect` には `kind` / `multiplier_num,den` / incoming 側の
+  全 modifier を echo する (反射技以外では完全に省略され、既存 JSON 形状と互換)。
+- 反射する側の **防御コンテキスト** (外側 `--atk-ability` / `--atk-item` /
+  `--atk-rank` / `--atk-status` / `--atk-nature`) は Step1 の defender 側に
+  そのまま流れる。例: `ハピナス カウンター --atk-ability マルチスケイル` で
+  ハピナスの HP 満タン時にマルチスケイル軽減を反映できる。
 
-**MVP の制約** (Open Questions):
-- incoming 側の ability / item / nature / rank / tera / crit は **無補正**。
-  反射する側の防御 ability / item / rank / status / wall は反映される。
-- nash 側 (`payoff/switching_game.mbt`) の反射評価は「相手の物理/特殊技の平均
-  ダメージ × 反射倍率 × p_slow × p_hit」で行う。メタルバースト / ほうふくは
-  base speed 比較で「明らかに先制する場合は 0」とし、相手の優先度技に対しては
-  p_slow=1 で必ず反射が成立する扱い。speed rank・スカーフ等の補正は MVP では
-  未反映 (compute_damage_variants が speed rank を伝播していないため)。
+**Nash 側の制約**: `payoff/switching_game.mbt` の反射評価は「相手の物理/特殊技
+の平均ダメージ × 反射倍率 × p_slow × p_hit」で行う。メタルバースト / ほうふく
+は base speed 比較で「明らかに先制する場合は 0」とし、相手の優先度技に対しては
+p_slow=1 で必ず反射が成立する扱い。speed rank・スカーフ等の補正は payoff 経路
+では未反映 (compute_damage_variants が speed rank を伝播していないため)。CLI
+の damage では incoming-* で全補正反映できる。
 
 ### ウェザーボール
 

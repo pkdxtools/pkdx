@@ -115,8 +115,8 @@ fn damage_input_to_json(input : @model.DamageCalcInput) -> String {
 /// だけ、入力 echo に `reflect` サブオブジェクトを追加する。incoming が
 /// None なら空文字を返し、既存 JSON 形状を完全に維持する (後方互換性)。
 fn reflect_section_or_empty(input : @model.DamageCalcInput) -> String {
-  match (input.incoming_attacker, input.incoming_move) {
-    (Some(ia), Some(im)) => {
+  match input.incoming {
+    Some(opts) => {
       let (kind_name, mult_num, mult_den) = match
         @damage.is_reflect_move(input.move_.name) {
         Some(k) => {
@@ -132,18 +132,40 @@ fn reflect_section_or_empty(input : @model.DamageCalcInput) -> String {
         None => ("unknown", 1, 1)
       }
       ",\"reflect\":{\"incoming_attacker\":\"" +
-      ia.name_ja +
+      opts.attacker.name_ja +
       "\",\"incoming_move\":\"" +
-      im.name +
+      opts.move_.name +
       "\",\"kind\":\"" +
       kind_name +
       "\",\"multiplier_num\":" +
       mult_num.to_string() +
       ",\"multiplier_den\":" +
       mult_den.to_string() +
-      ",\"incoming_assumption\":\"incoming side defaults to neutral; reflect-user defensive context is sourced from outer atk_* fields\"}"
+      ",\"incoming_ability\":\"" +
+      opts.atk_ability +
+      "\",\"incoming_item\":\"" +
+      opts.atk_item +
+      "\",\"incoming_nature\":\"" +
+      nature_name_or_empty(opts.atk_nature) +
+      "\",\"incoming_rank\":" +
+      opts.atk_rank.to_string() +
+      ",\"incoming_stat_override\":" +
+      opts.atk_stat_override.to_string() +
+      ",\"incoming_status\":\"" +
+      status_to_canonical(opts.atk_status_condition) +
+      "\",\"incoming_rank_up_count\":" +
+      opts.atk_rank_up_count.to_string() +
+      ",\"incoming_hp_num\":" +
+      opts.atk_hp_num.to_string() +
+      ",\"incoming_hp_den\":" +
+      opts.atk_hp_den.to_string() +
+      ",\"incoming_tera_type\":\"" +
+      opts.tera_type +
+      "\",\"incoming_critical\":" +
+      bool_to_json(opts.critical) +
+      "}"
     }
-    _ => ""
+    None => ""
   }
 }
 

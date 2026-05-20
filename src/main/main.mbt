@@ -594,6 +594,17 @@ fn run_damage_bench(
     disguise_active: false,
     incoming_attacker: "",
     incoming_move: "",
+    incoming_atk_ability: "",
+    incoming_atk_item: "",
+    incoming_atk_nature: "",
+    incoming_atk_rank: 0,
+    incoming_atk_stat: 0,
+    incoming_atk_status: "",
+    incoming_atk_rank_up_count: 0,
+    incoming_atk_hp_num: 0,
+    incoming_atk_hp_den: 0,
+    incoming_tera_type: "",
+    incoming_critical: false,
   }
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
@@ -662,8 +673,7 @@ fn run_damage_bench(
       def_item_removable: false,
       multi_hit_mode: @model.MultiHit::Auto,
       disguise_active: false,
-      incoming_attacker: None,
-      incoming_move: None,
+      incoming: None,
     }
     let json_format = @cli.parse_output_format("json")
     let report = @damage_cache.run_bench(cache, key, iterations, fn() {
@@ -1351,19 +1361,70 @@ fn cmd_damage() -> @admiral.CommandDef {
         description="ばけのかわ still intact: adds 1/8 max-HP chip on top of normal damage (disguise_blocked=true, disguise_chip=def_hp/8)",
       ),
       // --- reflect moves (Counter / MirrorCoat / MetalBurst / Comeuppance) ---
-      // Both --incoming-attacker and --incoming-move are required together
-      // when --move is a reflect move; either alone (or supplied with a
-      // non-reflect move) is rejected by run_damage. MVP では incoming 側の
-      // ability/item/rank/nature/tera/crit は無補正 (空文字 / rank=0 / false)。
+      // --incoming-attacker / --incoming-move are required together when
+      // --move is a reflect move. The remaining --incoming-* flags mirror
+      // the attacker-side `--atk-*` family so Step 1 (the incoming attack)
+      // honours Choice items, Life Orb, nature, +ranks, Tera, crit, burn,
+      // etc. Without these the reflected damage would be off by 50%+ and
+      // unusable in real battle planning.
       @admiral.string(
         "incoming-attacker",
-        description="(反射技用) 自分を殴ってきた相手のポケモン名。--incoming-move と必ず併用 (incoming 側の補正は無効)",
+        description="(反射技用) 自分を殴ってきた相手のポケモン名。--incoming-move と必ず併用",
         default=Some(""),
       ),
       @admiral.string(
         "incoming-move",
         description="(反射技用) 相手が使った技名 (Step1 計算用)。--incoming-attacker と必ず併用",
         default=Some(""),
+      ),
+      @admiral.string(
+        "incoming-atk-ability",
+        description="(反射技用) Incoming 側の特性 (ja). 例: もうか, すなのちから, いかく",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "incoming-atk-item",
+        description="(反射技用) Incoming 側の持ち物 (ja). 例: こだわりハチマキ, いのちのたま, とつげきチョッキ",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "incoming-atk-nature",
+        description="(反射技用) Incoming 側の性格 (ja). 例: いじっぱり, ようき, ひかえめ. Default: +10% 攻撃stat特化相当",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "incoming-atk-rank",
+        description="(反射技用) Incoming 側の攻撃ランク段 (-6..+6)",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "incoming-atk-stat",
+        description="(反射技用) Incoming 側の攻撃stat実数値 override (pre-rank)。0 = species ベース",
+        default=Some(0),
+      ),
+      @admiral.string(
+        "incoming-atk-status",
+        description="(反射技用) Incoming 側の状態異常: burn (やけど) など。物理半減等が反映される",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "incoming-atk-rank-up-count",
+        description="(反射技用) Incoming 側のランク上昇累計 (アシストパワー用)",
+        default=Some(0),
+      ),
+      @admiral.string(
+        "incoming-atk-hp",
+        description="(反射技用) Incoming 側の HP 比 (やけっぱち用)。例: 1/2, 50%. Default: full",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "incoming-tera-type",
+        description="(反射技用) Incoming 側のテラスタイプ (ja)",
+        default=Some(""),
+      ),
+      @admiral.bool(
+        "incoming-critical",
+        description="(反射技用) Incoming 側の攻撃が急所だった場合",
       ),
     ],
     positionals=[
@@ -1444,6 +1505,16 @@ fn cmd_damage() -> @admiral.CommandDef {
         rev2,
         ctx_str(ctx, "incoming-attacker"),
         ctx_str(ctx, "incoming-move"),
+        ctx_str(ctx, "incoming-atk-ability"),
+        ctx_str(ctx, "incoming-atk-item"),
+        ctx_str(ctx, "incoming-atk-nature"),
+        ctx_int(ctx, "incoming-atk-rank"),
+        ctx_int(ctx, "incoming-atk-stat"),
+        ctx_str(ctx, "incoming-atk-status"),
+        ctx_int(ctx, "incoming-atk-rank-up-count"),
+        ctx_str(ctx, "incoming-atk-hp"),
+        ctx_str(ctx, "incoming-tera-type"),
+        ctx.get_bool("incoming-critical"),
       )
     }),
   )

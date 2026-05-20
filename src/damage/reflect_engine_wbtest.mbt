@@ -105,8 +105,23 @@ fn rf_input(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
-    incoming_attacker: Some(incoming_attacker),
-    incoming_move: Some(incoming_move),
+    incoming: Some(
+      @model.IncomingOpts::{
+        attacker: incoming_attacker,
+        move_: incoming_move,
+        atk_ability: "",
+        atk_item: "",
+        atk_nature: None,
+        atk_rank: 0,
+        atk_stat_override: 0,
+        atk_status_condition: @model.StatusCondition::None,
+        atk_rank_up_count: 0,
+        atk_hp_num: 2,
+        atk_hp_den: 2,
+        tera_type: "",
+        critical: false,
+      },
+    ),
   }
 }
 
@@ -131,8 +146,7 @@ test "reflect: Counter doubles Step1 damage at every roll" {
     attacker: incoming,
     defender: reflect_user,
     move_: incoming_mv,
-    incoming_attacker: None,
-    incoming_move: None,
+    incoming: None,
   }
   let step1 = calc_damage(step1_input)
   for i = 0; i < 16; i = i + 1 {
@@ -164,8 +178,7 @@ test "reflect: MirrorCoat doubles special Step1 damage" {
     attacker: incoming,
     defender: reflect_user,
     move_: incoming_mv,
-    incoming_attacker: None,
-    incoming_move: None,
+    incoming: None,
   }
   let step1 = calc_damage(step1_input)
   for i = 0; i < 16; i = i + 1 {
@@ -193,8 +206,7 @@ test "reflect: MetalBurst multiplies physical Step1 by 1.5 (floor)" {
     attacker: incoming,
     defender: reflect_user,
     move_: incoming_mv,
-    incoming_attacker: None,
-    incoming_move: None,
+    incoming: None,
   }
   let step1 = calc_damage(step1_input)
   for i = 0; i < 16; i = i + 1 {
@@ -220,8 +232,7 @@ test "reflect: Revenge multiplies special Step1 by 1.5 (floor)" {
     attacker: incoming,
     defender: reflect_user,
     move_: incoming_mv,
-    incoming_attacker: None,
-    incoming_move: None,
+    incoming: None,
   }
   let step1 = calc_damage(step1_input)
   for i = 0; i < 16; i = i + 1 {
@@ -315,7 +326,7 @@ test "reflect: incoming unset → 0 (engine safe fallback)" {
   let any_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
   let mut input = rf_input(reflect_user, reflect_mv, any, any_mv)
   // Drop incoming_* to simulate the CLI-layer-bypassed misuse.
-  input = { ..input, incoming_attacker: None, incoming_move: None }
+  input = { ..input, incoming: None }
   let r = calc_damage(input)
   for i = 0; i < 16; i = i + 1 {
     @debug.debug_inspect(r.damages[i], content="0")

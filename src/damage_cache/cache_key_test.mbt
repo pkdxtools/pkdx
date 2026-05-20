@@ -38,6 +38,17 @@ fn baseline() -> CacheKeyInput {
     disguise_active: false,
     incoming_attacker: "",
     incoming_move: "",
+    incoming_atk_ability: "",
+    incoming_atk_item: "",
+    incoming_atk_nature: "",
+    incoming_atk_rank: 0,
+    incoming_atk_stat: 0,
+    incoming_atk_status: "",
+    incoming_atk_rank_up_count: 0,
+    incoming_atk_hp_num: 0,
+    incoming_atk_hp_den: 0,
+    incoming_tera_type: "",
+    incoming_critical: false,
   }
 }
 
@@ -93,9 +104,20 @@ test "build_cache_key: single-field change yields distinct key" {
     { ..baseline(), def_item_removable: true },
     { ..baseline(), multi_hit_mode: "fixed:5" },
     { ..baseline(), disguise_active: true },
-    // v3 additions: reflect-move incoming inputs.
+    // v3+v4 additions: reflect-move incoming inputs and modifier echo.
     { ..baseline(), incoming_attacker: "カイリュー" },
     { ..baseline(), incoming_move: "りゅうせいぐん" },
+    { ..baseline(), incoming_atk_ability: "いかく" },
+    { ..baseline(), incoming_atk_item: "いのちのたま" },
+    { ..baseline(), incoming_atk_nature: "ようき" },
+    { ..baseline(), incoming_atk_rank: 2 },
+    { ..baseline(), incoming_atk_stat: 200 },
+    { ..baseline(), incoming_atk_status: "burn" },
+    { ..baseline(), incoming_atk_rank_up_count: 3 },
+    { ..baseline(), incoming_atk_hp_num: 1 },
+    { ..baseline(), incoming_atk_hp_den: 4 },
+    { ..baseline(), incoming_tera_type: "じめん" },
+    { ..baseline(), incoming_critical: true },
   ]
   for i = 0; i < mutations.length(); i = i + 1 {
     guard build_cache_key(mutations[i]) is Ok(k) else {
@@ -177,11 +199,11 @@ test "build_cache_key: rejects trailing whitespace" {
 }
 
 ///|
-/// v3 schema bump: baseline key must start with the new version prefix so a
-/// damage_cache.sqlite written under v2 cannot collide with v3 entries.
-test "build_cache_key: v3 schema prefix" {
+/// v4 schema bump: baseline key must start with the new version prefix so a
+/// damage_cache.sqlite written under v2/v3 cannot collide with v4 entries.
+test "build_cache_key: v4 schema prefix" {
   guard build_cache_key(baseline()) is Ok(k) else { fail("unexpected Err") }
-  assert_true(k.has_prefix("v3|"))
+  assert_true(k.has_prefix("v4|"))
 }
 
 ///|

@@ -2,18 +2,13 @@
 /// Main damage calculation function.
 pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) 分岐。
-  // 通常の威力式は走らず、incoming_* で渡された相手の攻撃を Step1 として再帰
-  // 計算し、固定倍率を乗算する。incoming_* 片方欠損なら "failed" として全 0 を
-  // 返す (CLI 側でバリデーション済みだが engine 自体は安全側で振る舞う)。
-  match
-    (
-      is_reflect_move(input.move_.name),
-      input.incoming_attacker,
-      input.incoming_move,
-    ) {
-    (Some(kind), Some(ia), Some(im)) =>
-      return calc_reflect_damage(kind, input, ia, im)
-    (Some(_), _, _) => {
+  // 通常の威力式は走らず、incoming で渡された相手の攻撃情報一式 (attacker /
+  // move / ability / item / nature / rank / status / tera / crit) を Step1 と
+  // して再帰計算し、固定倍率を乗算する。incoming=None なら "failed" として
+  // 全 0 を返す (CLI 側でバリデーション済みだが engine 自体は安全側で振る舞う)。
+  match (is_reflect_move(input.move_.name), input.incoming) {
+    (Some(kind), Some(opts)) => return calc_reflect_damage(kind, input, opts)
+    (Some(_), None) => {
       let hp = if input.defender.hp > 0 { input.defender.hp } else { 1 }
       return reflect_zero_result(hp)
     }

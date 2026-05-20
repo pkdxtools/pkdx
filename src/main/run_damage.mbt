@@ -73,6 +73,16 @@ fn run_damage(
   rev2 : DamageRev2Opts,
   incoming_attacker_name : String,
   incoming_move_name : String,
+  incoming_atk_ability : String,
+  incoming_atk_item : String,
+  incoming_atk_nature_str : String,
+  incoming_atk_rank : Int,
+  incoming_atk_stat : Int,
+  incoming_atk_status_str : String,
+  incoming_atk_rank_up_count : Int,
+  incoming_atk_hp_str : String,
+  incoming_tera_type : String,
+  incoming_critical : Bool,
 ) -> Unit {
   if atk_rank < -6 || atk_rank > 6 {
     println("Error: --atk-rank must be in [-6, 6]")
@@ -82,14 +92,36 @@ fn run_damage(
     println("Error: --def-rank must be in [-6, 6]")
     return
   }
+  if incoming_atk_rank < -6 || incoming_atk_rank > 6 {
+    println("Error: --incoming-atk-rank must be in [-6, 6]")
+    return
+  }
   // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) と
   // --incoming-attacker / --incoming-move の整合性検証。両方そろっている
   // か両方空のどちらか。片方欠損 / 非反射技に incoming 指定はエラー。
+  // 他の --incoming-* フラグ (ability/item/nature/...) は反射技なら任意、
+  // 非反射技ならエラー (反射対象がないので意味を持たない)。
   let reflect_kind = @damage.is_reflect_move(move_name)
   let has_incoming = incoming_attacker_name.length() > 0 ||
     incoming_move_name.length() > 0
   let incoming_complete = incoming_attacker_name.length() > 0 &&
     incoming_move_name.length() > 0
+  let has_any_incoming_modifier = incoming_atk_ability.length() > 0 ||
+    incoming_atk_item.length() > 0 ||
+    incoming_atk_nature_str.length() > 0 ||
+    incoming_atk_rank != 0 ||
+    incoming_atk_stat != 0 ||
+    incoming_atk_status_str.length() > 0 ||
+    incoming_atk_rank_up_count != 0 ||
+    incoming_atk_hp_str.length() > 0 ||
+    incoming_tera_type.length() > 0 ||
+    incoming_critical
+  if reflect_kind is None && has_any_incoming_modifier {
+    println(
+      "Error: --incoming-atk-* / --incoming-tera-type / --incoming-critical は反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) でのみ使用できます",
+    )
+    return
+  }
   match (reflect_kind, has_incoming, incoming_complete) {
     (Some(_), false, _) => {
       println(
@@ -133,6 +165,26 @@ fn run_damage(
       }
     }
   }
+  let incoming_atk_nature : @model.Nature? = if incoming_atk_nature_str.length() ==
+    0 {
+    None
+  } else {
+    match @model.nature_from_ja(incoming_atk_nature_str) {
+      Some(n) => Some(n)
+      None => {
+        println(
+          "Error: Unknown incoming nature: " + incoming_atk_nature_str,
+        )
+        return
+      }
+    }
+  }
+  let incoming_atk_status_cond = @model.status_condition_from_cli_str(
+    incoming_atk_status_str,
+  )
+  let (incoming_atk_hp_num, incoming_atk_hp_den) = @cli.parse_hp_ratio(
+    incoming_atk_hp_str,
+  )
   // Cache path: only active for JSON output because the cached value is
   // JSON-shaped and table rendering depends on the original DamageCalcInput.
   // `--attach-team` もバイパス — attach 処理は DamageCalcInput / Result が
@@ -179,6 +231,17 @@ fn run_damage(
       disguise_active: rev2.disguise_active,
       incoming_attacker: incoming_attacker_name,
       incoming_move: incoming_move_name,
+      incoming_atk_ability,
+      incoming_atk_item,
+      incoming_atk_nature: incoming_atk_nature_str,
+      incoming_atk_rank,
+      incoming_atk_stat,
+      incoming_atk_status: incoming_atk_status_str,
+      incoming_atk_rank_up_count,
+      incoming_atk_hp_num,
+      incoming_atk_hp_den,
+      incoming_tera_type,
+      incoming_critical,
     }
     match @damage_cache.build_cache_key(key_input) {
       Ok(k) => Some(k)
@@ -252,9 +315,11 @@ fn run_damage(
         return
       }
     }
-    // 反射技 + 両方指定なら incoming side を query して DamageCalcInput に
-    // Some(...) で渡す。query_pokemon / query_move は同じ DB 接続を再利用。
-    let (incoming_attacker_opt, incoming_move_opt) = if incoming_complete {
+    // 反射技 + 両方指定なら incoming side を query して IncomingOpts を構築。
+    // query_pokemon / query_move は同じ DB 接続を再利用。incoming 側の他の
+    // modifier (ability / item / nature / rank / status / tera / crit) は
+    // CLI フラグから sourced する。
+    let incoming_opt : @model.IncomingOpts? = if incoming_complete {
       let ia = match
         @db.query_pokemon(db, incoming_attacker_name, game.version) {
         Ok(p) => p
@@ -278,9 +343,30 @@ fn run_damage(
           return
         }
       }
-      (Some(ia), Some(im))
+      let (hp_num, hp_den) = if incoming_atk_hp_den > 0 {
+        (incoming_atk_hp_num, incoming_atk_hp_den)
+      } else {
+        (2, 2)
+      }
+      Some(
+        @model.IncomingOpts::{
+          attacker: ia,
+          move_: im,
+          atk_ability: incoming_atk_ability,
+          atk_item: incoming_atk_item,
+          atk_nature: incoming_atk_nature,
+          atk_rank: incoming_atk_rank,
+          atk_stat_override: incoming_atk_stat,
+          atk_status_condition: incoming_atk_status_cond,
+          atk_rank_up_count: incoming_atk_rank_up_count,
+          atk_hp_num: hp_num,
+          atk_hp_den: hp_den,
+          tera_type: incoming_tera_type,
+          critical: incoming_critical,
+        },
+      )
     } else {
-      (None, None)
+      None
     }
     let input = @model.DamageCalcInput::{
       attacker: atk_pokemon,
@@ -316,8 +402,7 @@ fn run_damage(
       def_item_removable: rev2.def_item_removable,
       multi_hit_mode: rev2.multi_hit,
       disguise_active: rev2.disguise_active,
-      incoming_attacker: incoming_attacker_opt,
-      incoming_move: incoming_move_opt,
+      incoming: incoming_opt,
     }
     let result = @damage.calc_damage(input)
     let output = @cli.format_damage(result, input, format)

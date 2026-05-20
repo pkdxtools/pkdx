@@ -52,8 +52,7 @@ fn fd_input(
   attacker : @model.Pokemon,
   defender : @model.Pokemon,
   mv : @model.Move,
-  incoming_attacker~ : @model.Pokemon? = None,
-  incoming_move~ : @model.Move? = None,
+  incoming~ : @model.IncomingOpts? = None,
 ) -> @model.DamageCalcInput {
   {
     attacker,
@@ -88,8 +87,42 @@ fn fd_input(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
-    incoming_attacker,
-    incoming_move,
+    incoming,
+  }
+}
+
+///|
+/// Helper to build a minimal IncomingOpts with optional overrides — keeps
+/// the test call sites readable when only a subset of modifiers matters.
+fn fd_incoming(
+  attacker : @model.Pokemon,
+  move_ : @model.Move,
+  atk_ability~ : String = "",
+  atk_item~ : String = "",
+  atk_nature~ : @model.Nature? = None,
+  atk_rank~ : Int = 0,
+  atk_stat_override~ : Int = 0,
+  atk_status_condition~ : @model.StatusCondition = @model.StatusCondition::None,
+  atk_rank_up_count~ : Int = 0,
+  atk_hp_num~ : Int = 2,
+  atk_hp_den~ : Int = 2,
+  tera_type~ : String = "",
+  critical~ : Bool = false,
+) -> @model.IncomingOpts {
+  {
+    attacker,
+    move_,
+    atk_ability,
+    atk_item,
+    atk_nature,
+    atk_rank,
+    atk_stat_override,
+    atk_status_condition,
+    atk_rank_up_count,
+    atk_hp_num,
+    atk_hp_den,
+    tera_type,
+    critical,
   }
 }
 
@@ -103,8 +136,8 @@ test "format_damage JSON: reflect sub-object emitted when incoming_* is Some" {
   let reflect_mv = fd_move("ミラーコート", "エスパー")
   let incoming_mv = fd_move("りゅうせいぐん", "ドラゴン")
   let input = fd_input(
-    user, opponent, reflect_mv, incoming_attacker=Some(opponent),
-    incoming_move=Some(incoming_mv),
+    user, opponent, reflect_mv,
+    incoming=Some(fd_incoming(opponent, incoming_mv)),
   )
   let json = damage_input_to_json(input)
   // Spot-check: reflect sub-object is present with the expected kind label
@@ -118,6 +151,28 @@ test "format_damage JSON: reflect sub-object emitted when incoming_* is Some" {
   assert_true(json.contains("\"multiplier_den\":1"))
   assert_true(json.contains("\"incoming_attacker\":\"カイリュー\""))
   assert_true(json.contains("\"incoming_move\":\"りゅうせいぐん\""))
+}
+
+///|
+/// Incoming-side modifier echo: when CLI passes --incoming-atk-item etc.,
+/// the reflect sub-object surfaces every modifier so downstream skills can
+/// see exactly what context was applied to Step 1.
+test "format_damage JSON: reflect echo carries incoming-side modifiers" {
+  let user = fd_pokemon("ハピナス", "ノーマル", 200)
+  let opponent = fd_pokemon("カイリュー", "ドラゴン", 91)
+  let reflect_mv = fd_move("ミラーコート", "エスパー")
+  let incoming_mv = fd_move("りゅうせいぐん", "ドラゴン")
+  let opts = fd_incoming(
+    opponent, incoming_mv, atk_ability="マルチスケイル", atk_item="いのちのたま",
+    atk_rank=2, atk_stat_override=200, tera_type="ドラゴン", critical=true,
+  )
+  let json = damage_input_to_json(fd_input(user, opponent, reflect_mv, incoming=Some(opts)))
+  assert_true(json.contains("\"incoming_ability\":\"マルチスケイル\""))
+  assert_true(json.contains("\"incoming_item\":\"いのちのたま\""))
+  assert_true(json.contains("\"incoming_rank\":2"))
+  assert_true(json.contains("\"incoming_stat_override\":200"))
+  assert_true(json.contains("\"incoming_tera_type\":\"ドラゴン\""))
+  assert_true(json.contains("\"incoming_critical\":true"))
 }
 
 ///|
@@ -148,8 +203,8 @@ test "format_damage JSON: reflect multiplier matches move kind" {
   let reflect_mv = fd_move("メタルバースト", "はがね")
   let incoming_mv = fd_move("じしん", "じめん")
   let input = fd_input(
-    user, opponent, reflect_mv, incoming_attacker=Some(opponent),
-    incoming_move=Some(incoming_mv),
+    user, opponent, reflect_mv,
+    incoming=Some(fd_incoming(opponent, incoming_mv)),
   )
   let json = damage_input_to_json(input)
   assert_true(json.contains("\"kind\":\"metal_burst\""))

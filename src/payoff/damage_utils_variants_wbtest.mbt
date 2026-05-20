@@ -88,8 +88,7 @@ fn dvt_input(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
-    incoming_attacker: None,
-    incoming_move: None,
+    incoming: None,
   }
 }
 

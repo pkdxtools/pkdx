@@ -58,6 +58,17 @@ fn int_baseline() -> CacheKeyInput {
     disguise_active: false,
     incoming_attacker: "",
     incoming_move: "",
+    incoming_atk_ability: "",
+    incoming_atk_item: "",
+    incoming_atk_nature: "",
+    incoming_atk_rank: 0,
+    incoming_atk_stat: 0,
+    incoming_atk_status: "",
+    incoming_atk_rank_up_count: 0,
+    incoming_atk_hp_num: 0,
+    incoming_atk_hp_den: 0,
+    incoming_tera_type: "",
+    incoming_critical: false,
   }
 }
 

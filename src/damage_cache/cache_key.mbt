@@ -40,10 +40,21 @@ pub(all) struct CacheKeyInput {
   multi_hit_mode : String
   disguise_active : Bool
   // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) の Step1
-  // 入力。空文字 = 非反射技 (legacy)。schema_version bump (v2→v3) で既存
-  // damage_cache.sqlite は自動 invalidate される。
+  // 入力一式。空文字 / 0 / false = 非反射技または無補正。schema_version bump
+  // (v3→v4) で既存 damage_cache.sqlite は自動 invalidate される。
   incoming_attacker : String
   incoming_move : String
+  incoming_atk_ability : String
+  incoming_atk_item : String
+  incoming_atk_nature : String
+  incoming_atk_rank : Int
+  incoming_atk_stat : Int
+  incoming_atk_status : String
+  incoming_atk_rank_up_count : Int
+  incoming_atk_hp_num : Int
+  incoming_atk_hp_den : Int
+  incoming_tera_type : String
+  incoming_critical : Bool
 }
 
 ///|
@@ -118,6 +129,11 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     ("multi_hit_mode", input.multi_hit_mode),
     ("incoming_attacker", input.incoming_attacker),
     ("incoming_move", input.incoming_move),
+    ("incoming_atk_ability", input.incoming_atk_ability),
+    ("incoming_atk_item", input.incoming_atk_item),
+    ("incoming_atk_nature", input.incoming_atk_nature),
+    ("incoming_atk_status", input.incoming_atk_status),
+    ("incoming_tera_type", input.incoming_tera_type),
   ]
   for i = 0; i < string_fields.length(); i = i + 1 {
     let (name, value) = string_fields[i]
@@ -131,8 +147,9 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
   let screen_pierce_s = if input.screen_pierce { "1" } else { "0" }
   let def_item_removable_s = if input.def_item_removable { "1" } else { "0" }
   let disguise_active_s = if input.disguise_active { "1" } else { "0" }
+  let incoming_critical_s = if input.incoming_critical { "1" } else { "0" }
   let parts : Array[String] = [
-    "v3",
+    "v4",
     input.version,
     input.regulation,
     input.attacker,
@@ -169,12 +186,22 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     def_item_removable_s,
     input.multi_hit_mode,
     disguise_active_s,
-    // 反射技セクション (v3 で追加)。incoming_attacker / incoming_move は CLI
-    // で渡されたポケモン名 / 技名 (英名・日本語名・空文字いずれも可)。空文字
-    // = 非反射技 (legacy) で v2 までの key 末尾と互換だが、version prefix が
-    // 既に v3 のため pre-v3 entries とは別キー扱いになる。
+    // 反射技セクション (v3 で追加、v4 で incoming 側 modifier を拡張)。
+    // 空文字 / 0 / false = 非反射技または無補正で legacy 互換。version prefix
+    // (v4) のため pre-v4 entries とは別キー扱いになる。
     input.incoming_attacker,
     input.incoming_move,
+    input.incoming_atk_ability,
+    input.incoming_atk_item,
+    input.incoming_atk_nature,
+    input.incoming_atk_rank.to_string(),
+    input.incoming_atk_stat.to_string(),
+    input.incoming_atk_status,
+    input.incoming_atk_rank_up_count.to_string(),
+    input.incoming_atk_hp_num.to_string(),
+    input.incoming_atk_hp_den.to_string(),
+    input.incoming_tera_type,
+    incoming_critical_s,
   ]
   Ok(parts.join("|"))
 }

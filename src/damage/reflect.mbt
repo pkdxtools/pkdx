@@ -110,8 +110,7 @@ pub fn reflect_accepts_category(
 pub fn calc_reflect_damage(
   kind : ReflectKind,
   input : @model.DamageCalcInput,
-  incoming_attacker : @model.Pokemon,
-  incoming_move : @model.Move,
+  opts : @model.IncomingOpts,
 ) -> @model.DamageCalcResult {
   // target_hp = reflected target's actual HP (post stat formula), with
   // --def-hp override honored. This matches normal damage calc semantics.
@@ -126,50 +125,58 @@ pub fn calc_reflect_damage(
 
   // Step 0: category acceptance. Counter rejects special, MirrorCoat rejects
   // physical, MetalBurst/Revenge reject only status.
-  if !reflect_accepts_category(kind, incoming_move.category) {
+  if !reflect_accepts_category(kind, opts.move_.category) {
     return reflect_zero_result(target_hp)
   }
 
   // Step 1: compute the damage the reflect user would have taken from the
-  // incoming attack. We reuse `calc_damage` with `incoming_*: None` so the
+  // incoming attack. We reuse `calc_damage` with `incoming: None` so the
   // engine takes the normal power-based path and we cannot recurse.
-  // Outer `atk_*` = reflect user's modifiers → Step1's `def_*` slots
-  // (because the reflect user is Step1's defender).
+  //
+  // Field-routing rules:
+  //   - opts.* = INCOMING attacker side modifiers (Step1.atk_*) — Choice
+  //     items, Adamant/Modest nature, Tera, crit, burn, +ranks, etc. all
+  //     scale the incoming damage and therefore the reflected number.
+  //   - input.atk_* = REFLECT USER (outer attacker) modifiers, which in
+  //     Step 1 sit on the defender side because the reflect user is the
+  //     one absorbing the hit.
+  //   - input.def_* / wall / screen_pierce / def_item_removable /
+  //     disguise_active describe the reflected target, not the reflect user
+  //     as Step 1 defender, so they are intentionally NOT propagated.
   let step1_input : @model.DamageCalcInput = {
-    attacker: incoming_attacker,
+    attacker: opts.attacker,
     defender: input.attacker,
-    move_: incoming_move,
-    atk_ability: "",
+    move_: opts.move_,
+    atk_ability: opts.atk_ability,
     def_ability: input.atk_ability,
-    atk_item: "",
+    atk_item: opts.atk_item,
     def_item: input.atk_item,
     weather: input.weather,
     field: input.field,
-    tera_type: "",
-    critical: false,
-    atk_nature: None,
+    tera_type: opts.tera_type,
+    critical: opts.critical,
+    atk_nature: opts.atk_nature,
     def_nature: input.atk_nature,
-    atk_stat_override: 0,
+    atk_stat_override: opts.atk_stat_override,
     def_stat_override: 0,
     def_hp_override: 0,
-    atk_rank: 0,
+    atk_rank: opts.atk_rank,
     def_rank: input.atk_rank,
     fainted_count: 0,
     is_double: input.is_double,
     stat_system: input.stat_system,
     wall: @model.Wall::NoWall,
     screen_pierce: false,
-    atk_status_condition: @model.StatusCondition::None,
+    atk_status_condition: opts.atk_status_condition,
     def_status_condition: input.atk_status_condition,
-    atk_rank_up_count: 0,
+    atk_rank_up_count: opts.atk_rank_up_count,
     def_rank_up_count: input.atk_rank_up_count,
-    atk_hp_num: 2,
-    atk_hp_den: 2,
+    atk_hp_num: opts.atk_hp_num,
+    atk_hp_den: opts.atk_hp_den,
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
-    incoming_attacker: None,
-    incoming_move: None,
+    incoming: None,
   }
   let step1 = calc_damage(step1_input)
   if step1.is_immune {
@@ -183,10 +190,10 @@ pub fn calc_reflect_damage(
   let reflect_type = reflect_move_type(kind)
   let type_immune = match @types.type_from_jp(reflect_type) {
     Some(rt) =>
-      match @types.type_from_jp(incoming_attacker.type1) {
+      match @types.type_from_jp(opts.attacker.type1) {
         Some(t1) => {
-          let t2 = if incoming_attacker.type2.length() > 0 {
-            @types.type_from_jp(incoming_attacker.type2)
+          let t2 = if opts.attacker.type2.length() > 0 {
+            @types.type_from_jp(opts.attacker.type2)
           } else {
             None
           }

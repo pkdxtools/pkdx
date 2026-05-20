@@ -595,10 +595,15 @@ fn compute_mean_damage(
   atk_rank : Int,
   def_rank : Int,
   atk_burn~ : Bool = false,
+  atk_ranks_full~ : Array[Int]? = None,
+  def_ranks_full~ : Array[Int]? = None,
 ) -> Int {
   weighted_mean_floor(
     compute_damage_variants(
-      attacker, defender, mv, atk_rank, def_rank, atk_burn~,
+      attacker, defender, mv, atk_rank, def_rank,
+      atk_burn~,
+      atk_ranks_full~,
+      def_ranks_full~,
     ),
   )
 }
@@ -623,6 +628,8 @@ fn compute_damage_variants(
   def_rank : Int,
   atk_burn~ : Bool = false,
   allow_reflect~ : Bool = true,
+  atk_ranks_full~ : Array[Int]? = None,
+  def_ranks_full~ : Array[Int]? = None,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -637,12 +644,16 @@ fn compute_damage_variants(
   // 威力ベース計算を走らせず、相手の各候補攻撃技から「後手確率 × 命中確率 ×
   // Step1 期待値」の平均 × 反射倍率として静的評価する。Step1 計算は反転再帰
   // (defender→attacker) で行うため、再入を構造的に防ぐ `allow_reflect=false`
-  // を渡す。
+  // を渡す。`*_ranks_full` が渡されていれば各候補技のカテゴリで rank を再
+  // 振り分けし、外側の反射技カテゴリで一括ディスパッチされた値を使わない。
   if allow_reflect {
     match @damage.is_reflect_move(mv.name) {
       Some(kind) =>
         return reflect_damage_outcomes(
-          kind, attacker, defender, atk_rank, def_rank, atk_burn~,
+          kind, attacker, defender, atk_rank, def_rank,
+          atk_burn~,
+          atk_ranks_full~,
+          def_ranks_full~,
         )
       None => ()
     }
@@ -674,6 +685,16 @@ fn compute_damage_variants(
 /// (`allow_reflect=false` to lock out further recursion), then weight by
 /// `p_slow_i × p_hit_i` and average.
 ///
+/// Rank routing: `atk_ranks_full` / `def_ranks_full` are the FULL 5-slot
+/// `[A, B, C, D, S]` rank arrays of the reflect user / opponent respectively.
+/// When provided, Step1 picks `(attacker_rank, defender_rank)` per
+/// `mv_i.category` instead of reusing the outer reflect-move-category
+/// dispatch — Mirror Coat's outer ranks resolve to (SpA, SpD) but Step1 for
+/// a physical candidate needs (opponent Atk, our Def), and Metal Burst /
+/// Comeuppance accept both categories so any single fixed pair would
+/// mis-evaluate mixed candidates. `None` falls back to the pre-dispatched
+/// `atk_rank` / `def_rank` for the test fixtures that pass rank 0 directly.
+///
 /// MVP simplifications:
 ///   - Speed ranks default to 0 (base speed comparison). Compute-time speed
 ///     rank is not propagated through `compute_damage_variants` today.
@@ -685,6 +706,8 @@ fn reflect_damage_outcomes(
   atk_rank : Int,
   def_rank : Int,
   atk_burn~ : Bool,
+  atk_ranks_full~ : Array[Int]? = None,
+  def_ranks_full~ : Array[Int]? = None,
 ) -> Array[@model.DamageOutcome] {
   let _ = atk_burn
   // Type immunity check: reflect move's own type vs the OPPONENT (defender,
@@ -726,8 +749,31 @@ fn reflect_damage_outcomes(
       continue
     }
     // Step 1: reverse direction, allow_reflect=false to prevent re-entry.
+    // Pick the rank pair from each side's FULL rank array using `mv_i`'s
+    // category, NOT the outer reflect move's category. Step1's attacker
+    // is the opponent (outer defender) so its offensive rank comes from
+    // `def_ranks_full`; Step1's defender is the reflect user (outer
+    // attacker) so its defensive rank comes from `atk_ranks_full`.
+    let step1_atk_rank = match def_ranks_full {
+      Some(arr) =>
+        match mv_i.category {
+          @model.Physical => arr[0]
+          @model.Special => arr[2]
+          @model.Status => 0
+        }
+      None => def_rank
+    }
+    let step1_def_rank = match atk_ranks_full {
+      Some(arr) =>
+        match mv_i.category {
+          @model.Physical => arr[1]
+          @model.Special => arr[3]
+          @model.Status => 0
+        }
+      None => atk_rank
+    }
     let step1_outcomes = compute_damage_variants(
-      defender, attacker, mv_i, def_rank, atk_rank,
+      defender, attacker, mv_i, step1_atk_rank, step1_def_rank,
       atk_burn=false,
       allow_reflect=false,
     )

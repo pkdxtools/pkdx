@@ -221,7 +221,22 @@ fn mean_damage_via_disk(
   atk_rank : Int,
   def_rank : Int,
   atk_burn~ : Bool = false,
+  atk_ranks_full~ : Array[Int]? = None,
+  def_ranks_full~ : Array[Int]? = None,
 ) -> Int {
+  // 反射技は L2 disk を経由しない。@damage.calc_damage に incoming=None で
+  // 渡すと反射 fallback が走り 0 ダメージの JSON が書き込まれてしまうため、
+  // この cache key で zero を読み返す経路を恒久的に poison させない。
+  // compute_mean_damage は compute_damage_variants 経由で reflect_damage_
+  // outcomes に到達し、フル rank 配列を使って Step1 を正しく評価する。
+  if @damage.is_reflect_move(mv.name) is Some(_) {
+    return compute_mean_damage(
+      attacker, defender, mv, atk_rank, def_rank,
+      atk_burn=atk_burn,
+      atk_ranks_full~,
+      def_ranks_full~,
+    )
+  }
   let disk = match cache.disk {
     Some(d) => d
     None =>
@@ -457,6 +472,8 @@ pub fn mean_damage_cached(
             key.atk_rank,
             key.def_rank,
             atk_burn=atk_burn,
+            atk_ranks_full=Some(atk_ranks),
+            def_ranks_full=Some(def_ranks),
           )
         None =>
           compute_mean_damage(
@@ -466,6 +483,8 @@ pub fn mean_damage_cached(
             key.atk_rank,
             key.def_rank,
             atk_burn=atk_burn,
+            atk_ranks_full=Some(atk_ranks),
+            def_ranks_full=Some(def_ranks),
           )
       }
       cache.data[key] = v
@@ -538,13 +557,17 @@ fn damage_variants_cached(
         key.atk_rank,
         key.def_rank,
         atk_burn=atk_burn,
+        atk_ranks_full=Some(atk_ranks),
+        def_ranks_full=Some(def_ranks),
       )
       cache.variants_data[key] = v
       // Touch the L2 disk cache so cross-session damage entries stay
       // populated. The disk payload is the engine's pre-burn 16-roll
       // table (scalar), reused by mean_damage_cached callers (Monte
       // Carlo / select / nash graph). Variants serialisation to disk
-      // is deferred — see open question on hit_steps fallback.
+      // is deferred — see open question on hit_steps fallback. Reflect
+      // moves are short-circuited inside `mean_damage_via_disk` so the
+      // L2 entry is never populated with the engine's zero fallback.
       match cache.disk {
         Some(_) => {
           let _ = mean_damage_via_disk(
@@ -555,6 +578,8 @@ fn damage_variants_cached(
             key.atk_rank,
             key.def_rank,
             atk_burn=atk_burn,
+            atk_ranks_full=Some(atk_ranks),
+            def_ranks_full=Some(def_ranks),
           )
         }
         None => ()

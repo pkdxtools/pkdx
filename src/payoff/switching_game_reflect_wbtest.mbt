@@ -314,3 +314,108 @@ test "reflect nash: Counter against Ghost-type opponent → 0 (type immune)" {
   )
   @debug.debug_inspect(outcomes[0].mean_damage, content="0")
 }
+
+///|
+/// MirrorCoat (Special) Step1 must read the opponent's SpA stage and the
+/// reflect user's SpD stage. Before the rank-routing fix, the outer
+/// dispatch picked the opponent's SpD for the outer `def_rank` and reused
+/// it as Step1's atk_rank, so an opponent SpA boost was invisible to
+/// Step1. With the fix, Step1 picks `def_ranks_full[2]` (opponent SpA)
+/// and `atk_ranks_full[3]` (reflect user SpD).
+test "reflect nash: MirrorCoat Step1 reads opponent SpA from def_ranks_full" {
+  let mc_user = rfn_combatant(
+    rfn_pokemon("user", "エスパー", "", 200, 50, 100, 50, 100, 50),
+    [rfn_move("ミラーコート", "エスパー", @model.Special, 1)],
+  )
+  let special_atk = rfn_combatant(
+    rfn_pokemon("atk", "ノーマル", "", 200, 100, 100, 100, 100, 100),
+    [rfn_move("ねっぷう", "ほのお", @model.Special, 95)],
+  )
+  let reflect_mv = mc_user.moves[0]
+  // Baseline: all ranks 0. compute_damage_variants applies the rank-routing
+  // fix when full arrays are present.
+  let baseline = compute_damage_variants(
+    mc_user, special_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, 0, 0, 0, 0]),
+    def_ranks_full=Some([0, 0, 0, 0, 0]),
+  )
+  // Opponent SpA at +2 (def_ranks_full index 2 = SpA stage). Step1
+  // attacker is the opponent, so its SpA rank scales the inbound damage,
+  // which then scales the reflected output.
+  let spa_boost = compute_damage_variants(
+    mc_user, special_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, 0, 0, 0, 0]),
+    def_ranks_full=Some([0, 0, 2, 0, 0]),
+  )
+  // Reflect user SpD at -2 (atk_ranks_full index 3 = SpD stage). Step1
+  // defender is the reflect user, so a lower SpD increases the inbound
+  // damage and therefore the reflected output.
+  let spd_drop = compute_damage_variants(
+    mc_user, special_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, 0, 0, -2, 0]),
+    def_ranks_full=Some([0, 0, 0, 0, 0]),
+  )
+  // Both perturbations must increase the reflected damage above baseline.
+  // Before the fix, they would not — the outer (Special-dispatched) atk/
+  // def ranks were already opp-SpD / user-SpA, masking these stages.
+  assert_true(spa_boost[0].mean_damage > baseline[0].mean_damage)
+  assert_true(spd_drop[0].mean_damage > baseline[0].mean_damage)
+  // Boosting the opponent's Atk or our Def must NOT affect a MirrorCoat
+  // reflecting a Special candidate — the rank-routing pick is per-category.
+  let irrelevant = compute_damage_variants(
+    mc_user, special_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, -2, 0, 0, 0]),
+    def_ranks_full=Some([2, 0, 0, 0, 0]),
+  )
+  @debug.assert_eq(irrelevant[0].mean_damage, baseline[0].mean_damage)
+}
+
+///|
+/// MetalBurst accepts BOTH physical and special candidates, so a single
+/// fixed (atk_rank, def_rank) pair from the outer dispatch cannot serve
+/// both. Verify per-candidate routing: an opponent Atk boost only affects
+/// the physical candidate's Step1, and an opponent SpA boost only the
+/// special candidate's Step1.
+test "reflect nash: MetalBurst routes Atk vs SpA per candidate category" {
+  let mb_user = rfn_combatant(
+    // Slow user so MetalBurst always lands (p_slow=1).
+    rfn_pokemon("user", "はがね", "", 200, 100, 100, 100, 100, 50),
+    [rfn_move("メタルバースト", "はがね", @model.Physical, 1)],
+  )
+  // Opponent has tied physical + special offences with equal base stats so
+  // both candidates contribute equally at baseline. Choose move powers and
+  // types that don't favour one over the other relative to user typing.
+  let mixed_atk = rfn_combatant(
+    rfn_pokemon("atk", "ノーマル", "", 200, 120, 100, 120, 100, 120),
+    [
+      rfn_move("たいあたり", "ノーマル", @model.Physical, 60),
+      rfn_move("はかいこうせん", "ノーマル", @model.Special, 60),
+    ],
+  )
+  let reflect_mv = mb_user.moves[0]
+  let baseline = compute_damage_variants(
+    mb_user, mixed_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, 0, 0, 0, 0]),
+    def_ranks_full=Some([0, 0, 0, 0, 0]),
+  )
+  // Boost opponent's Atk only.
+  let atk_boost = compute_damage_variants(
+    mb_user, mixed_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, 0, 0, 0, 0]),
+    def_ranks_full=Some([2, 0, 0, 0, 0]),
+  )
+  // Boost opponent's SpA only.
+  let spa_boost = compute_damage_variants(
+    mb_user, mixed_atk, reflect_mv, 0, 0,
+    atk_ranks_full=Some([0, 0, 0, 0, 0]),
+    def_ranks_full=Some([0, 0, 2, 0, 0]),
+  )
+  // Both single-stage boosts must lift the reflected damage above
+  // baseline, because each is the dominant rank for exactly one
+  // candidate. With the pre-fix code, the outer (Physical-dispatched)
+  // pair was (user-Atk, opp-Def) for both candidates, so SpA boosts
+  // would be invisible and the physical Atk boost would land on the
+  // wrong slot.
+  assert_true(atk_boost[0].mean_damage > baseline[0].mean_damage)
+  assert_true(spa_boost[0].mean_damage > baseline[0].mean_damage)
+}

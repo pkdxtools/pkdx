@@ -95,10 +95,10 @@ pkdx damage "メガガルーラ" "ハピナス" "すてみタックル" \
 **CLI 例** (`damage/reflect.mbt` / `damage/engine.mbt` の早期分岐):
 
 ```bash
-bin/pkdx damage ハピナス カイリュー ミラーコート \
-  --incoming-attacker カイリュー \
-  --incoming-move りゅうせいぐん \
-  --format json --version scarlet_violet
+bin/pkdx damage <reflect_user> <reflected_target> <反射技> \
+  --incoming-attacker <reflected_target> \
+  --incoming-move <相手の技> \
+  --format json
 ```
 
 - `--incoming-attacker` / `--incoming-move` は **反射技でのみ受理**。両方欠損で

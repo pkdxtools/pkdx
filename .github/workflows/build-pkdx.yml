@@ -57,7 +57,38 @@ jobs:
         run: |
           # Use MSYS2's MinGW64 packages so OpenBLAS and gcc share the same ABI
           # without spending release CI time building OpenBLAS from source.
-          C:\msys64\usr\bin\pacman.exe -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-openblas
+
+          # The default mirrorlist on the GitHub Actions Windows image rotates
+          # through mirrors including tuna, which has timed out at ~0 B/sec
+          # from Azure runners and aborted the release job mid-database-sync.
+          # Pin to upstream + geographically diverse fallbacks (skipping tuna)
+          # to make this step deterministic.
+          Set-Content -Path C:\msys64\etc\pacman.d\mirrorlist.msys -Encoding ASCII -Value @'
+          Server = https://repo.msys2.org/msys/$arch/
+          Server = https://downloads.sourceforge.net/project/msys2/REPOS/MSYS2/$arch/
+          Server = https://mirror.yandex.ru/mirrors/msys2/msys/$arch/
+          '@
+          Set-Content -Path C:\msys64\etc\pacman.d\mirrorlist.mingw64 -Encoding ASCII -Value @'
+          Server = https://repo.msys2.org/mingw/$repo/
+          Server = https://downloads.sourceforge.net/project/msys2/REPOS/MINGW/$arch/
+          Server = https://mirror.yandex.ru/mirrors/msys2/mingw/$repo/
+          '@
+
+          # Belt-and-braces: even with curated mirrors, a transient blip during
+          # the multi-file sync can still abort pacman. Retry the whole call
+          # before failing the job.
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            C:\msys64\usr\bin\pacman.exe -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-openblas
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq $maxAttempts) {
+              Write-Error "pacman failed after $maxAttempts attempts"
+              exit 1
+            }
+            Write-Host "pacman attempt $attempt failed (exit $LASTEXITCODE); retrying in 10s..."
+            Start-Sleep -Seconds 10
+          }
+
           # Add OpenBLAS DLL dir to PATH for runtime resolution during moon test.
           Add-Content $env:GITHUB_PATH "C:\msys64\mingw64\bin"
 

@@ -194,6 +194,28 @@ elif [ -f "$LOCAL_BUILD" ] || [ -f "$LOCAL_BUILD_DEBUG" ]; then
   rm -f "$LOCAL_BUILD" "$LOCAL_BUILD_DEBUG"
 fi
 
+# When no usable local build exists but the MoonBit toolchain is on PATH,
+# build from source instead of downloading a release. The released binary
+# only knows about migrations baked in at compile time, so a fresh checkout
+# of a feature branch that adds a new migration would silently skip it
+# when running `pkdx migrate` with an older release binary.
+if [ "$NEED_DOWNLOAD" = true ] && command -v moon &>/dev/null; then
+  echo "  No local build; moon detected. Building from source..."
+  if (cd "$REPO_ROOT" && moon build --target native --release src/main); then
+    if [ -f "$LOCAL_BUILD" ]; then
+      echo "  Local build complete."
+      NEED_DOWNLOAD=false
+    else
+      echo "  Warning: moon build reported success but $LOCAL_BUILD is missing." >&2
+      echo "  Falling back to release binary." >&2
+    fi
+  else
+    echo "  Warning: moon build failed." >&2
+    echo "  Non-macOS hosts likely need MOON_CC_LINK_FLAGS exported (see Step 2.7 above)." >&2
+    echo "  Falling back to release binary." >&2
+  fi
+fi
+
 if [ "$NEED_DOWNLOAD" = true ]; then
   mkdir -p "$CACHE_DIR"
   BINARY="$CACHE_DIR/$BINARY_NAME"
@@ -267,10 +289,39 @@ if [ -f "$REPO_ROOT/pokedex/pokedex.db" ]; then
     exit 1
   fi
   rm -f "$CHAMPIONS_DB"
-  if "$REPO_ROOT/bin/pkdx" migrate --repo-root "$REPO_ROOT"; then
+  migrate_log="$(mktemp)"
+  trap 'rm -f "$migrate_log"' EXIT
+  if "$REPO_ROOT/bin/pkdx" migrate --repo-root "$REPO_ROOT" | tee "$migrate_log"; then
     :
   else
     echo "  Error: pkdx migrate failed." >&2
+    exit 1
+  fi
+  # Verify the binary's migration list is at least as new as the source's.
+  # An older released binary will report fewer "applied" migrations than
+  # `migrations_pokedex()` / `migrations_champions()` declares in source —
+  # the missing ones are silently dropped, leaving the DB half-migrated.
+  expected_pokedex=$(awk '/^pub fn migrations_pokedex/,/^}/' \
+    "$REPO_ROOT/src/migrate/migrations.mbt" | grep -c 'name:')
+  expected_champions=$(awk '/^pub fn migrations_champions/,/^}/' \
+    "$REPO_ROOT/src/migrate/migrations.mbt" | grep -c 'name:')
+  summary_line=$(grep '^pkdx_patch:' "$migrate_log" | tail -1)
+  applied_pokedex=$(echo "$summary_line" | sed -n 's/.*pokedex \([0-9][0-9]*\) applied.*/\1/p')
+  applied_champions=$(echo "$summary_line" | sed -n 's/.*champions \([0-9][0-9]*\) applied.*/\1/p')
+  applied_pokedex=${applied_pokedex:-0}
+  applied_champions=${applied_champions:-0}
+  if [ "$applied_pokedex" -lt "$expected_pokedex" ] || \
+     [ "$applied_champions" -lt "$expected_champions" ]; then
+    echo "" >&2
+    echo "  Error: pkdx binary is missing migrations declared in source." >&2
+    echo "    expected: pokedex=$expected_pokedex, champions=$expected_champions" >&2
+    echo "    applied:  pokedex=$applied_pokedex, champions=$applied_champions" >&2
+    echo "" >&2
+    echo "  Your pkdx binary predates one or more source migrations." >&2
+    echo "  Install the MoonBit toolchain and rebuild from source, then rerun:" >&2
+    echo "    curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash" >&2
+    echo "    moon build --target native --release src/main" >&2
+    echo "    ./setup.sh" >&2
     exit 1
   fi
 else

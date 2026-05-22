@@ -13,6 +13,44 @@ pub(all) struct StatEffect {
 } derive(Debug, Eq, Hash)
 
 ///|
+/// HP-restoring effect carried by healing moves. The payoff layer applies
+/// these in `with_post_hit_effects` (FixedFraction / WeatherDependent /
+/// Drain / Rest / LeechSeed / PainSplit / Wish) and during EOT ticks
+/// (Wish发动 / LeechSeed tick). All numerators / denominators are stored
+/// as integers — the engine performs `max_hp * n / d` with integer
+/// arithmetic to match mainline rounding.
+///
+/// - `FixedFraction(n, d)` — restore `max_hp * n / d` (じこさいせい = (1, 2))
+/// - `WeatherDependent(default_n, default_d, sunny_n, sunny_d, harsh_n, harsh_d)` —
+///   pick fraction by current weather (Sun → sunny, Rain/Sand/Snow → harsh,
+///   None → default). つきのひかり / あさのひざし / シンセシス all share
+///   the (1,2) / (2,3) / (1,4) triple.
+/// - `Drain(n, d)` — restore `dmg_dealt * n / d` (ギガドレイン = (1, 2)).
+///   `defender.ability == "ヘドロえき"` reverses the sign (attacker takes
+///   damage instead) — handled by the payoff layer, not encoded here.
+/// - `Rest` — full HP restore + self-Sleep(2). `Sleep` immunity abilities
+///   (ふみん / やるき / スイートベール) block the entire effect.
+/// - `LeechSeed` — plant seed on defender; EOT tick drains 1/8 each turn.
+/// - `PainSplit` — average both HP, clamped per side's max.
+/// - `Wish` — slot-bound delayed heal: 2 EOT ticks later, restore
+///   `max_hp / 2` on the Pokemon currently occupying the side's
+///   active battle slot when the counter fires. `max_hp` is read off
+///   the active slot's occupant at fire time, so Wish-and-switch is
+///   correctly modelled — the replacement receives the heal, not the
+///   original Wisher. Wish persists across switches (the counter is
+///   side-scoped, not Pokemon-scoped) and re-uses overwrite the timer
+///   to `2` (Gen9 later-wins semantics).
+pub(all) enum HealingEffect {
+  FixedFraction(Int, Int)
+  WeatherDependent(Int, Int, Int, Int, Int, Int)
+  Drain(Int, Int)
+  Rest
+  LeechSeed
+  PainSplit
+  Wish
+} derive(Debug, Eq, Hash)
+
+///|
 /// A move (technique) usable by a Pokemon. Move metadata used by the payoff
 /// layer (SwitchingGame / team_monte_carlo) travels inline on this struct:
 ///
@@ -62,4 +100,17 @@ pub(all) struct Move {
   recoil_den : Int
   self_ko : Bool
   recharge : Bool
+  // `healing` — optional HP-restoring effect carried by healing moves.
+  // `None` for the vast majority of moves; populated from `move_meta` by
+  // `parse_healing` when `heal_kind != ''`. See `HealingEffect` above for
+  // the per-variant semantics. The payoff layer is responsible for
+  // applying the effect; the DB / model layer just transports it.
+  //
+  // `weather_set` — for weather-setting moves (にほんばれ / あまごい /
+  // すなあらし / ゆきげしき). `Some(weather)` indicates the move sets the
+  // battlefield weather on use; `None` otherwise. Weather持続ターン数 (Gen9
+  // base 5, weather rock 延長 8) は本 PR ではモデルしない — 後続 PR で
+  // `Pokemon.item` を見て延長する。
+  healing : HealingEffect?
+  weather_set : Weather?
 } derive(Debug, Eq)

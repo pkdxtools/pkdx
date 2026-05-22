@@ -58,6 +58,8 @@ fn rf_move(
     recoil_den: 1,
     self_ko: false,
     recharge: false,
+    healing: None,
+    weather_set: None,
   }
 }
 

@@ -6,7 +6,7 @@ pub(all) enum Weather {
   Rain
   Sand
   Snow
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Convert Japanese weather name to Weather enum.

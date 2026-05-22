@@ -868,20 +868,30 @@ pub fn eot_leftovers_heal(current_hp : Int, max_hp : Int, item : String) -> Int 
 ///   2. アイテム回復 (たべのこし)
 ///   3. やどりぎのタネ tick
 ///   4. 状態異常スリップ (Burn / Poison / BadPoison / Drowsy → Sleep)
-///   5. ねがいごと発動 (atomic tick+activate; see comment below)
+///   5. ねがいごと tick+activate (atomic single block; see "Wish timing
+///      contract" below)
 ///   6. 天候カウンタ tick (decrement / reset to None)
-///   7. wish_turns tick — see "Plan H-2 vs implementation note" below
-///   8. sleep カウンタ tick — handled in attempt_turn_with_cache, out of scope
+///   7. sleep カウンタ tick — handled in attempt_turn_with_cache, out of scope
 ///
-/// Plan H-2 vs implementation note: Plan splits "Wish activation" (step 5)
-/// from "wish_turns tick" (step 7), which is only consistent with a set value
-/// of 1 on use. Plan H-D / K-1 fix the set value at 2 and document the
-/// fired-at-N+1 semantics, which require the tick and activation to be a
-/// single atomic step ("tick to 0 then heal"). Following Plan K-1 (the
-/// test-level spec) the Wish step is treated as one block — Bulbapedia's
-/// Gen 5+ wording "at the end of the next turn" matches this single-block
-/// behaviour, so we keep set=2 with combined tick+activate at the position
-/// Plan H-2 assigns to step 5.
+/// Wish timing contract (SSoT — referenced from the wish_turns docstring on
+/// SwitchingGameState):
+///   - On use during turn T's action phase, `with_post_hit_effects` sets
+///     `wish_turns = 2`. `transition_with_cache` then bumps `state.turn` to
+///     T+1 and `attempt_turn_with_cache` invokes this `apply_eot`.
+///   - This EOT (T+1 in `state.turn` terms but conceptually "EOT of turn T"
+///     in narrative terms) ticks `2 → 1`. No heal yet.
+///   - The next turn's EOT ticks `1 → 0` and atomically fires the heal at
+///     the same step (single block; see step 5 below). This matches
+///     Bulbapedia's Gen5+ "at the end of the next turn" wording: Wish used
+///     on turn T heals at end-of-turn(T+1).
+///   - The two-step (tick, then check) ordering inside the wish block is
+///     atomic — set=2 with tick-then-check is the only way to fire at
+///     end-of-turn(T+1). Splitting tick and activate into separate EOT
+///     steps would require set=1 to keep the same fire turn, and breaking
+///     the atomic block in a future refactor needs the set value to flip
+///     to 1 accordingly. The end-to-end test through `attempt_turn_with_
+///     cache` (see `Wish real-path` test in switching_game_healing_wbtest)
+///     locks this contract independent of internal step ordering.
 ///
 /// Order changes vs Stage 11 (pre-refactor) and the observable consequences:
 ///
@@ -982,9 +992,18 @@ pub fn apply_eot(
       // 加算する) 退化を構造的に防ぐ。`sub_hp_floor0` も内部で floor 0 する
       // ため不変だが、両側で同じ amount を渡す形を SSoT として明示する。
       //
-      // ヘドロえき (Liquid Ooze): 種付き側 ability が ヘドロえき のとき、
-      // mainline は drain 系効果を反転させる — 相手 (本来の回復側) が drained
-      // 量の damage を受ける。種付き側の HP 減少は通常通り発生する。
+      // ヘドロえき (Liquid Ooze) × Leech Seed (design note): Gen5+ mainline
+      // では Liquid Ooze は「相手 (Liquid Ooze 持ち) から HP を吸収する効果」
+      // をすべて反転させる — Drain 系技だけでなく Leech Seed の EOT 吸収にも
+      // 適用される。これは Showdown が実装する競技標準挙動で、本家ゲーム内
+      // テキストも同じ意味を持つ:
+      //   pokedex.db `ability.json` "ヘドロえき" (Sun_Moon 以降):
+      //     "ヘドロえき を すいとった あいて は きょうれつな あくしゅう で
+      //      ダメージ を うけて HP を へらす"
+      // すなわち Liquid Ooze 持ちから HP を「すいとった」側 (= Leech Seed の
+      // 種を蒔いた seeder、または Drain 系の attacker) が damage を受ける。
+      // 種付き側 (Liquid Ooze 持ち) の HP 減少は通常通り発生する。本実装は
+      // この本家挙動に従い、tests Case L-8b / L-8c で観測値を pin する。
       let raw = my_max / 8
       let cur_hp = my_hps[state.my_active]
       let drained = if cur_hp < raw { cur_hp } else { raw }
@@ -1032,25 +1051,26 @@ pub fn apply_eot(
   opp_hps[state.opp_active] = opp_hp_new
   opp_status[state.opp_active] = opp_st_new
 
-  // === Step 5: ねがいごと (Wish) 発動 (atomic tick+activate) ===
-  // wish_turns は per-side の scalar (Int)。
+  // === Step 5: ねがいごと (Wish) tick + activate (atomic single block) ===
+  // wish_turns は per-side の scalar (Int)。pkdx は single battle で各サイド
+  // 常に 1 active のため、サイド毎に 1 値で表現する (= 長さ 1 の per-active-
+  // slot 配列と観測上等価)。受け取りは「fire 時点の current active」が拾うため、
+  // Wisher が Switch で控えに退いた後でも、交代先 active が回復する (mainline
+  // Gen5+ "the replacement in that slot receives the Wish" と一致)。
+  //
   //   `>0`  → -= 1 (tick)
   //   `==0` → 発動: 現在 active な slot の HP > 0 なら `add_hp_capped(hps,
   //           my_active, slot_max/2, slot_max)` で回復、HP=0 なら不変。
   //           発動の有無に関わらず -1 に idle 化 (Wish 自体は消費される)。
   //   `<0`  → idle 状態、不変 (fixpoint)。
   //
-  // 本実装はサイド単位の slot-bound Wish: Wisher が Switch で控えに退いた
-  // 後でも、Wish の counter は active slot に残り、交代先で受け取る (これが
-  // 「ねがいごと」の戦略的価値、mainline と一致)。
-  //
-  // tick → 発動 の atomic 結合: set 2 → EOT1 (tick: 2→1, ==0 false) → EOT2
-  // (tick: 1→0, ==0 true → 発動)。これにより Bulbapedia の Gen5+ 表記
-  // "At the end of the next turn" (= 使用ターンの次 EOT で発動) を満たす。
-  // Plan H-2 が step 5 (発動) と step 7 (tick) を分離している点は、set 値
-  // を 1 にしない限り意味論が崩れるため、Plan K-1 (set=2 + 2 EOT 経過で発動)
-  // を SSoT とし atomic 結合を採用する (この差分は本関数 doccomment 冒頭の
-  // "Plan H-2 vs implementation note" を参照)。
+  // タイミング契約 (SSoT は SwitchingGameState の wish_turns docstring):
+  // 使用ターン T の action phase で set=2 → 同 turn の EOT (tick: 2→1) →
+  // 次 turn の EOT (tick: 1→0 → 発動) で発火。これは Bulbapedia Gen5+ の
+  // "at the end of the next turn" に一致。end-to-end 契約 (turn-relative
+  // タイミング) は `attempt_turn_with_cache` 経由の real-path 回帰テストで
+  // pin する (switching_game_healing_wbtest の Wish real-path セクション
+  // 参照)。
   let mut my_wish_turns_new = state.my_wish_turns
   if my_wish_turns_new > 0 {
     my_wish_turns_new = my_wish_turns_new - 1

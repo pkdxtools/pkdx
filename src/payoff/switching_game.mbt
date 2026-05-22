@@ -85,15 +85,29 @@ pub(all) struct SwitchingGameState {
   //   not modeled in this PR). When 0 the next EOT clears to `None`.
   // - my_leech_seeded / opp_leech_seeded: per-slot seeded flag. Persists slot-
   //   scoped (Switch clears the switched-out slot's flag in stage 8).
-  // - my_wish_turns / opp_wish_turns: pending Wish counter for the active
-  //   battle slot. pkdx single battle has exactly one active slot per side,
-  //   so we keep a single scalar per side (not an array keyed by team index).
-  //   `-1` = no pending wish, `0` = fires on the next EOT, `>0` = ticks down.
-  //   When the counter fires it heals whoever is currently active (= the
-  //   replacement after a Switch, not the original Wisher). This is the
-  //   mainline "slot-bound delayed Recover" semantics: the strategic
-  //   "switch out the Wisher → receive on the replacement" pattern IS
-  //   captured. See `model/move.mbt :: HealingEffect :: Wish`.
+  // - my_wish_turns / opp_wish_turns: pending Wish counter for the side's
+  //   single active battle slot. pkdx's payoff layer models single battle —
+  //   exactly one active slot per side — so the Wish state collapses to one
+  //   scalar per side. This is observationally equivalent to a per-active-
+  //   slot `Array[Int]` of length 1; we use `Int` directly to keep the state
+  //   `derive(Hash)`-friendly and the struct lean. If pkdx ever extends to
+  //   double battle, this becomes `Array[Int]` indexed by battle position.
+  //   Sentinel values:
+  //     `-1` = idle (no pending wish)
+  //      `0` = fires on the next EOT (atomic tick-and-fire; see `apply_eot`)
+  //     `>0` = ticks down by 1 each EOT
+  //   Receiver semantics (mainline Gen5+): the heal lands on whoever is in
+  //   the side's active battle slot at fire time — that is, the replacement
+  //   if the original Wisher switched out. The "Wish, then switch to receive
+  //   on the replacement" pattern is captured by `state.my_active` /
+  //   `state.opp_active` being read at fire time inside `apply_eot`.
+  //   Non-stacking: a fresh Wish overwrites a pending one (Gen5+ rule that
+  //   only one Wish can be queued per side at any time). See `with_post_hit_
+  //   effects`'s `Wish` arm and `model/move.mbt :: HealingEffect :: Wish`.
+  //   Timing (set value = 2): used on turn T → counter = 2 at end of T's
+  //   action phase → EOT(T) ticks 2→1 → EOT(T+1) ticks 1→0 and fires. So
+  //   Wish set on turn T heals at EOT(T+1) — "at the end of the next turn"
+  //   per Bulbapedia's Gen5+ wording. Two EOTs elapse between set and fire.
   weather : @model.Weather
   weather_turns_left : Int
   my_leech_seeded : Array[Bool]
@@ -1104,9 +1118,10 @@ fn with_post_hit_effects(
   // ローカルに展開。Wish 以外の経路では unchanged のまま base state を経由して
   // 最終 state にスレッドされる。Wish の発動は attacker_is_me に応じて
   // my_wish_turns / opp_wish_turns のどちらかを書き換える (defender 側は
-  // 触らない、これは LeechSeed と対照的)。scalar 化 (Array → Int) 後は
-  // 「slot に貼り付く Wish」を正しく表現できる。pkdx single battle は active
-  // が常に 1 つなので per-side で 1 値で十分。
+  // 触らない、これは LeechSeed と対照的)。pkdx single battle は active が常に
+  // 1 つなので per-side scalar で十分で、これは長さ 1 の per-active-slot 配列と
+  // 観測上等価。受け取りは EOT 発火時の current active がスレッドする (= Wisher
+  // が Switch 後でも交代先が受ける、Bulbapedia Gen5+ 仕様)。
   let mut my_wish_turns = state.my_wish_turns
   let mut opp_wish_turns = state.opp_wish_turns
   let attacker_hps = if attacker_is_me { my_hps } else { opp_hps }
@@ -1212,14 +1227,16 @@ fn with_post_hit_effects(
       defender_hps[defender_active] = new_defender
     }
     // Stage 11 (Wish / ねがいごと): attacker 側の wish_turns を 2 にセット。
-    // 既に pending な wish_turns があっても上書きする (Gen9 仕様: 重ね掛け
+    // 既に pending な wish_turns があっても上書きする (Gen5+ 仕様: 重ね掛け
     // 不可、後着優先)。`apply_healing` のシグネチャは wish_turns を取らない
     // ため、LeechSeed / PainSplit と同じく専用パスで処理する。発動は EOT 側
-    // (`apply_eot` の wish-trigger ブロック) で行う。
+    // (`apply_eot` の wish-trigger ブロック) で行う。set 値 2 は「EOT を 2 回
+    // 経て発火」の tick 残数。詳しいタイミング契約は struct definition の
+    // wish_turns docstring を参照。
     //
     // attacker_is_me=true なら my_wish_turns、false なら opp_wish_turns を
-    // 書き換える。scalar 化後は active slot index に依存せず、サイドに対し
-    // 1 つの Wish counter を持つ (= slot に貼り付く Wish を正しく表現)。
+    // 書き換える。pkdx single battle は active が常に 1 つなので per-side
+    // scalar で十分 (長さ 1 の per-active-slot 配列と観測上等価)。
     Some(@model.Wish) => {
       if attacker_is_me {
         my_wish_turns = 2

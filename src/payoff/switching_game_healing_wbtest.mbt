@@ -2382,6 +2382,216 @@ test "apply_eot: Sand+Wish leaves turn unchanged" {
 }
 
 // =====================================================================
+// Wish real-path regression: drive the full turn-resolution pipeline
+// (`attempt_turn_with_cache` → `transition_with_cache` → `apply_eot`) end
+// to end. Earlier W-* cases directly invoke `with_post_hit_effects` /
+// `apply_eot` to isolate behaviour, but reviewers asked for a pinned
+// turn-relative contract through the real entry point — used turn T → fires
+// at EOT(T+1). Without these, the wish_turns docstring contract relies on
+// implementation knowledge of how `apply_eot` is sequenced inside the per-
+// turn driver.
+// =====================================================================
+
+///|
+/// Combatant ヘルパー: 任意の moves と max_hp / spe を指定可能。real-path テスト
+/// で「Wish 使う側 my[0]」「交代先 my[1]」「opp 側 idle」を作り分ける。
+fn mk_wish_real_combatant(
+  name~ : String = "WishTest",
+  moves~ : Array[@model.Move] = [],
+  max_hp~ : Int = 100,
+  spe~ : Int = 100,
+) -> Combatant {
+  let p : @model.Pokemon = {
+    global_no: "0001",
+    name_ja: name,
+    name_en: name,
+    type1: "ノーマル",
+    type2: "",
+    hp: max_hp,
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe,
+    bst: 600,
+    ability1: "",
+    ability2: "",
+    dream_ability: "",
+    weight: 1.0,
+    forms: [],
+  }
+  {
+    pokemon: p,
+    moves,
+    ability: "",
+    item: "",
+    tera_type: "",
+    stat_system: @model.Standard,
+    mega_form: None,
+    nature: None,
+    stat_points: None,
+    actual_stats: Some([max_hp, 100, 100, 100, 100, spe]),
+    ivs: None,
+  }
+}
+
+///|
+/// Wish real-path regression — used turn T heals at EOT(T+1).
+///
+/// シナリオ:
+///   Turn T (= state.turn 0): my[0] が ねがいごと を撃ち、opp は idle (no-op)。
+///   `attempt_turn_with_cache` 呼び出し後、my_wish_turns は 2 でセットされた
+///   直後に同 turn の EOT で 1 へ tick される (= 2→1)。HP は不変。
+///   Turn T+1 (= state.turn 1): 両側 idle。EOT が 1→0 へ tick し、atomic に
+///   発動して active (my[0]) を max/2 ぶん回復。my_wish_turns は -1 へ idle 化。
+///
+/// この観測は wish_turns docstring の "set on turn T → fires at EOT(T+1)"
+/// 契約を turn 解決パイプライン全体で pin する。set=2 の tick-then-fire 設計
+/// または tick / fire を分割する set=1 設計のどちらでも、外部観測上は等価で
+/// なければならない。
+test "attempt_turn_with_cache: Wish used on turn T heals at EOT(T+1)" {
+  let wish_mv = mk_heal_move(
+    "ねがいごと", "ノーマル", @model.Status, 0, healing=Some(@model.Wish),
+  )
+  let idle_mv = mk_heal_move("まもる", "ノーマル", @model.Status, 0)
+  // my[0] / my[1] とも Wish + idle を持つ (UseMove(0) / UseMove(1) で参照可能に)。
+  let my0 = mk_wish_real_combatant(
+    name="MyA", moves=[wish_mv, idle_mv], max_hp=100, spe=120,
+  )
+  let my1 = mk_wish_real_combatant(
+    name="MyB", moves=[wish_mv, idle_mv], max_hp=200, spe=80,
+  )
+  let opp0 = mk_wish_real_combatant(
+    name="OppA", moves=[idle_mv], max_hp=100, spe=60,
+  )
+  let my_team = [my0, my1]
+  let opp_team = [opp0]
+  let s0 : SwitchingGameState = {
+    my_active: 0,
+    opp_active: 0,
+    my_hps: [50, 50],
+    opp_hps: [100],
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    my_mega_used: false,
+    opp_mega_used: false,
+    my_megaed: [false, false],
+    opp_megaed: [false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None],
+    my_must_recharge: [false, false],
+    opp_must_recharge: [false],
+    my_item_consumed: [false, false],
+    opp_item_consumed: [false],
+    my_moves_used: [],
+    opp_moves_used: [],
+    weather: @model.Weather::None,
+    weather_turns_left: 0,
+    my_leech_seeded: [false, false],
+    opp_leech_seeded: [false],
+    my_wish_turns: -1,
+    opp_wish_turns: -1,
+    turn: 0,
+  }
+  // Turn T: my[0] uses Wish, opp uses idle. EOT inside attempt_turn_with_cache
+  // ticks the just-set wish_turns from 2 → 1; HP is unchanged this turn.
+  let outs_t = attempt_turn_with_cache(
+    s0, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  @debug.assert_eq(outs_t.length(), 1)
+  let (_, s1) = outs_t[0]
+  @debug.assert_eq(s1.my_wish_turns, 1)
+  @debug.assert_eq(s1.my_hps[0], 50)
+  @debug.assert_eq(s1.turn, 1)
+  // Turn T+1: both sides idle. EOT ticks wish_turns 1 → 0 and atomically
+  // fires the heal on the current active (my[0], max=100): 50 + 50 = 100.
+  let outs_t1 = attempt_turn_with_cache(
+    s1, UseMove(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  @debug.assert_eq(outs_t1.length(), 1)
+  let (_, s2) = outs_t1[0]
+  @debug.assert_eq(s2.my_hps[0], 100)
+  @debug.assert_eq(s2.my_wish_turns, -1)
+  @debug.assert_eq(s2.turn, 2)
+}
+
+///|
+/// Wish real-path regression — Switch threads the heal to the replacement.
+///
+/// シナリオ:
+///   Turn T: my[0] (max=100) が ねがいごと を撃つ。EOT で wish_turns 2→1。
+///   Turn T+1: my[0]→my[1] (max=200) へ Switch。EOT で wish_turns 1→0 → 発動。
+///   発動時の current active = my[1] (max=200) → heal +100。Wisher の my[0]
+///   ではなく交代先 my[1] が受ける (mainline "the replacement receives the
+///   Wish" 仕様)。
+///
+/// W-13 がこの slot-bound 受信を直接 apply_eot で観測するのに対し、本テスト
+/// は real turn-resolution path 経由で同じ契約を観測する。
+test "attempt_turn_with_cache: Switch threads Wish to replacement (real path)" {
+  let wish_mv = mk_heal_move(
+    "ねがいごと", "ノーマル", @model.Status, 0, healing=Some(@model.Wish),
+  )
+  let idle_mv = mk_heal_move("まもる", "ノーマル", @model.Status, 0)
+  let my0 = mk_wish_real_combatant(
+    name="MyA", moves=[wish_mv, idle_mv], max_hp=100, spe=120,
+  )
+  let my1 = mk_wish_real_combatant(
+    name="MyB", moves=[wish_mv, idle_mv], max_hp=200, spe=80,
+  )
+  let opp0 = mk_wish_real_combatant(
+    name="OppA", moves=[idle_mv], max_hp=100, spe=60,
+  )
+  let my_team = [my0, my1]
+  let opp_team = [opp0]
+  let s0 : SwitchingGameState = {
+    my_active: 0,
+    opp_active: 0,
+    my_hps: [50, 50],
+    opp_hps: [100],
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    my_mega_used: false,
+    opp_mega_used: false,
+    my_megaed: [false, false],
+    opp_megaed: [false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None],
+    my_must_recharge: [false, false],
+    opp_must_recharge: [false],
+    my_item_consumed: [false, false],
+    opp_item_consumed: [false],
+    my_moves_used: [],
+    opp_moves_used: [],
+    weather: @model.Weather::None,
+    weather_turns_left: 0,
+    my_leech_seeded: [false, false],
+    opp_leech_seeded: [false],
+    my_wish_turns: -1,
+    opp_wish_turns: -1,
+    turn: 0,
+  }
+  // Turn T: my[0] uses Wish, EOT ticks 2 → 1.
+  let outs_t = attempt_turn_with_cache(
+    s0, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  @debug.assert_eq(outs_t.length(), 1)
+  let (_, s1) = outs_t[0]
+  @debug.assert_eq(s1.my_wish_turns, 1)
+  @debug.assert_eq(s1.my_active, 0)
+  // Turn T+1: my[0] → my[1] Switch, EOT ticks 1 → 0 and fires.
+  // Receiver is the current active (= my[1], max=200): 50 + 100 = 150.
+  let outs_t1 = attempt_turn_with_cache(
+    s1, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  @debug.assert_eq(outs_t1.length(), 1)
+  let (_, s2) = outs_t1[0]
+  @debug.assert_eq(s2.my_active, 1)
+  @debug.assert_eq(s2.my_hps[1], 150)
+  @debug.assert_eq(s2.my_hps[0], 50) // 控え (元 Wisher) は不変
+  @debug.assert_eq(s2.my_wish_turns, -1)
+}
+
+// =====================================================================
 // Stage 12 (EOT 順序整理): Gen9 公式順序の verification 群。
 //
 // Plan H-2 / 段階 12 申し送りの順序 (1.Sand chip → 2.leftovers → 3.leech →

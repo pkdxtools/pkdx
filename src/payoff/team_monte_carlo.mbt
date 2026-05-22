@@ -977,9 +977,12 @@ pub fn team_rollout(
             // 同じ `drained` を渡し、Issue #4 の「HP が空から生まれる」退化を
             // 構造的に防ぐ。
             //
-            // ヘドロえき (Liquid Ooze): 種付き側 ability が ヘドロえき のとき、
-            // 相手 (本来の回復側) が drained 量の damage を受ける。DP 側と
-            // semantics 完全一致。
+            // ヘドロえき (Liquid Ooze) × Leech Seed: Gen5+ mainline では
+            // Liquid Ooze は HP 吸収効果を反転させ、Drain 系技だけでなく
+            // Leech Seed の EOT 吸収にも適用される (Showdown 競技標準 +
+            // pokedex.db `ability.json` "ヘドロえき" の Sun_Moon 以降のテキスト
+            // と一致)。DP 側 `apply_eot` Step 3 と semantics 完全一致。詳細
+            // citation は switching_game_effects.mbt の同 step を参照。
             let raw = own_max / 8
             let cur_hp = own_hps[own_active]
             let drained = if cur_hp < raw { cur_hp } else { raw }

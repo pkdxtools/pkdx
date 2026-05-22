@@ -47,6 +47,53 @@
 /// side; for doubles the model is currently unsupported (Single only).
 
 ///|
+/// CLI JSON 経由で `Move.healing` を直接指定する path。
+///
+/// `m014` 由来の DB カラム名 (`heal_kind` / `heal_num` / `heal_den` /
+/// `heal_sunny_num` / `heal_sunny_den` / `heal_harsh_num` / `heal_harsh_den`)
+/// と同名のフィールドを optional で受ける。`heal_kind` が無ければ `None` で、
+/// 既存テスト fixture (回復技を持たない move JSON) は無改変で通る。
+///
+/// 主な用途: E2E golden test で DB 接続なしに回復技持ち team を組み立てる。
+/// 通常運用では `pkdx query` 経由で DB から読まれた値が input JSON に乗るため
+/// この path も DB と同じセマンティクスを保つ必要がある — そのため
+/// `@db.parse_healing` を共有する。
+fn parse_healing_json(m : Map[String, Json]) -> @model.HealingEffect? {
+  let kind = match m.get("heal_kind") {
+    Some(String(s)) => s
+    _ => ""
+  }
+  if kind == "" {
+    return None
+  }
+  let n = match m.get("heal_num") {
+    Some(Number(x, ..)) => x.to_int()
+    _ => 0
+  }
+  let d = match m.get("heal_den") {
+    Some(Number(x, ..)) => x.to_int()
+    _ => 1
+  }
+  let sn = match m.get("heal_sunny_num") {
+    Some(Number(x, ..)) => x.to_int()
+    _ => 0
+  }
+  let sd = match m.get("heal_sunny_den") {
+    Some(Number(x, ..)) => x.to_int()
+    _ => 1
+  }
+  let hn = match m.get("heal_harsh_num") {
+    Some(Number(x, ..)) => x.to_int()
+    _ => 0
+  }
+  let hd = match m.get("heal_harsh_den") {
+    Some(Number(x, ..)) => x.to_int()
+    _ => 1
+  }
+  @db.parse_healing(kind, n, d, sn, sd, hn, hd)
+}
+
+///|
 fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
   match j {
     Object(m) => {
@@ -102,6 +149,15 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(True) => true
         _ => false
       }
+      // healing / weather_set: 通常運用では DB 経路で m014 由来の値が乗る。
+      // golden / E2E test では DB 接続なしで CLI JSON 経由で move を組み立て
+      // たいため、`heal_kind` / `weather_set` キーを optional で受ける。`heal_kind`
+      // の値域とパーサは @db.parse_healing と同一 (整合性を確保するため共有)。
+      let healing = parse_healing_json(m)
+      let weather_set = match m.get("weather_set") {
+        Some(String(s)) => @db.parse_weather_set(s)
+        _ => None
+      }
       {
         name,
         type_,
@@ -117,6 +173,8 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         recoil_den,
         self_ko,
         recharge,
+        healing,
+        weather_set,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
@@ -326,6 +384,8 @@ fn parse_combatant_json(
             recoil_den: 1,
             self_ko: false,
             recharge: false,
+            healing: None,
+            weather_set: None,
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(

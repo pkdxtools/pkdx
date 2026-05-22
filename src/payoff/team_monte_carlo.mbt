@@ -188,21 +188,60 @@ fn greedy_team_action(
 
 ///|
 /// Apply team-level post-hit side effects after a `team_perform_attack`
-/// call. Mirrors `resolve_post_hit_effects` in the DP layer so the two
-/// resolvers agree on post-hit semantics.
+/// call. Mirrors `resolve_post_hit_effects` + `with_post_hit_effects` in
+/// the DP layer so the two resolvers agree on post-hit semantics.
 ///
-/// Order matches the DP helper: `stat_effects` (self + opp-target with
-/// opp_alive gating) → recoil → self_ko → recharge. Applied for both
-/// damaging and status moves — `team_perform_attack` no longer resolves
-/// stat_effects for status moves; this helper is the single owner.
+/// Order matches the DP helper:
+///   1. `stat_effects` (self + opp-target with opp_alive gating)
+///   2. recoil (attacker HP loss)
+///   3. apply_healing (HealingEffect: FixedFraction / WeatherDependent /
+///      Drain / Rest / LeechSeed planting / PainSplit / Wish setting)
+///   4. self_ko (attacker HP forced to 0, post-heal — self_ko wins ordering)
+///   5. recharge (set only if attacker is still alive after 4)
+///   6. weather_set (にほんばれ / あまごい / すなあらし / ゆきげしき)
+///
+/// Stage 13 (healing parity): Stage 12 まで MC 側は recoil / self_ko / recharge
+/// しか resolve していなかったため、回復技 (じこさいせい等) や 天候設定技を
+/// MC で打っても完全に無視され、ScreenedSwitchingGame の MC phase と DP phase
+/// が割れていた。本関数は DP 側 `with_post_hit_effects` の意味論を移植し、
+/// `apply_healing` / LeechSeed planting / PainSplit / Wish set / 天候設定の
+/// 経路を MC でも有効化する。
+///
+/// `weather_state` / `weather_turns_state` は 1-element 配列 (out-param) で
+/// 渡し、天候設定技ヒット時に書き換える。`attacker_team` / `defender_team` は
+/// `apply_healing` の defender_ability 解決と LeechSeed のくさタイプ判定に必要。
+/// `defender_leech_seeded` は LeechSeed 植え付け先 (defender 側) を書き換える。
+/// attacker 側の leech_seeded は post-hit では触らない (剥がしは Switch arm
+/// 側で行う)。`attacker_wish_turns` は per-side scalar の Wish counter
+/// (1-element 配列で mutable に渡す)。Wish 使用で `[0]` に 2 を書き、EOT で
+/// `tick_and_fire_wish_inplace` が active slot へ向けて発動する。DP 側
+/// (`SwitchingGameState.my_wish_turns : Int`) と同じ slot-bound 仕様。
+/// `attacker_status` は Rest が `Sleep(2)` を上書きするために必要。
+/// `defender_megaed` は LeechSeed くさ判定の mega 後 type 解決に渡す
+/// (MC では常に false 固定の dummy 配列だが、シグネチャは DP 側
+/// `effective_combatant` 経路と整合)。MC は attacker mega を解決しないため
+/// attacker_megaed は受け取らない (現状の MC は mega 未モデル、`apply_healing`
+/// 側は attacker_ability を raw に読むので mega 後 ability の解決も不要)。
+///
+/// `applied for both damaging and status moves` — `team_perform_attack` は
+/// status moves で damage を返さないが、本関数の全 phase (stat_effects 〜
+/// weather_set) は damage の有無に依存せず適用される。
 fn team_apply_post_hit(
   attacker_hps : Array[Int],
   attacker_active : Int,
   attacker_ranks : Array[Int],
   attacker_must_recharge : Array[Bool],
+  attacker_status : Array[@model.StatusCondition],
+  attacker_wish_turns : Array[Int],
+  attacker_team : Array[Combatant],
   defender_hps : Array[Int],
   defender_active : Int,
   defender_ranks : Array[Int],
+  defender_leech_seeded : Array[Bool],
+  defender_team : Array[Combatant],
+  defender_megaed : Array[Bool],
+  weather_state : Array[@model.Weather],
+  weather_turns_state : Array[Int],
   mv : @model.Move,
   dmg : Int,
 ) -> Unit {
@@ -214,11 +253,116 @@ fn team_apply_post_hit(
     let new_hp = attacker_hps[attacker_active] - recoil
     attacker_hps[attacker_active] = if new_hp < 0 { 0 } else { new_hp }
   }
+  // Stage 13: 回復技 (HealingEffect) を self_ko の **手前** で適用。じばく系 +
+  // healing の組合せは現状ゲーム内には無いが、ある場合は self_ko 側 (HP=0 強制
+  // 上書き) が後勝ち、という DP 側の順序契約を MC でも維持する。
+  let attacker_max = effective_hp(attacker_team[attacker_active])
+  let attacker_ability = attacker_team[attacker_active].ability
+  let defender_ability = defender_team[defender_active].ability
+  let weather = weather_state[0]
+  apply_healing(
+    mv,
+    attacker_active,
+    attacker_hps,
+    attacker_max,
+    weather,
+    attacker_status,
+    attacker_ability,
+    dmg,
+    defender_ability,
+  )
+  // Stage 13: LeechSeed 植え付け (apply_healing は attacker 側バッファしか
+  // 触れない設計なので、defender_leech_seeded への書き込みは専用パス)。
+  //   - defender が くさタイプ (mega 後 effective type) なら失敗
+  //   - すでに seeded な相手にもう一度撃っても観測上 no-op (true 上書きは無害)
+  //   - Magic Guard は植え付け自体は許容する (EOT tick 側で 0 化される)
+  match mv.healing {
+    Some(@model.LeechSeed) => {
+      let def_megaed = if defender_active < defender_megaed.length() {
+        defender_megaed[defender_active]
+      } else {
+        false
+      }
+      let defender_eff = effective_combatant(
+        defender_team[defender_active], def_megaed,
+      )
+      let is_grass = defender_eff.pokemon.type1 == "くさ" ||
+        defender_eff.pokemon.type2 == "くさ"
+      if !is_grass && defender_active < defender_leech_seeded.length() {
+        defender_leech_seeded[defender_active] = true
+      }
+    }
+    // PainSplit: 双方の HP を平均化し、各 max でクランプ。`apply_healing` は
+    // attacker バッファしか書けないため LeechSeed と同様に専用パス。
+    Some(@model.PainSplit) => {
+      let defender_max = effective_hp(defender_team[defender_active])
+      let attacker_cur = attacker_hps[attacker_active]
+      let defender_cur = defender_hps[defender_active]
+      let avg = (attacker_cur + defender_cur) / 2
+      let new_attacker = if avg > attacker_max { attacker_max } else { avg }
+      let new_defender = if avg > defender_max { defender_max } else { avg }
+      attacker_hps[attacker_active] = new_attacker
+      defender_hps[defender_active] = new_defender
+    }
+    // Wish: per-side scalar (1-element 配列) `[0]` を 2 にセット (DP 側と
+    // 同じ後着優先の上書き semantics)。`attacker_active` は不要 — per-side
+    // 1 wish counter のため。発動は EOT 側 (`tick_and_fire_wish_inplace`)。
+    Some(@model.Wish) =>
+      if attacker_wish_turns.length() > 0 {
+        attacker_wish_turns[0] = 2
+      }
+    _ => ()
+  }
   if mv.self_ko {
     attacker_hps[attacker_active] = 0
   }
   if mv.recharge && attacker_hps[attacker_active] > 0 {
     attacker_must_recharge[attacker_active] = true
+  }
+  // Stage 13: 天候設定技 (Move.weather_set) の効果を out-param に反映する。
+  // Gen9 base の 5 ターン (天候石なし) を固定値とする。DP 側 `with_post_hit_effects`
+  // 末尾の処理と整合。
+  match mv.weather_set {
+    Some(w) => {
+      weather_state[0] = w
+      weather_turns_state[0] = 5
+    }
+    None => ()
+  }
+}
+
+///|
+/// In-place Wish tick + activate (per-side scalar、1-element 配列で mutable
+/// に渡す)。
+///   - `wish_turns[0] > 0`: -= 1 (tick).
+///   - tick 後 `wish_turns[0] == 0`: fire — `hps[active] > 0` なら
+///     `effective_hp(team[active]) / 2` ぶん回復 (max クランプ)。HP=0 受け手
+///     には発動扱いだが HP は不変 (蘇生しない、本家挙動)。発動の有無に関わらず
+///     `wish_turns[0] = -1` で idle 化、Wish 自体は消費される。
+///   - `wish_turns[0] < 0` (idle, sentinel `-1`): no-op (fixpoint).
+///
+/// per-side scalar 設計のため、Wisher が Switch で控えに退いた後でも、Wish
+/// は active slot に残り、交代先で受け取る (mainline と一致)。MC 側の EOT
+/// block (`team_rollout` の Step 4.5) と wbtest 双方から同じ実装を呼ぶことで
+/// helper 二重化を防ぐ — DP 側 `apply_eot` Step 5 と semantics 一致。
+pub fn tick_and_fire_wish_inplace(
+  wish_turns : Array[Int],
+  hps : Array[Int],
+  active : Int,
+  team : Array[Combatant],
+) -> Unit {
+  if wish_turns.length() == 0 {
+    return
+  }
+  if wish_turns[0] > 0 {
+    wish_turns[0] = wish_turns[0] - 1
+  }
+  if wish_turns[0] == 0 {
+    if active >= 0 && active < hps.length() && hps[active] > 0 {
+      let slot_max = effective_hp(team[active])
+      add_hp_capped(hps, active, slot_max / 2, slot_max)
+    }
+    wish_turns[0] = -1
   }
 }
 
@@ -268,7 +412,16 @@ fn team_perform_attack(
   } else {
     raw
   }
-  defender_hp - dmg
+  // overkill 分が `before - new_hp` で過大計上されてドレイン / 反動を膨らませる
+  // のを防ぐため 0 床でクランプ。caller は `before - new_hp` を dealt として
+  // team_apply_post_hit に渡すので、ここで HP を 0 にすればその差分は actual
+  // dealt (= min(dmg, before)) に一致する。
+  let new_hp = defender_hp - dmg
+  if new_hp < 0 {
+    0
+  } else {
+    new_hp
+  }
 }
 
 ///|
@@ -354,44 +507,10 @@ fn mc_try_apply_status(
   defender_status_arr[defender_slot] = @model.inflict_status(kind)
 }
 
-///|
-/// Apply end-of-turn slip damage for one side's active slot. Mirrors
-/// `eot_slip_active` from switching_game but operates on mutable team arrays.
-fn mc_eot_slip(
-  max_hp : Int,
-  current_hp : Int,
-  status : @model.StatusCondition,
-) -> (Int, @model.StatusCondition) {
-  if current_hp <= 0 {
-    return (current_hp, status)
-  }
-  match status {
-    @model.Burn => {
-      let dmg = max_hp / 16
-      let h = current_hp - dmg
-      (if h < 0 { 0 } else { h }, status)
-    }
-    @model.Poison => {
-      let dmg = max_hp / 8
-      let h = current_hp - dmg
-      (if h < 0 { 0 } else { h }, status)
-    }
-    @model.BadPoison(n) => {
-      let ticks = if n + 1 > TOXIC_MAX_TICKS { TOXIC_MAX_TICKS } else { n + 1 }
-      let dmg = max_hp * ticks / 16
-      let h = current_hp - dmg
-      (if h < 0 { 0 } else { h }, @model.BadPoison(ticks))
-    }
-    @model.Drowsy(n) => {
-      if n > 0 {
-        (current_hp, @model.Drowsy(n - 1))
-      } else {
-        (current_hp, @model.Sleep(2))
-      }
-    }
-    _ => (current_hp, status)
-  }
-}
+// Stage 13: `mc_eot_slip` は削除。MC rollout の EOT 状態異常 slip は DP 側
+// `eot_slip_active` (switching_game_effects.mbt) を直接呼ぶようになったため、
+// 重複定義 (semantics 一致だがコピー実装) を廃止し SSoT を保つ。挙動は
+// pre-Stage-13 と完全一致 (関数本体が同じ).
 
 ///|
 /// Run a single team rollout trial. Returns own-side value in `[-1, +1]`:
@@ -431,6 +550,25 @@ pub fn team_rollout(
   // turn after the forced skip.
   let own_must_recharge : Array[Bool] = Array::make(own.length(), false)
   let opp_must_recharge : Array[Bool] = Array::make(opp.length(), false)
+  // Stage 13: 回復技 / 天候設定 / LeechSeed / Wish 用の state を追加。
+  // DP 側 `SwitchingGameState` の対応フィールドと同じ semantics:
+  //   - weather / weather_turns_left: 1-element 配列で out-param スタイル
+  //     (Bool の 1 要素配列に値を流す)
+  //   - *_leech_seeded[i]: i 番スロットがやどりぎ tick を受けるか
+  //   - *_wish_turns: per-side scalar (1-element 配列で mutable に渡す)。
+  //     active slot に貼り付く Wish を表現する (DP 側 Int と同 semantics)。
+  // mega は MC では未モデル化 (screening 用) なので megaed は false 固定の
+  // dummy 配列を用意 (effective_combatant + LeechSeed くさ判定で使う)。
+  let weather_state : Array[@model.Weather] = [@model.Weather::None]
+  let weather_turns_state : Array[Int] = [0]
+  let own_leech_seeded : Array[Bool] = Array::make(own.length(), false)
+  let opp_leech_seeded : Array[Bool] = Array::make(opp.length(), false)
+  // per-side scalar Wish counter (DP 側 `SwitchingGameState.my_wish_turns : Int`
+  // と同じ slot-bound 仕様)。Mutability のため 1-element 配列で持つ。
+  let own_wish_turns : Array[Int] = [-1]
+  let opp_wish_turns : Array[Int] = [-1]
+  let own_megaed : Array[Bool] = Array::make(own.length(), false)
+  let opp_megaed : Array[Bool] = Array::make(opp.length(), false)
   let mut own_active = 0
   let mut opp_active = 0
   for _ in 0..<turn_limit {
@@ -514,12 +652,18 @@ pub fn team_rollout(
         }
         // Step 2: apply switches. Reset toxic counter on the switched-out
         // slot. (Switches are never chosen while must_recharge is set, so
-        // there is no recharge flag to clear here.)
+        // there is no recharge flag to clear here.) Stage 13: LeechSeed は
+        // switched-out slot で剥がれる (mainline: ordinary switch で seed が
+        // 消える)。Wish はスロットに残るため触らない (= 受け手は交代後の
+        // Pokemon、DP 側 SwitchingGame の Switch arm と同じ semantics)。
         match ao {
           TmSwitch(i) => {
             own_status[own_active] = reset_toxic_counter_on_switch(
               own_status[own_active],
             )
+            if own_active < own_leech_seeded.length() {
+              own_leech_seeded[own_active] = false
+            }
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -530,6 +674,9 @@ pub fn team_rollout(
             opp_status[opp_active] = reset_toxic_counter_on_switch(
               opp_status[opp_active],
             )
+            if opp_active < opp_leech_seeded.length() {
+              opp_leech_seeded[opp_active] = false
+            }
             opp_active = i
             reset_ranks(opp_ranks)
           }
@@ -591,7 +738,10 @@ pub fn team_rollout(
               )
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge,
+                own_status, own_wish_turns, own,
                 opp_hps, opp_active, opp_ranks,
+                opp_leech_seeded, opp, opp_megaed,
+                weather_state, weather_turns_state,
                 mv_own, before - opp_hps[opp_active],
               )
               mc_try_apply_status(
@@ -624,7 +774,10 @@ pub fn team_rollout(
               )
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge,
+                opp_status, opp_wish_turns, opp,
                 own_hps, own_active, own_ranks,
+                own_leech_seeded, own, own_megaed,
+                weather_state, weather_turns_state,
                 mv_opp, before - own_hps[own_active],
               )
               mc_try_apply_status(
@@ -647,7 +800,10 @@ pub fn team_rollout(
               )
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge,
+                opp_status, opp_wish_turns, opp,
                 own_hps, own_active, own_ranks,
+                own_leech_seeded, own, own_megaed,
+                weather_state, weather_turns_state,
                 mv_opp, before - own_hps[own_active],
               )
               mc_try_apply_status(
@@ -678,7 +834,10 @@ pub fn team_rollout(
               )
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge,
+                own_status, own_wish_turns, own,
                 opp_hps, opp_active, opp_ranks,
+                opp_leech_seeded, opp, opp_megaed,
+                weather_state, weather_turns_state,
                 mv_own, before - opp_hps[opp_active],
               )
               mc_try_apply_status(
@@ -707,7 +866,10 @@ pub fn team_rollout(
             )
             team_apply_post_hit(
               own_hps, own_active, own_ranks, own_must_recharge,
+              own_status, own_wish_turns, own,
               opp_hps, opp_active, opp_ranks,
+              opp_leech_seeded, opp, opp_megaed,
+              weather_state, weather_turns_state,
               mv_own, before - opp_hps[opp_active],
             )
             mc_try_apply_status(
@@ -735,7 +897,10 @@ pub fn team_rollout(
             )
             team_apply_post_hit(
               opp_hps, opp_active, opp_ranks, opp_must_recharge,
+              opp_status, opp_wish_turns, opp,
               own_hps, own_active, own_ranks,
+              own_leech_seeded, own, own_megaed,
+              weather_state, weather_turns_state,
               mv_opp, before - own_hps[own_active],
             )
             mc_try_apply_status(
@@ -763,20 +928,122 @@ pub fn team_rollout(
           opp_start_active < opp_must_recharge.length() {
           opp_must_recharge[opp_start_active] = false
         }
-        // Step 4: end-of-turn slip damage on each active (both still alive
-        // below; dead slots are handled by `all_ko` earlier).
+        // Step 4: end-of-turn — Gen9 公式順序で適用する。DP 側 `apply_eot`
+        // (switching_game_effects.mbt) と同じ順序を保つことで、MC と DP の
+        // 意味論 parity を保証する。順序:
+        //   1. 天候ダメ (Sand chip)
+        //   2. アイテム回復 (たべのこし)
+        //   3. やどりぎのタネ tick
+        //   4. 状態異常 slip
+        //   5. ねがいごと発動 (atomic tick + activate)
+        //   6. 天候カウンタ tick
+        //   7. wish_turns カウンタ tick (Stage 12 SSoT: atomic と組み合わせ済み)
+        //
+        // DP 側のヘルパー (`apply_sand_damage_active` / `eot_leftovers_heal` /
+        // `eot_slip_active` / `add_hp_capped` / `sub_hp_floor0`) を直接呼び、
+        // 二重実装の乖離リスクを排除する (= 単一ソース)。
         let own_max = effective_hp(own[own_active])
         let opp_max = effective_hp(opp[opp_active])
-        let (new_own_hp, new_own_st) = mc_eot_slip(
-          own_max, own_hps[own_active], own_status[own_active],
+
+        // === Step 4.1: 天候ダメ (Sand chip) ===
+        apply_sand_damage_active(
+          own_active, own_hps, own, own_megaed, own_max, weather_state[0],
+        )
+        apply_sand_damage_active(
+          opp_active, opp_hps, opp, opp_megaed, opp_max, weather_state[0],
+        )
+
+        // === Step 4.2: アイテム回復 (たべのこし) ===
+        // eot_leftovers_heal は HP<=0 で early return するので、Sand チップで
+        // KO されたあとは heal が発火しない (DP 側と整合)。
+        own_hps[own_active] = eot_leftovers_heal(
+          own_hps[own_active], own_max, own[own_active].item,
+        )
+        opp_hps[opp_active] = eot_leftovers_heal(
+          opp_hps[opp_active], opp_max, opp[opp_active].item,
+        )
+
+        // === Step 4.3: やどりぎのタネ tick ===
+        // 種付き側 HP -= max/8、相手 active HP += 同量。Magic Guard は seed
+        // 側 tick を完全スキップ (HP 不変 + 相手側加算も 0)。HP<=0 (faint 後) は
+        // tick skip (faint 後の二度発火抑止)。my → opp の固定順序で逐次適用。
+        let own_seeded = own_active < own_leech_seeded.length() &&
+          own_leech_seeded[own_active]
+        if own_seeded && own_hps[own_active] > 0 {
+          if !ability_blocks_leech_seed(own[own_active].ability) {
+            // 種付き側 HP が max/8 未満なら実際に吸えた分しか相手に渡らない
+            // (本家挙動: actual drained を基準とし overkill 分を回復に
+            // 転用しない)。DP 側 `apply_eot` と同じ semantics。sub / add 両側で
+            // 同じ `drained` を渡し、Issue #4 の「HP が空から生まれる」退化を
+            // 構造的に防ぐ。
+            //
+            // ヘドロえき (Liquid Ooze): 種付き側 ability が ヘドロえき のとき、
+            // 相手 (本来の回復側) が drained 量の damage を受ける。DP 側と
+            // semantics 完全一致。
+            let raw = own_max / 8
+            let cur_hp = own_hps[own_active]
+            let drained = if cur_hp < raw { cur_hp } else { raw }
+            sub_hp_floor0(own_hps, own_active, drained)
+            if ability_reverses_drain(own[own_active].ability) {
+              sub_hp_floor0(opp_hps, opp_active, drained)
+            } else {
+              add_hp_capped(opp_hps, opp_active, drained, opp_max)
+            }
+          }
+        }
+        let opp_seeded = opp_active < opp_leech_seeded.length() &&
+          opp_leech_seeded[opp_active]
+        if opp_seeded && opp_hps[opp_active] > 0 {
+          if !ability_blocks_leech_seed(opp[opp_active].ability) {
+            let raw = opp_max / 8
+            let cur_hp = opp_hps[opp_active]
+            let drained = if cur_hp < raw { cur_hp } else { raw }
+            sub_hp_floor0(opp_hps, opp_active, drained)
+            if ability_reverses_drain(opp[opp_active].ability) {
+              sub_hp_floor0(own_hps, own_active, drained)
+            } else {
+              add_hp_capped(own_hps, own_active, drained, own_max)
+            }
+          }
+        }
+
+        // === Step 4.4: 状態異常 slip ===
+        // DP 側 `eot_slip_active` を直接呼ぶ (MC ローカル `mc_eot_slip` と
+        // semantics 完全一致だが、SSoT 化のため DP 側を共有)。Stage 12 で確立
+        // した eot_slip_active を MC でも reuse することで両者の乖離を防ぐ。
+        let (new_own_hp, new_own_st) = eot_slip_active(
+          own_hps[own_active], own_max, own_status[own_active],
         )
         own_hps[own_active] = new_own_hp
         own_status[own_active] = new_own_st
-        let (new_opp_hp, new_opp_st) = mc_eot_slip(
-          opp_max, opp_hps[opp_active], opp_status[opp_active],
+        let (new_opp_hp, new_opp_st) = eot_slip_active(
+          opp_hps[opp_active], opp_max, opp_status[opp_active],
         )
         opp_hps[opp_active] = new_opp_hp
         opp_status[opp_active] = new_opp_st
+
+        // === Step 4.5: ねがいごと (Wish) 発動 (atomic tick + activate) ===
+        // 共通 helper `tick_and_fire_wish_inplace` に集約 (DP 側 `apply_eot`
+        // Step 5 と semantics 一致)。テスト (`_wbtest.mbt`) からも同じ helper
+        // を呼んで HP の実加算を直接観測できる。
+        tick_and_fire_wish_inplace(own_wish_turns, own_hps, own_active, own)
+        tick_and_fire_wish_inplace(opp_wish_turns, opp_hps, opp_active, opp)
+
+        // === Step 4.6: 天候カウンタ tick ===
+        // weather_turns_left > 0 ならデクリメント、0 になった瞬間に
+        // Weather::None へリセット。Step 4.1 の Sand チップは tick 前の
+        // weather を参照するため、「カウンタが 0 になる EOT」も Sand チップは
+        // 入る (= 切れる前の最後の Sand チップが成立、本家挙動)。
+        if weather_turns_state[0] > 0 {
+          let dec = weather_turns_state[0] - 1
+          if dec <= 0 {
+            weather_state[0] = @model.Weather::None
+            weather_turns_state[0] = 0
+          } else {
+            weather_turns_state[0] = dec
+          }
+        }
+
         if all_ko(own_hps) {
           return -1.0
         }

@@ -4,6 +4,87 @@
 /// `clear_consumed_recharge`. `_wbtest.mbt` lives in the same package so the
 /// private helper `team_apply_post_hit` is visible; `mk_move` is reused from
 /// `switching_game_status_wbtest.mbt`.
+///
+/// Stage 13 で `team_apply_post_hit` のシグネチャが拡張されたため (healing /
+/// LeechSeed / Wish / 天候設定 / status 配列を取るようになった)、本 wbtest 群
+/// は新しい呼び出し規約に追従する。引数は本ファイル冒頭のヘルパー
+/// `mk_post_hit_ctx` でまとめて用意する。
+
+///|
+/// Stage 13 のシグネチャ拡張に対応した最小フィクスチャ。stat_effects / recoil /
+/// recharge の検証用に必要な空配列をすべて生成し、`team_apply_post_hit` の
+/// 引数群を 1 箇所で管理する。
+priv struct PostHitCtx {
+  attacker_status : Array[@model.StatusCondition]
+  attacker_wish_turns : Array[Int]
+  attacker_team : Array[Combatant]
+  defender_leech_seeded : Array[Bool]
+  defender_team : Array[Combatant]
+  defender_megaed : Array[Bool]
+  weather_state : Array[@model.Weather]
+  weather_turns_state : Array[Int]
+}
+
+///|
+/// 単スロット側の dummy combatant を作る (status moves / damaging moves の
+/// post-hit semantics 検証で、healing / weather / LeechSeed 系の追加引数は
+/// すべて初期値で十分)。max_hp は `effective_hp` 経由でしか参照されないので
+/// pokemon.hp = 200 のままで OK。
+/// wbtest は `_test.mbt` のヘルパー (mk_pokemon / mk_combatant) を import
+/// できないため、本ファイル内に最小フィクスチャを inline で持つ。
+fn mk_post_hit_pokemon() -> @model.Pokemon {
+  {
+    global_no: "0000",
+    name_ja: "dummy",
+    name_en: "dummy",
+    type1: "ノーマル",
+    type2: "",
+    hp: 200,
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    bst: 700,
+    ability1: "",
+    ability2: "",
+    dream_ability: "",
+    weight: 50.0,
+    forms: [],
+  }
+}
+
+///|
+fn mk_post_hit_combatant() -> Combatant {
+  {
+    pokemon: mk_post_hit_pokemon(),
+    moves: [],
+    ability: "",
+    item: "",
+    tera_type: "",
+    stat_system: @model.Standard,
+    mega_form: None,
+    nature: None,
+    stat_points: None,
+    actual_stats: None,
+    ivs: None,
+  }
+}
+
+///|
+fn mk_post_hit_ctx() -> PostHitCtx {
+  let c = mk_post_hit_combatant()
+  {
+    attacker_status: [@model.None],
+    attacker_wish_turns: [-1],
+    attacker_team: [c],
+    defender_leech_seeded: [false],
+    defender_team: [c],
+    defender_megaed: [false],
+    weather_state: [@model.Weather::None],
+    weather_turns_state: [0],
+  }
+}
 
 ///|
 /// Regression for blocking issue 1: `team_apply_post_hit` must apply
@@ -17,6 +98,7 @@ test "team_apply_post_hit applies self-target stat drops on damaging moves" {
   let attacker_must_recharge = [false]
   let defender_hps = [100]
   let defender_ranks = [0, 0, 0, 0, 0]
+  let ctx = mk_post_hit_ctx()
   // オーバーヒート analogue: damaging special move, self SpA -2 after hit.
   let overheat = mk_move(
     "オーバーヒート", "ほのお", @model.Special, 130,
@@ -24,7 +106,10 @@ test "team_apply_post_hit applies self-target stat drops on damaging moves" {
   )
   team_apply_post_hit(
     attacker_hps, 0, attacker_ranks, attacker_must_recharge,
+    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
     defender_hps, 0, defender_ranks,
+    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
+    ctx.weather_state, ctx.weather_turns_state,
     overheat, 50,
   )
   @debug.assert_eq(attacker_ranks[2], -2)
@@ -43,13 +128,17 @@ test "team_apply_post_hit skips opp-target stat drops when defender faints" {
   // Defender fainted by this hit — HP already dropped to 0 by caller.
   let defender_hps = [0]
   let defender_ranks = [0, 0, 0, 0, 0]
+  let ctx = mk_post_hit_ctx()
   let mv = mk_move(
     "アイアンテール", "はがね", @model.Physical, 100,
     stat_effects=[{ stat: 1, delta: -1, target: 1 }],
   )
   team_apply_post_hit(
     attacker_hps, 0, attacker_ranks, attacker_must_recharge,
+    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
     defender_hps, 0, defender_ranks,
+    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
+    ctx.weather_state, ctx.weather_turns_state,
     mv, 120,
   )
   // Opp-target drop is gated out: defender ranks unchanged.
@@ -63,13 +152,17 @@ test "team_apply_post_hit applies opp-target stat drops when defender survives" 
   let attacker_must_recharge = [false]
   let defender_hps = [40]
   let defender_ranks = [0, 0, 0, 0, 0]
+  let ctx = mk_post_hit_ctx()
   let mv = mk_move(
     "アイアンテール", "はがね", @model.Physical, 100,
     stat_effects=[{ stat: 1, delta: -1, target: 1 }],
   )
   team_apply_post_hit(
     attacker_hps, 0, attacker_ranks, attacker_must_recharge,
+    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
     defender_hps, 0, defender_ranks,
+    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
+    ctx.weather_state, ctx.weather_turns_state,
     mv, 60,
   )
   @debug.assert_eq(defender_ranks[1], -1)
@@ -113,12 +206,16 @@ test "team_apply_post_hit sets recharge flag after damaging recharge-move hit" {
   let attacker_must_recharge = [false]
   let defender_hps = [120]
   let defender_ranks = [0, 0, 0, 0, 0]
+  let ctx = mk_post_hit_ctx()
   let hyper_beam = mk_move(
     "はかいこうせん", "ノーマル", @model.Physical, 150, recharge=true,
   )
   team_apply_post_hit(
     attacker_hps, 0, attacker_ranks, attacker_must_recharge,
+    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
     defender_hps, 0, defender_ranks,
+    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
+    ctx.weather_state, ctx.weather_turns_state,
     hyper_beam, 180,
   )
   @debug.assert_eq(attacker_must_recharge[0], true)

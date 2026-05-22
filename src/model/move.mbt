@@ -28,8 +28,10 @@ pub(all) struct StatEffect {
 /// - `Drain(n, d)` — restore `dmg_dealt * n / d` (ギガドレイン = (1, 2)).
 ///   `defender.ability == "ヘドロえき"` reverses the sign (attacker takes
 ///   damage instead) — handled by the payoff layer, not encoded here.
-/// - `Rest` — full HP restore + self-Sleep(2). `Sleep` immunity abilities
-///   (ふみん / やるき / スイートベール) block the entire effect.
+/// - `Rest` — full HP restore + self-Sleep(2). Fails (no HP / status change)
+///   when the user is already at full HP, mirroring mainline behavior.
+///   `Sleep` immunity abilities (ふみん / やるき / スイートベール) also
+///   block the entire effect.
 /// - `LeechSeed` — plant seed on defender; EOT tick drains 1/8 each turn.
 /// - `PainSplit` — average both HP, clamped per side's max.
 /// - `Wish` — slot-bound delayed heal: 2 EOT ticks later, restore

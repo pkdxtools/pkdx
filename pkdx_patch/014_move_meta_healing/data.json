@@ -12,7 +12,6 @@
   { "name": "すいとる", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
   { "name": "きゅうけつ", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
   { "name": "ドレインキッス", "heal_kind": "drain", "heal_num": 3, "heal_den": 4 },
-  { "name": "オーラぐるま", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
   { "name": "パラボラチャージ", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
   { "name": "ドレインパンチ", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
 

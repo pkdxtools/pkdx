@@ -620,6 +620,8 @@ test "apply_healing: WeatherDependent no-op when HP=max regardless of weather" {
 //      `スイートベール`) なら Rest は失敗。HP も status も不変
 //   4. Magic Guard は Sleep を **止めない** (Magic Guard は residual damage
 //      の immunity であって status 付与の immunity ではない)
+//   5. attacker HP が既に max のとき Rest は「体力がいっぱいで眠れない」で
+//      失敗。HP も status も不変 (本家挙動)
 //
 // Rest は `maybe_apply_status_fanout` を経由せず、`apply_healing` の中で
 // 直接 `attacker_status[active] = Sleep(2)` を書き込む (既存 status を
@@ -660,11 +662,13 @@ test "apply_healing: Rest from Burn restores HP=max and overwrites status to Sle
 }
 
 ///|
-/// Case R-2: HP=max / status=Sleep(0) / ability=normal で Rest を撃つと
+/// Case R-2: HP=1 / status=Sleep(0) / ability=normal で Rest を撃つと
 /// HP=max / status=Sleep(2)。Sleep カウンタが 0 (まもなく覚醒) でも Rest で
 /// 2 にリセットされる (本家「Rest は既存 Sleep の残ターンを上書きする」)。
+/// HP=max では Rest が失敗するため、Sleep カウンタリセット観察用には
+/// HP < max のシナリオで pin する。
 test "apply_healing: Rest resets Sleep(0) counter to Sleep(2)" {
-  let hps = [100]
+  let hps = [1]
   let status : Array[@model.StatusCondition] = [@model.Sleep(0)]
   let mv = mk_rest_move()
   apply_healing(mv, 0, hps, 100, @model.Weather::None, status, "", 0, "")
@@ -674,15 +678,30 @@ test "apply_healing: Rest resets Sleep(0) counter to Sleep(2)" {
 
 ///|
 /// Case R-3: HP=max / status=None / ability=normal で Rest を撃つと
-/// HP=max (不変) / status=Sleep(2)。満タンでも Rest は使用可能で必ず Sleep を
-/// 付与する。
-test "apply_healing: Rest at full HP still inflicts Sleep(2)" {
+/// 「体力がいっぱいで眠れない」で失敗 — HP も status も不変。
+/// 本家挙動 (https://bulbapedia.bulbagarden.net/wiki/Rest_(move))。これを
+/// 入れないと満タン Rest 使いが状態異常解除目的で常時撃てて payoff が
+/// overvalued になる。
+test "apply_healing: Rest at full HP fails (no HP / status change)" {
   let hps = [100]
   let status : Array[@model.StatusCondition] = [@model.None]
   let mv = mk_rest_move()
   apply_healing(mv, 0, hps, 100, @model.Weather::None, status, "", 0, "")
   @debug.assert_eq(hps[0], 100)
-  @debug.assert_eq(status[0], @model.Sleep(2))
+  @debug.assert_eq(status[0], @model.None)
+}
+
+///|
+/// Case R-3b: HP=max / status=Burn / ability=normal で Rest を撃つと
+/// 同じく failure (HP も status も変化しない)。満タンガードが status 上書き
+/// よりも先に走り、Burn を「Rest で踏み消す」抜け道を塞ぐ境界 pin。
+test "apply_healing: Rest at full HP with Burn fails (Burn preserved)" {
+  let hps = [100]
+  let status : Array[@model.StatusCondition] = [@model.Burn]
+  let mv = mk_rest_move()
+  apply_healing(mv, 0, hps, 100, @model.Weather::None, status, "", 0, "")
+  @debug.assert_eq(hps[0], 100)
+  @debug.assert_eq(status[0], @model.Burn)
 }
 
 ///|
@@ -738,7 +757,7 @@ test "apply_healing: Magic Guard does NOT block Rest (Sleep is inflicted)" {
 // =================================================================
 //
 // `HealingEffect::Drain(n, d)` (ギガドレイン / メガドレイン / すいとる /
-// きゅうけつ / ドレインキッス (3/4) / オーラぐるま / パラボラチャージ /
+// きゅうけつ / ドレインキッス (3/4) / パラボラチャージ /
 // ドレインパンチ) は与えた damage の n/d を attacker が回復する。
 //
 // 境界仕様:

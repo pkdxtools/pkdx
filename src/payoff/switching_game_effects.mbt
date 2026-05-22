@@ -1279,12 +1279,14 @@ pub fn sub_hp_floor0(hps : Array[Int], slot : Int, amount : Int) -> Unit {
 /// `None` の場合のみ書き換える保護を持っている)。さらに `ふみん` /
 /// `やるき` / `スイートベール` の Sleep 免疫がある attacker では Rest 自体
 /// が失敗する (HP も status も不変)。ability immunity 判定は
-/// `ability_blocks_status(ability, SleepKind)` に集約済み。
+/// `ability_blocks_status(ability, SleepKind)` に集約済み。本家挙動として
+/// attacker HP が既に max のときも Rest は失敗する (「体力がいっぱいで
+/// 眠れない」)。
 ///
 /// 引数 `dmg` / `defender_ability` は段階 8 (Drain + ヘドロえき反転) で追加。
 /// Drain は与えた damage の n/d を attacker が吸収する技群 (ギガドレイン /
-/// メガドレイン / すいとる / きゅうけつ / ドレインキッス (3/4) / オーラ
-/// ぐるま / パラボラチャージ / ドレインパンチ) で、`dmg > 0` の場合のみ
+/// メガドレイン / すいとる / きゅうけつ / ドレインキッス (3/4) /
+/// パラボラチャージ / ドレインパンチ) で、`dmg > 0` の場合のみ
 /// `max(1, dmg * n / d)` を回復する。`dmg` は **dealt** (defender HP で
 /// クランプ済み、overkill 補正済み) を caller が渡すこと。defender ability
 /// が `ヘドロえき` (Liquid Ooze) の場合は回復が damage に反転し、`sub_hp_floor0`
@@ -1354,6 +1356,14 @@ pub fn apply_healing(
       // immunity であって status immunity ではない) ので、ability_blocks_status
       // の truth table から意図的に外している (ability_immunity.mbt 参照)。
       if ability_blocks_status(attacker_ability, @model.SleepKind) {
+        return
+      }
+      // 本家挙動: HP が既に max のとき Rest は「体力がいっぱいで眠れない」で
+      // 失敗。HP も status も不変。これを入れないと満タンの攻め手が Rest を
+      // 状態異常解除目的で常時撃って Sleep(2) を上書きしてしまい payoff が
+      // overvalued になる (Sleep フェーズの行動制限分を払わずに status を
+      // 書き換えるため)。
+      if attacker_hps[attacker_active_slot] >= attacker_max {
         return
       }
       // 既存 status を強制的に Sleep(2) で上書き (本家挙動 — Burn / Poison /

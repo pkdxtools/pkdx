@@ -5,12 +5,12 @@
 /// Y inserted" 数値と move_meta の総行数が想定通りに収束することを assert
 /// する。具体的に観測する不変量:
 ///
-/// 1. **1 回目の実行**: 既存行 0 件 → 22 件すべて INSERT
-///    ("0 updated, 22 inserted")
-/// 2. **2 回目の実行**: 22 件が UPDATE (内容は同じだが reset + upsert で
-///    UPDATE 経路を通る) → 0 件 INSERT ("22 updated, 0 inserted")
-/// 3. `move_meta` 行数は 2 回目以降 22 のまま不変
-/// 4. `heal_kind != ''` または `weather_set != ''` の行数が 22 のまま不変
+/// 1. **1 回目の実行**: 既存行 0 件 → 21 件すべて INSERT
+///    ("0 updated, 21 inserted")
+/// 2. **2 回目の実行**: 21 件が UPDATE (内容は同じだが reset + upsert で
+///    UPDATE 経路を通る) → 0 件 INSERT ("21 updated, 0 inserted")
+/// 3. `move_meta` 行数は 2 回目以降 21 のまま不変
+/// 4. `heal_kind != ''` または `weather_set != ''` の行数が 21 のまま不変
 ///    (= 全 healing/weather 行が正しく投入されており、reset で消失していない)
 /// 5. PRAGMA table_info で m014 が追加した 9 列が **2 回 ALTER せずに**
 ///    1 セットだけ存在する (ensure_column の冪等性)
@@ -111,9 +111,9 @@ fn count_m014_columns(db : @db.Db) -> Int {
 }
 
 ///|
-/// 1 回目の run_014: 既存 0 件 → 22 件すべて INSERT。
-/// (data.json は 22 件、Plan の仕様通り)
-test "m014 idempotent: first run inserts all 22 entries" {
+/// 1 回目の run_014: 既存 0 件 → 21 件すべて INSERT。
+/// (data.json は 21 件)
+test "m014 idempotent: first run inserts all 21 entries" {
   let db = match setup_temp_db("first") {
     Ok(d) => d
     Err(e) => {
@@ -131,16 +131,16 @@ test "m014 idempotent: first run inserts all 22 entries" {
   }
   // フォーマット: "healing/weather columns added; <updated> updated, <inserted> inserted"
   @debug.debug_inspect(
-    msg, content="\"healing/weather columns added; 0 updated, 22 inserted\"",
+    msg, content="\"healing/weather columns added; 0 updated, 21 inserted\"",
   )
-  @debug.assert_eq(count_rows(db), 22)
-  @debug.assert_eq(count_healing_rows(db), 22)
+  @debug.assert_eq(count_rows(db), 21)
+  @debug.assert_eq(count_healing_rows(db), 21)
   @debug.assert_eq(count_m014_columns(db), 9)
   @db.close(db)
 }
 
 ///|
-/// 2 回目の run_014 (同じ db): 22 件 UPDATE、0 INSERT、行数 / 列数不変。
+/// 2 回目の run_014 (同じ db): 21 件 UPDATE、0 INSERT、行数 / 列数不変。
 test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
   let db = match setup_temp_db("second") {
     Ok(d) => d
@@ -161,7 +161,7 @@ test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
   let rows_after_first = count_rows(db)
   let healing_after_first = count_healing_rows(db)
   let cols_after_first = count_m014_columns(db)
-  // 2 回目: authoritative reset → 22 件 UPDATE で同じ状態へ収束。
+  // 2 回目: authoritative reset → 21 件 UPDATE で同じ状態へ収束。
   let msg2 = match run_014(db, ".") {
     Ok(s) => s
     Err(e) => {
@@ -171,7 +171,7 @@ test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
     }
   }
   @debug.debug_inspect(
-    msg2, content="\"healing/weather columns added; 22 updated, 0 inserted\"",
+    msg2, content="\"healing/weather columns added; 21 updated, 0 inserted\"",
   )
   @debug.assert_eq(count_rows(db), rows_after_first)
   @debug.assert_eq(count_healing_rows(db), healing_after_first)
@@ -181,7 +181,7 @@ test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
 }
 
 ///|
-/// 3 回目 (連続適用): 2 回目以降は永続的に "22 updated, 0 inserted" のまま、
+/// 3 回目 (連続適用): 2 回目以降は永続的に "21 updated, 0 inserted" のまま、
 /// 行数 / 列数 / healing 行数すべて不変。data.json 状態への収束保証。
 test "m014 idempotent: third run is identical to second (steady state)" {
   let db = match setup_temp_db("third") {
@@ -216,10 +216,10 @@ test "m014 idempotent: third run is identical to second (steady state)" {
     }
   }
   @debug.debug_inspect(
-    msg3, content="\"healing/weather columns added; 22 updated, 0 inserted\"",
+    msg3, content="\"healing/weather columns added; 21 updated, 0 inserted\"",
   )
-  @debug.assert_eq(count_rows(db), 22)
-  @debug.assert_eq(count_healing_rows(db), 22)
+  @debug.assert_eq(count_rows(db), 21)
+  @debug.assert_eq(count_healing_rows(db), 21)
   @debug.assert_eq(count_m014_columns(db), 9)
   @db.close(db)
 }

@@ -1,0 +1,28 @@
+[
+  { "name": "じこさいせい", "heal_kind": "fixed", "heal_num": 1, "heal_den": 2 },
+  { "name": "なまける", "heal_kind": "fixed", "heal_num": 1, "heal_den": 2 },
+  { "name": "はねやすめ", "heal_kind": "fixed", "heal_num": 1, "heal_den": 2 },
+
+  { "name": "つきのひかり", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
+  { "name": "あさのひざし", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
+  { "name": "シンセシス", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
+
+  { "name": "ギガドレイン", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+  { "name": "メガドレイン", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+  { "name": "すいとる", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+  { "name": "きゅうけつ", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+  { "name": "ドレインキッス", "heal_kind": "drain", "heal_num": 3, "heal_den": 4 },
+  { "name": "オーラぐるま", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+  { "name": "パラボラチャージ", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+  { "name": "ドレインパンチ", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
+
+  { "name": "ねむる", "heal_kind": "rest" },
+  { "name": "やどりぎのタネ", "heal_kind": "leech_seed" },
+  { "name": "いたみわけ", "heal_kind": "pain_split" },
+  { "name": "ねがいごと", "heal_kind": "wish" },
+
+  { "name": "にほんばれ", "weather_set": "sun", "weather_turns": 5 },
+  { "name": "あまごい", "weather_set": "rain", "weather_turns": 5 },
+  { "name": "すなあらし", "weather_set": "sand", "weather_turns": 5 },
+  { "name": "ゆきげしき", "weather_set": "snow", "weather_turns": 5 }
+]

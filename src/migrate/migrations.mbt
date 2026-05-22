@@ -7,6 +7,15 @@
 /// Champions メガ行が残っているが、クエリ層は `version='champions'` のとき
 /// champions.db を読むため無害。気になる場合は `rm pokedex/pokedex.db &&
 /// ./setup.sh` で fresh な upstream に戻せる。
+///
+/// 番号の歴史:
+///   - 001-007: pokedex.db ターゲット (現役)
+///   - 008-013: champions.db ターゲット (`migrations_champions()` 側で管理)
+///   - 014:   pokedex.db ターゲット (回復技 / 天候設定技用 m014_move_meta_healing)
+/// 007 → 014 で番号が飛んでいるのは「pokedex / champions の番号空間を
+/// 共有しつつ、ファイルとしては別 DB を触る」設計を採っているため。新規
+/// pokedex.db migration を追加するときは `migrations_champions()` 末尾より
+/// 大きい次の番号 (= 現状なら 014 の次として 015) を割り当てる。
 pub fn migrations_pokedex() -> Array[Migration] {
   [
     { name: "001_mega_legendsza", run: run_001 },
@@ -16,6 +25,7 @@ pub fn migrations_pokedex() -> Array[Migration] {
     { name: "005_move_meta_posthit", run: run_005 },
     { name: "006_form_name_aliases", run: run_006 },
     { name: "007_gender_symbol_aliases", run: run_007 },
+    { name: "014_move_meta_healing", run: run_014 },
   ]
 }
 

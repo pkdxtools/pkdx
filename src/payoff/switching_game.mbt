@@ -72,6 +72,34 @@ pub(all) struct SwitchingGameState {
   // initial state). Mixed length is treated as untracked for safety.
   my_moves_used : Array[Int]
   opp_moves_used : Array[Int]
+  // Stage 2 (healing-moves plan): infrastructure fields for upcoming healing /
+  // weather / leech-seed / wish semantics. Stage 2 only adds these fields and
+  // wires their propagation through every state helper / clone path; the
+  // read/write logic that consumes them lands in stages 3–11. Default values
+  // are no-op: `Weather::None` / `0` turns left / no slot seeded / `-1` wish
+  // pending. Existing 943+ tests must observe identical behaviour with these
+  // defaults — verified by stage 2's "behaviour unchanged" gate.
+  // - weather: current battlefield weather. Read by WeatherDependent healing
+  //   and post-hit weather-setting moves in later stages.
+  // - weather_turns_left: remaining turns of `weather` (5 base, stone-extended
+  //   not modeled in this PR). When 0 the next EOT clears to `None`.
+  // - my_leech_seeded / opp_leech_seeded: per-slot seeded flag. Persists slot-
+  //   scoped (Switch clears the switched-out slot's flag in stage 8).
+  // - my_wish_turns / opp_wish_turns: pending Wish counter for the active
+  //   battle slot. pkdx single battle has exactly one active slot per side,
+  //   so we keep a single scalar per side (not an array keyed by team index).
+  //   `-1` = no pending wish, `0` = fires on the next EOT, `>0` = ticks down.
+  //   When the counter fires it heals whoever is currently active (= the
+  //   replacement after a Switch, not the original Wisher). This is the
+  //   mainline "slot-bound delayed Recover" semantics: the strategic
+  //   "switch out the Wisher → receive on the replacement" pattern IS
+  //   captured. See `model/move.mbt :: HealingEffect :: Wish`.
+  weather : @model.Weather
+  weather_turns_left : Int
+  my_leech_seeded : Array[Bool]
+  opp_leech_seeded : Array[Bool]
+  my_wish_turns : Int
+  opp_wish_turns : Int
   turn : Int
 } derive(Debug, Eq, Hash)
 
@@ -80,6 +108,19 @@ pub(all) struct SwitchingGameState {
 /// and in test construction.
 pub fn zero_status(team_size : Int) -> Array[@model.StatusCondition] {
   Array::make(team_size, @model.None)
+}
+
+///|
+/// Default value for the per-side Wish pending counter. `-1` encodes "no
+/// pending wish" so we can keep `wish_turns : Int` (scalar) and stay
+/// derive(Hash)-friendly. Values:
+///   -1 = idle (no Wish pending)
+///    0 = fires on the next EOT
+///   >0 = ticks down
+/// `_team_size` is unused (kept for API symmetry with `zero_status`; the
+/// underscore prefix silences the MoonBit unused-parameter warning).
+pub fn no_wish_pending(_team_size : Int) -> Int {
+  -1
 }
 
 ///|
@@ -918,6 +959,18 @@ fn apply_damage_variants_fanout(
   let leaves : Array[(Double, SwitchingGameState)] = []
   for i = 0; i < outcomes.length(); i = i + 1 {
     let outcome = outcomes[i]
+    // ドレイン / 反動 が overkill 分を吸わないように、実 dealt = min(theoretical,
+    // pre_dmg_defender_hp) でクランプ。本家挙動 (Showdown / Gen9) は「与えた
+    // ダメージ」基準で吸収・反動を計算するため、防御側 HP が技の理論値を
+    // 下回るときは その HP までしか吸えない。Drain / Liquid Ooze だけでなく
+    // recoil 系も同じく overkill 分を 吸わないので、共通の `actual_dmg` を
+    // 後段の with_post_hit_effects へ渡す。HP 自体の減算は `with_hp_damage`
+    // が `clamp_zero` で 0 床にするので、theoretical を渡しても結果は同じ。
+    let actual_dmg = if outcome.mean_damage > pre_dmg_defender_hp {
+      pre_dmg_defender_hp
+    } else {
+      outcome.mean_damage
+    }
     let state_dmg = with_hp_damage(state, target_is_me, target_slot, outcome.mean_damage)
     // Phase 2-E (#91): per-variant post-hit state effects so recoil /
     // self_ko / recharge / stat_effects compound on the variant-specific
@@ -928,8 +981,10 @@ fn apply_damage_variants_fanout(
       attacker_is_me,
       attacker_slot,
       target_slot,
+      attacker_team,
+      defender_team,
       attacker_move,
-      outcome.mean_damage,
+      actual_dmg,
     )
     let sub = compose_fanouts(state_v, [
       fn(s) {
@@ -1021,6 +1076,8 @@ fn with_post_hit_effects(
   attacker_is_me : Bool,
   attacker_active : Int,
   defender_active : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
   mv : @model.Move,
   dmg : Int,
 ) -> SwitchingGameState {
@@ -1030,10 +1087,33 @@ fn with_post_hit_effects(
   let opp_ranks = state.opp_ranks.copy()
   let my_must_recharge = state.my_must_recharge.copy()
   let opp_must_recharge = state.opp_must_recharge.copy()
+  // Stage 7 (Rest): attacker_status は apply_healing で書き換わる可能性が
+  // あるので copy on write。Rest が attacker_status[active] を Sleep(2) で
+  // 上書きする本家挙動を反映する。non-Rest pathways では unchanged のまま
+  // 最終 state にスレッドされる。
+  let my_status = state.my_status.copy()
+  let opp_status = state.opp_status.copy()
+  // Stage 9 (LeechSeed): defender 側の leech_seeded 配列を書き換える可能性が
+  // あるため copy on write。LeechSeed 以外の経路では unchanged のまま base
+  // state を経由して最終 state にスレッドされる。植え付けは attacker 側で
+  // なく defender 側のフラグを立てる (attacker_is_me=true → opp_leech_seeded、
+  // attacker_is_me=false → my_leech_seeded)。
+  let my_leech_seeded = state.my_leech_seeded.copy()
+  let opp_leech_seeded = state.opp_leech_seeded.copy()
+  // Stage 11 (Wish): attacker 側の wish_turns scalar を書き換える可能性があるため
+  // ローカルに展開。Wish 以外の経路では unchanged のまま base state を経由して
+  // 最終 state にスレッドされる。Wish の発動は attacker_is_me に応じて
+  // my_wish_turns / opp_wish_turns のどちらかを書き換える (defender 側は
+  // 触らない、これは LeechSeed と対照的)。scalar 化 (Array → Int) 後は
+  // 「slot に貼り付く Wish」を正しく表現できる。pkdx single battle は active
+  // が常に 1 つなので per-side で 1 値で十分。
+  let mut my_wish_turns = state.my_wish_turns
+  let mut opp_wish_turns = state.opp_wish_turns
   let attacker_hps = if attacker_is_me { my_hps } else { opp_hps }
   let attacker_ranks = if attacker_is_me { my_ranks } else { opp_ranks }
   let defender_hps = if attacker_is_me { opp_hps } else { my_hps }
   let defender_ranks = if attacker_is_me { opp_ranks } else { my_ranks }
+  let attacker_status = if attacker_is_me { my_status } else { opp_status }
   let attacker_must_recharge = if attacker_is_me {
     my_must_recharge
   } else {
@@ -1042,11 +1122,131 @@ fn with_post_hit_effects(
   let opp_alive = defender_hps[defender_active] > 0
   apply_stat_effects(attacker_ranks, defender_ranks, opp_alive, mv)
   apply_recoil(attacker_hps, attacker_active, mv, dmg)
+  // 回復技 (HealingEffect) は self_ko の **手前** で適用する。本家挙動と
+  // 整合: じばく + healing 等の組合せは現状ゲーム内で存在しないが、ある
+  // 場合は self_ko 側 (= HP=0 への強制上書き) が後勝ち。recoil → heal →
+  // self_ko の順は本段階以降の追加バリアントでも維持する。
+  let attacker_max = effective_hp(attacker_team[attacker_active])
+  // state.weather を渡して WeatherDependent (つきのひかり等) が動的に倍率を
+  // 選択できるようにする。FixedFraction では参照されない。
+  // Stage 7: attacker_status と attacker_ability を追加で渡す。Rest が
+  // ability_blocks_status(SleepKind) を見て免疫 ability の場合は失敗し、
+  // それ以外では attacker_status[active] を Sleep(2) に上書きする。
+  // Stage 8: dmg と defender_ability を追加で渡す。Drain (ギガドレイン等) が
+  // dmg * n / d を吸収し、defender_ability=ヘドロえき なら反転して attacker
+  // が damage を受ける。defender_ability は damage 計算で参照される mega 後の
+  // ability ではなく raw な defender_team[active].ability を読む。回復計算は
+  // attacker mega 形態と独立 (Drain 倍率は move 側の n/d で決まる) なので
+  // mega 解決経路を再通する必要はない。
+  let attacker_ability = attacker_team[attacker_active].ability
+  let defender_ability = defender_team[defender_active].ability
+  apply_healing(
+    mv,
+    attacker_active,
+    attacker_hps,
+    attacker_max,
+    state.weather,
+    attacker_status,
+    attacker_ability,
+    dmg,
+    defender_ability,
+  )
+  // Stage 9 (LeechSeed planting): `apply_healing` は attacker 側のバッファ
+  // (HP / status) しか書き換えられない設計だが、LeechSeed は defender 側の
+  // フラグを立てる必要があるため専用パスとして外出ししている。判定:
+  //   - mv.healing == Some(LeechSeed) のときのみ発火
+  //   - defender が くさタイプ (mega 後 effective type) なら失敗
+  //   - すでに seeded な相手にもう一度撃っても観測上 no-op (true 上書きは無害)
+  //   - Magic Guard は植え付け自体は許容する (EOT tick 側で 0 化される)
+  // attacker_is_me=true (= 自分が技を撃った) なら opp 側 = opp_leech_seeded、
+  // false なら my 側 = my_leech_seeded を書き換える。defender の mega 状態は
+  // 撃った側から見た相手側 megaed 配列を参照する。
+  match mv.healing {
+    Some(@model.LeechSeed) => {
+      let def_megaed = if attacker_is_me {
+        state.opp_megaed[defender_active]
+      } else {
+        state.my_megaed[defender_active]
+      }
+      let defender_eff = effective_combatant(
+        defender_team[defender_active], def_megaed,
+      )
+      let is_grass = defender_eff.pokemon.type1 == "くさ" ||
+        defender_eff.pokemon.type2 == "くさ"
+      if !is_grass {
+        // Defensive: legacy test fixtures may size leech_seeded shorter than
+        // the team. Out-of-bounds slots are treated as no-op (the cache key
+        // / state ignores them entirely).
+        if attacker_is_me {
+          if defender_active < opp_leech_seeded.length() {
+            opp_leech_seeded[defender_active] = true
+          }
+        } else {
+          if defender_active < my_leech_seeded.length() {
+            my_leech_seeded[defender_active] = true
+          }
+        }
+      }
+    }
+    // Stage 10 (PainSplit / いたみわけ): `apply_healing` は attacker 側 HP
+    // バッファしか書けない設計のため LeechSeed と同じく外出しで処理する。
+    // 双方の現 HP を合算し floor 除算で avg を作り、各側 max_hp で independent
+    // にクランプする (asymmetric max への対応)。my_hps / opp_hps は本関数
+    // 冒頭で copy-on-write 済みなので、ここで直接書き換えれば最終 state に
+    // 反映される。defender_max は defender_team[defender_active] から
+    // effective_hp で取得し、attacker_max は外で計算済みの値を流用する。
+    //
+    // fainted defender (HP=0) への PainSplit は mainline では失敗扱いだが、
+    // 本 PR では alive_actions が ひんし を action 候補から外すため通常の
+    // ゲーム木では到達しない。テスト都合で直接呼んだときの挙動を pin する
+    // (= 失敗扱いではなく avg=attacker_cur/2 で素直に動く)。重複ガードは
+    // 入れない (= alive_actions 側で担保)。
+    Some(@model.PainSplit) => {
+      let defender_max = effective_hp(defender_team[defender_active])
+      let attacker_cur = attacker_hps[attacker_active]
+      let defender_cur = defender_hps[defender_active]
+      let avg = (attacker_cur + defender_cur) / 2
+      let new_attacker = if avg > attacker_max { attacker_max } else { avg }
+      let new_defender = if avg > defender_max { defender_max } else { avg }
+      attacker_hps[attacker_active] = new_attacker
+      defender_hps[defender_active] = new_defender
+    }
+    // Stage 11 (Wish / ねがいごと): attacker 側の wish_turns を 2 にセット。
+    // 既に pending な wish_turns があっても上書きする (Gen9 仕様: 重ね掛け
+    // 不可、後着優先)。`apply_healing` のシグネチャは wish_turns を取らない
+    // ため、LeechSeed / PainSplit と同じく専用パスで処理する。発動は EOT 側
+    // (`apply_eot` の wish-trigger ブロック) で行う。
+    //
+    // attacker_is_me=true なら my_wish_turns、false なら opp_wish_turns を
+    // 書き換える。scalar 化後は active slot index に依存せず、サイドに対し
+    // 1 つの Wish counter を持つ (= slot に貼り付く Wish を正しく表現)。
+    Some(@model.Wish) => {
+      if attacker_is_me {
+        my_wish_turns = 2
+      } else {
+        opp_wish_turns = 2
+      }
+    }
+    _ => ()
+  }
   if mv.self_ko {
     attacker_hps[attacker_active] = 0
   }
   if mv.recharge && attacker_hps[attacker_active] > 0 {
     attacker_must_recharge[attacker_active] = true
+  }
+  // Stage 5 (healing-moves plan): 天候設定技 (にほんばれ / あまごい /
+  // すなあらし / ゆきげしき) の効果を state に反映する。`mv.weather_set` が
+  // `Some(w)` なら weather と weather_turns_left を上書き、`None` なら維持。
+  // Gen9 base の 5 ターン (天候石なし) を本段階では固定値とし、天候石による
+  // 8 ターン延長は後続 PR で `Pokemon.item` から派生させる。HP に対する damage
+  // はそもそも status カテゴリの技なので変化しない (apply_healing 直後でも HP
+  // は不変)。天候設定の上書きは self_ko / recharge と独立 (じばく + 天候設定の
+  // 同居技は本家に存在しないが、ある場合は self_ko 後に weather を書き換える
+  // 順序で問題なし — 天候はサイド非依存のグローバル state)。
+  let (new_weather, new_weather_turns) = match mv.weather_set {
+    Some(w) => (w, 5)
+    None => (state.weather, state.weather_turns_left)
   }
   {
     ..state,
@@ -1056,6 +1256,14 @@ fn with_post_hit_effects(
     opp_ranks,
     my_must_recharge,
     opp_must_recharge,
+    my_status,
+    opp_status,
+    weather: new_weather,
+    weather_turns_left: new_weather_turns,
+    my_leech_seeded,
+    opp_leech_seeded,
+    my_wish_turns,
+    opp_wish_turns,
   }
 }
 

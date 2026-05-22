@@ -55,6 +55,8 @@ fn ck_move(name : String) -> @model.Move {
     recoil_den: 1,
     self_ko: false,
     recharge: false,
+    healing: None,
+    weather_set: None,
   }
 }
 
@@ -281,4 +283,123 @@ test "cache key: two identical matchup calls produce identical keys" {
   let b = base_def()
   let mv = base_move()
   @debug.assert_eq(key_of(a, b, mv), key_of(a, b, mv))
+}
+
+// ─── SwitchingGameState Hash 完全性 (stage 2: healing infra) ──────────────────
+//
+// Plan K-4: each new state field added in stage 2 (weather / weather_turns_left
+// / my_leech_seeded / opp_leech_seeded / my_wish_turns / opp_wish_turns) must
+// be part of the derive(Hash) so the DP memoisation cache does not collide
+// two distinct states that only differ on a healing-infrastructure field.
+//
+// Strategy: build a baseline state, then perturb exactly one new field at a
+// time. The two states must compare !=, hash to distinct buckets when used
+// as @hashmap keys, AND the spread-update path must propagate the change
+// (so a `{ ..base, ... }` modification cannot silently drop the new fields).
+
+///|
+fn ck_state_base() -> SwitchingGameState {
+  {
+    my_active: 0,
+    opp_active: 0,
+    my_hps: [100, 100],
+    opp_hps: [100, 100],
+    my_ranks: [0, 0, 0, 0, 0],
+    opp_ranks: [0, 0, 0, 0, 0],
+    my_mega_used: false,
+    opp_mega_used: false,
+    my_megaed: [false, false],
+    opp_megaed: [false, false],
+    my_status: [@model.None, @model.None],
+    opp_status: [@model.None, @model.None],
+    my_must_recharge: [false, false],
+    opp_must_recharge: [false, false],
+    my_item_consumed: [false, false],
+    opp_item_consumed: [false, false],
+    my_moves_used: [],
+    opp_moves_used: [],
+    weather: @model.Weather::None,
+    weather_turns_left: 0,
+    my_leech_seeded: [false, false],
+    opp_leech_seeded: [false, false],
+    my_wish_turns: -1,
+    opp_wish_turns: -1,
+    turn: 0,
+  }
+}
+
+///|
+/// Probe (a, b) with both `Eq` and HashMap-keyed retrieval: stores `a`'s value
+/// and asserts that `b` does NOT collide with it. Confirms `b` hashes to a
+/// distinct bucket AND compares not-equal to `a` — the two prerequisites a
+/// state cache key needs to keep two distinct states apart.
+fn assert_distinct_state_keys(
+  a : SwitchingGameState,
+  b : SwitchingGameState,
+) -> Unit raise {
+  assert_true(a != b)
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  cache[a] = 1.0
+  match cache.get(b) {
+    Some(_) => assert_true(false)
+    None => ()
+  }
+}
+
+///|
+test "state cache key: weather field distinguishes the key" {
+  let base = ck_state_base()
+  let with_sun = { ..base, weather: @model.Weather::Sun }
+  assert_distinct_state_keys(base, with_sun)
+}
+
+///|
+test "state cache key: weather_turns_left distinguishes the key" {
+  let base = ck_state_base()
+  let with_turns = { ..base, weather_turns_left: 5 }
+  assert_distinct_state_keys(base, with_turns)
+}
+
+///|
+test "state cache key: my_leech_seeded distinguishes the key" {
+  let base = ck_state_base()
+  let seeded = { ..base, my_leech_seeded: [true, false] }
+  assert_distinct_state_keys(base, seeded)
+}
+
+///|
+test "state cache key: opp_leech_seeded distinguishes the key" {
+  let base = ck_state_base()
+  let seeded = { ..base, opp_leech_seeded: [false, true] }
+  assert_distinct_state_keys(base, seeded)
+}
+
+///|
+test "state cache key: my_wish_turns distinguishes the key" {
+  let base = ck_state_base()
+  let wished = { ..base, my_wish_turns: 2 }
+  assert_distinct_state_keys(base, wished)
+}
+
+///|
+test "state cache key: opp_wish_turns distinguishes the key" {
+  let base = ck_state_base()
+  let wished = { ..base, opp_wish_turns: 0 }
+  assert_distinct_state_keys(base, wished)
+}
+
+///|
+/// All-equal sanity: untouched copy of the base state must compare equal and
+/// collide on the HashMap. Catches accidental Hash regressions on the new
+/// fields that would silently fail every other assertion above.
+test "state cache key: identical states with all new fields collide" {
+  let a = ck_state_base()
+  let b = ck_state_base()
+  @debug.assert_eq(a, b)
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  cache[a] = 0.42
+  match cache.get(b) {
+    Some(v) => @debug.assert_eq(v, 0.42)
+    None => assert_true(false)
+  }
 }

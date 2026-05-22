@@ -776,6 +776,12 @@ fn with_status_set(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
+    weather: state.weather,
+    weather_turns_left: state.weather_turns_left,
+    my_leech_seeded: state.my_leech_seeded.copy(),
+    opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_wish_turns: state.my_wish_turns,
+    opp_wish_turns: state.opp_wish_turns,
     turn: state.turn,
   }
 }
@@ -827,26 +833,78 @@ pub fn eot_slip_active(
 /// は no-op。
 /// くろいヘドロ は持ち主の type が どく なら回復、それ以外なら max_hp / 8 の
 /// ダメージだが、本実装では未対応 (たべのこし のみ)。
-fn eot_leftovers_heal(current_hp : Int, max_hp : Int, item : String) -> Int {
+///
+/// HP 加算と上限クランプ部分は `add_hp_capped` 共通ヘルパーに委譲し、
+/// 段階 4 以降で追加される回復技 (`apply_healing` の FixedFraction 等) と
+/// 同じ実装パスを通る。ひんし (HP <= 0) は EOT 自動回復としては起こらない
+/// 既存契約を守るため、本関数側で `current_hp <= 0` 早期 return を維持
+/// (helper 側は ひんしスロット を蘇生してしまうため、契約を helper に
+/// 押し付けない)。`item` の判定も EOT 固有なのでここに残る。
+pub fn eot_leftovers_heal(current_hp : Int, max_hp : Int, item : String) -> Int {
   if current_hp <= 0 {
-    return current_hp
-  }
-  if current_hp >= max_hp {
     return current_hp
   }
   if item != "たべのこし" {
     return current_hp
   }
-  let heal = max_hp / 16
-  let new_hp = current_hp + heal
-  if new_hp > max_hp { max_hp } else { new_hp }
+  // add_hp_capped 経由で「max 以上は no-op」「加算後 max クランプ」を共通化。
+  // 単要素 buffer を立てて in-place mutation を return 値に取り出す。
+  let buf = [current_hp]
+  add_hp_capped(buf, 0, max_hp / 16, max_hp)
+  buf[0]
 }
 
 ///|
-/// Apply end-of-turn slip damage and counter updates to both actives of
-/// `state` in place on fresh copies; returns the updated state. Only the
-/// active slot receives EOT — bench Pokemon don't tick. Called at the end of
-/// every turn resolution in `attempt_turn_with_cache`.
+/// Apply end-of-turn slip damage, item heal, residual chip and counter ticks
+/// to both actives of `state` on fresh copies; returns the updated state.
+/// Only the active slot receives most EOT effects — bench Pokemon don't tick
+/// outside of slot-scoped Wish. Called at the end of every turn resolution
+/// in `attempt_turn_with_cache`.
+///
+/// Stage 12 (EOT 順序整理): tick blocks are arranged in the Gen9 mainline
+/// "residual" order. Plan H-2 specifies the canonical sequence as:
+///
+///   1. 天候ダメ (Sand chip on non-はがね/いわ/じめん, non-immune ability)
+///   2. アイテム回復 (たべのこし)
+///   3. やどりぎのタネ tick
+///   4. 状態異常スリップ (Burn / Poison / BadPoison / Drowsy → Sleep)
+///   5. ねがいごと発動 (atomic tick+activate; see comment below)
+///   6. 天候カウンタ tick (decrement / reset to None)
+///   7. wish_turns tick — see "Plan H-2 vs implementation note" below
+///   8. sleep カウンタ tick — handled in attempt_turn_with_cache, out of scope
+///
+/// Plan H-2 vs implementation note: Plan splits "Wish activation" (step 5)
+/// from "wish_turns tick" (step 7), which is only consistent with a set value
+/// of 1 on use. Plan H-D / K-1 fix the set value at 2 and document the
+/// fired-at-N+1 semantics, which require the tick and activation to be a
+/// single atomic step ("tick to 0 then heal"). Following Plan K-1 (the
+/// test-level spec) the Wish step is treated as one block — Bulbapedia's
+/// Gen 5+ wording "at the end of the next turn" matches this single-block
+/// behaviour, so we keep set=2 with combined tick+activate at the position
+/// Plan H-2 assigns to step 5.
+///
+/// Order changes vs Stage 11 (pre-refactor) and the observable consequences:
+///
+/// * **Sand chip is new** (step 1). Any non-immune Pokemon now loses max/16 HP
+///   under Sand weather before any item heal or status slip is applied. This
+///   can cause an Pokemon that previously survived (Sand + leftovers neutral
+///   shape) to faint at EOT if HP <= max/16 entering the EOT under Sand.
+/// * **Leech tick moved from after status slip to before status slip**
+///   (positions 3 ↔ 4). Burn / Poison damage no longer "front-runs" Leech
+///   Seed when both apply on the same EOT. The two ticks are still
+///   independent slot accesses, but if Leech reduces HP to 0 first, the
+///   status slip falls into the `current_hp <= 0` early-return in
+///   `eot_slip_active` and contributes zero further damage. (Pre-refactor
+///   status would chip first and Leech would skip on the corpse.) Both
+///   orderings have the same "death" outcome but the recovered HP on the
+///   opposing seed source differs: the new order always banks max/8 to the
+///   seed source before status considers fainting.
+/// * **Wish activation no longer races against status slip** — it now fires
+///   after status slip, matching Plan H-2 step 5. Effect on a turn where the
+///   wish receiver enters EOT at HP=max/16 with Burn: pre-refactor Wish
+///   tick+heal happened after status, observable as +max/2 then -max/16. The
+///   new order preserves this (status before Wish), so this case is
+///   regression-safe.
 pub fn apply_eot(
   state : SwitchingGameState,
   my_team : Array[Combatant],
@@ -858,26 +916,183 @@ pub fn apply_eot(
   let opp_status = state.opp_status.copy()
   let my_max = effective_hp(my_team[state.my_active])
   let opp_max = effective_hp(opp_team[state.opp_active])
-  // Mainline EOT 順: たべのこし 等のアイテム回復 → 状態異常のスリップダメージ。
-  // (Gen9 公式順では item heal が status damage より先にティックする。)
-  // 持ち物消費フラグは消費系 berry 用で、たべのこし はそもそも非消費アイテム
-  // なので item_consumed の影響を受けない。
+
+  // === Step 1: 天候ダメ (Sand chip) ===
+  // Gen9 Sand deals max/16 chip damage at EOT to every active Pokemon that is
+  // not はがね / いわ / じめん and whose ability does not block it (Magic
+  // Guard / すなかき / すながくれ / すなのちから / すなおこし). Type lookup
+  // uses `effective_combatant` so the post-mega type pair is honoured —
+  // an Aerodactyl that megas into Rock-typed form will not take Sand chip on
+  // the same turn it megas (and pre-mega it was Rock anyway, so this is
+  // mostly insurance). Other weathers (Rain / Sun / Snow / None) deal no
+  // chip damage in Gen9 (Hail was retired in favour of Snow).
+  apply_sand_damage_active(
+    state.my_active, my_hps, my_team, state.my_megaed, my_max, state.weather,
+  )
+  apply_sand_damage_active(
+    state.opp_active, opp_hps, opp_team, state.opp_megaed, opp_max,
+    state.weather,
+  )
+
+  // === Step 2: アイテム回復 (たべのこし) ===
+  // たべのこし は HP=0 (瀕死) では発動しないので Sand チップで KO されたあと
+  // の同 EOT 内では heal が発火しない。これは Gen9 公式挙動とも一致 (item
+  // heal は alive 判定を内部で持つ)。`eot_leftovers_heal` 側で current_hp<=0
+  // 早期 return が掛かっており、helper の add_hp_capped 経路と契約が分離
+  // されているため、Sand → leftovers の順序が間違いなく観測できる。
   let my_hp_after_heal = eot_leftovers_heal(
     my_hps[state.my_active], my_max, my_team[state.my_active].item,
   )
   let opp_hp_after_heal = eot_leftovers_heal(
     opp_hps[state.opp_active], opp_max, opp_team[state.opp_active].item,
   )
+  my_hps[state.my_active] = my_hp_after_heal
+  opp_hps[state.opp_active] = opp_hp_after_heal
+
+  // === Step 3: やどりぎのタネ tick ===
+  // 種付き側 (`*_leech_seeded[active] == true`) は HP -= max/8、相手 active
+  // HP += 同量。種付き側 ability が マジックガード のとき tick は完全に
+  // skip (seed 側 HP 不変、相手側加算も 0)。種付き側 HP <= 0 のスロットは
+  // tick skip (faint 後の二度発火を抑止)。種付き側が tick で HP=0 になっても、
+  // その同ターン分の吸収は相手に入る (ダメージ量は clamp 前の max/8 で計算)。
+  // 両側同時に seeded の場合は my → opp の固定順序で逐次適用。中間状態を
+  // 介して計算するため、加算側が満タンで cap に当たって失われるケースが
+  // 起こり得る (mainline でも発生する自然な挙動)。
+  //
+  // Stage 12 配置: leftovers の **後** / 状態異常 slip の **前** へ移動。
+  // pre-stage12 では status slip の後にあったため、Burn と seed が同時の
+  // ターンに seed 側が status で先死 → leech skip という挙動だったが、
+  // 新順序では leech tick が先になり、seed 側が max/8 削れた上で status が
+  // 動く。両者ともに max/8 < HP <= max/16 の境界では「leech で死亡 → status
+  // skip」が観測される (eot_slip_active が `current_hp <= 0` early return)。
+  //
+  // Defensive: legacy test fixtures may size leech_seeded shorter than the
+  // team. Out-of-bounds is treated as "not seeded" and skips the tick.
+  let my_seeded = state.my_active < state.my_leech_seeded.length() &&
+    state.my_leech_seeded[state.my_active]
+  if my_seeded && my_hps[state.my_active] > 0 {
+    let attacker_blocks = ability_blocks_leech_seed(
+      my_team[state.my_active].ability,
+    )
+    if !attacker_blocks {
+      // 種付き側 HP が max/8 未満なら実際に吸えた分しか相手に渡らない (本家
+      // 挙動: ドレイン同様 actual drained 量を基準にし、overkill 分を相手の
+      // 回復に転用しない)。Issue #4: sub / add 両方で同じ `drained` 値を使う
+      // ことで「HP が空から生まれる」(seed 側 HP < max/8 なのに相手が max/8
+      // 加算する) 退化を構造的に防ぐ。`sub_hp_floor0` も内部で floor 0 する
+      // ため不変だが、両側で同じ amount を渡す形を SSoT として明示する。
+      //
+      // ヘドロえき (Liquid Ooze): 種付き側 ability が ヘドロえき のとき、
+      // mainline は drain 系効果を反転させる — 相手 (本来の回復側) が drained
+      // 量の damage を受ける。種付き側の HP 減少は通常通り発生する。
+      let raw = my_max / 8
+      let cur_hp = my_hps[state.my_active]
+      let drained = if cur_hp < raw { cur_hp } else { raw }
+      sub_hp_floor0(my_hps, state.my_active, drained)
+      if ability_reverses_drain(my_team[state.my_active].ability) {
+        sub_hp_floor0(opp_hps, state.opp_active, drained)
+      } else {
+        add_hp_capped(opp_hps, state.opp_active, drained, opp_max)
+      }
+    }
+  }
+  let opp_seeded = state.opp_active < state.opp_leech_seeded.length() &&
+    state.opp_leech_seeded[state.opp_active]
+  if opp_seeded && opp_hps[state.opp_active] > 0 {
+    let defender_blocks = ability_blocks_leech_seed(
+      opp_team[state.opp_active].ability,
+    )
+    if !defender_blocks {
+      let raw = opp_max / 8
+      let cur_hp = opp_hps[state.opp_active]
+      let drained = if cur_hp < raw { cur_hp } else { raw }
+      sub_hp_floor0(opp_hps, state.opp_active, drained)
+      if ability_reverses_drain(opp_team[state.opp_active].ability) {
+        sub_hp_floor0(my_hps, state.my_active, drained)
+      } else {
+        add_hp_capped(my_hps, state.my_active, drained, my_max)
+      }
+    }
+  }
+
+  // === Step 4: 状態異常 slip ===
+  // Burn / Poison / BadPoison / Drowsy → Sleep の counter 遷移を含む。
+  // `eot_slip_active` は HP<=0 で早期 return するので、Sand or Leech で HP=0
+  // になったスロットは status slip を観測しない (= HP は不変、status counter
+  // も不変)。これは mainline 挙動 (faint 後の status は燃え尽きない / Toxic
+  // counter は death で凍結) と一致する。
   let (my_hp_new, my_st_new) = eot_slip_active(
-    my_hp_after_heal, my_max, my_status[state.my_active],
+    my_hps[state.my_active], my_max, my_status[state.my_active],
   )
   my_hps[state.my_active] = my_hp_new
   my_status[state.my_active] = my_st_new
   let (opp_hp_new, opp_st_new) = eot_slip_active(
-    opp_hp_after_heal, opp_max, opp_status[state.opp_active],
+    opp_hps[state.opp_active], opp_max, opp_status[state.opp_active],
   )
   opp_hps[state.opp_active] = opp_hp_new
   opp_status[state.opp_active] = opp_st_new
+
+  // === Step 5: ねがいごと (Wish) 発動 (atomic tick+activate) ===
+  // wish_turns は per-side の scalar (Int)。
+  //   `>0`  → -= 1 (tick)
+  //   `==0` → 発動: 現在 active な slot の HP > 0 なら `add_hp_capped(hps,
+  //           my_active, slot_max/2, slot_max)` で回復、HP=0 なら不変。
+  //           発動の有無に関わらず -1 に idle 化 (Wish 自体は消費される)。
+  //   `<0`  → idle 状態、不変 (fixpoint)。
+  //
+  // 本実装はサイド単位の slot-bound Wish: Wisher が Switch で控えに退いた
+  // 後でも、Wish の counter は active slot に残り、交代先で受け取る (これが
+  // 「ねがいごと」の戦略的価値、mainline と一致)。
+  //
+  // tick → 発動 の atomic 結合: set 2 → EOT1 (tick: 2→1, ==0 false) → EOT2
+  // (tick: 1→0, ==0 true → 発動)。これにより Bulbapedia の Gen5+ 表記
+  // "At the end of the next turn" (= 使用ターンの次 EOT で発動) を満たす。
+  // Plan H-2 が step 5 (発動) と step 7 (tick) を分離している点は、set 値
+  // を 1 にしない限り意味論が崩れるため、Plan K-1 (set=2 + 2 EOT 経過で発動)
+  // を SSoT とし atomic 結合を採用する (この差分は本関数 doccomment 冒頭の
+  // "Plan H-2 vs implementation note" を参照)。
+  let mut my_wish_turns_new = state.my_wish_turns
+  if my_wish_turns_new > 0 {
+    my_wish_turns_new = my_wish_turns_new - 1
+  }
+  if my_wish_turns_new == 0 {
+    let active = state.my_active
+    if active >= 0 && active < my_hps.length() && my_hps[active] > 0 {
+      let slot_max = effective_hp(my_team[active])
+      add_hp_capped(my_hps, active, slot_max / 2, slot_max)
+    }
+    my_wish_turns_new = -1
+  }
+  let mut opp_wish_turns_new = state.opp_wish_turns
+  if opp_wish_turns_new > 0 {
+    opp_wish_turns_new = opp_wish_turns_new - 1
+  }
+  if opp_wish_turns_new == 0 {
+    let active = state.opp_active
+    if active >= 0 && active < opp_hps.length() && opp_hps[active] > 0 {
+      let slot_max = effective_hp(opp_team[active])
+      add_hp_capped(opp_hps, active, slot_max / 2, slot_max)
+    }
+    opp_wish_turns_new = -1
+  }
+
+  // === Step 6: 天候カウンタ tick ===
+  // `weather_turns_left > 0` ならデクリメント、`0` になった瞬間に
+  // `Weather::None` へリセット。`weather == None` 状態では既に `turns_left=0`
+  // が保たれているので no-op (fixpoint)。step 1 の Sand チップは tick 前の
+  // state.weather を参照しているため、「カウンタが 0 になる EOT」も Sand
+  // チップは入る (= 切れる前の "最後の Sand チップ" が成立する)。これは
+  // 本家挙動と一致 (天候は EOT の最後にカウントが終了する)。
+  let (next_weather, next_weather_turns) = if state.weather_turns_left > 0 {
+    let dec = state.weather_turns_left - 1
+    if dec <= 0 {
+      (@model.Weather::None, 0)
+    } else {
+      (state.weather, dec)
+    }
+  } else {
+    (state.weather, 0)
+  }
   {
     my_active: state.my_active,
     opp_active: state.opp_active,
@@ -897,7 +1112,57 @@ pub fn apply_eot(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
+    weather: next_weather,
+    weather_turns_left: next_weather_turns,
+    my_leech_seeded: state.my_leech_seeded.copy(),
+    opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_wish_turns: my_wish_turns_new,
+    opp_wish_turns: opp_wish_turns_new,
     turn: state.turn,
+  }
+}
+
+///|
+/// Step 1 of `apply_eot`. Apply sandstorm chip damage (max_hp / 16, floor 0)
+/// to the active slot when weather is Sand and the active Pokemon is neither
+/// type-immune (はがね / いわ / じめん) nor ability-immune (delegated to
+/// `ability_blocks_sand_damage`). Mutates `hps[slot]` in place. The post-mega
+/// type pair is read via `effective_combatant`, so a Pokemon mid-mega is
+/// evaluated against its new typing.
+pub fn apply_sand_damage_active(
+  active : Int,
+  hps : Array[Int],
+  team : Array[Combatant],
+  megaed : Array[Bool],
+  max_hp : Int,
+  weather : @model.Weather,
+) -> Unit {
+  match weather {
+    @model.Sand => {
+      if hps[active] <= 0 {
+        return
+      }
+      let is_mega = active < megaed.length() && megaed[active]
+      let eff = effective_combatant(team[active], is_mega)
+      // 即値カバレッジ: 単タイプは type2="" で素通り (空文字は どのタイプ名
+      // とも一致しない)。テラスタル / うちおとす による空中浮遊解除等の動的
+      // type 上書きは本 EOT chip では未対応 (Plan スコープ外)。
+      if eff.pokemon.type1 == "はがね" ||
+        eff.pokemon.type1 == "いわ" ||
+        eff.pokemon.type1 == "じめん" {
+        return
+      }
+      if eff.pokemon.type2 == "はがね" ||
+        eff.pokemon.type2 == "いわ" ||
+        eff.pokemon.type2 == "じめん" {
+        return
+      }
+      if ability_blocks_sand_damage(eff.ability) {
+        return
+      }
+      sub_hp_floor0(hps, active, max_hp / 16)
+    }
+    _ => ()
   }
 }
 
@@ -942,5 +1207,194 @@ pub fn sleep_turns(s : @model.StatusCondition) -> Int? {
   match s {
     @model.Sleep(n) => Some(n)
     _ => None
+  }
+}
+
+///|
+/// In-place HP 加算 helper。`hps[slot]` に `amount` を加え、`max_hp` で上限
+/// クランプする。`amount <= 0` は no-op (回復系の呼び出し側で「無効」を表現
+/// するため 0 / 負値で早期 return)。`hps[slot]` が既に `max_hp` 以上のときも
+/// 副作用なし (回復対象が満タンなら何もしない)。
+///
+/// 回復技 (`apply_healing`) の FixedFraction / WeatherDependent / Drain 等
+/// と EOT 自動回復 (`eot_leftovers_heal`) の HP 増加部分を共通化するための
+/// 最小単位。`sub_hp_floor0` (HP 減少クランプ) は段階 8 (Drain + ヘドロえき)
+/// で同じファイルに追加予定。
+pub fn add_hp_capped(
+  hps : Array[Int],
+  slot : Int,
+  amount : Int,
+  max_hp : Int,
+) -> Unit {
+  if amount <= 0 {
+    return
+  }
+  let cur = hps[slot]
+  if cur >= max_hp {
+    return
+  }
+  let new_hp = cur + amount
+  hps[slot] = if new_hp > max_hp { max_hp } else { new_hp }
+}
+
+///|
+/// In-place HP 減算 helper。`hps[slot]` から `amount` を引き、0 未満には
+/// 落とさない (= floor at 0)。`amount <= 0` は no-op (Drain 反転で
+/// `max(1, _)` が常に正であることを呼び出し側が保証する前提だが、防衛的
+/// に no-op で吸収)。
+///
+/// 段階 8 で Drain × ヘドロえき (Liquid Ooze) の反転 damage を表現するため
+/// に導入する。`add_hp_capped` の対称形 (HP 増加 + max クランプ ↔ HP 減少
+/// + 0 床)。ひんしスロット (HP=0) でも `amount > 0` なら HP=0 のまま変化
+/// なし (`max(0, -amount)` で吸収)。
+pub fn sub_hp_floor0(hps : Array[Int], slot : Int, amount : Int) -> Unit {
+  if amount <= 0 {
+    return
+  }
+  let new_hp = hps[slot] - amount
+  hps[slot] = if new_hp < 0 { 0 } else { new_hp }
+}
+
+///|
+/// HP 回復技を適用する。`mv.healing` が `None` であれば no-op。本段階では
+/// `FixedFraction(n, d)` / `WeatherDependent(...)` / `Rest` バリアントを実装。
+/// 残る `Drain` / `LeechSeed` / `PainSplit` / `Wish` は段階 8 以降で同じ
+/// 関数を拡張する形で順次有効化する。未実装バリアントは `_ => ()` で
+/// fall-through し、ランタイムは no-op (型は通るが効果は出ないので、段階
+/// 移行中に CLI が落ちることはない)。
+///
+/// 引数 `weather` は `WeatherDependent` の倍率選択に使う。
+/// FixedFraction / その他バリアントでは参照されない。段階 5 で
+/// `SwitchingGameState.weather` を導入したことに対応し、本関数は呼び出し元
+/// (`with_post_hit_effects`) から state.weather を抜き出して受け取る (state
+/// 全体ではなく Weather 単体にしている理由: Drain は defender.ability、Wish
+/// は wish_turns 配列など state の特定フィールドではなく別ロジックを使う
+/// ため、共通の "state 全部渡し" にしても利点が薄い。最小拡張で意味論を
+/// 表現することを優先する)。
+///
+/// 引数 `attacker_status` / `attacker_ability` は段階 7 (Rest) で追加。
+/// Rest は HP を max まで戻すと同時に `attacker_status[active]` を
+/// `Sleep(2)` に **上書き** する本家挙動を持つため、status fanout
+/// (`maybe_apply_status_fanout`) を経由できない (fanout は既存 status が
+/// `None` の場合のみ書き換える保護を持っている)。さらに `ふみん` /
+/// `やるき` / `スイートベール` の Sleep 免疫がある attacker では Rest 自体
+/// が失敗する (HP も status も不変)。ability immunity 判定は
+/// `ability_blocks_status(ability, SleepKind)` に集約済み。
+///
+/// 引数 `dmg` / `defender_ability` は段階 8 (Drain + ヘドロえき反転) で追加。
+/// Drain は与えた damage の n/d を attacker が吸収する技群 (ギガドレイン /
+/// メガドレイン / すいとる / きゅうけつ / ドレインキッス (3/4) / オーラ
+/// ぐるま / パラボラチャージ / ドレインパンチ) で、`dmg > 0` の場合のみ
+/// `max(1, dmg * n / d)` を回復する。`dmg` は **dealt** (defender HP で
+/// クランプ済み、overkill 補正済み) を caller が渡すこと。defender ability
+/// が `ヘドロえき` (Liquid Ooze) の場合は回復が damage に反転し、`sub_hp_floor0`
+/// 経由で attacker HP=0 まで削れる。Magic Guard × Liquid Ooze の組合せ
+/// (attacker_ability=マジックガード が反転 damage を防ぐか) は Plan に
+/// 明記されておらず本段階では未対応 (デフォルトで反転して食らう)。
+/// FixedFraction / WeatherDependent / Rest は `dmg` / `defender_ability` を
+/// 参照しない。
+///
+/// `with_post_hit_effects` の末尾、`self_ko` の手前で呼ばれる。`self_ko`
+/// 側で attacker HP を 0 にする本家挙動を妨げないよう、必ず先に回復してから
+/// `self_ko` が後勝ちで HP を 0 化する。
+pub fn apply_healing(
+  mv : @model.Move,
+  attacker_active_slot : Int,
+  attacker_hps : Array[Int],
+  attacker_max : Int,
+  weather : @model.Weather,
+  attacker_status : Array[@model.StatusCondition],
+  attacker_ability : String,
+  dmg : Int,
+  defender_ability : String,
+) -> Unit {
+  match mv.healing {
+    None => ()
+    Some(@model.FixedFraction(n, d)) => {
+      // d == 0 / n <= 0 は data.json 側で発生し得ないが、防衛的に no-op。
+      if d <= 0 || n <= 0 {
+        return
+      }
+      let amount = attacker_max * n / d
+      add_hp_capped(attacker_hps, attacker_active_slot, amount, attacker_max)
+    }
+    Some(
+      @model.WeatherDependent(
+        default_n,
+        default_d,
+        sunny_n,
+        sunny_d,
+        harsh_n,
+        harsh_d,
+      ),
+    ) => {
+      // weather に応じて 3 系統から (n, d) を選択する。
+      //   Sun                → sunny (= 2/3 for moonlight family)
+      //   Rain / Sand / Snow → harsh (= 1/4)
+      //   None               → default (= 1/2)
+      // Gen9 仕様。霧 / 強い晴れ / 強い雨 / 乱気流は本 PR ではモデル外
+      // (Champions M-A は通常 4 天候 + 無天候のみ)。
+      let (n, d) = match weather {
+        @model.Weather::Sun => (sunny_n, sunny_d)
+        @model.Weather::Rain | @model.Weather::Sand | @model.Weather::Snow =>
+          (harsh_n, harsh_d)
+        @model.Weather::None => (default_n, default_d)
+      }
+      // 防衛的: data.json が壊れて (0, 0) が来ても segfault しないよう no-op。
+      if d <= 0 || n <= 0 {
+        return
+      }
+      let amount = attacker_max * n / d
+      add_hp_capped(attacker_hps, attacker_active_slot, amount, attacker_max)
+    }
+    Some(@model.Rest) => {
+      // Sleep 免疫 ability (ふみん / やるき / スイートベール) を持つ attacker
+      // が Rest を撃つと「ねむれない！」で失敗し、HP も status も不変。
+      // Magic Guard は Sleep の付与を **阻止しない** (residual damage の
+      // immunity であって status immunity ではない) ので、ability_blocks_status
+      // の truth table から意図的に外している (ability_immunity.mbt 参照)。
+      if ability_blocks_status(attacker_ability, @model.SleepKind) {
+        return
+      }
+      // 既存 status を強制的に Sleep(2) で上書き (本家挙動 — Burn / Poison /
+      // Para / 既存 Sleep(残ターン) を Rest が必ず書き換える)。
+      // status fanout を経由せず直接書き込むのは、fanout が None 保護を
+      // 持っているため (Rest はその保護を bypass する必要がある)。
+      // HP も max まで強制リセット (`add_hp_capped` の早期 return を bypass
+      // する必要があるため直接代入)。
+      attacker_hps[attacker_active_slot] = attacker_max
+      attacker_status[attacker_active_slot] = @model.Sleep(2)
+    }
+    Some(@model.Drain(n, d)) => {
+      // Drain は dmg > 0 のときのみ発動。dmg=0 (タイプ免疫 / 0 ダメ) では
+      // 回復も反転 damage も起こさない (= ヘドロえき も発火しない、本家挙動)。
+      if dmg <= 0 {
+        return
+      }
+      // 防衛的: data.json が壊れて (0, 0) が来ても segfault しないよう no-op。
+      if d <= 0 || n <= 0 {
+        return
+      }
+      // 回復量は `max(1, dmg * n / d)`。dmg=1 / n=1 / d=2 のとき整数除算で
+      // 0 に丸まる境界を `max(1, _)` で最小 1 回復に持ち上げる (Showdown / Gen9
+      // 仕様)。
+      let raw = dmg * n / d
+      let amount = if raw < 1 { 1 } else { raw }
+      if ability_reverses_drain(defender_ability) {
+        // ヘドロえき (Liquid Ooze): 回復が damage に反転。attacker は amount
+        // と同じ量の damage を受ける。`sub_hp_floor0` で HP=0 を床。HP=max
+        // でも反転 damage は発動する (add_hp_capped の早期 return とは
+        // 独立経路)。Magic Guard × Liquid Ooze (attacker_ability=マジックガード
+        // が反転 damage を防ぐか) は Plan に明記なく本段階では未対応 =
+        // デフォルトで反転して食らう。
+        sub_hp_floor0(attacker_hps, attacker_active_slot, amount)
+      } else {
+        add_hp_capped(
+          attacker_hps, attacker_active_slot, amount, attacker_max,
+        )
+      }
+    }
+    // 他バリアントは段階 9 以降で順次実装。本段階ではランタイム no-op。
+    _ => ()
   }
 }

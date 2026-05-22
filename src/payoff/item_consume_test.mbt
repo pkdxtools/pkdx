@@ -77,6 +77,12 @@ fn ic_state(
     opp_item_consumed: [false, false, false],
     my_moves_used: [],
     opp_moves_used: [],
+    weather: @model.Weather::None,
+    weather_turns_left: 0,
+    my_leech_seeded: [false, false, false],
+    opp_leech_seeded: [false, false, false],
+    my_wish_turns: -1,
+    opp_wish_turns: -1,
     turn: 0,
   }
 }
@@ -98,6 +104,8 @@ fn ic_move(name : String, type_ : String) -> @model.Move {
     recoil_den: 1,
     self_ko: false,
     recharge: false,
+    healing: None,
+    weather_set: None,
   }
 }
 

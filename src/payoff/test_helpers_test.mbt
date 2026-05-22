@@ -63,6 +63,8 @@ fn mk_move(
     recoil_den,
     self_ko,
     recharge,
+    healing: None,
+    weather_set: None,
   }
 }
 

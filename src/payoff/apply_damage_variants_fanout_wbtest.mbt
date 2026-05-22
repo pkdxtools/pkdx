@@ -57,6 +57,8 @@ fn advf_move(
     recoil_den: 1,
     self_ko: false,
     recharge: false,
+    healing: None,
+    weather_set: None,
   }
 }
 
@@ -102,6 +104,12 @@ fn advf_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
     opp_item_consumed: [false],
     my_moves_used: [],
     opp_moves_used: [],
+    weather: @model.Weather::None,
+    weather_turns_left: 0,
+    my_leech_seeded: [false],
+    opp_leech_seeded: [false],
+    my_wish_turns: -1,
+    opp_wish_turns: -1,
     turn: 0,
   }
 }

@@ -72,6 +72,15 @@ priv struct TurnWorkspace {
   opp_item_consumed : Array[Bool]
   my_moves_used : Array[Int]
   opp_moves_used : Array[Int]
+  // Stage 2 (healing-moves plan): mirror the new state fields so
+  // `ws_from_state` / `ws_to_state` preserve healing infrastructure across
+  // workspace round-trips. Stage 2 keeps them at no-op defaults.
+  weather : @model.Weather
+  weather_turns_left : Int
+  my_leech_seeded : Array[Bool]
+  opp_leech_seeded : Array[Bool]
+  my_wish_turns : Int
+  opp_wish_turns : Int
   turn : Int
 }
 
@@ -96,6 +105,12 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
+    weather: state.weather,
+    weather_turns_left: state.weather_turns_left,
+    my_leech_seeded: state.my_leech_seeded.copy(),
+    opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_wish_turns: state.my_wish_turns,
+    opp_wish_turns: state.opp_wish_turns,
     turn: state.turn,
   }
 }
@@ -121,6 +136,12 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_item_consumed: ws.opp_item_consumed.copy(),
     my_moves_used: ws.my_moves_used.copy(),
     opp_moves_used: ws.opp_moves_used.copy(),
+    weather: ws.weather,
+    weather_turns_left: ws.weather_turns_left,
+    my_leech_seeded: ws.my_leech_seeded.copy(),
+    opp_leech_seeded: ws.opp_leech_seeded.copy(),
+    my_wish_turns: ws.my_wish_turns,
+    opp_wish_turns: ws.opp_wish_turns,
     turn: if bump_turn { ws.turn + 1 } else { ws.turn },
   }
 }
@@ -376,6 +397,12 @@ fn clone_state(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
+    weather: state.weather,
+    weather_turns_left: state.weather_turns_left,
+    my_leech_seeded: state.my_leech_seeded.copy(),
+    opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_wish_turns: state.my_wish_turns,
+    opp_wish_turns: state.opp_wish_turns,
     turn: state.turn + turn_delta,
   }
 }
@@ -428,6 +455,11 @@ pub fn transition_with_cache(
   let opp_item_consumed_new = state.opp_item_consumed.copy()
   let my_moves_used_new = state.my_moves_used.copy()
   let opp_moves_used_new = state.opp_moves_used.copy()
+  // Stage 9: leech_seeded は slot-scoped で剥がれる。Switch arm で switched-out
+  // slot を false に書き戻すため、まず copy をローカルに持つ。Switch しない
+  // arm では state.copy() が base_state にそのまま流れるので影響なし。
+  let my_leech_seeded_new = state.my_leech_seeded.copy()
+  let opp_leech_seeded_new = state.opp_leech_seeded.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
   }
@@ -464,6 +496,17 @@ pub fn transition_with_cache(
       opp_status_new[state.opp_active] = reset_toxic_counter_on_switch(
         opp_status_new[state.opp_active],
       )
+      // Stage 9: LeechSeed は switched-out slot に対して剥がれる (mainline:
+      // 種付き が控えに下がると seed は消える)。双方同時 Switch でも両側
+      // 独立に剥がす。Defensive: 旧テスト fixture が leech_seeded 配列を
+      // team サイズより短く構築している場合があるので bounds check で吸収
+      // (他の配列、例 my_item_consumed も同じパターンで防衛している)。
+      if state.my_active < my_leech_seeded_new.length() {
+        my_leech_seeded_new[state.my_active] = false
+      }
+      if state.opp_active < opp_leech_seeded_new.length() {
+        opp_leech_seeded_new[state.opp_active] = false
+      }
     }
     (Switch(i), UseMove(mj)) => {
       my_active_new = i
@@ -473,6 +516,11 @@ pub fn transition_with_cache(
       my_status_new[state.my_active] = reset_toxic_counter_on_switch(
         my_status_new[state.my_active],
       )
+      // Stage 9: switched-out my slot から seed が剥がれる。Defensive:
+      // legacy test fixtures may size leech_seeded shorter than my_team.
+      if state.my_active < my_leech_seeded_new.length() {
+        my_leech_seeded_new[state.my_active] = false
+      }
       // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
       // are deferred to apply_damage_variants_fanout in the Some(...) arm
       // below, which fans the chance-node leaves across hit-count variants.
@@ -491,6 +539,11 @@ pub fn transition_with_cache(
       opp_status_new[state.opp_active] = reset_toxic_counter_on_switch(
         opp_status_new[state.opp_active],
       )
+      // Stage 9: switched-out opp slot から seed が剥がれる。Defensive:
+      // legacy test fixtures may size leech_seeded shorter than opp_team.
+      if state.opp_active < opp_leech_seeded_new.length() {
+        opp_leech_seeded_new[state.opp_active] = false
+      }
       // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
       // post-hit effects are handled per-variant in the Some(...) arm.
       pre_dmg_defender_hp = opp_hps_new[j]
@@ -567,6 +620,12 @@ pub fn transition_with_cache(
     opp_item_consumed: opp_item_consumed_new,
     my_moves_used: my_moves_used_new,
     opp_moves_used: opp_moves_used_new,
+    weather: state.weather,
+    weather_turns_left: state.weather_turns_left,
+    my_leech_seeded: my_leech_seeded_new,
+    opp_leech_seeded: opp_leech_seeded_new,
+    my_wish_turns: state.my_wish_turns,
+    opp_wish_turns: state.opp_wish_turns,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -736,6 +795,12 @@ fn pass_turn_state(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
+    weather: state.weather,
+    weather_turns_left: state.weather_turns_left,
+    my_leech_seeded: state.my_leech_seeded.copy(),
+    opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_wish_turns: state.my_wish_turns,
+    opp_wish_turns: state.opp_wish_turns,
     turn: state.turn + 1,
   }
 }
@@ -750,6 +815,18 @@ fn pass_turn_state(
 /// damage-calc helpers see the post-attempt status). For outcomes where one
 /// or both sides skip, `pass_turn_state` / partial-execution arms build the
 /// next state directly.
+///
+/// **Turn counter contract** (single source of truth): every branch returned
+/// by the four cases below — `transition_with_cache` (both act),
+/// `partial_act_outcomes` (one side skips), `pass_turn_state` (both skip) —
+/// produces states with `turn = state.turn + 1`. `apply_eot` is then called
+/// on that post-bump state and preserves `turn` unchanged. So weather /
+/// Wish counters and the `state.turn >= turn_limit` terminal check observe
+/// **exactly one** turn boundary per `attempt_turn_with_cache` call,
+/// regardless of whether the turn contained an attack event, a switch, a
+/// pass, or any mix. The four producers must keep this invariant — if a
+/// future change inserts an extra `+1` or removes one, attack-vs-pass paths
+/// will fall out of phase and EOT counters will tick at different cadences.
 pub fn attempt_turn_with_cache(
   state : SwitchingGameState,
   my_action : ActionKind,
@@ -804,6 +881,12 @@ pub fn attempt_turn_with_cache(
         opp_item_consumed: state.opp_item_consumed,
         my_moves_used: state.my_moves_used,
         opp_moves_used: state.opp_moves_used,
+        weather: state.weather,
+        weather_turns_left: state.weather_turns_left,
+        my_leech_seeded: state.my_leech_seeded,
+        opp_leech_seeded: state.opp_leech_seeded,
+        my_wish_turns: state.my_wish_turns,
+        opp_wish_turns: state.opp_wish_turns,
         turn: state.turn,
       }
       let branch_outs : Array[(Double, SwitchingGameState)] = match (
@@ -952,6 +1035,12 @@ fn partial_act_outcomes(
     opp_item_consumed,
     my_moves_used,
     opp_moves_used,
+    weather: state.weather,
+    weather_turns_left: state.weather_turns_left,
+    my_leech_seeded: state.my_leech_seeded.copy(),
+    opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_wish_turns: state.my_wish_turns,
+    opp_wish_turns: state.opp_wish_turns,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -1336,6 +1425,12 @@ pub fn switching_game_winrate_stats(
     opp_item_consumed: Array::make(opp_team.length(), false),
     my_moves_used: Array::make(my_team.length(), 0),
     opp_moves_used: Array::make(opp_team.length(), 0),
+    weather: @model.Weather::None,
+    weather_turns_left: 0,
+    my_leech_seeded: Array::make(my_team.length(), false),
+    opp_leech_seeded: Array::make(opp_team.length(), false),
+    my_wish_turns: no_wish_pending(my_team.length()),
+    opp_wish_turns: no_wish_pending(opp_team.length()),
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])

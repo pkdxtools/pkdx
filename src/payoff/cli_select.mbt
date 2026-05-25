@@ -158,6 +158,15 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(String(s)) => @db.parse_weather_set(s)
         _ => None
       }
+      // Stage E: `field_set` を weather_set と完全対称な pattern で受ける。
+      // 通常運用では DB 経路で m015 由来の値が乗るが、golden / E2E test では
+      // DB 接続なしで CLI JSON 経由で move を組み立てたいため optional 受け。
+      // 値域とパーサは `@db.parse_field_set` と同一 (整合性を確保するため共有)。
+      // 値が無い move は field_set: None (= field 設定技でない通常技)。
+      let field_set = match m.get("field_set") {
+        Some(String(s)) => @db.parse_field_set(s)
+        _ => None
+      }
       {
         name,
         type_,
@@ -175,7 +184,7 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         recharge,
         healing,
         weather_set,
-        field_set: None,
+        field_set,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")

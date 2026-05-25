@@ -318,6 +318,49 @@ test "parse_move_json_3elem_stat_effects_and_posthit_fields" {
 }
 
 ///|
+/// Stage E: `field_set` JSON フィールドが weather_set と同じ pattern で
+/// `@db.parse_field_set` 経由でパースされ、`Move.field_set` を埋める。
+/// 4 種類 (electric / grassy / misty / psychic) を pin。値が無い move は
+/// `field_set: None`。Stage C で残った cli_select.mbt の open item を解消する。
+test "parse_move_json_reads_field_set" {
+  let raw =
+    #|{
+    #|  "team": [
+    #|    {"name":"A","type1":"でんき","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"エレキフィールド","type":"でんき","category":"変化","power":0,"field_set":"electric"}]},
+    #|    {"name":"B","type1":"くさ","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"グラスフィールド","type":"くさ","category":"変化","power":0,"field_set":"grassy"}]},
+    #|    {"name":"C","type1":"フェアリー","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"ミストフィールド","type":"フェアリー","category":"変化","power":0,"field_set":"misty"}]},
+    #|    {"name":"D","type1":"エスパー","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"サイコフィールド","type":"エスパー","category":"変化","power":0,"field_set":"psychic"},
+    #|              {"name":"じしん","type":"じめん","category":"物理","power":100}]}
+    #|  ]
+    #|}
+  let parsed = match @json.parse(raw) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => parse_team_array(t, "team")
+        _ => {
+          assert_true(false)
+          return
+        }
+      }
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  // 4 種 × field_set を pin。
+  @debug.assert_eq(parsed[0].moves[0].field_set, Some(@model.Field::Electric))
+  @debug.assert_eq(parsed[1].moves[0].field_set, Some(@model.Field::Grassy))
+  @debug.assert_eq(parsed[2].moves[0].field_set, Some(@model.Field::Misty))
+  @debug.assert_eq(parsed[3].moves[0].field_set, Some(@model.Field::Psychic))
+  // field_set を持たない通常技は None。
+  @debug.assert_eq(parsed[3].moves[1].field_set, None)
+}
+
+///|
 /// Phase 14: ScreenedSwitchingGame(1) returns a SelectResult whose `selections`
 /// / `selection_names` / `row_strategy` are filtered down to retained rows
 /// only. `6 × C(5, 2) = 60` selections on each side × `keep_top = 0.5` →

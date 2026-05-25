@@ -1284,6 +1284,18 @@ fn with_post_hit_effects(
     Some(w) => (w, 5)
     None => (state.weather, state.weather_turns_left)
   }
+  // Stage E (field-setting moves): エレキ / グラス / ミスト / サイコフィールド
+  // の効果を state に反映する。`mv.field_set` が `Some(f)` なら field と
+  // field_turns_left を上書き、`None` なら維持。Gen9 base の 5 ターン (Terrain
+  // Extender なし) を本段階では固定値とし、Terrain Extender (8 ターン延長) は
+  // 後続 PR で `Pokemon.item` から派生させる。weather_set と完全に対称な
+  // 構造で、weather と同様に side 非依存のグローバル state。同じ field を
+  // 撃ち直すと field_turns_left は 5 にリセット (later-wins、weather と同じ
+  // semantics)。
+  let (new_field, new_field_turns) = match mv.field_set {
+    Some(f) => (f, 5)
+    None => (state.field, state.field_turns_left)
+  }
   {
     ..state,
     my_hps,
@@ -1300,6 +1312,8 @@ fn with_post_hit_effects(
     opp_leech_seeded,
     my_wish_turns,
     opp_wish_turns,
+    field: new_field,
+    field_turns_left: new_field_turns,
   }
 }
 

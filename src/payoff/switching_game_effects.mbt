@@ -1115,6 +1115,25 @@ pub fn apply_eot(
   } else {
     (state.weather, 0)
   }
+
+  // === Step 7: フィールド (terrain) カウンタ tick ===
+  // 天候 tick と完全対称: `field_turns_left > 0` ならデクリメント、`0` に
+  // なった瞬間に `Field::None` へリセット。`field == None` 状態では既に
+  // `turns_left=0` が保たれているので no-op (fixpoint)。Stage F / G で field
+  // 連動の damage 倍率 / 回復 / status block 等を実装した際は、それらは tick
+  // **前** の state.field を参照する (= weather と同じ「切れる前の最後の
+  // 効果」が成立する)。Showdown の仕様では EOT は weather → field の順に
+  // tick されるため、本実装もその順で書く (field は weather の後)。
+  let (next_field, next_field_turns) = if state.field_turns_left > 0 {
+    let dec = state.field_turns_left - 1
+    if dec <= 0 {
+      (@model.Field::None, 0)
+    } else {
+      (state.field, dec)
+    }
+  } else {
+    (state.field, 0)
+  }
   {
     my_active: state.my_active,
     opp_active: state.opp_active,
@@ -1140,8 +1159,13 @@ pub fn apply_eot(
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: my_wish_turns_new,
     opp_wish_turns: opp_wish_turns_new,
-    field: state.field,
-    field_turns_left: state.field_turns_left,
+    // Stage E: field counter tick — `next_field` / `next_field_turns` は
+    // step 7 で計算済み (weather tick と対称構造)。Stage F / G で field
+    // 連動効果 (damage 倍率 / 回復 / status block 等) を実装する際は、
+    // tick **前** の `state.field` を参照すること (= weather と同じ "切れる
+    // 前の最後の効果" を成立させる)。
+    field: next_field,
+    field_turns_left: next_field_turns,
     turn: state.turn,
   }
 }

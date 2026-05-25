@@ -26,6 +26,11 @@ pub suberror NashCliError {
   InfeasibleGame
   UnboundedGame
   InnerError(String)
+  /// Both iterative fallbacks (fictitious_play and mwu) exceeded `config.tol`
+  /// after the primary simplex raised. Carries the original simplex error
+  /// message and the observed exploitabilities so the CLI can report how
+  /// close each approximate solver came.
+  NashFallbackExhausted(simplex_err~ : String, fp_expl~ : Double, mwu_expl~ : Double)
 } derive(Debug)
 
 ///|

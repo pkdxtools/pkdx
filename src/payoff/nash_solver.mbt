@@ -7,9 +7,13 @@
 /// value-cache semantics differ and the silent-degrade behavior is tracked
 /// separately via `silent_dp_fallback_count` (Stage 3).
 ///
-/// Stage 1b: primary simplex with a fictitious_play fallback for the
-/// `SimplexFailure` case. The `mwu` fallback and `NashFallbackExhausted`
-/// suberror are added in Stage 1c.
+/// Stage 1c: primary simplex with a two-step iterative fallback chain.
+/// On `SimplexFailure`, retry with `fictitious_play`; if its exploitability
+/// still exceeds `config.tol`, retry once more with `mwu` (learning rate
+/// `η = sqrt(ln(max(rows,cols))/iterations)` per Freund & Schapire). When
+/// both iterative learners exceed tol, raise `NashFallbackExhausted` with
+/// the original simplex error and both observed exploitabilities so the CLI
+/// can report how close each approximate solver came.
 
 ///|
 pub(all) enum NashSolverPath {
@@ -69,42 +73,66 @@ pub fn solver_path_string(p : NashSolverPath) -> String {
 }
 
 ///|
-/// Try the `@nash.fictitious_play` fallback. Returns `Some((p, q, expl))` when
-/// the iterative solution lands within `tol` of the equilibrium; `None` when
-/// the result is above tolerance and the caller should escalate further.
+/// Try the `@nash.fictitious_play` fallback. Returns `Ok((p, q, expl))` when
+/// the iterative solution lands within `tol` of the equilibrium; `Err(expl)`
+/// carries the observed exploitability when the result is above tolerance, so
+/// the caller can surface it via `NashFallbackExhausted` after escalating.
 fn try_fictitious(
   matrix : @nash.FiniteMatrix,
   iterations : Int,
   tol : Double,
-) -> (@nash.MixedStrategy, @nash.MixedStrategy, Double)? {
+) -> Result[(@nash.MixedStrategy, @nash.MixedStrategy, Double), Double] {
   let (p, q) = @nash.fictitious_play(matrix, iterations)
   let expl = @nash.exploitability(matrix, p, q)
   if expl < tol {
-    Some((p, q, expl))
+    Ok((p, q, expl))
   } else {
-    None
+    Err(expl)
+  }
+}
+
+///|
+/// Try the `@nash.mwu` (Multiplicative Weights Update) fallback. Same
+/// `Ok((p, q, expl))` / `Err(expl)` contract as `try_fictitious`. Learning rate
+/// follows Freund & Schapire: `η = sqrt(ln(max(rows, cols)) / iterations)`,
+/// which trades off exploration vs. convergence for finite-horizon MWU.
+fn try_mwu(
+  matrix : @nash.FiniteMatrix,
+  iterations : Int,
+  tol : Double,
+) -> Result[(@nash.MixedStrategy, @nash.MixedStrategy, Double), Double] {
+  let max_dim = if matrix.rows() > matrix.cols() {
+    matrix.rows()
+  } else {
+    matrix.cols()
+  }
+  let eta = (@math.ln(max_dim.to_double()) / iterations.to_double()).sqrt()
+  let (p, q) = @nash.mwu(matrix, iterations, eta)
+  let expl = @nash.exploitability(matrix, p, q)
+  if expl < tol {
+    Ok((p, q, expl))
+  } else {
+    Err(expl)
   }
 }
 
 ///|
 /// Solve a zero-sum game with the pkdx fallback chain.
 ///
-/// Stage 1b: primary simplex, then a `fictitious_play` retry when the
-/// underlying LP raises `SimplexFailure`. If the iterative result exceeds
-/// `config.tol`, the original simplex error is re-raised as `InnerError`.
-/// Stage 1c will add the `mwu` retry and a dedicated `NashFallbackExhausted`
-/// suberror.
+/// Stage 1c: primary simplex, then a two-step iterative chain on
+/// `SimplexFailure`: `fictitious_play` first, `mwu` second. The first solver
+/// whose exploitability is below `config.tol` wins. If both exceed tol, raise
+/// `NashFallbackExhausted` carrying the original simplex error message and
+/// both observed exploitabilities.
 pub fn solve_with_fallback(
   matrix : @nash.FiniteMatrix,
   config~ : NashSolverConfig = NashSolverConfig::default(),
 ) -> NashSolverResult raise NashCliError {
   let lp = try @nash.solve_zero_sum(matrix) catch {
-    @nash.SimplexFailure(_) as simplex_err =>
-      // Fallback 1: fictitious_play. Accept only when exploitability is
-      // within `config.tol`; otherwise re-raise so the CLI surfaces the
-      // original simplex failure rather than silently degrading.
-      match try_fictitious(matrix, config.iterations, config.tol) {
-        Some((p, q, expl)) => {
+    @nash.SimplexFailure(_) as simplex_err => {
+      // Fallback 1: fictitious_play.
+      let fp_expl = match try_fictitious(matrix, config.iterations, config.tol) {
+        Ok((p, q, expl)) => {
           let v = @nash.expected_payoff(p, matrix, q)
           return {
             value: v,
@@ -114,8 +142,28 @@ pub fn solve_with_fallback(
             solver_path: FictitiousPlay,
           }
         }
-        None => raise InnerError(simplex_err.to_string())
+        Err(expl) => expl
       }
+      // Fallback 2: mwu.
+      let mwu_expl = match try_mwu(matrix, config.iterations, config.tol) {
+        Ok((p, q, expl)) => {
+          let v = @nash.expected_payoff(p, matrix, q)
+          return {
+            value: v,
+            row_strategy: p,
+            col_strategy: q,
+            exploitability: expl,
+            solver_path: Mwu,
+          }
+        }
+        Err(expl) => expl
+      }
+      raise NashFallbackExhausted(
+        simplex_err=simplex_err.to_string(),
+        fp_expl~,
+        mwu_expl~,
+      )
+    }
     other => raise InnerError(other.to_string())
   }
   match lp {

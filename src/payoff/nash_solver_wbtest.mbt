@@ -100,6 +100,30 @@ test "fixture baseline: solve_zero_sum raises SimplexFailure on degenerate 60x60
 }
 
 ///|
+/// Stage 1c red→green: when both `fictitious_play` and `mwu` exceed `tol` on a
+/// pathologically tight tolerance (1e-10) with a tight iteration budget, the
+/// fallback chain raises `NashFallbackExhausted` carrying the original simplex
+/// error message plus the observed exploitabilities from both iterative
+/// solvers. Users can inspect how close each approximate solver came.
+test "all-fallback fail raises NashFallbackExhausted on pathological tol" {
+  let m = load_degenerate_fixture_60x60()
+  let pathological : NashSolverConfig = { tol: 1.0e-10, iterations: 100 }
+  try solve_with_fallback(m, config=pathological) catch {
+    NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) => {
+      // Observed exploitabilities from both iterative solvers must be at or
+      // above the impossible tol — i.e. neither succeeded.
+      assert_true(fp_expl >= 1.0e-10)
+      assert_true(mwu_expl >= 1.0e-10)
+      // Simplex error message is non-empty (carries the original failure).
+      assert_true(simplex_err.length() > 0)
+    }
+    _ => fail("expected NashFallbackExhausted, got a different NashCliError")
+  } noraise {
+    _ => fail("expected NashFallbackExhausted but solver returned a strategy")
+  }
+}
+
+///|
 /// Stage 1b green: `solve_with_fallback` retries via `@nash.fictitious_play`
 /// when the primary simplex raises. The iterative result is accepted only
 /// when `@nash.exploitability` < `config.tol` (default 0.05 winrate units).

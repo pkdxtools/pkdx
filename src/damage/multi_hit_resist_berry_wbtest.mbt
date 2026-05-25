@@ -47,6 +47,7 @@ fn rb_move(name : String, type_ : String) -> @model.Move {
     recharge: false,
     healing: None,
     weather_set: None,
+    field_set: None,
   }
 }
 

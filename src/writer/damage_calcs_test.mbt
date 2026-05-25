@@ -45,6 +45,7 @@ fn mk_move_for_test(
     recharge: false,
     healing: None,
     weather_set: None,
+    field_set: None,
   }
 }
 

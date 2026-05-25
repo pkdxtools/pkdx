@@ -113,6 +113,14 @@ pub(all) struct Move {
   // battlefield weather on use; `None` otherwise. Weather持続ターン数 (Gen9
   // base 5, weather rock 延長 8) は本 PR ではモデルしない — 後続 PR で
   // `Pokemon.item` を見て延長する。
+  //
+  // `field_set` — for field-setting (terrain) moves (エレキフィールド /
+  // グラスフィールド / ミストフィールド / サイコフィールド).
+  // `Some(field)` indicates the move sets the battlefield terrain on use;
+  // `None` otherwise. Field 持続ターン数 (Gen9 base 5、Terrain Extender
+  // による延長は別 PR) は本 PR ではモデルしない — Stage E 以降で SwitchingGame
+  // 側に `field_turns_left` を持たせる。`Weather` と完全対称な構造。
   healing : HealingEffect?
   weather_set : Weather?
+  field_set : Field?
 } derive(Debug, Eq)

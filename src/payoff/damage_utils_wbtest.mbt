@@ -124,6 +124,7 @@ test "build_input_with_ranks: weather~ argument threads into DamageCalcInput.wea
     recharge: false,
     healing: None,
     weather_set: None,
+    field_set: None,
   }
   // Default (no weather~) must remain Weather::None so the existing 13
   // fixtures and 1078-test baseline stay green without churn.

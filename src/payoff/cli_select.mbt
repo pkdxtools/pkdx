@@ -175,6 +175,7 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         recharge,
         healing,
         weather_set,
+        field_set: None,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
@@ -386,6 +387,7 @@ fn parse_combatant_json(
             recharge: false,
             healing: None,
             weather_set: None,
+            field_set: None,
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(

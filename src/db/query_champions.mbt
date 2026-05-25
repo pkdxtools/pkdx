@@ -144,6 +144,12 @@ pub fn query_champions_moves(
   } else {
     ""
   }
+  // C-4 / m015: field 列も独立 PRAGMA detect (ATTACH 済 pokedex.move_meta)
+  let field_cols = if move_meta_has_field_columns(db, "pokedex") {
+    field_select_columns()
+  } else {
+    ""
+  }
   let sql =
     "SELECT DISTINCT m.waza, m.type, m.category,\n" +
     "       m.power, m.accuracy, m.pp, l.conditions AS learn_method,\n" +
@@ -156,25 +162,39 @@ pub fn query_champions_moves(
     "       COALESCE(mm.self_ko, 0) AS self_ko,\n" +
     "       COALESCE(mm.recharge, 0) AS recharge" +
     heal_cols +
+    field_cols +
     "\nFROM learnset l\n" +
     "JOIN move m ON l.waza = m.waza\n" +
     "LEFT JOIN pokedex.move_meta mm ON mm.name_ja = m.waza\n" +
     "WHERE l.id = ?\n" +
     "ORDER BY CAST(REPLACE(m.power, '-', '0') AS INTEGER) DESC"
-  collect_champions_moves_rows(db, sql, [pokemon_id])
+  collect_champions_moves_rows(
+    db,
+    sql,
+    [pokemon_id],
+    has_heal=heal_cols != "",
+    has_field=field_cols != "",
+  )
 }
 
 ///|
+/// has_heal / has_field の意味は `collect_moves_rows` と同じ。row index 配置:
+///   - 14 列固定 + heal 8 列 (has_heal=true) + field 2 列 (has_field=true)
+///   - heal_base = 15, field_base = 23 (heal あり) / 15 (heal なし)
 fn collect_champions_moves_rows(
   db : Db,
   sql : String,
   binds : Array[String],
+  has_heal~ : Bool = true,
+  has_field~ : Bool = true,
 ) -> Result[Array[@model.Move], String] {
   let rows = match query(db, sql, binds) {
     Ok(r) => r
     Err(e) => return Err(e)
   }
   let moves : Array[@model.Move] = []
+  let heal_base = 15
+  let field_base = if has_heal { 23 } else { 15 }
   for i = 0; i < rows.length(); i = i + 1 {
     let r = rows[i]
     let priority = parse_int_simple(r[7])
@@ -185,19 +205,61 @@ fn collect_champions_moves_rows(
     let recoil_den = if recoil_den_raw <= 0 { 1 } else { recoil_den_raw }
     let self_ko = parse_int_simple(r[13]) != 0
     let recharge = parse_int_simple(r[14]) != 0
-    let heal_kind = if r.length() > 15 { r[15] } else { "" }
-    let heal_num = if r.length() > 16 { parse_int_simple(r[16]) } else { 0 }
-    let heal_den = if r.length() > 17 { parse_int_simple(r[17]) } else { 1 }
-    let heal_sunny_num = if r.length() > 18 { parse_int_simple(r[18]) } else { 0 }
-    let heal_sunny_den = if r.length() > 19 { parse_int_simple(r[19]) } else { 1 }
-    let heal_harsh_num = if r.length() > 20 { parse_int_simple(r[20]) } else { 0 }
-    let heal_harsh_den = if r.length() > 21 { parse_int_simple(r[21]) } else { 1 }
-    let weather_set_str = if r.length() > 22 { r[22] } else { "" }
-    let healing = parse_healing(
-      heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
-      heal_harsh_den,
-    )
-    let weather_set = parse_weather_set(weather_set_str)
+    let healing = if has_heal {
+      let heal_kind = if r.length() > heal_base { r[heal_base] } else { "" }
+      let heal_num = if r.length() > heal_base + 1 {
+        parse_int_simple(r[heal_base + 1])
+      } else {
+        0
+      }
+      let heal_den = if r.length() > heal_base + 2 {
+        parse_int_simple(r[heal_base + 2])
+      } else {
+        1
+      }
+      let heal_sunny_num = if r.length() > heal_base + 3 {
+        parse_int_simple(r[heal_base + 3])
+      } else {
+        0
+      }
+      let heal_sunny_den = if r.length() > heal_base + 4 {
+        parse_int_simple(r[heal_base + 4])
+      } else {
+        1
+      }
+      let heal_harsh_num = if r.length() > heal_base + 5 {
+        parse_int_simple(r[heal_base + 5])
+      } else {
+        0
+      }
+      let heal_harsh_den = if r.length() > heal_base + 6 {
+        parse_int_simple(r[heal_base + 6])
+      } else {
+        1
+      }
+      parse_healing(
+        heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
+        heal_harsh_den,
+      )
+    } else {
+      None
+    }
+    let weather_set = if has_heal {
+      let weather_set_str = if r.length() > heal_base + 7 {
+        r[heal_base + 7]
+      } else {
+        ""
+      }
+      parse_weather_set(weather_set_str)
+    } else {
+      None
+    }
+    let field_set = if has_field {
+      let field_set_str = if r.length() > field_base { r[field_base] } else { "" }
+      parse_field_set(field_set_str)
+    } else {
+      None
+    }
     moves.push(@model.Move::{
       name: r[0],
       type_: r[1],
@@ -215,6 +277,7 @@ fn collect_champions_moves_rows(
       recharge,
       healing,
       weather_set,
+      field_set,
     })
   }
   Ok(moves)
@@ -234,6 +297,14 @@ pub fn query_champions_move(
   } else {
     ""
   }
+  // C-4 / m015: field 列も独立 PRAGMA detect。
+  let field_cols = if move_meta_has_field_columns(db, "pokedex") {
+    field_select_columns()
+  } else {
+    ""
+  }
+  let has_heal = heal_cols != ""
+  let has_field = field_cols != ""
   let sql =
     "SELECT m.waza, m.type, m.category, m.power, m.accuracy, m.pp,\n" +
     "       COALESCE(mm.priority, 0) AS priority,\n" +
@@ -245,6 +316,7 @@ pub fn query_champions_move(
     "       COALESCE(mm.self_ko, 0) AS self_ko,\n" +
     "       COALESCE(mm.recharge, 0) AS recharge" +
     heal_cols +
+    field_cols +
     "\nFROM move m\n" +
     "LEFT JOIN pokedex.move_meta mm ON mm.name_ja = m.waza\n" +
     "WHERE m.waza = ?\n" +
@@ -269,19 +341,63 @@ pub fn query_champions_move(
   let recharge = if r.length() > 13 { parse_int_simple(r[13]) != 0 } else {
     false
   }
-  let heal_kind = if r.length() > 14 { r[14] } else { "" }
-  let heal_num = if r.length() > 15 { parse_int_simple(r[15]) } else { 0 }
-  let heal_den = if r.length() > 16 { parse_int_simple(r[16]) } else { 1 }
-  let heal_sunny_num = if r.length() > 17 { parse_int_simple(r[17]) } else { 0 }
-  let heal_sunny_den = if r.length() > 18 { parse_int_simple(r[18]) } else { 1 }
-  let heal_harsh_num = if r.length() > 19 { parse_int_simple(r[19]) } else { 0 }
-  let heal_harsh_den = if r.length() > 20 { parse_int_simple(r[20]) } else { 1 }
-  let weather_set_str = if r.length() > 21 { r[21] } else { "" }
-  let healing = parse_healing(
-    heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
-    heal_harsh_den,
-  )
-  let weather_set = parse_weather_set(weather_set_str)
+  let heal_base = 14
+  let field_base = if has_heal { 22 } else { 14 }
+  let healing = if has_heal {
+    let heal_kind = if r.length() > heal_base { r[heal_base] } else { "" }
+    let heal_num = if r.length() > heal_base + 1 {
+      parse_int_simple(r[heal_base + 1])
+    } else {
+      0
+    }
+    let heal_den = if r.length() > heal_base + 2 {
+      parse_int_simple(r[heal_base + 2])
+    } else {
+      1
+    }
+    let heal_sunny_num = if r.length() > heal_base + 3 {
+      parse_int_simple(r[heal_base + 3])
+    } else {
+      0
+    }
+    let heal_sunny_den = if r.length() > heal_base + 4 {
+      parse_int_simple(r[heal_base + 4])
+    } else {
+      1
+    }
+    let heal_harsh_num = if r.length() > heal_base + 5 {
+      parse_int_simple(r[heal_base + 5])
+    } else {
+      0
+    }
+    let heal_harsh_den = if r.length() > heal_base + 6 {
+      parse_int_simple(r[heal_base + 6])
+    } else {
+      1
+    }
+    parse_healing(
+      heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
+      heal_harsh_den,
+    )
+  } else {
+    None
+  }
+  let weather_set = if has_heal {
+    let weather_set_str = if r.length() > heal_base + 7 {
+      r[heal_base + 7]
+    } else {
+      ""
+    }
+    parse_weather_set(weather_set_str)
+  } else {
+    None
+  }
+  let field_set = if has_field {
+    let field_set_str = if r.length() > field_base { r[field_base] } else { "" }
+    parse_field_set(field_set_str)
+  } else {
+    None
+  }
   Ok(@model.Move::{
     name: r[0],
     type_: r[1],
@@ -299,6 +415,7 @@ pub fn query_champions_move(
     recharge,
     healing,
     weather_set,
+    field_set,
   })
 }
 

@@ -59,6 +59,7 @@ fn advf_move(
     recharge: false,
     healing: None,
     weather_set: None,
+    field_set: None,
   }
 }
 

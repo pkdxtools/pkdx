@@ -53,6 +53,45 @@ fn move_meta_has_heal_columns(db : Db, qualifier : String) -> Bool {
 }
 
 ///|
+/// m015 が `move_meta` に追加する `field_set` / `field_turns` 列の有無を
+/// PRAGMA table_info で検出する。`move_meta_has_heal_columns` と同じ pattern。
+///
+/// 戻り値:
+///   - true  = 2 列とも存在する (m015 適用済み DB)。SELECT に列を加える
+///   - false = 1 列でも欠落 (m015 未適用 / 部分適用 DB)。SELECT に加えず、
+///             caller 側で Move.field_set=None を default で埋める
+///
+/// m014/m015 は **独立な migration** で異なる列を触る (heal_* vs field_*)
+/// ため、本関数は `move_meta_has_heal_columns` と独立に呼ぶ。両者が独立に
+/// 適用済み/未適用の組み合わせを取りうる。
+fn move_meta_has_field_columns(db : Db, qualifier : String) -> Bool {
+  let prefix = if qualifier == "" { "" } else { qualifier + "." }
+  let sql = "PRAGMA " + prefix + "table_info(move_meta)"
+  let rows = match query(db, sql, []) {
+    Ok(r) => r
+    Err(_) => return false
+  }
+  let required = ["field_set", "field_turns"]
+  let found : Array[Bool] = Array::make(required.length(), false)
+  for row in rows {
+    if row.length() > 1 {
+      let name = row[1]
+      for i = 0; i < required.length(); i = i + 1 {
+        if name == required[i] {
+          found[i] = true
+        }
+      }
+    }
+  }
+  for present in found {
+    if !present {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Query all moves a Pokemon can learn (level-up + TM).
 /// For champions version, reads from champions_learnset; other versions
 /// use local_pokedex_waza + local_pokedex_waza_machine.
@@ -99,6 +138,13 @@ fn query_moves_legacy(
   } else {
     ""
   }
+  // C-4 / m015: 同じ理由で field_set/field_turns 列も独立に PRAGMA detect。
+  // heal/field は別 migration なので組み合わせは 4 通り取りうる。
+  let field_cols = if move_meta_has_field_columns(db, "") {
+    field_select_columns()
+  } else {
+    ""
+  }
   // LEFT JOIN move_meta per both UNION branches so priority / stat_effects
   // ride along on the returned Move. COALESCE defaults preserve the legacy
   // "no metadata" behaviour for moves not in the seed table.
@@ -114,6 +160,7 @@ fn query_moves_legacy(
     "       COALESCE(mm.self_ko, 0) AS self_ko,\n" +
     "       COALESCE(mm.recharge, 0) AS recharge" +
     heal_cols +
+    field_cols +
     "\nFROM local_pokedex_waza pw\n" +
     "JOIN local_waza w ON pw.waza = w.waza AND w.version = ?\n" +
     "JOIN local_waza_language wl ON pw.waza = wl.waza\n" +
@@ -132,6 +179,7 @@ fn query_moves_legacy(
     "       COALESCE(mm.self_ko, 0) AS self_ko,\n" +
     "       COALESCE(mm.recharge, 0) AS recharge" +
     heal_cols +
+    field_cols +
     "\nFROM local_pokedex_waza_machine pm\n" +
     "JOIN local_waza_machine wm ON pm.machine_no = wm.waza AND wm.version = ?\n" +
     "JOIN local_waza w ON wm.machine_no = w.waza AND w.version = ?\n" +
@@ -144,7 +192,7 @@ fn query_moves_legacy(
   let binds = [
     waza_ver, waza_ver, gno, waza_ver, waza_ver, waza_ver, waza_ver, gno, waza_ver,
   ]
-  collect_moves_rows(db, sql, binds)
+  collect_moves_rows(db, sql, binds, has_heal=heal_cols != "", has_field=field_cols != "")
 }
 
 ///|
@@ -162,16 +210,39 @@ fn healing_select_columns() -> String {
 }
 
 ///|
+/// m015 列があるときだけ SELECT projection に付与する 2 列文字列を返す。
+/// `healing_select_columns()` と同じ pattern。`field_turns` は本 PR では
+/// クエリ側で参照しない (Stage E で SwitchingGame 側に持つため将来 hook)
+/// が、PRAGMA detect と同期させるため列ごと SELECT する。
+fn field_select_columns() -> String {
+  ",\n       COALESCE(mm.field_set, '') AS field_set,\n" +
+  "       COALESCE(mm.field_turns, 0) AS field_turns"
+}
+
+///|
+/// `has_heal` / `has_field` は caller 側で PRAGMA detect した結果。SELECT に
+/// 含めた列だけが行に乗るため、ここでの index 解釈もそれに合わせる。
+/// - has_heal=false なら m014 列は row 末尾に無い (r[14] まで)
+/// - has_heal=true / has_field=false: heal 8 列が r[15..22] に乗る
+/// - has_heal=true / has_field=true: 加えて field 2 列が r[23..24] に乗る
+/// - has_heal=false / has_field=true: heal を飛ばして field 2 列が r[15..16]
+///
+/// 4 通りの組み合わせを `r.length() > N` ガードで一様に扱う。
 fn collect_moves_rows(
   db : Db,
   sql : String,
   binds : Array[String],
+  has_heal~ : Bool = true,
+  has_field~ : Bool = true,
 ) -> Result[Array[@model.Move], String] {
   let rows = match query(db, sql, binds) {
     Ok(r) => r
     Err(e) => return Err(e)
   }
   let moves : Array[@model.Move] = []
+  // m014 / m015 列の row index は SELECT に含めた順で決まる。
+  let heal_base = 15
+  let field_base = if has_heal { 23 } else { 15 }
   for i = 0; i < rows.length(); i = i + 1 {
     let r = rows[i]
     let priority = if r.length() > 7 { parse_int(r[7]) } else { 0 }
@@ -185,34 +256,66 @@ fn collect_moves_rows(
     } else {
       None
     }
-    // Phase 4 columns: r[11]=recoil_num, r[12]=recoil_den, r[13]=self_ko,
-    // r[14]=recharge. COALESCE defaults guarantee numeric/int values even on
-    // rows lacking move_meta entries, so `parse_int` never sees NULL.
     let recoil_num = if r.length() > 11 { parse_int(r[11]) } else { 0 }
     let recoil_den_raw = if r.length() > 12 { parse_int(r[12]) } else { 1 }
     let recoil_den = if recoil_den_raw <= 0 { 1 } else { recoil_den_raw }
     let self_ko = if r.length() > 13 { parse_int(r[13]) != 0 } else { false }
     let recharge = if r.length() > 14 { parse_int(r[14]) != 0 } else { false }
-    // m014 columns: r[15]=heal_kind, r[16..21]=heal fractions,
-    // r[22]=weather_set. m014 は本クエリの prerequisite なので未適用 DB に
-    // 対しては SELECT 自体が `no such column` で prepare 失敗する (COALESCE は
-    // 行の NULL を埋めるだけで列の存在チェックは行わない)。`setup.sh` 経由で
-    // migrate を流せばこのパスに到達するときには列が存在することが保証される。
-    // 下記の `r.length() > N` ガードは「想定外に短い行」への防衛 (例: 旧 SELECT
-    // が UNION 経由で混入したとき) としてのみ働き、列欠落の補償ではない。
-    let heal_kind = if r.length() > 15 { r[15] } else { "" }
-    let heal_num = if r.length() > 16 { parse_int(r[16]) } else { 0 }
-    let heal_den = if r.length() > 17 { parse_int(r[17]) } else { 1 }
-    let heal_sunny_num = if r.length() > 18 { parse_int(r[18]) } else { 0 }
-    let heal_sunny_den = if r.length() > 19 { parse_int(r[19]) } else { 1 }
-    let heal_harsh_num = if r.length() > 20 { parse_int(r[20]) } else { 0 }
-    let heal_harsh_den = if r.length() > 21 { parse_int(r[21]) } else { 1 }
-    let weather_set_str = if r.length() > 22 { r[22] } else { "" }
-    let healing = parse_healing(
-      heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
-      heal_harsh_den,
-    )
-    let weather_set = parse_weather_set(weather_set_str)
+    let healing = if has_heal {
+      let heal_kind = if r.length() > heal_base { r[heal_base] } else { "" }
+      let heal_num = if r.length() > heal_base + 1 {
+        parse_int(r[heal_base + 1])
+      } else {
+        0
+      }
+      let heal_den = if r.length() > heal_base + 2 {
+        parse_int(r[heal_base + 2])
+      } else {
+        1
+      }
+      let heal_sunny_num = if r.length() > heal_base + 3 {
+        parse_int(r[heal_base + 3])
+      } else {
+        0
+      }
+      let heal_sunny_den = if r.length() > heal_base + 4 {
+        parse_int(r[heal_base + 4])
+      } else {
+        1
+      }
+      let heal_harsh_num = if r.length() > heal_base + 5 {
+        parse_int(r[heal_base + 5])
+      } else {
+        0
+      }
+      let heal_harsh_den = if r.length() > heal_base + 6 {
+        parse_int(r[heal_base + 6])
+      } else {
+        1
+      }
+      parse_healing(
+        heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
+        heal_harsh_den,
+      )
+    } else {
+      None
+    }
+    let weather_set = if has_heal {
+      let weather_set_str = if r.length() > heal_base + 7 {
+        r[heal_base + 7]
+      } else {
+        ""
+      }
+      parse_weather_set(weather_set_str)
+    } else {
+      None
+    }
+    let field_set = if has_field {
+      let field_set_str = if r.length() > field_base { r[field_base] } else { "" }
+      parse_field_set(field_set_str)
+    } else {
+      None
+    }
     moves.push(@model.Move::{
       name: r[0],
       type_: r[1],
@@ -230,6 +333,7 @@ fn collect_moves_rows(
       recharge,
       healing,
       weather_set,
+      field_set,
     })
   }
   Ok(moves)
@@ -287,6 +391,22 @@ pub fn parse_weather_set(weather_set : String) -> @model.Weather? {
     "sand" => Some(Sand)
     "snow" => Some(Snow)
     _ => None
+  }
+}
+
+///|
+/// Convert `move_meta.field_set` ('' / 'electric' / 'grassy' / 'misty' /
+/// 'psychic') into `Field?`. Empty / unknown strings yield `None`. m015 で
+/// 投入される canonical 値を `@model.field_from_jp` と同じパーサで解決する
+/// (関数は内部で日本語 CLI 表記と DB canonical を両方受けるので、ここから
+/// 共有して値域を一意に保つ)。
+pub fn parse_field_set(field_set : String) -> @model.Field? {
+  if field_set == "" {
+    return None
+  }
+  match @model.field_from_jp(field_set) {
+    @model.Field::None => None
+    f => Some(f)
   }
 }
 
@@ -395,6 +515,14 @@ pub fn query_move(
   } else {
     ""
   }
+  // C-4 / m015: field_set/field_turns 列も独立 PRAGMA detect。
+  let field_cols = if move_meta_has_field_columns(db, "") {
+    field_select_columns()
+  } else {
+    ""
+  }
+  let has_heal = heal_cols != ""
+  let has_field = field_cols != ""
   let sql =
     "SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,\n" +
     "       COALESCE(mm.priority, 0) AS priority,\n" +
@@ -406,6 +534,7 @@ pub fn query_move(
     "       COALESCE(mm.self_ko, 0) AS self_ko,\n" +
     "       COALESCE(mm.recharge, 0) AS recharge" +
     heal_cols +
+    field_cols +
     "\nFROM local_waza_language wl\n" +
     "JOIN local_waza w ON wl.waza = w.waza AND w.version = ?\n" +
     "LEFT JOIN move_meta mm ON mm.name_ja = wl.name\n" +
@@ -435,19 +564,66 @@ pub fn query_move(
   let recoil_den = if recoil_den_raw <= 0 { 1 } else { recoil_den_raw }
   let self_ko = if r.length() > 12 { parse_int(r[12]) != 0 } else { false }
   let recharge = if r.length() > 13 { parse_int(r[13]) != 0 } else { false }
-  let heal_kind = if r.length() > 14 { r[14] } else { "" }
-  let heal_num = if r.length() > 15 { parse_int(r[15]) } else { 0 }
-  let heal_den = if r.length() > 16 { parse_int(r[16]) } else { 1 }
-  let heal_sunny_num = if r.length() > 17 { parse_int(r[17]) } else { 0 }
-  let heal_sunny_den = if r.length() > 18 { parse_int(r[18]) } else { 1 }
-  let heal_harsh_num = if r.length() > 19 { parse_int(r[19]) } else { 0 }
-  let heal_harsh_den = if r.length() > 20 { parse_int(r[20]) } else { 1 }
-  let weather_set_str = if r.length() > 21 { r[21] } else { "" }
-  let healing = parse_healing(
-    heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
-    heal_harsh_den,
-  )
-  let weather_set = parse_weather_set(weather_set_str)
+  // m014/m015 列: SELECT projection 順は heal 8 列 → field 2 列。query_move
+  // は SELECT 先頭に 14 列固定 (w.* + mm.*)、heal 列があれば r[14..21]、その
+  // 後 field 列があれば r[22..23]。
+  let heal_base = 14
+  let field_base = if has_heal { 22 } else { 14 }
+  let healing = if has_heal {
+    let heal_kind = if r.length() > heal_base { r[heal_base] } else { "" }
+    let heal_num = if r.length() > heal_base + 1 {
+      parse_int(r[heal_base + 1])
+    } else {
+      0
+    }
+    let heal_den = if r.length() > heal_base + 2 {
+      parse_int(r[heal_base + 2])
+    } else {
+      1
+    }
+    let heal_sunny_num = if r.length() > heal_base + 3 {
+      parse_int(r[heal_base + 3])
+    } else {
+      0
+    }
+    let heal_sunny_den = if r.length() > heal_base + 4 {
+      parse_int(r[heal_base + 4])
+    } else {
+      1
+    }
+    let heal_harsh_num = if r.length() > heal_base + 5 {
+      parse_int(r[heal_base + 5])
+    } else {
+      0
+    }
+    let heal_harsh_den = if r.length() > heal_base + 6 {
+      parse_int(r[heal_base + 6])
+    } else {
+      1
+    }
+    parse_healing(
+      heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num,
+      heal_harsh_den,
+    )
+  } else {
+    None
+  }
+  let weather_set = if has_heal {
+    let weather_set_str = if r.length() > heal_base + 7 {
+      r[heal_base + 7]
+    } else {
+      ""
+    }
+    parse_weather_set(weather_set_str)
+  } else {
+    None
+  }
+  let field_set = if has_field {
+    let field_set_str = if r.length() > field_base { r[field_base] } else { "" }
+    parse_field_set(field_set_str)
+  } else {
+    None
+  }
   Ok(@model.Move::{
     name: r[0],
     type_: r[1],
@@ -465,5 +641,6 @@ pub fn query_move(
     recharge,
     healing,
     weather_set,
+    field_set,
   })
 }

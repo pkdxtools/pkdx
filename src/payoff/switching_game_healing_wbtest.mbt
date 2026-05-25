@@ -49,6 +49,7 @@ fn mk_heal_move(
     recharge,
     healing,
     weather_set,
+    field_set: None,
   }
 }
 

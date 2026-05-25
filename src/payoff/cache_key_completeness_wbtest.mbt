@@ -57,6 +57,7 @@ fn ck_move(name : String) -> @model.Move {
     recharge: false,
     healing: None,
     weather_set: None,
+    field_set: None,
   }
 }
 

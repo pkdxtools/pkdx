@@ -65,6 +65,7 @@ fn mk_move(
     recharge,
     healing: None,
     weather_set: None,
+    field_set: None,
   }
 }
 

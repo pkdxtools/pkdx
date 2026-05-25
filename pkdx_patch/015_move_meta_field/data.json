@@ -1,0 +1,6 @@
+[
+  { "name": "エレキフィールド", "field_set": "electric", "field_turns": 5 },
+  { "name": "グラスフィールド", "field_set": "grassy",   "field_turns": 5 },
+  { "name": "ミストフィールド", "field_set": "misty",    "field_turns": 5 },
+  { "name": "サイコフィールド", "field_set": "psychic",  "field_turns": 5 }
+]

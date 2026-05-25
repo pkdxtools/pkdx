@@ -667,3 +667,168 @@ test "transition_with_cache: Psychic field ふうせん defender takes priority>
   assert_true(tp > 0.999 && tp < 1.001)
   assert_true(th < 99.5)
 }
+
+///|
+/// Case G-3-G (#143 review): Switch-vs-UseMove DP path も Psychic-priority
+/// guard を funnel する。my が slot 1 (grounded) へ交代、opp が priority>0
+/// (しんそく) で switch-in を狙う → Psychic 下では無効化され my_hps[1] は不変。
+/// guard が switch path を bypass していた回帰を pin する。
+test "transition_with_cache: Psychic blocks opp priority>0 vs my grounded switch-in" {
+  let state0 = mk_field_eff_state()
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
+  let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
+  let my_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let opp_team = [
+    mk_field_eff_combatant(moves=[priority_mv]),
+    mk_field_eff_combatant(),
+  ]
+  let outs = transition_with_cache(
+    state, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  let mut tp = 0.0
+  for b in outs {
+    let (p, s) = b
+    tp = tp + p
+    // priority block: switch-in (my_active=1) は damage を受けない。
+    @debug.assert_eq(s.my_hps[1], 50)
+  }
+  assert_true(tp > 0.999 && tp < 1.001)
+}
+
+///|
+/// Case G-3-H: Switch-vs-UseMove で Field==None なら guard 不発、opp の
+/// priority 技は switch-in に通る (my_hps[1] < 50)。G-3-G の対照。
+test "transition_with_cache: Field=None lets opp priority>0 hit my switch-in" {
+  let state = mk_field_eff_state()
+  let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
+  let my_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let opp_team = [
+    mk_field_eff_combatant(moves=[priority_mv]),
+    mk_field_eff_combatant(),
+  ]
+  let outs = transition_with_cache(
+    state, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  let mut tp = 0.0
+  let mut th = 0.0
+  for b in outs {
+    let (p, s) = b
+    tp = tp + p
+    th = th + p * s.my_hps[1].to_double()
+  }
+  assert_true(tp > 0.999 && tp < 1.001)
+  assert_true(th < 49.5)
+}
+
+///|
+/// Case G-3-I (#143 review): 逆方向 — my が priority>0 で opp の grounded
+/// switch-in (slot 1) を狙う。UseMove-vs-Switch path も guard を funnel し、
+/// Psychic 下では opp_hps[1] が不変。
+test "transition_with_cache: Psychic blocks my priority>0 vs opp grounded switch-in" {
+  let state0 = mk_field_eff_state()
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
+  let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
+  let my_team = [
+    mk_field_eff_combatant(moves=[priority_mv]),
+    mk_field_eff_combatant(),
+  ]
+  let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let outs = transition_with_cache(
+    state, UseMove(0), Switch(1), my_team, opp_team, new_damage_cache(),
+  )
+  let mut tp = 0.0
+  for b in outs {
+    let (p, s) = b
+    tp = tp + p
+    @debug.assert_eq(s.opp_hps[1], 50)
+  }
+  assert_true(tp > 0.999 && tp < 1.001)
+}
+
+///|
+/// Case G-3-J: UseMove-vs-Switch で Field==None なら guard 不発、my の
+/// priority 技は opp switch-in に通る (opp_hps[1] < 50)。G-3-I の対照。
+test "transition_with_cache: Field=None lets my priority>0 hit opp switch-in" {
+  let state = mk_field_eff_state()
+  let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
+  let my_team = [
+    mk_field_eff_combatant(moves=[priority_mv]),
+    mk_field_eff_combatant(),
+  ]
+  let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let outs = transition_with_cache(
+    state, UseMove(0), Switch(1), my_team, opp_team, new_damage_cache(),
+  )
+  let mut tp = 0.0
+  let mut th = 0.0
+  for b in outs {
+    let (p, s) = b
+    tp = tp + p
+    th = th + p * s.opp_hps[1].to_double()
+  }
+  assert_true(tp > 0.999 && tp < 1.001)
+  assert_true(th < 49.5)
+}
+
+///|
+/// Case G-3-K (#143 review): partial-act path (相手が眠りで skip) も guard を
+/// funnel する。opp が Sleep(2) で行動不能、my が priority>0 (しんそく) で opp の
+/// grounded active を狙う → Psychic 下では opp_hps[0] 不変。Sleep(n>0) は
+/// prob 1.0 / acts=false なので partial_act_outcomes が決定的に走る。
+test "attempt_turn_with_cache: Psychic blocks my priority>0 vs sleeping grounded opp (partial act)" {
+  let state0 = mk_field_eff_state()
+  let state = {
+    ..state0,
+    field: @model.Field::Psychic,
+    field_turns_left: 5,
+    opp_status: [@model.Sleep(2), @model.None],
+  }
+  let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
+  let my_team = [
+    mk_field_eff_combatant(moves=[priority_mv]),
+    mk_field_eff_combatant(),
+  ]
+  let opp_team = [
+    mk_field_eff_combatant(moves=[mk_recover_move()]),
+    mk_field_eff_combatant(),
+  ]
+  let outs = attempt_turn_with_cache(
+    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  let mut tp = 0.0
+  for b in outs {
+    let (p, s) = b
+    tp = tp + p
+    @debug.assert_eq(s.opp_hps[0], 50)
+  }
+  assert_true(tp > 0.999 && tp < 1.001)
+}
+
+///|
+/// Case G-3-L: partial-act で Field==None なら guard 不発、my の priority 技は
+/// 眠っている opp active に通る (opp_hps[0] < 50)。G-3-K の対照。
+test "attempt_turn_with_cache: Field=None lets my priority>0 hit sleeping opp (partial act)" {
+  let state0 = mk_field_eff_state()
+  let state = { ..state0, opp_status: [@model.Sleep(2), @model.None] }
+  let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
+  let my_team = [
+    mk_field_eff_combatant(moves=[priority_mv]),
+    mk_field_eff_combatant(),
+  ]
+  let opp_team = [
+    mk_field_eff_combatant(moves=[mk_recover_move()]),
+    mk_field_eff_combatant(),
+  ]
+  let outs = attempt_turn_with_cache(
+    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+  )
+  let mut tp = 0.0
+  let mut th = 0.0
+  for b in outs {
+    let (p, s) = b
+    tp = tp + p
+    th = th + p * s.opp_hps[0].to_double()
+  }
+  assert_true(tp > 0.999 && tp < 1.001)
+  assert_true(th < 49.5)
+}

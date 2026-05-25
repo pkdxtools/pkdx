@@ -156,6 +156,48 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
 }
 
 ///|
+/// Stage G-3: サイコフィールド は地面にいる防御側への priority>0 技を無効化
+/// する (Gen9 mainline)。block 対象なら true を返す — 呼び出し側は damage=0,
+/// post-hit fanout なし, status 付与なしで単一 leaf を返す。priority<=0 /
+/// Field != Psychic / 非 grounded defender では false。
+///
+/// Gen9 仕様: サイコフィールドの効果テキスト "地面にいるポケモンに対して
+/// 優先度の高い技を受け付けない"。Helping Hand 等の補助 priority>0 も同様に
+/// 無効 (Showdown 実装と一致)。pkdx は 1v1 / シングル選出 なので単体技のみが
+/// 対象 (全体技 Perish Song / Flower Shield / Rototiller は priority=0)。
+///
+/// grounded SSoT は `@damage.is_grounded` (Stage F-1)。defender mega 後の
+/// type/ability/item を反映するため `effective_combatant` 経由で評価する
+/// (Mega Gengar はメガ後にふゆうが消えて grounded になり block を受ける、等)。
+///
+/// 注意: 現状は priority>0 を一律 block する。これは相手対象の攻撃技には
+/// 正しいが、self-target priority 技 (将来モデル化する場合) は本来 Psychic の
+/// 影響を受けない。target semantics をモデル化した時点で「相手対象技のみ」に
+/// 絞る余地がある。
+fn psychic_blocks_priority(
+  field : @model.Field,
+  move_priority : Int,
+  defender : Combatant,
+  defender_megaed : Bool,
+) -> Bool {
+  if move_priority <= 0 {
+    return false
+  }
+  match field {
+    @model.Field::Psychic => {
+      let def_eff = effective_combatant(defender, defender_megaed)
+      @damage.is_grounded(
+        type1=def_eff.pokemon.type1,
+        type2=def_eff.pokemon.type2,
+        ability=def_eff.ability,
+        item=def_eff.item,
+      )
+    }
+    _ => false
+  }
+}
+
+///|
 /// Resolve one attacker's move leg: apply damage, update ranks, fan out the
 /// attacker's status effect onto the target. Mutates the caller's workspace
 /// for damage / rank changes but produces the status branches as new states
@@ -198,48 +240,20 @@ fn resolve_attacker_leg(
   let attacker_team = if attacker_is_me { my_team } else { opp_team }
   let defender_team_eff = if attacker_is_me { opp_team } else { my_team }
   // Stage G-3: Psychic field blocks priority>0 moves against grounded
-  // defenders. 攻撃自体が無効化される (damage=0, post-hit fanout なし,
-  // status 付与なし)。priority<=0 / Field != Psychic / 非 grounded defender
-  // では通常通り outcomes を解決する。
-  //
-  // Gen9 mainline 仕様 — サイコフィールド の効果テキスト: "地面にいる
-  // ポケモンに対して優先度の高い技を受け付けない"。Helping Hand のような
-  // 補助 priority>0 も同様に無効化される (Showdown 実装と一致)。pkdx は
-  // 1v1 / シングル選出 なので priority>0 の単体技のみが対象 (全体技
-  // Perish Song / Flower Shield / Rototiller は priority=0 なので別問題)。
-  //
-  // grounded SSoT は `@damage.is_grounded` (Stage F-1)。defender mega 後の
-  // type/ability/item を反映するため `effective_combatant` 経由で評価する
-  // (Mega Gengar はメガ後にふゆうが消えて grounded になり Psychic block を
-  // 受けるようになる、等)。
-  if attacker_move.priority > 0 {
-    match ws.field {
-      @model.Field::Psychic => {
-        let def_megaed_arr = if attacker_is_me {
-          ws.opp_megaed
-        } else {
-          ws.my_megaed
-        }
-        let def_is_mega = defender_active < def_megaed_arr.length() &&
-          def_megaed_arr[defender_active]
-        let def_eff = effective_combatant(
-          defender_team_eff[defender_active], def_is_mega,
-        )
-        if @damage.is_grounded(
-            type1=def_eff.pokemon.type1,
-            type2=def_eff.pokemon.type2,
-            ability=def_eff.ability,
-            item=def_eff.item,
-          ) {
-          // 攻撃自体が無効: damage 適用も post-hit fanout もスキップし、
-          // 単一 leaf (確率 1.0) で pre_damage_state をそのまま返す。turn
-          // は resolve_moves 側で advance するため bump_turn=false の
-          // pre_damage_state をそのまま使う。
-          return [(1.0, pre_damage_state)]
-        }
-      }
-      _ => ()
-    }
+  // defenders — see `psychic_blocks_priority` for the Gen9 spec. blocked なら
+  // 攻撃自体が無効: damage 適用も post-hit fanout もスキップし、単一 leaf
+  // (確率 1.0) で pre_damage_state をそのまま返す。turn は resolve_moves 側で
+  // advance するため bump_turn=false の pre_damage_state をそのまま使う。
+  let def_megaed_arr = if attacker_is_me { ws.opp_megaed } else { ws.my_megaed }
+  let def_is_mega = defender_active < def_megaed_arr.length() &&
+    def_megaed_arr[defender_active]
+  if psychic_blocks_priority(
+      ws.field,
+      attacker_move.priority,
+      defender_team_eff[defender_active],
+      def_is_mega,
+    ) {
+    return [(1.0, pre_damage_state)]
   }
   let outcomes = damage_variants_cached(
     dmg_cache,
@@ -709,6 +723,16 @@ pub fn transition_with_cache(
       } else {
         base_state.my_megaed[target_slot]
       }
+      // Stage G-3: resolve_attacker_leg と同じ Psychic-priority guard を
+      // Switch-vs-UseMove の DP path にも適用する。これがないと priority 技が
+      // Psychic 下の grounded な switch-in に当たってしまう。base_state は
+      // 既に turn を advance 済みなので blocked leaf は base_state をそのまま返す。
+      if psychic_blocks_priority(
+          base_state.field, used_move.priority, defender_team_eff[target_slot],
+          defender_mega,
+        ) {
+        return [(1.0, base_state)]
+      }
       let attacker_burn = if attacker_is_me {
         is_burned(state.my_status[state.my_active])
       } else {
@@ -1135,6 +1159,15 @@ fn partial_act_outcomes(
         base_state.opp_megaed[target_slot]
       } else {
         base_state.my_megaed[target_slot]
+      }
+      // Stage G-3: partial-act (相手が para/sleep/miss で skip) でも actor の
+      // priority 技は Psychic 下の grounded defender に当たってはならない。
+      // resolve_attacker_leg / Switch-vs-UseMove path と同じ guard を funnel する。
+      if psychic_blocks_priority(
+          base_state.field, used_move.priority, defender_team_eff[target_slot],
+          defender_mega,
+        ) {
+        return [(1.0, base_state)]
       }
       let attacker_burn = if attacker_is_me {
         is_burned(state.my_status[state.my_active])

@@ -1268,6 +1268,18 @@ const VALUE_SADDLE_TOL : Double = 1.0e-10
 const VALUE_PRUNE_EPS : Double = 1.0e-12
 
 ///|
+/// Global diagnostics counter: how often the recursive DP path silently
+/// degraded to 0.0 on a solver failure. Tests can verify a given fixture
+/// does NOT exercise this path (= baseline for the scope-out claim
+/// "internal callsites are unaffected by the cli_select fallback").
+///
+/// This is intentionally NOT thread-safe: pkdx's switching_game DP runs
+/// single-threaded per process (parallelism happens at the outer shard
+/// level in cli_select). If parallel DP is ever introduced, swap to
+/// AtomicInt or similar.
+pub let silent_dp_fallback_count : Ref[Int] = { val: 0 }
+
+///|
 /// Recursive Nash value of a `SwitchingGameState`. Solves a per-state zero-sum
 /// matrix whose cells are `value(next_state, ...)` for each action pair.
 /// Memoized by `cache` (state-value memo) and `dmg_cache` (damage-table memo);
@@ -1425,7 +1437,10 @@ pub fn value(
     Err(_) => return 0.0
   }
   let lp = try @nash.solve_zero_sum(m) catch {
-    _ => return 0.0
+    _ => {
+      silent_dp_fallback_count.val = silent_dp_fallback_count.val + 1
+      return 0.0
+    }
   }
   let result = match lp {
     Optimal(value~, ..) => value

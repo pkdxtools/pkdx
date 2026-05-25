@@ -116,8 +116,8 @@ fn attack_defense_stat_indices(mv : @model.Move) -> (Int, Int) {
 
 ///|
 /// Build a `DamageCalcInput` with the combatants' abilities/items/tera, the
-/// given attacker/defender ranks, and the supplied weather. Used as the
-/// canonical reference input for payoff computation.
+/// given attacker/defender ranks, and the supplied weather and field.
+/// Used as the canonical reference input for payoff computation.
 ///
 /// Combatant が `nature` / `actual_stats` を保持しているとき、対応する
 /// engine フィールドへ流し込む。欠損時は engine の legacy default
@@ -126,6 +126,9 @@ fn attack_defense_stat_indices(mv : @model.Move) -> (Int, Int) {
 /// `weather~` default is `Weather::None` so the ~13 existing fixtures and
 /// the 1078-test baseline stay green without per-call churn while callers
 /// are migrated to thread `state.weather` through the cache layer.
+/// Stage F-3: `field~` mirrors `weather~` — default `Field::None` so the
+/// pre-Stage-F fixtures stay green; production callers thread
+/// `state.field` through the cache layer.
 fn build_input_with_ranks(
   atk : Combatant,
   dfn : Combatant,
@@ -133,6 +136,7 @@ fn build_input_with_ranks(
   atk_rank : Int,
   def_rank : Int,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> @model.DamageCalcInput {
   let (atk_idx, def_idx) = attack_defense_stat_indices(mv)
   let atk_stat_override = match atk.actual_stats {
@@ -156,7 +160,7 @@ fn build_input_with_ranks(
     atk_item: atk.item,
     def_item: dfn.item,
     weather,
-    field: @model.Field::None,
+    field,
     tera_type: atk.tera_type,
     critical: false,
     atk_nature: atk.nature,

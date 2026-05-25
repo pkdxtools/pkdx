@@ -382,9 +382,33 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
         }
       }
 
-      // Field mod
+      // Field mod (Stage F-1: grounded-aware, Gen 9 spec).
+      // - 1.3x boost arm: attacker grounded + (Electric/でんき | Grassy/くさ
+      //   | Psychic/エスパー).
+      // - 0.5x debuff arm: defender grounded + (Grassy/じしん|マグニチュード|
+      //   じならし | Misty/ドラゴン).
+      // Grounded check uses ability / type1 / type2 / item only (Gen 9
+      // minimal). Tera / うちおとす / グランディング技 are scope-out.
       if field.is_active() {
-        let f_mod = get_field_damage_mod(field, move_type)
+        let atk_grounded = is_grounded(
+          type1=atk.type1,
+          type2=atk.type2,
+          ability=atk_ability,
+          item=atk_item,
+        )
+        let def_grounded = is_grounded(
+          type1=dfn.type1,
+          type2=dfn.type2,
+          ability=def_ability,
+          item=def_item,
+        )
+        let f_mod = get_field_damage_mod(
+          field,
+          move_name,
+          move_type,
+          atk_grounded,
+          def_grounded,
+        )
         if f_mod > 0 {
           dmg = round5(dmg, f_mod)
         }

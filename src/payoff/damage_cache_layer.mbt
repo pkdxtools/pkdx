@@ -34,6 +34,13 @@ pub(all) struct DamageKey {
   // a single matchup cached pre-weather-change would shadow every
   // post-weather-change lookup for the rest of the switching-game run.
   weather : @model.Weather
+  // Stage F (healing-moves plan): battle field (terrain). Electric / Grassy
+  // / Misty / Psychic field flip damage multipliers for grounded combatants
+  // (1.3x on type match, 0.5x on Grassy じしん / Misty ドラゴン). Without
+  // field in the key, a matchup cached pre-terrain-change would shadow
+  // every post-terrain-change lookup for the rest of the run, silently
+  // suppressing the field bonus / debuff.
+  field : @model.Field
 } derive(Eq, Hash)
 
 ///|
@@ -106,9 +113,8 @@ pub fn new_damage_cache(
 ///   * `move_` (`Move`) — keyed by `mv.name`. Move rows are 1:1 with name
 ///     per version, so power / type / category / accuracy follow.
 ///   * `atk_ability` / `def_ability` / `atk_item` / `def_item` — encoded.
-///   * `weather` — encoded via Stage B (Japanese jp label "" / はれ / あめ /
-///     すなあらし / ゆき). `field` — canonicalized to "": payoff always
-///     passes `Field::None` via `build_input_with_ranks`.
+///   * `weather` / `field` — canonicalized to "": payoff always passes
+///     `Weather::None` / `Field::None` via `build_input_with_ranks`.
 ///   * `tera_type` — encoded (attacker only; `calc_damage` does not read a
 ///     defender tera, so there is no `def_tera` to encode).
 ///   * `critical` — always false in payoff (we model expected damage, not
@@ -137,9 +143,10 @@ fn combatant_to_cache_key_input(
   atk_rank : Int,
   def_rank : Int,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> @damage_cache.CacheKeyInput {
   let input = build_input_with_ranks(
-    atk, dfn, mv, atk_rank, def_rank, weather~,
+    atk, dfn, mv, atk_rank, def_rank, weather~, field~,
   )
   let version_str = match atk.stat_system {
     @model.Champions => "champions"
@@ -158,6 +165,11 @@ fn combatant_to_cache_key_input(
     @model.Weather::Sand => "すなあらし"
     @model.Weather::Snow => "ゆき"
   }
+  // Stage F-4: encode field with the same jp-label shape weather uses so
+  // L2 disk entries written by `pkdx damage` and the payoff layer share
+  // identity. `Field::None` collapses to "" so pre-Stage-F disk entries
+  // (which carried `field=""`) remain readable for terrainless matchups.
+  let field_str = field_to_cache_key(field)
   let atk_nature_str = match atk.nature {
     Some(n) => n.name_ja
     None => ""
@@ -177,7 +189,7 @@ fn combatant_to_cache_key_input(
     atk_item: atk.item,
     def_item: dfn.item,
     weather: weather_str,
-    field: "",
+    field: field_str,
     tera_type: atk.tera_type,
     critical: false,
     is_double: false,
@@ -248,6 +260,7 @@ fn mean_damage_via_disk(
   atk_ranks_full~ : Array[Int]? = None,
   def_ranks_full~ : Array[Int]? = None,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Int {
   // 反射技は L2 disk を経由しない。@damage.calc_damage に incoming=None で
   // 渡すと反射 fallback が走り 0 ダメージの JSON が書き込まれてしまうため、
@@ -261,6 +274,7 @@ fn mean_damage_via_disk(
       atk_ranks_full~,
       def_ranks_full~,
       weather~,
+      field~,
     )
   }
   let disk = match cache.disk {
@@ -269,10 +283,11 @@ fn mean_damage_via_disk(
       return compute_mean_damage(
         attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
         weather~,
+        field~,
       )
   }
   let key_input = combatant_to_cache_key_input(
-    attacker, defender, mv, atk_rank, def_rank, weather~,
+    attacker, defender, mv, atk_rank, def_rank, weather~, field~,
   )
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
@@ -280,6 +295,7 @@ fn mean_damage_via_disk(
       return compute_mean_damage(
         attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
         weather~,
+        field~,
       )
   }
   match @damage_cache.get(disk, key) {
@@ -299,6 +315,7 @@ fn mean_damage_via_disk(
             disk, key, attacker, defender, mv, atk_rank, def_rank,
             atk_burn=atk_burn,
             weather~,
+            field~,
           )
         }
       }
@@ -308,6 +325,7 @@ fn mean_damage_via_disk(
         disk, key, attacker, defender, mv, atk_rank, def_rank,
         atk_burn=atk_burn,
         weather~,
+        field~,
       )
     }
   }
@@ -333,9 +351,10 @@ fn compute_and_populate_disk(
   def_rank : Int,
   atk_burn~ : Bool = false,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Int {
   let input = build_input_with_ranks(
-    attacker, defender, mv, atk_rank, def_rank, weather~,
+    attacker, defender, mv, atk_rank, def_rank, weather~, field~,
   )
   let r = @damage.calc_damage(input)
   let json_format = @cli.parse_output_format("json")
@@ -375,6 +394,7 @@ fn prepare_damage_lookup(
   atk_item_consumed : Bool,
   def_item_consumed : Bool,
   weather : @model.Weather,
+  field : @model.Field,
 ) -> (Bool, DamageKey, Combatant, Combatant, @model.Move) {
   let raw_attacker_full = if my_attacker {
     my_team[atk_idx]
@@ -417,6 +437,7 @@ fn prepare_damage_lookup(
       atk_item_consumed,
       def_item_consumed,
       weather,
+      field,
     }
     return (true, dummy_key, raw_attacker, raw_defender, mv)
   }
@@ -443,6 +464,7 @@ fn prepare_damage_lookup(
     atk_item_consumed,
     def_item_consumed,
     weather,
+    field,
   }
   (false, key, raw_attacker, raw_defender, mv)
 }
@@ -468,6 +490,7 @@ pub fn mean_damage_cached(
   atk_item_consumed~ : Bool = false,
   def_item_consumed~ : Bool = false,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Int {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -484,6 +507,7 @@ pub fn mean_damage_cached(
     atk_item_consumed,
     def_item_consumed,
     weather,
+    field,
   )
   if early {
     return 0
@@ -513,6 +537,7 @@ pub fn mean_damage_cached(
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
             weather~,
+            field~,
           )
         None =>
           compute_mean_damage(
@@ -525,6 +550,7 @@ pub fn mean_damage_cached(
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
             weather~,
+            field~,
           )
       }
       cache.data[key] = v
@@ -563,6 +589,7 @@ fn damage_variants_cached(
   atk_item_consumed~ : Bool = false,
   def_item_consumed~ : Bool = false,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Array[@model.DamageOutcome] {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -579,6 +606,7 @@ fn damage_variants_cached(
     atk_item_consumed,
     def_item_consumed,
     weather,
+    field,
   )
   if early {
     return [{ probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] }]
@@ -602,6 +630,7 @@ fn damage_variants_cached(
         atk_ranks_full=Some(atk_ranks),
         def_ranks_full=Some(def_ranks),
         weather~,
+        field~,
       )
       cache.variants_data[key] = v
       // Touch the L2 disk cache so cross-session damage entries stay
@@ -624,11 +653,29 @@ fn damage_variants_cached(
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
             weather~,
+            field~,
           )
         }
         None => ()
       }
       v
     }
+  }
+}
+
+///|
+/// Stage F-4: convert a `Field` enum to the L2 cache jp label, mirroring
+/// the inline weather → jp label match in `combatant_to_cache_key_input`.
+/// Centralized as a helper so the CLI / payoff / tests share the same
+/// encoding. `Field::None` collapses to "" so disk entries written before
+/// Stage F (which carried `field=""`) remain readable for terrainless
+/// matchups.
+pub fn field_to_cache_key(field : @model.Field) -> String {
+  match field {
+    @model.Field::None => ""
+    @model.Field::Electric => "エレキ"
+    @model.Field::Grassy => "グラス"
+    @model.Field::Misty => "ミスト"
+    @model.Field::Psychic => "サイコ"
   }
 }

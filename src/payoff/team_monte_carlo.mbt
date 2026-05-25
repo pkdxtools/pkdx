@@ -27,6 +27,7 @@ fn best_expected_damage(
   atk_ranks : Array[Int],
   def_ranks : Array[Int],
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Double {
   let mut best = 0.0
   for i in 0..<atk.moves.length() {
@@ -45,7 +46,7 @@ fn best_expected_damage(
       @model.Status => 0
     }
     let r = @damage.calc_damage(
-      build_input_with_ranks(atk, dfn, mv, ar, dr, weather~),
+      build_input_with_ranks(atk, dfn, mv, ar, dr, weather~, field~),
     )
     let avg = avg_damage(r)
     if avg > best {
@@ -383,6 +384,7 @@ fn team_perform_attack(
   def_ranks : Array[Int],
   atk_burn~ : Bool = false,
   weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Int {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
@@ -402,7 +404,7 @@ fn team_perform_attack(
   }
   let r = @damage.calc_damage(
     build_input_with_ranks(
-      attacker, defender, mv, atk_rank, def_rank, weather~,
+      attacker, defender, mv, atk_rank, def_rank, weather~, field~,
     ),
   )
   if r.is_immune {

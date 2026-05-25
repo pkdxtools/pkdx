@@ -43,14 +43,5 @@ pub fn apply_weather_def_mod(
   }
 }
 
-///|
-/// Get field damage modifier (4096 base) for move type.
-pub fn get_field_damage_mod(field : @model.Field, move_type : String) -> Int {
-  match (field, move_type) {
-    (Electric, "でんき") => 5325 // 1.3x
-    (Grassy, "くさ") => 5325
-    (Psychic, "エスパー") => 5325
-    (Misty, "ドラゴン") => 2048 // 0.5x
-    _ => 0
-  }
-}
+// Field damage modifier moved to `field.mbt` (Stage F-1) with Gen 9 spec —
+// grounded check + Grassy じしん/マグニチュード/じならし 0.5x debuff arm.

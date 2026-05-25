@@ -140,3 +140,75 @@ test "build_input_with_ranks: weather~ argument threads into DamageCalcInput.wea
   let input_snow = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Snow)
   @debug.assert_eq(input_snow.weather, @model.Weather::Snow)
 }
+
+///|
+/// Stage F-3: build_input_with_ranks must accept a `field~` keyword argument
+/// and thread it verbatim into the resulting DamageCalcInput.field field.
+/// Without this wiring, state.field set inside SwitchingGame cannot reach
+/// @damage.calc_damage and Electric / Grassy / Misty / Psychic terrain
+/// multipliers silently degrade to Field::None.
+test "build_input_with_ranks: field~ argument threads into DamageCalcInput.field" {
+  let p : @model.Pokemon = {
+    global_no: "0006",
+    name_ja: "テスト",
+    name_en: "Test",
+    type1: "ほのお",
+    type2: "",
+    hp: 100,
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    bst: 600,
+    ability1: "",
+    ability2: "",
+    dream_ability: "",
+    weight: 1.0,
+    forms: [],
+  }
+  let c : Combatant = {
+    pokemon: p,
+    moves: [],
+    ability: "",
+    item: "",
+    tera_type: "",
+    stat_system: @model.Standard,
+    mega_form: None,
+    nature: None,
+    stat_points: None,
+    actual_stats: None,
+    ivs: None,
+  }
+  let mv : @model.Move = {
+    name: "10まんボルト",
+    type_: "でんき",
+    category: @model.Special,
+    power: 90,
+    accuracy: 100,
+    pp: 15,
+    learn_method: "",
+    priority: 0,
+    stat_effects: [],
+    status_effect: None,
+    recoil_num: 0,
+    recoil_den: 1,
+    self_ko: false,
+    recharge: false,
+    healing: None,
+    weather_set: None,
+    field_set: None,
+  }
+  // Default (no field~) must remain Field::None so existing fixtures stay
+  // green without per-call churn.
+  let input_default = build_input_with_ranks(c, c, mv, 0, 0)
+  @debug.assert_eq(input_default.field, @model.Field::None)
+  let input_electric = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Electric)
+  @debug.assert_eq(input_electric.field, @model.Field::Electric)
+  let input_grassy = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Grassy)
+  @debug.assert_eq(input_grassy.field, @model.Field::Grassy)
+  let input_misty = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Misty)
+  @debug.assert_eq(input_misty.field, @model.Field::Misty)
+  let input_psychic = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Psychic)
+  @debug.assert_eq(input_psychic.field, @model.Field::Psychic)
+}

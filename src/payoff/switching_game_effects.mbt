@@ -161,6 +161,36 @@ pub fn maybe_apply_status_fanout(
   ) {
     return [(1.0, state)]
   }
+  // Stage G-2: Misty field blocks status infliction on grounded defenders.
+  // 対象は major status (まひ / やけど / どく / もうどく / ねむり / こおり) +
+  // confusion (こんらん) すべて。フリーズドライによる凍りも防ぐ。Gen9 mainline
+  // 仕様 — Misty Surge / ミストフィールド の効果テキスト「状態異常にならない」。
+  //
+  // Mega 後の type/ability/item を反映するため `effective_combatant` 経由で
+  // grounded 判定する (Mega Gengar はメガ後にふゆうが消えて grounded になる等)。
+  // grounded SSoT は `@damage.is_grounded` (Stage F-1)。
+  // `target_megaed` は target_is_me に応じて my_megaed / opp_megaed を選ぶ。
+  match state.field {
+    @model.Field::Misty => {
+      let target_megaed = if target_is_me {
+        state.my_megaed
+      } else {
+        state.opp_megaed
+      }
+      let is_mega = target_slot < target_megaed.length() &&
+        target_megaed[target_slot]
+      let eff = effective_combatant(combatant, is_mega)
+      if @damage.is_grounded(
+          type1=eff.pokemon.type1,
+          type2=eff.pokemon.type2,
+          ability=eff.ability,
+          item=eff.item,
+        ) {
+        return [(1.0, state)]
+      }
+    }
+    _ => ()
+  }
   // #91 Phase 2-C: per-hit independent secondary roll. p_per_hit = chance/100,
   // p_set after `hits_count` hits = 1 - (1 - p_per_hit)^hits_count. hits_count
   // defaults to 1 to preserve legacy single-hit semantics for callers that
@@ -961,6 +991,20 @@ pub fn apply_eot(
   my_hps[state.my_active] = my_hp_after_heal
   opp_hps[state.opp_active] = opp_hp_after_heal
 
+  // === Step 2-bis: Grassy field heal (Stage G-1) ===
+  // state.field == Grassy で active が grounded なら HP += max(1, max_hp/16)。
+  // leftovers (step 2) の **後**、leech tick (step 3) の **前** に走る
+  // (Gen9 mainline residual order)。max クランプは `add_hp_capped` が担当。
+  // ひんし (HP <= 0) は heal 対象外 (本家挙動 — Grassy heal は alive 限定)。
+  // grounded 判定は `@damage.is_grounded` の単一 SSoT を再利用し、mega 後の
+  // type/ability/item を反映するため `effective_combatant` 経由で読む。
+  apply_grassy_heal_active(
+    state.my_active, my_hps, my_team, state.my_megaed, my_max, state.field,
+  )
+  apply_grassy_heal_active(
+    state.opp_active, opp_hps, opp_team, state.opp_megaed, opp_max, state.field,
+  )
+
   // === Step 3: やどりぎのタネ tick ===
   // 種付き側 (`*_leech_seeded[active] == true`) は HP -= max/8、相手 active
   // HP += 同量。種付き側 ability が マジックガード のとき tick は完全に
@@ -1167,6 +1211,52 @@ pub fn apply_eot(
     field: next_field,
     field_turns_left: next_field_turns,
     turn: state.turn,
+  }
+}
+
+///|
+/// Step 2-bis of `apply_eot`. Apply Grassy field heal (max_hp / 16, capped at
+/// max_hp) to the active slot when field is Grassy and the active Pokemon is
+/// grounded. Mutates `hps[slot]` in place. The post-mega type/ability/item are
+/// read via `effective_combatant` so a Pokemon mid-mega is evaluated against
+/// its new grounded state (e.g. Mega Gengar — ふゆう vanishes post-mega).
+/// HP=0 (fainted) slots are skipped (Grassy heal does not revive). Order
+/// contract: this runs **after** `eot_leftovers_heal` and **before** leech
+/// tick / status slip (Gen9 mainline residual order).
+///
+/// Grounded check delegates to `@damage.is_grounded` (Stage F-1 SSoT — single
+/// source of truth for grounded semantics across damage and EOT paths).
+pub fn apply_grassy_heal_active(
+  active : Int,
+  hps : Array[Int],
+  team : Array[Combatant],
+  megaed : Array[Bool],
+  max_hp : Int,
+  field : @model.Field,
+) -> Unit {
+  match field {
+    @model.Field::Grassy => {
+      if hps[active] <= 0 {
+        return
+      }
+      let is_mega = active < megaed.length() && megaed[active]
+      let eff = effective_combatant(team[active], is_mega)
+      if !(@damage.is_grounded(
+          type1=eff.pokemon.type1,
+          type2=eff.pokemon.type2,
+          ability=eff.ability,
+          item=eff.item,
+        )) {
+        return
+      }
+      // max_hp / 16 を回復。整数除算で 0 になる low-max ケースは max(1, _) で
+      // 最小 1 に持ち上げる (本家挙動: Grassy heal は alive 限定で常に
+      // 「少なくとも 1 HP」を回復する)。
+      let raw = max_hp / 16
+      let amount = if raw < 1 { 1 } else { raw }
+      add_hp_capped(hps, active, amount, max_hp)
+    }
+    _ => ()
   }
 }
 

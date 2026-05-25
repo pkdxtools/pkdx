@@ -509,6 +509,15 @@ fn mc_resolve_attempt(
 /// roll directly. Mutates `defender_status_arr[defender_slot]` in place when
 /// the status lands (ignored when already statused, type immune, fainted, or
 /// the chance roll fails).
+///
+/// Stage H parity: `field` を受け取り、DP 側 `maybe_apply_status_fanout` の
+/// Misty Terrain block (switching_game_effects.mbt Stage G-2) を移植する。
+/// ミストフィールド下で grounded な defender には major status + confusion +
+/// freeze-dry の凍りが付与されない。grounded SSoT は `@damage.is_grounded`。
+/// MC は mega を未モデルなので raw combatant をそのまま読む (= DP の
+/// `effective_combatant(c, false)` と一致)。これが無いと ScreenedSwitchingGame
+/// の MC screening phase が Misty 下で status 技を過大評価し、DP refine phase と
+/// payoff が割れる。
 fn mc_try_apply_status(
   rng : @random.Rand,
   mv : @model.Move,
@@ -516,6 +525,7 @@ fn mc_try_apply_status(
   defender_hps : Array[Int],
   defender_status_arr : Array[@model.StatusCondition],
   defender_slot : Int,
+  field~ : @model.Field = @model.Field::None,
 ) -> Unit {
   let eff = match mv.status_effect {
     None => return
@@ -535,10 +545,52 @@ fn mc_try_apply_status(
   if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
     return
   }
+  // Stage H: Misty Terrain は grounded defender への状態異常付与を全て阻止
+  // する (DP `maybe_apply_status_fanout` Stage G-2 と semantics 一致)。
+  match field {
+    @model.Field::Misty =>
+      if @damage.is_grounded(
+          type1=c.pokemon.type1,
+          type2=c.pokemon.type2,
+          ability=c.ability,
+          item=c.item,
+        ) {
+        return
+      }
+    _ => ()
+  }
   if !(rand_bool(rng, chance.to_double() / 100.0)) {
     return
   }
   defender_status_arr[defender_slot] = @model.inflict_status(kind)
+}
+
+///|
+/// MC variant of the DP Psychic-terrain priority block (switching_game_turn.mbt
+/// Stage G-3). Returns `true` when `mv` has priority > 0 and the grounded
+/// `defender` is under Psychic Terrain — the attack is fully negated (no
+/// damage / post-hit / status), matching the DP single-leaf no-effect branch.
+/// MC does not model mega, so the raw combatant is read directly (= DP's
+/// `effective_combatant(defender, false)`). Without this gate the MC screening
+/// phase overvalues priority moves under Psychic Terrain vs the DP refine phase.
+fn mc_psychic_priority_blocked(
+  mv : @model.Move,
+  field : @model.Field,
+  defender : Combatant,
+) -> Bool {
+  if mv.priority <= 0 {
+    return false
+  }
+  match field {
+    @model.Field::Psychic =>
+      @damage.is_grounded(
+        type1=defender.pokemon.type1,
+        type2=defender.pokemon.type2,
+        ability=defender.ability,
+        item=defender.item,
+      )
+    _ => false
+  }
 }
 
 // Stage 13: `mc_eot_slip` は削除。MC rollout の EOT 状態異常 slip は DP 側
@@ -782,7 +834,10 @@ pub fn team_rollout(
           let opp_pre_status = opp_status[opp_active]
           if own_first {
             let mut opp_blocked_mid_turn = false
-            if own_attempt_acts {
+            // Stage H: Psychic Terrain priority block — own の priority>0 技は
+            // grounded な opp に対し無効化 (DP resolve 側 Stage G-3 と一致)。
+            if own_attempt_acts &&
+              !mc_psychic_priority_blocked(mv_own, field_state[0], opp[opp_active]) {
               let before = opp_hps[opp_active]
               opp_hps[opp_active] = team_perform_attack(
                 own[own_active], opp[opp_active], before, mv_own,
@@ -800,6 +855,7 @@ pub fn team_rollout(
               )
               mc_try_apply_status(
                 rng, mv_own, opp, opp_hps, opp_status, opp_active,
+                field=field_state[0],
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -817,7 +873,8 @@ pub fn team_rollout(
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
-              !(opp_blocked_mid_turn) {
+              !(opp_blocked_mid_turn) &&
+              !mc_psychic_priority_blocked(mv_opp, field_state[0], own[own_active]) {
               // Read burn *after* first leg's status fan-out so a fresh burn
               // from own's move halves opp's physical damage this turn.
               let opp_burn_now = is_burned(opp_status[opp_active])
@@ -838,6 +895,7 @@ pub fn team_rollout(
               )
               mc_try_apply_status(
                 rng, mv_opp, own, own_hps, own_status, own_active,
+                field=field_state[0],
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -848,7 +906,10 @@ pub fn team_rollout(
             }
           } else {
             let mut own_blocked_mid_turn = false
-            if opp_attempt_acts {
+            // Stage H: Psychic Terrain priority block — opp の priority>0 技は
+            // grounded な own に対し無効化 (DP resolve 側 Stage G-3 と一致)。
+            if opp_attempt_acts &&
+              !mc_psychic_priority_blocked(mv_opp, field_state[0], own[own_active]) {
               let before = own_hps[own_active]
               own_hps[own_active] = team_perform_attack(
                 opp[opp_active], own[own_active], before, mv_opp,
@@ -866,6 +927,7 @@ pub fn team_rollout(
               )
               mc_try_apply_status(
                 rng, mv_opp, own, own_hps, own_status, own_active,
+                field=field_state[0],
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -883,7 +945,8 @@ pub fn team_rollout(
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
               own_attempt_acts &&
-              !(own_blocked_mid_turn) {
+              !(own_blocked_mid_turn) &&
+              !mc_psychic_priority_blocked(mv_own, field_state[0], opp[opp_active]) {
               let own_burn_now = is_burned(own_status[own_active])
               let before = opp_hps[opp_active]
               opp_hps[opp_active] = team_perform_attack(
@@ -902,6 +965,7 @@ pub fn team_rollout(
               )
               mc_try_apply_status(
                 rng, mv_own, opp, opp_hps, opp_status, opp_active,
+                field=field_state[0],
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -918,7 +982,9 @@ pub fn team_rollout(
           }
           let mv_own = own[own_active].moves[mi_own]
           let own_burn = is_burned(own_status[own_active])
-          if own_attempt_acts {
+          // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
+          if own_attempt_acts &&
+            !mc_psychic_priority_blocked(mv_own, field_state[0], opp[opp_active]) {
             let before = opp_hps[opp_active]
             opp_hps[opp_active] = team_perform_attack(
               own[own_active], opp[opp_active], before, mv_own,
@@ -936,6 +1002,7 @@ pub fn team_rollout(
             )
             mc_try_apply_status(
               rng, mv_own, opp, opp_hps, opp_status, opp_active,
+              field=field_state[0],
             )
             if all_ko(own_hps) {
               return -1.0
@@ -951,7 +1018,9 @@ pub fn team_rollout(
           }
           let mv_opp = opp[opp_active].moves[mi_opp]
           let opp_burn = is_burned(opp_status[opp_active])
-          if opp_attempt_acts {
+          // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
+          if opp_attempt_acts &&
+            !mc_psychic_priority_blocked(mv_opp, field_state[0], own[own_active]) {
             let before = own_hps[own_active]
             own_hps[own_active] = team_perform_attack(
               opp[opp_active], own[own_active], before, mv_opp,
@@ -969,6 +1038,7 @@ pub fn team_rollout(
             )
             mc_try_apply_status(
               rng, mv_opp, own, own_hps, own_status, own_active,
+              field=field_state[0],
             )
             if all_ko(own_hps) {
               return -1.0
@@ -1025,6 +1095,20 @@ pub fn team_rollout(
         )
         opp_hps[opp_active] = eot_leftovers_heal(
           opp_hps[opp_active], opp_max, opp[opp_active].item,
+        )
+
+        // === Step 4.2-bis: グラスフィールド回復 (Stage H parity) ===
+        // field == Grassy で active が grounded なら HP += max(1, max/16)。
+        // leftovers (Step 4.2) の **後**、leech tick (Step 4.3) の **前** に
+        // 走る (Gen9 mainline residual order)。DP 側 `apply_eot` Step 2-bis
+        // (`apply_grassy_heal_active`) を直接呼び SSoT を共有する。これが無いと
+        // ScreenedSwitchingGame の MC screening phase が Grassy 回復を無視し、
+        // DP refine phase と payoff が割れる。
+        apply_grassy_heal_active(
+          own_active, own_hps, own, own_megaed, own_max, field_state[0],
+        )
+        apply_grassy_heal_active(
+          opp_active, opp_hps, opp, opp_megaed, opp_max, field_state[0],
         )
 
         // === Step 4.3: やどりぎのタネ tick ===
@@ -1114,10 +1198,10 @@ pub fn team_rollout(
         // === Step 4.7: フィールドカウンタ tick (Stage H) ===
         // weather と完全対称: `field_turns_left > 0` ならデクリメント、0 に
         // なった瞬間に Field::None へリセット。DP 側 `apply_eot` の field tick
-        // (switching_game_effects.mbt) と semantics 一致。Grassy heal (Step
-        // 4.x で実装される場合) は tick 前の field を読むため、heal とリセットの
-        // 順序整合は EOT 順序内で確保される (現状 MC は Grassy heal を実装して
-        // いないが、field=Grassy の damage 計算結果は Step 3 で反映されている)。
+        // (switching_game_effects.mbt) と semantics 一致。Step 4.2-bis の Grassy
+        // heal は tick **前** の field_state[0] を読むため、heal とリセットの
+        // 順序整合は EOT 順序内で確保される (= 切れる前の最後の Grassy 回復が
+        // 成立する、本家挙動)。
         if field_turns_state[0] > 0 {
           let dec = field_turns_state[0] - 1
           if dec <= 0 {

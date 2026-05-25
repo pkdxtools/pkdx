@@ -35,6 +35,13 @@ fn best_expected_damage(
     if mv.power <= 0 {
       continue
     }
+    // Psychic Terrain priority block (DP/MC parity): grounded defender 下では
+    // priority>0 の damage 期待値を 0 として評価する。これが無いと greedy が
+    // 無効化される priority 技を選び続け、resolution 側で `mc_psychic_priority_
+    // blocked` により毎ターン no-effect になって MC value が DP と乖離する。
+    if mc_psychic_priority_blocked(mv, field, dfn) {
+      continue
+    }
     let ar = match mv.category {
       @model.Physical => atk_ranks[0]
       @model.Special => atk_ranks[2]

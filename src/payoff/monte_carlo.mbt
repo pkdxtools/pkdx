@@ -53,6 +53,25 @@ pub fn pick_best_move(
     if mv.power <= 0 {
       continue
     }
+    // Psychic Terrain priority block (DP/MC parity): grounded defender 下で
+    // priority>0 は no-effect になるので greedy 選択から除外する。判定は
+    // `mc_psychic_priority_blocked` (team_monte_carlo.mbt) と同 semantics を
+    // インライン化 (cross-file 依存を避けるため、ここでは `@damage.is_grounded`
+    // を直接呼ぶ)。
+    if mv.priority > 0 {
+      match field {
+        @model.Field::Psychic =>
+          if @damage.is_grounded(
+              type1=dfn.pokemon.type1,
+              type2=dfn.pokemon.type2,
+              ability=dfn.ability,
+              item=dfn.item,
+            ) {
+            continue
+          }
+        _ => ()
+      }
+    }
     let ar = match mv.category {
       @model.Physical => atk_ranks[0]
       @model.Special => atk_ranks[2]

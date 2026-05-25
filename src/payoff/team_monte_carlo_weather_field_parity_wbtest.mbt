@@ -246,6 +246,124 @@ test "MC parity: default (None, None) and explicit seed are bit-exact" {
 /// fixture: own = でんき 攻撃 (Electric Terrain 1.3x for grounded attacker)。
 /// own grounded + field=Electric で damage 1.3x boost → opp 側 KO までの
 /// turn が縮まり MC value が異なる。
+///|
+/// **Case H-2A (Grassy heal — DP/MC value tol parity, field-active fixture)**:
+/// AI Rally 指摘 #2 (MC EOT が Grassy heal をスキップしていた) の回帰防止用 tol
+/// 一致テスト。既存 H-1 系は sign-agreement (DP > 0 → MC > -0.5) どまりで、
+/// MC が `apply_grassy_heal_active` を実際に EOT で呼んでいることを value レベル
+/// で観測できなかった。本テストは Grassy 下で grounded 同士の地味な殴り合いを
+/// 解き、`|dp - mc| < 0.15` を要求する (既存 healing parity と同じ tol)。
+///
+/// fixture 設計: 1v1 で own / opp 共に grounded ノーマル殴り合い。両者 max_hp /
+/// 16 ずつ EOT で回復するので Grassy heal 自体は zero-sum (両側に同じく載る)
+/// だが、damage 計算 + EOT residual の符号付き寄与が DP / MC で一致するかを直接
+/// 観測する。trial=64 で law-of-large-numbers を効かせ tol 0.15 に収める。
+test "MC/DP value parity under Grassy Terrain heal (field-active fixture)" {
+  let own_p = mk_pokemon("OwnG", "ノーマル", "", 240, 100, 100, 80, 100, 100)
+  let opp_p = mk_pokemon("OppG", "ノーマル", "", 240, 100, 100, 80, 100, 90)
+  let tackle_o = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let tackle_p = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let own = [mk_combatant(own_p, [tackle_o])]
+  let opp = [mk_combatant(opp_p, [tackle_p])]
+  let turn_limit = 4
+  let state = h1_state_from_weather_field(
+    @model.Weather::None, @model.Field::Grassy, own, opp,
+  )
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let stats = new_stats_with_progress(noop_progress, 0)
+  let dmg = new_damage_cache()
+  let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
+  let mc_value = team_monte_carlo_value(
+    own, opp, 64, 4242UL,
+    turn_limit~,
+    weather=@model.Weather::None,
+    field=@model.Field::Grassy,
+  )
+  // tol 0.15: MC が Grassy heal を EOT で呼んでいなければ own 側は HP 維持が
+  // 弱くなり (両側 grounded だが、damage 確率分布の偏りで EOT heal 抜けは
+  // value を負方向にずらす)、tol を超える。既存 healing parity と同じ tol 値。
+  let diff = (dp_value - mc_value).abs()
+  assert_true(diff < 0.15)
+}
+
+///|
+/// **Case H-2B (Misty status block — DP/MC value tol parity, field-active
+/// fixture)**: AI Rally 指摘 #1 (MC `mc_try_apply_status` が field を読まず
+/// Misty 下でも grounded defender に status を付与していた) の回帰防止用 tol
+/// 一致テスト。
+///
+/// fixture: own = でんじは + 殴り技、opp = grounded ノーマル殴り技のみ。
+/// Misty 下では own のでんじは が effects 経由で paralysis を付与できない (DP /
+/// MC 両方とも block すべき)。MC で field が未配線だと paralysis が MC 側だけ
+/// 通って opp が遅延し own が一方的に削れ続けるという乖離が出る。Misty が
+/// 両 layer で block されていれば、両者は damage-only な殴り合いを解き、value
+/// は `|dp - mc| < 0.15` で一致する。
+test "MC/DP value parity under Misty Terrain status block (field-active fixture)" {
+  let own_p = mk_pokemon("OwnM", "ノーマル", "", 220, 110, 95, 80, 95, 110)
+  let opp_p = mk_pokemon("GroundedM", "ノーマル", "", 220, 100, 100, 80, 100, 90)
+  let thunderwave = mk_move(
+    "でんじは", "でんき", @model.Status, 0,
+    status_effect=Some((@model.ParalyzeKind, 100)),
+  )
+  let tackle_o = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let tackle_p = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let own = [mk_combatant(own_p, [tackle_o, thunderwave])]
+  let opp = [mk_combatant(opp_p, [tackle_p])]
+  let turn_limit = 4
+  let state = h1_state_from_weather_field(
+    @model.Weather::None, @model.Field::Misty, own, opp,
+  )
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let stats = new_stats_with_progress(noop_progress, 0)
+  let dmg = new_damage_cache()
+  let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
+  let mc_value = team_monte_carlo_value(
+    own, opp, 64, 5151UL,
+    turn_limit~,
+    weather=@model.Weather::None,
+    field=@model.Field::Misty,
+  )
+  let diff = (dp_value - mc_value).abs()
+  assert_true(diff < 0.15)
+}
+
+///|
+/// **Case H-2C (Psychic priority block — DP/MC value tol parity, field-active
+/// fixture)**: AI Rally 指摘 #3 (MC move-resolution が Psychic Terrain で
+/// priority>0 を block していなかった) の回帰防止用 tol 一致テスト。
+///
+/// fixture: own = しんそく (priority +1) + 通常 priority 攻撃の 2 択、opp =
+/// grounded ノーマル殴り技。Psychic Terrain では own のしんそくが grounded
+/// opp に対して無効化される (両 layer で同じ semantics)。MC 側 block が
+/// 抜けていれば、MC は priority +1 を毎ターン通して own が大幅に有利になり
+/// tol を超える。両 layer で block されていれば DP greedy / MC greedy 共に
+/// 通常 priority 攻撃にフォールバックし、value は `|dp - mc| < 0.15` で一致。
+test "MC/DP value parity under Psychic Terrain priority block (field-active fixture)" {
+  let own_p = mk_pokemon("OwnP", "ノーマル", "", 220, 110, 95, 80, 95, 100)
+  let opp_p = mk_pokemon("GroundedP", "ノーマル", "", 220, 100, 100, 80, 100, 90)
+  let extreme_speed = mk_move("しんそく", "ノーマル", @model.Physical, 80, priority=2)
+  let tackle_o = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let tackle_p = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let own = [mk_combatant(own_p, [extreme_speed, tackle_o])]
+  let opp = [mk_combatant(opp_p, [tackle_p])]
+  let turn_limit = 4
+  let state = h1_state_from_weather_field(
+    @model.Weather::None, @model.Field::Psychic, own, opp,
+  )
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let stats = new_stats_with_progress(noop_progress, 0)
+  let dmg = new_damage_cache()
+  let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
+  let mc_value = team_monte_carlo_value(
+    own, opp, 64, 6363UL,
+    turn_limit~,
+    weather=@model.Weather::None,
+    field=@model.Field::Psychic,
+  )
+  let diff = (dp_value - mc_value).abs()
+  assert_true(diff < 0.15)
+}
+
 test "MC field threading: Electric Terrain shifts MC value vs Field::None" {
   // own = でんき 攻撃 (Electric Terrain で 1.3x boost、grounded 必要)。
   // 充分に bulky な opp を組んで turn_limit 内で簡単に KO されないようにし、

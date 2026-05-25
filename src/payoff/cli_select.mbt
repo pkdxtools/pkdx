@@ -632,7 +632,18 @@ fn parse_nash_solver_config(
       }
       let iterations = match m.get("iterations") {
         None => default.iterations
-        Some(Number(n, ..)) => n.to_int()
+        Some(Number(n, ..)) => {
+          let i = n.to_int()
+          // Reject fractional values (1.5 等) explicitly: to_int() は黙って
+          // 切り捨てるため、config の打ち間違いが要求より低い反復回数で
+          // fallback chain を走らせてしまう
+          if i.to_double() != n {
+            raise InvalidJson(
+              "nash_solver_config.iterations must be a positive integer",
+            )
+          }
+          i
+        }
         Some(_) =>
           raise InvalidJson(
             "nash_solver_config.iterations must be a positive integer",

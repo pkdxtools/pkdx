@@ -7,9 +7,9 @@
 /// value-cache semantics differ and the silent-degrade behavior is tracked
 /// separately via `silent_dp_fallback_count` (Stage 3).
 ///
-/// Stage 1a: primary simplex passthrough only. The fictitious_play / mwu
-/// fallback chain and the `NashFallbackExhausted` suberror are added in Stage
-/// 1b and 1c.
+/// Stage 1b: primary simplex with a fictitious_play fallback for the
+/// `SimplexFailure` case. The `mwu` fallback and `NashFallbackExhausted`
+/// suberror are added in Stage 1c.
 
 ///|
 pub(all) enum NashSolverPath {
@@ -69,19 +69,54 @@ pub fn solver_path_string(p : NashSolverPath) -> String {
 }
 
 ///|
+/// Try the `@nash.fictitious_play` fallback. Returns `Some((p, q, expl))` when
+/// the iterative solution lands within `tol` of the equilibrium; `None` when
+/// the result is above tolerance and the caller should escalate further.
+fn try_fictitious(
+  matrix : @nash.FiniteMatrix,
+  iterations : Int,
+  tol : Double,
+) -> (@nash.MixedStrategy, @nash.MixedStrategy, Double)? {
+  let (p, q) = @nash.fictitious_play(matrix, iterations)
+  let expl = @nash.exploitability(matrix, p, q)
+  if expl < tol {
+    Some((p, q, expl))
+  } else {
+    None
+  }
+}
+
+///|
 /// Solve a zero-sum game with the pkdx fallback chain.
 ///
-/// Stage 1a: primary simplex only. On `SolverError` the wrapper raises
-/// `InnerError(...)` — fictitious_play / mwu fallbacks land in Stage 1b/1c.
+/// Stage 1b: primary simplex, then a `fictitious_play` retry when the
+/// underlying LP raises `SimplexFailure`. If the iterative result exceeds
+/// `config.tol`, the original simplex error is re-raised as `InnerError`.
+/// Stage 1c will add the `mwu` retry and a dedicated `NashFallbackExhausted`
+/// suberror.
 pub fn solve_with_fallback(
   matrix : @nash.FiniteMatrix,
   config~ : NashSolverConfig = NashSolverConfig::default(),
 ) -> NashSolverResult raise NashCliError {
-  // `config` is unused in Stage 1a but pinned in the signature so the
-  // fallback-aware callers do not need to migrate again in Stage 1b/1c.
-  ignore(config)
   let lp = try @nash.solve_zero_sum(matrix) catch {
-    err => raise InnerError(err.to_string())
+    @nash.SimplexFailure(_) as simplex_err =>
+      // Fallback 1: fictitious_play. Accept only when exploitability is
+      // within `config.tol`; otherwise re-raise so the CLI surfaces the
+      // original simplex failure rather than silently degrading.
+      match try_fictitious(matrix, config.iterations, config.tol) {
+        Some((p, q, expl)) => {
+          let v = @nash.expected_payoff(p, matrix, q)
+          return {
+            value: v,
+            row_strategy: p,
+            col_strategy: q,
+            exploitability: expl,
+            solver_path: FictitiousPlay,
+          }
+        }
+        None => raise InnerError(simplex_err.to_string())
+      }
+    other => raise InnerError(other.to_string())
   }
   match lp {
     Optimal(value~, row_strategy~, col_strategy~) =>

@@ -1,7 +1,6 @@
 ///|
 /// Whitebox tests for `solve_with_fallback`. Stage 1a covers the primary
-/// simplex path only — the fallback chain (fictitious_play / mwu) is wired in
-/// later commits.
+/// simplex path; Stage 1b adds the fictitious_play fallback wired below.
 
 ///|
 test "primary simplex on rock-paper-scissors returns Simplex path + expl=0" {
@@ -31,4 +30,102 @@ test "primary simplex on rock-paper-scissors returns Simplex path + expl=0" {
     assert_true((row[i] - third).abs() < 1.0e-6)
     assert_true((col[i] - third).abs() < 1.0e-6)
   }
+}
+
+///|
+/// Load the pinned 60x60 degenerate payoff matrix from
+/// `tests/fixtures/nash_simplex_failure_60x60.json`. This matrix was produced
+/// by running `bin/pkdx select` on the 6v6 turn_limit=3 smoke fixture
+/// observed to raise `SimplexFailure(IterationLimit)` on PR #143 smoke. We
+/// reuse the same matrix here so that the regression guard is exactly the
+/// case the fallback chain must handle.
+fn load_degenerate_fixture_60x60() -> @nash.FiniteMatrix {
+  let raw = match @db.read_file(
+      "tests/fixtures/nash_simplex_failure_60x60.json",
+    ) {
+    Some(s) => s
+    None => abort("missing tests/fixtures/nash_simplex_failure_60x60.json")
+  }
+  let parsed = try @json.parse(raw) catch {
+    _ => abort("fixture JSON parse failed")
+  } noraise {
+    j => j
+  }
+  let rows : Array[Array[Double]] = match parsed {
+    Array(rs) => {
+      let out = Array::make(rs.length(), ([] : Array[Double]))
+      for i in 0..<rs.length() {
+        match rs[i] {
+          Array(cs) => {
+            let row = Array::make(cs.length(), 0.0)
+            for j in 0..<cs.length() {
+              row[j] = match cs[j] {
+                Number(n, ..) => n
+                _ => abort("fixture cell not a number")
+              }
+            }
+            out[i] = row
+          }
+          _ => abort("fixture row not an array")
+        }
+      }
+      out
+    }
+    _ => abort("fixture root not an array")
+  }
+  match @nash.FiniteMatrix::new(rows) {
+    Ok(m) => m
+    Err(_) => abort("fixture matrix construction failed")
+  }
+}
+
+///|
+/// Baseline regression guard: `@nash.solve_zero_sum` on its own is still
+/// expected to raise `SimplexFailure(_)` for this fixture. If a future
+/// upstream change makes the primary simplex succeed here, this assertion
+/// will fail and we should reconsider whether the fallback chain is still
+/// needed (or replace the fixture with a still-failing matrix).
+test "fixture baseline: solve_zero_sum raises SimplexFailure on degenerate 60x60 matrix" {
+  let m = load_degenerate_fixture_60x60()
+  assert_true(m.rows() == 60)
+  assert_true(m.cols() == 60)
+  let raised_simplex_failure = try {
+    let _ = @nash.solve_zero_sum(m)
+    false
+  } catch {
+    @nash.SimplexFailure(_) => true
+    _ => false
+  }
+  assert_true(raised_simplex_failure)
+}
+
+///|
+/// Stage 1b green: `solve_with_fallback` retries via `@nash.fictitious_play`
+/// when the primary simplex raises. The iterative result is accepted only
+/// when `@nash.exploitability` < `config.tol` (default 0.05 winrate units).
+test "fictitious_play fallback succeeds on degenerate 60x60 matrix" {
+  let m = load_degenerate_fixture_60x60()
+  let result = solve_with_fallback(m)
+  inspect(result.solver_path, content="FictitiousPlay")
+  // exploitability must be strictly below the default tolerance.
+  assert_true(result.exploitability < 0.05)
+  // value lives in [-1, +1] (winrate units).
+  assert_true(result.value >= -1.0 && result.value <= 1.0)
+  // Strategies are valid probability simplex points.
+  let row = result.row_strategy.to_array()
+  let col = result.col_strategy.to_array()
+  assert_eq(row.length(), 60)
+  assert_eq(col.length(), 60)
+  let mut row_sum = 0.0
+  for x in row {
+    assert_true(x >= 0.0)
+    row_sum += x
+  }
+  assert_true((row_sum - 1.0).abs() < 1.0e-6)
+  let mut col_sum = 0.0
+  for x in col {
+    assert_true(x >= 0.0)
+    col_sum += x
+  }
+  assert_true((col_sum - 1.0).abs() < 1.0e-6)
 }

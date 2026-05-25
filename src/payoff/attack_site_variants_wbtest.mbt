@@ -118,6 +118,8 @@ fn asv_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
     opp_leech_seeded: [false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
 }

@@ -63,6 +63,8 @@ fn b4_state_from_weather(
     opp_leech_seeded: Array::make(opp_team.length(), false),
     my_wish_turns: no_wish_pending(my_team.length()),
     opp_wish_turns: no_wish_pending(opp_team.length()),
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
 }

@@ -81,6 +81,11 @@ priv struct TurnWorkspace {
   opp_leech_seeded : Array[Bool]
   my_wish_turns : Int
   opp_wish_turns : Int
+  // Stage D (field semantics): mirror state.field / state.field_turns_left so
+  // workspace round-trips preserve terrain. Stage D keeps them at no-op
+  // defaults; Move.field_set consumption and EOT counter tick land in Stage E.
+  field : @model.Field
+  field_turns_left : Int
   turn : Int
 }
 
@@ -111,6 +116,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn,
   }
 }
@@ -142,6 +149,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_leech_seeded: ws.opp_leech_seeded.copy(),
     my_wish_turns: ws.my_wish_turns,
     opp_wish_turns: ws.opp_wish_turns,
+    field: ws.field,
+    field_turns_left: ws.field_turns_left,
     turn: if bump_turn { ws.turn + 1 } else { ws.turn },
   }
 }
@@ -404,6 +413,8 @@ fn clone_state(
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn + turn_delta,
   }
 }
@@ -627,6 +638,8 @@ pub fn transition_with_cache(
     opp_leech_seeded: opp_leech_seeded_new,
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -803,6 +816,8 @@ fn pass_turn_state(
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn + 1,
   }
 }
@@ -889,6 +904,8 @@ pub fn attempt_turn_with_cache(
         opp_leech_seeded: state.opp_leech_seeded,
         my_wish_turns: state.my_wish_turns,
         opp_wish_turns: state.opp_wish_turns,
+        field: state.field,
+        field_turns_left: state.field_turns_left,
         turn: state.turn,
       }
       let branch_outs : Array[(Double, SwitchingGameState)] = match (
@@ -1043,6 +1060,8 @@ fn partial_act_outcomes(
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -1434,6 +1453,8 @@ pub fn switching_game_winrate_stats(
     opp_leech_seeded: Array::make(opp_team.length(), false),
     my_wish_turns: no_wish_pending(my_team.length()),
     opp_wish_turns: no_wish_pending(opp_team.length()),
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])

@@ -114,6 +114,19 @@ pub(all) struct SwitchingGameState {
   opp_leech_seeded : Array[Bool]
   my_wish_turns : Int
   opp_wish_turns : Int
+  // Stage D (field semantics): mirror weather / weather_turns_left for terrain.
+  // Stage D only adds these fields, threads them through state helpers, and
+  // pins their inclusion in derive(Hash) so the DP cache cannot collide two
+  // distinct states that differ only on terrain. The Move.field_set consumption,
+  // EOT counter tick, Grassy heal, Misty status block, Psychic priority block,
+  // and damage multipliers all land in stages E–G. Default no-op values:
+  // Field::None / 0 turns left.
+  // - field: current battlefield terrain. Read by damage / heal / status /
+  //   priority arms in later stages.
+  // - field_turns_left: remaining turns of `field` (5 base, terrain-extender
+  //   not modeled in this PR). When 0 the next EOT clears to `None`.
+  field : @model.Field
+  field_turns_left : Int
   turn : Int
 } derive(Debug, Eq, Hash)
 

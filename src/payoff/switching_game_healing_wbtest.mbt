@@ -187,6 +187,8 @@ test "with_post_hit_effects: FixedFraction heals attacker active slot" {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
   let mv = mk_heal_move(
@@ -287,6 +289,8 @@ fn mk_weather_state() -> SwitchingGameState {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
 }
@@ -1012,6 +1016,8 @@ test "with_post_hit_effects: Drain heals attacker by dealt/2" {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
   let mv = mk_drain_move()
@@ -1089,6 +1095,8 @@ test "with_post_hit_effects: Drain reversed by defender's ヘドロえき" {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
   let mv = mk_drain_move()
@@ -1216,6 +1224,8 @@ fn mk_seed_state() -> SwitchingGameState {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
 }
@@ -1774,6 +1784,8 @@ fn mk_painsplit_state() -> SwitchingGameState {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
 }
@@ -2054,6 +2066,8 @@ fn mk_wish_state() -> SwitchingGameState {
     opp_leech_seeded: [false, false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
 }
@@ -2231,6 +2245,8 @@ test "apply_eot: Wish independent sides — opp fires, my ticks" {
     opp_hps: [60, 100],
     my_wish_turns: 2,
     opp_wish_turns: 0,
+    field: @model.Field::None,
+    field_turns_left: 0,
   }
   let team = [mk_wish_combatant(), mk_wish_combatant()]
   let new_state = apply_eot(state, team, team)
@@ -2268,6 +2284,8 @@ test "apply_eot: Wish on both sides triggers independently" {
     opp_hps: [30, 100],
     my_wish_turns: 0,
     opp_wish_turns: 0,
+    field: @model.Field::None,
+    field_turns_left: 0,
   }
   let team = [mk_wish_combatant(), mk_wish_combatant()]
   let new_state = apply_eot(state, team, team)
@@ -2492,6 +2510,8 @@ test "attempt_turn_with_cache: Wish used on turn T heals at EOT(T+1)" {
     opp_leech_seeded: [false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
   // Turn T: my[0] uses Wish, opp uses idle. EOT inside attempt_turn_with_cache
@@ -2569,6 +2589,8 @@ test "attempt_turn_with_cache: Switch threads Wish to replacement (real path)" {
     opp_leech_seeded: [false],
     my_wish_turns: -1,
     opp_wish_turns: -1,
+    field: @model.Field::None,
+    field_turns_left: 0,
     turn: 0,
   }
   // Turn T: my[0] uses Wish, EOT ticks 2 → 1.

@@ -782,6 +782,8 @@ fn with_status_set(
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn,
   }
 }
@@ -1138,6 +1140,8 @@ pub fn apply_eot(
     opp_leech_seeded: state.opp_leech_seeded.copy(),
     my_wish_turns: my_wish_turns_new,
     opp_wish_turns: opp_wish_turns_new,
+    field: state.field,
+    field_turns_left: state.field_turns_left,
     turn: state.turn,
   }
 }

@@ -487,3 +487,70 @@ test "select_accepts_team_builder_member_format" {
     _ => assert_true(false)
   }
 }
+
+///|
+/// Stage 4 e2e regression: the same 6v6 turn_limit=3 team input that caused
+/// `bin/pkdx select` to raise `SimplexFailure(IterationLimit)` on PR #143
+/// smoke testing must now return a successful Nash result via the fallback
+/// chain. Asserts that `nash_solver` is one of the known solver tags, that
+/// exploitability stays under the configured default tolerance (0.05), that
+/// the selections matrix has the expected 60 = C(6,3) * lead-order shape,
+/// and that the recursive DP path did not silently degrade
+/// (`silent_dp_fallback_count` baseline = 0 — i.e. the scope-out claim
+/// "internal DP callsites are unaffected by the cli_select fallback" holds
+/// for this fixture).
+test "e2e: 6v6 turn_limit=3 degenerate fixture triggers Nash fallback" {
+  // Baseline reset so other tests that may have incremented this counter
+  // earlier in the same run do not pollute the assertion below.
+  silent_dp_fallback_count.val = 0
+  let input_json = match @db.read_file(
+      "tests/fixtures/nash_select_input_6v6_t3.json",
+    ) {
+    Some(s) => s
+    None => {
+      fail("missing tests/fixtures/nash_select_input_6v6_t3.json")
+      return
+    }
+  }
+  let output_json = run_select(input_json)
+  let output = @json.parse(output_json)
+  match output {
+    Object(obj) => {
+      // (a) success exit is implicit — run_select did not raise.
+      // (b) nash_solver field is one of the known solver tags.
+      let solver = match obj.get("nash_solver") {
+        Some(String(s)) => s
+        _ => {
+          fail("nash_solver field missing or not a string")
+          return
+        }
+      }
+      assert_true(
+        solver == "fictitious_play" || solver == "mwu" || solver == "simplex",
+      )
+      // (c) exploitability under the default tolerance (0.05). Add a small
+      // numerical slack for the upper bound to absorb fp rounding around
+      // the acceptance check inside the fallback chain.
+      let expl = match obj.get("exploitability") {
+        Some(Number(n, ..)) => n
+        _ => {
+          fail("exploitability field missing or not a number")
+          return
+        }
+      }
+      assert_true(expl <= 0.05 + 1.0e-9)
+      // (d) selections shape: 6v6 with `switching_game:3` yields
+      // C(6, 3) * 3 leads = 20 * 3 = 60 selections per side.
+      match obj.get("selections") {
+        Some(Array(arr)) => assert_eq(arr.length(), 60)
+        _ => fail("selections field missing or not an array")
+      }
+      // (e) silent_dp_fallback_count == 0 baseline assert: the internal DP
+      // path's silent-degrade branch was never exercised for this fixture,
+      // so the scope-out (cli_select fallback does not depend on DP-level
+      // silent fallback) is empirically valid.
+      inspect(silent_dp_fallback_count.val, content="0")
+    }
+    _ => fail("output is not a JSON object")
+  }
+}

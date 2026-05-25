@@ -73,6 +73,13 @@ priv enum TeamAction {
 /// When `must_recharge` is true the whole turn is forfeit (mainline Hyper
 /// Beam / Giga Impact behaviour); we emit a `TmUseMove(0)` placeholder that
 /// the caller will short-circuit to `acts=false`.
+///
+/// Stage H: `weather~ / field~` を受け取り、`best_expected_damage` /
+/// `pick_best_move` の damage 評価に thread する。DP 側 `value` が state.weather
+/// / state.field を渡しているのと対称な配線。これが無いと「Sun で でんき
+/// vs ほのお のうち greedy が ほのお を選ぶ」「Electric Terrain で でんき
+/// vs ほのお のうち greedy が でんき を選ぶ」といった field 依存の選択が
+/// MC で起きず DP / MC parity が崩れる。
 fn greedy_team_action(
   active : Int,
   my_team : Array[Combatant],
@@ -84,6 +91,8 @@ fn greedy_team_action(
   rng : @random.Rand,
   epsilon : Double,
   must_recharge~ : Bool = false,
+  weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> TeamAction? {
   if must_recharge && my_hps[active] > 0 {
     return Some(TmUseMove(0))
@@ -105,6 +114,7 @@ fn greedy_team_action(
     for s in alive_slots {
       let score = best_expected_damage(
         my_team[s], opp_team[opp_active], zero_ranks, opp_ranks,
+        weather~, field~,
       )
       if score > best_score {
         best_score = score
@@ -159,6 +169,7 @@ fn greedy_team_action(
   }
   let stay_value = best_expected_damage(
       my_team[active], opp_team[opp_active], my_ranks, opp_ranks,
+      weather~, field~,
     ) /
     opp_hp_denom
   let mut best_switch = -1
@@ -170,6 +181,7 @@ fn greedy_team_action(
     }
     let v = best_expected_damage(
         my_team[s], opp_team[opp_active], zero_ranks, opp_ranks,
+        weather~, field~,
       ) /
       opp_hp_denom
     if v > best_switch_value {
@@ -184,6 +196,7 @@ fn greedy_team_action(
   match pick_best_move(
     my_team[active], opp_team[opp_active],
     atk_ranks=my_ranks, def_ranks=opp_ranks,
+    weather~, field~,
   ) {
     Some(i) => Some(TmUseMove(i))
     None => Some(TmUseMove(0))
@@ -246,6 +259,8 @@ fn team_apply_post_hit(
   defender_megaed : Array[Bool],
   weather_state : Array[@model.Weather],
   weather_turns_state : Array[Int],
+  field_state : Array[@model.Field],
+  field_turns_state : Array[Int],
   mv : @model.Move,
   dmg : Int,
 ) -> Unit {
@@ -330,6 +345,17 @@ fn team_apply_post_hit(
     Some(w) => {
       weather_state[0] = w
       weather_turns_state[0] = 5
+    }
+    None => ()
+  }
+  // Stage H: フィールド設定技 (Move.field_set) の効果を out-param に反映する。
+  // Gen9 base の 5 ターン (Terrain Extender なし) を固定値とする。DP 側
+  // `with_post_hit_effects` の `mv.field_set` 処理と semantics 一致 (later-wins
+  // 上書き、turns=5 リセット)。weather_set と完全対称な処理パス。
+  match mv.field_set {
+    Some(f) => {
+      field_state[0] = f
+      field_turns_state[0] = 5
     }
     None => ()
   }
@@ -535,6 +561,8 @@ pub fn team_rollout(
   rng : @random.Rand,
   turn_limit~ : Int = MC_TURN_LIMIT,
   epsilon~ : Double = default_rollout_epsilon,
+  weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Double {
   let own_hps = Array::make(own.length(), 0)
   let opp_hps = Array::make(opp.length(), 0)
@@ -567,8 +595,20 @@ pub fn team_rollout(
   //     active slot に貼り付く Wish を表現する (DP 側 Int と同 semantics)。
   // mega は MC では未モデル化 (screening 用) なので megaed は false 固定の
   // dummy 配列を用意 (effective_combatant + LeechSeed くさ判定で使う)。
-  let weather_state : Array[@model.Weather] = [@model.Weather::None]
-  let weather_turns_state : Array[Int] = [0]
+  // Stage H: caller-provided initial weather / field を seed して MC を回す。
+  // 既存 default (Weather::None / Field::None + turns=0) 動作は引数省略時に
+  // bit-exact 維持される。caller が `Sun` を渡せば、Sun の効果が damage 計算 +
+  // greedy 選択 + EOT (Sand chip / Sun heal 倍率) に反映される。`turns=999` の
+  // 大きな値で初期化することで、テスト用に DP horizon 内で weather/field が
+  // 切れないように引き受ける (DP 側 `b4_state_from_weather` の `999` と同じ
+  // 設計)。weather が None / field が None で渡された場合は turns=0 を保ち、
+  // EOT tick が weather/field を立てない無害な状態にする。
+  let init_weather_turns = if weather.is_active() { 999 } else { 0 }
+  let init_field_turns = if field.is_active() { 999 } else { 0 }
+  let weather_state : Array[@model.Weather] = [weather]
+  let weather_turns_state : Array[Int] = [init_weather_turns]
+  let field_state : Array[@model.Field] = [field]
+  let field_turns_state : Array[Int] = [init_field_turns]
   let own_leech_seeded : Array[Bool] = Array::make(own.length(), false)
   let opp_leech_seeded : Array[Bool] = Array::make(opp.length(), false)
   // per-side scalar Wish counter (DP 側 `SwitchingGameState.my_wish_turns : Int`
@@ -591,6 +631,8 @@ pub fn team_rollout(
       rng,
       epsilon,
       must_recharge=own_must_recharge[own_active],
+      weather=weather_state[0],
+      field=field_state[0],
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -603,6 +645,8 @@ pub fn team_rollout(
       rng,
       epsilon,
       must_recharge=opp_must_recharge[opp_active],
+      weather=weather_state[0],
+      field=field_state[0],
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -743,6 +787,7 @@ pub fn team_rollout(
               opp_hps[opp_active] = team_perform_attack(
                 own[own_active], opp[opp_active], before, mv_own,
                 rng, own_ranks, opp_ranks, atk_burn=is_burned(own_pre_status),
+                weather=weather_state[0], field=field_state[0],
               )
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge,
@@ -750,6 +795,7 @@ pub fn team_rollout(
                 opp_hps, opp_active, opp_ranks,
                 opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state,
+                field_state, field_turns_state,
                 mv_own, before - opp_hps[opp_active],
               )
               mc_try_apply_status(
@@ -779,6 +825,7 @@ pub fn team_rollout(
               own_hps[own_active] = team_perform_attack(
                 opp[opp_active], own[own_active], before, mv_opp,
                 rng, opp_ranks, own_ranks, atk_burn=opp_burn_now,
+                weather=weather_state[0], field=field_state[0],
               )
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge,
@@ -786,6 +833,7 @@ pub fn team_rollout(
                 own_hps, own_active, own_ranks,
                 own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state,
+                field_state, field_turns_state,
                 mv_opp, before - own_hps[own_active],
               )
               mc_try_apply_status(
@@ -805,6 +853,7 @@ pub fn team_rollout(
               own_hps[own_active] = team_perform_attack(
                 opp[opp_active], own[own_active], before, mv_opp,
                 rng, opp_ranks, own_ranks, atk_burn=is_burned(opp_pre_status),
+                weather=weather_state[0], field=field_state[0],
               )
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge,
@@ -812,6 +861,7 @@ pub fn team_rollout(
                 own_hps, own_active, own_ranks,
                 own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state,
+                field_state, field_turns_state,
                 mv_opp, before - own_hps[own_active],
               )
               mc_try_apply_status(
@@ -839,6 +889,7 @@ pub fn team_rollout(
               opp_hps[opp_active] = team_perform_attack(
                 own[own_active], opp[opp_active], before, mv_own,
                 rng, own_ranks, opp_ranks, atk_burn=own_burn_now,
+                weather=weather_state[0], field=field_state[0],
               )
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge,
@@ -846,6 +897,7 @@ pub fn team_rollout(
                 opp_hps, opp_active, opp_ranks,
                 opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state,
+                field_state, field_turns_state,
                 mv_own, before - opp_hps[opp_active],
               )
               mc_try_apply_status(
@@ -871,6 +923,7 @@ pub fn team_rollout(
             opp_hps[opp_active] = team_perform_attack(
               own[own_active], opp[opp_active], before, mv_own,
               rng, own_ranks, opp_ranks, atk_burn=own_burn,
+              weather=weather_state[0], field=field_state[0],
             )
             team_apply_post_hit(
               own_hps, own_active, own_ranks, own_must_recharge,
@@ -878,6 +931,7 @@ pub fn team_rollout(
               opp_hps, opp_active, opp_ranks,
               opp_leech_seeded, opp, opp_megaed,
               weather_state, weather_turns_state,
+              field_state, field_turns_state,
               mv_own, before - opp_hps[opp_active],
             )
             mc_try_apply_status(
@@ -902,6 +956,7 @@ pub fn team_rollout(
             own_hps[own_active] = team_perform_attack(
               opp[opp_active], own[own_active], before, mv_opp,
               rng, opp_ranks, own_ranks, atk_burn=opp_burn,
+              weather=weather_state[0], field=field_state[0],
             )
             team_apply_post_hit(
               opp_hps, opp_active, opp_ranks, opp_must_recharge,
@@ -909,6 +964,7 @@ pub fn team_rollout(
               own_hps, own_active, own_ranks,
               own_leech_seeded, own, own_megaed,
               weather_state, weather_turns_state,
+              field_state, field_turns_state,
               mv_opp, before - own_hps[own_active],
             )
             mc_try_apply_status(
@@ -1055,6 +1111,23 @@ pub fn team_rollout(
           }
         }
 
+        // === Step 4.7: フィールドカウンタ tick (Stage H) ===
+        // weather と完全対称: `field_turns_left > 0` ならデクリメント、0 に
+        // なった瞬間に Field::None へリセット。DP 側 `apply_eot` の field tick
+        // (switching_game_effects.mbt) と semantics 一致。Grassy heal (Step
+        // 4.x で実装される場合) は tick 前の field を読むため、heal とリセットの
+        // 順序整合は EOT 順序内で確保される (現状 MC は Grassy heal を実装して
+        // いないが、field=Grassy の damage 計算結果は Step 3 で反映されている)。
+        if field_turns_state[0] > 0 {
+          let dec = field_turns_state[0] - 1
+          if dec <= 0 {
+            field_state[0] = @model.Field::None
+            field_turns_state[0] = 0
+          } else {
+            field_turns_state[0] = dec
+          }
+        }
+
         if all_ko(own_hps) {
           return -1.0
         }
@@ -1086,6 +1159,8 @@ pub fn team_monte_carlo_value(
   trials : Int,
   seed : UInt64,
   turn_limit~ : Int = MC_TURN_LIMIT,
+  weather~ : @model.Weather = @model.Weather::None,
+  field~ : @model.Field = @model.Field::None,
 ) -> Double {
   if trials <= 0 {
     return 0.0
@@ -1093,7 +1168,7 @@ pub fn team_monte_carlo_value(
   let rng = seeded_rng(seed)
   let mut total = 0.0
   for _ in 0..<trials {
-    total += team_rollout(own, opp, rng, turn_limit~)
+    total += team_rollout(own, opp, rng, turn_limit~, weather~, field~)
   }
   total / trials.to_double()
 }

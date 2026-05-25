@@ -283,6 +283,10 @@ test "team_apply_post_hit + tick_and_fire_wish_inplace: Wish heals max/2 2 EOT l
   let defender_megaed = [false]
   let weather_state : Array[@model.Weather] = [@model.Weather::None]
   let weather_turns_state = [0]
+  // Stage H: team_apply_post_hit が field_state / field_turns_state を取るので
+  // 単なる Wish setting テストでも dummy (Field::None / turns=0) を渡す。
+  let field_state : Array[@model.Field] = [@model.Field::None]
+  let field_turns_state = [0]
   // Wish を発動: wish_turns[0] = 2 にセットされる。
   team_apply_post_hit(
     attacker_hps, 0, attacker_ranks, attacker_must_recharge,
@@ -290,6 +294,7 @@ test "team_apply_post_hit + tick_and_fire_wish_inplace: Wish heals max/2 2 EOT l
     defender_hps, 0, defender_ranks,
     defender_leech_seeded, defender_team, defender_megaed,
     weather_state, weather_turns_state,
+    field_state, field_turns_state,
     wish_move, 0,
   )
   @debug.assert_eq(attacker_wish_turns[0], 2)

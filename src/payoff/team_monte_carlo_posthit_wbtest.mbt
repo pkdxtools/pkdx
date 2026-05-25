@@ -23,6 +23,10 @@ priv struct PostHitCtx {
   defender_megaed : Array[Bool]
   weather_state : Array[@model.Weather]
   weather_turns_state : Array[Int]
+  // Stage H: team_apply_post_hit が field_set 反映用 out-param を取るため
+  // wbtest 側 ctx でも field 用の dummy slot を用意する。
+  field_state : Array[@model.Field]
+  field_turns_state : Array[Int]
 }
 
 ///|
@@ -83,6 +87,8 @@ fn mk_post_hit_ctx() -> PostHitCtx {
     defender_megaed: [false],
     weather_state: [@model.Weather::None],
     weather_turns_state: [0],
+    field_state: [@model.Field::None],
+    field_turns_state: [0],
   }
 }
 
@@ -110,6 +116,7 @@ test "team_apply_post_hit applies self-target stat drops on damaging moves" {
     defender_hps, 0, defender_ranks,
     ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
     ctx.weather_state, ctx.weather_turns_state,
+    ctx.field_state, ctx.field_turns_state,
     overheat, 50,
   )
   @debug.assert_eq(attacker_ranks[2], -2)
@@ -139,6 +146,7 @@ test "team_apply_post_hit skips opp-target stat drops when defender faints" {
     defender_hps, 0, defender_ranks,
     ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
     ctx.weather_state, ctx.weather_turns_state,
+    ctx.field_state, ctx.field_turns_state,
     mv, 120,
   )
   // Opp-target drop is gated out: defender ranks unchanged.
@@ -163,6 +171,7 @@ test "team_apply_post_hit applies opp-target stat drops when defender survives" 
     defender_hps, 0, defender_ranks,
     ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
     ctx.weather_state, ctx.weather_turns_state,
+    ctx.field_state, ctx.field_turns_state,
     mv, 60,
   )
   @debug.assert_eq(defender_ranks[1], -1)
@@ -216,6 +225,7 @@ test "team_apply_post_hit sets recharge flag after damaging recharge-move hit" {
     defender_hps, 0, defender_ranks,
     ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
     ctx.weather_state, ctx.weather_turns_state,
+    ctx.field_state, ctx.field_turns_state,
     hyper_beam, 180,
   )
   @debug.assert_eq(attacker_must_recharge[0], true)

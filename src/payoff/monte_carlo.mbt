@@ -43,6 +43,7 @@ pub fn pick_best_move(
   dfn : Combatant,
   atk_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
   def_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Int? {
   let mut best_idx = -1
   let mut best_avg = 0.0
@@ -62,7 +63,7 @@ pub fn pick_best_move(
       @model.Status => 0
     }
     let r = @damage.calc_damage(
-      build_input_with_ranks(atk, dfn, mv, ar, dr),
+      build_input_with_ranks(atk, dfn, mv, ar, dr, weather~),
     )
     let avg = avg_damage(r)
     if avg > best_avg {
@@ -91,6 +92,7 @@ pub fn rollout_pick_move(
   epsilon : Double,
   atk_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
   def_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Int? {
   let n = atk.moves.length()
   if n == 0 {
@@ -102,7 +104,7 @@ pub fn rollout_pick_move(
   if draw < epsilon {
     return Some(rng.int(limit=n))
   }
-  match pick_best_move(atk, dfn, atk_ranks~, def_ranks~) {
+  match pick_best_move(atk, dfn, atk_ranks~, def_ranks~, weather~) {
     Some(idx) => Some(idx)
     None =>
       // Fallback: no damaging moves, but status moves exist — pick a random

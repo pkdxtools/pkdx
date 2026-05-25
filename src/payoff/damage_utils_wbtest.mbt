@@ -64,3 +64,78 @@ test "avg_damage: immune matchup returns 0" {
   let r = mk_result(d, 160, is_immune=true)
   @debug.debug_inspect(avg_damage(r), content="0")
 }
+
+///|
+/// Stage B (healing-moves plan): build_input_with_ranks must accept a
+/// `weather~` keyword argument and thread it verbatim into the resulting
+/// DamageCalcInput.weather field. Without this wiring, state.weather set
+/// inside SwitchingGame cannot reach @damage.calc_damage and Sun /
+/// Rain / Sand / Snow weather multipliers (and WeatherBall typing) silently
+/// degrade to Weather::None.
+///
+/// Red→Green minimum: assert that each variant of Weather flows through.
+test "build_input_with_ranks: weather~ argument threads into DamageCalcInput.weather" {
+  let p : @model.Pokemon = {
+    global_no: "0006",
+    name_ja: "テスト",
+    name_en: "Test",
+    type1: "ほのお",
+    type2: "",
+    hp: 100,
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    bst: 600,
+    ability1: "",
+    ability2: "",
+    dream_ability: "",
+    weight: 1.0,
+    forms: [],
+  }
+  let c : Combatant = {
+    pokemon: p,
+    moves: [],
+    ability: "",
+    item: "",
+    tera_type: "",
+    stat_system: @model.Standard,
+    mega_form: None,
+    nature: None,
+    stat_points: None,
+    actual_stats: None,
+    ivs: None,
+  }
+  let mv : @model.Move = {
+    name: "かえんほうしゃ",
+    type_: "ほのお",
+    category: @model.Special,
+    power: 90,
+    accuracy: 100,
+    pp: 15,
+    learn_method: "",
+    priority: 0,
+    stat_effects: [],
+    status_effect: None,
+    recoil_num: 0,
+    recoil_den: 1,
+    self_ko: false,
+    recharge: false,
+    healing: None,
+    weather_set: None,
+  }
+  // Default (no weather~) must remain Weather::None so the existing 13
+  // fixtures and 1078-test baseline stay green without churn.
+  let input_default = build_input_with_ranks(c, c, mv, 0, 0)
+  @debug.assert_eq(input_default.weather, @model.Weather::None)
+  // Each Weather variant must reach DamageCalcInput.weather verbatim.
+  let input_sun = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Sun)
+  @debug.assert_eq(input_sun.weather, @model.Weather::Sun)
+  let input_rain = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Rain)
+  @debug.assert_eq(input_rain.weather, @model.Weather::Rain)
+  let input_sand = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Sand)
+  @debug.assert_eq(input_sand.weather, @model.Weather::Sand)
+  let input_snow = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Snow)
+  @debug.assert_eq(input_snow.weather, @model.Weather::Snow)
+}

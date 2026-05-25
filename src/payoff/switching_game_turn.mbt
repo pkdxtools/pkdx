@@ -203,6 +203,7 @@ fn resolve_attacker_leg(
     atk_burn=attacker_burn,
     atk_item_consumed=atk_consumed,
     def_item_consumed=def_consumed,
+    weather=ws.weather,
   )
   apply_damage_variants_fanout(
     pre_damage_state,
@@ -686,6 +687,7 @@ pub fn transition_with_cache(
         atk_burn=attacker_burn,
         atk_item_consumed=atk_item_consumed,
         def_item_consumed=def_item_consumed,
+        weather=base_state.weather,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -1105,6 +1107,7 @@ fn partial_act_outcomes(
         atk_burn=attacker_burn,
         atk_item_consumed=atk_item_consumed,
         def_item_consumed=def_item_consumed,
+        weather=base_state.weather,
       )
       apply_damage_variants_fanout(
         base_state,

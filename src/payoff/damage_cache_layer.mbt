@@ -27,6 +27,13 @@ pub(all) struct DamageKey {
   // item, so resist berries don't double-halve the second hit.
   atk_item_consumed : Bool
   def_item_consumed : Bool
+  // Stage B (healing-moves plan): battle weather. Sun / Rain / Sand / Snow
+  // produce different damage values for weather-sensitive moves (fire /
+  // water 1.5x under Sun / Rain, Snow's Ice-type SpD boost, Sand's Rock
+  // SpD boost, WeatherBall typing/power). Without weather in the key,
+  // a single matchup cached pre-weather-change would shadow every
+  // post-weather-change lookup for the rest of the switching-game run.
+  weather : @model.Weather
 } derive(Eq, Hash)
 
 ///|
@@ -99,8 +106,9 @@ pub fn new_damage_cache(
 ///   * `move_` (`Move`) — keyed by `mv.name`. Move rows are 1:1 with name
 ///     per version, so power / type / category / accuracy follow.
 ///   * `atk_ability` / `def_ability` / `atk_item` / `def_item` — encoded.
-///   * `weather` / `field` — canonicalized to "": payoff always passes
-///     `Weather::None` / `Field::None` via `build_input_with_ranks`.
+///   * `weather` — encoded via Stage B (Japanese jp label "" / はれ / あめ /
+///     すなあらし / ゆき). `field` — canonicalized to "": payoff always
+///     passes `Field::None` via `build_input_with_ranks`.
 ///   * `tera_type` — encoded (attacker only; `calc_damage` does not read a
 ///     defender tera, so there is no `def_tera` to encode).
 ///   * `critical` — always false in payoff (we model expected damage, not
@@ -128,11 +136,27 @@ fn combatant_to_cache_key_input(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> @damage_cache.CacheKeyInput {
-  let input = build_input_with_ranks(atk, dfn, mv, atk_rank, def_rank)
+  let input = build_input_with_ranks(
+    atk, dfn, mv, atk_rank, def_rank, weather~,
+  )
   let version_str = match atk.stat_system {
     @model.Champions => "champions"
     @model.Standard => "scarlet_violet"
+  }
+  // Use the canonical Japanese weather labels already stored in pokedex.db
+  // (`local_waza_weather`) so L2 disk entries written by `pkdx damage`
+  // (which feeds the same labels via the CLI) and by the payoff layer
+  // share identity. `Weather::None` collapses to "" so legacy v3 disk
+  // entries (pre-Stage B, written under `weather=""`) remain readable for
+  // weatherless matchups.
+  let weather_str = match weather {
+    @model.Weather::None => ""
+    @model.Weather::Sun => "はれ"
+    @model.Weather::Rain => "あめ"
+    @model.Weather::Sand => "すなあらし"
+    @model.Weather::Snow => "ゆき"
   }
   let atk_nature_str = match atk.nature {
     Some(n) => n.name_ja
@@ -152,7 +176,7 @@ fn combatant_to_cache_key_input(
     def_ability: dfn.ability,
     atk_item: atk.item,
     def_item: dfn.item,
-    weather: "",
+    weather: weather_str,
     field: "",
     tera_type: atk.tera_type,
     critical: false,
@@ -223,6 +247,7 @@ fn mean_damage_via_disk(
   atk_burn~ : Bool = false,
   atk_ranks_full~ : Array[Int]? = None,
   def_ranks_full~ : Array[Int]? = None,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Int {
   // 反射技は L2 disk を経由しない。@damage.calc_damage に incoming=None で
   // 渡すと反射 fallback が走り 0 ダメージの JSON が書き込まれてしまうため、
@@ -235,6 +260,7 @@ fn mean_damage_via_disk(
       atk_burn=atk_burn,
       atk_ranks_full~,
       def_ranks_full~,
+      weather~,
     )
   }
   let disk = match cache.disk {
@@ -242,16 +268,18 @@ fn mean_damage_via_disk(
     None =>
       return compute_mean_damage(
         attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+        weather~,
       )
   }
   let key_input = combatant_to_cache_key_input(
-    attacker, defender, mv, atk_rank, def_rank,
+    attacker, defender, mv, atk_rank, def_rank, weather~,
   )
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
     Err(_) =>
       return compute_mean_damage(
         attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+        weather~,
       )
   }
   match @damage_cache.get(disk, key) {
@@ -270,6 +298,7 @@ fn mean_damage_via_disk(
           compute_and_populate_disk(
             disk, key, attacker, defender, mv, atk_rank, def_rank,
             atk_burn=atk_burn,
+            weather~,
           )
         }
       }
@@ -278,6 +307,7 @@ fn mean_damage_via_disk(
       compute_and_populate_disk(
         disk, key, attacker, defender, mv, atk_rank, def_rank,
         atk_burn=atk_burn,
+        weather~,
       )
     }
   }
@@ -302,8 +332,11 @@ fn compute_and_populate_disk(
   atk_rank : Int,
   def_rank : Int,
   atk_burn~ : Bool = false,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Int {
-  let input = build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank)
+  let input = build_input_with_ranks(
+    attacker, defender, mv, atk_rank, def_rank, weather~,
+  )
   let r = @damage.calc_damage(input)
   let json_format = @cli.parse_output_format("json")
   let json = @cli.format_damage(r, input, json_format)
@@ -341,6 +374,7 @@ fn prepare_damage_lookup(
   atk_burn : Bool,
   atk_item_consumed : Bool,
   def_item_consumed : Bool,
+  weather : @model.Weather,
 ) -> (Bool, DamageKey, Combatant, Combatant, @model.Move) {
   let raw_attacker_full = if my_attacker {
     my_team[atk_idx]
@@ -382,6 +416,7 @@ fn prepare_damage_lookup(
       atk_burn,
       atk_item_consumed,
       def_item_consumed,
+      weather,
     }
     return (true, dummy_key, raw_attacker, raw_defender, mv)
   }
@@ -407,6 +442,7 @@ fn prepare_damage_lookup(
     atk_burn,
     atk_item_consumed,
     def_item_consumed,
+    weather,
   }
   (false, key, raw_attacker, raw_defender, mv)
 }
@@ -431,6 +467,7 @@ pub fn mean_damage_cached(
   atk_burn~ : Bool = false,
   atk_item_consumed~ : Bool = false,
   def_item_consumed~ : Bool = false,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Int {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -446,6 +483,7 @@ pub fn mean_damage_cached(
     atk_burn,
     atk_item_consumed,
     def_item_consumed,
+    weather,
   )
   if early {
     return 0
@@ -474,6 +512,7 @@ pub fn mean_damage_cached(
             atk_burn=atk_burn,
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
+            weather~,
           )
         None =>
           compute_mean_damage(
@@ -485,6 +524,7 @@ pub fn mean_damage_cached(
             atk_burn=atk_burn,
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
+            weather~,
           )
       }
       cache.data[key] = v
@@ -522,6 +562,7 @@ fn damage_variants_cached(
   atk_burn~ : Bool = false,
   atk_item_consumed~ : Bool = false,
   def_item_consumed~ : Bool = false,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Array[@model.DamageOutcome] {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -537,6 +578,7 @@ fn damage_variants_cached(
     atk_burn,
     atk_item_consumed,
     def_item_consumed,
+    weather,
   )
   if early {
     return [{ probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] }]
@@ -559,6 +601,7 @@ fn damage_variants_cached(
         atk_burn=atk_burn,
         atk_ranks_full=Some(atk_ranks),
         def_ranks_full=Some(def_ranks),
+        weather~,
       )
       cache.variants_data[key] = v
       // Touch the L2 disk cache so cross-session damage entries stay
@@ -580,6 +623,7 @@ fn damage_variants_cached(
             atk_burn=atk_burn,
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
+            weather~,
           )
         }
         None => ()

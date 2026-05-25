@@ -652,6 +652,7 @@ fn compute_mean_damage(
   atk_burn~ : Bool = false,
   atk_ranks_full~ : Array[Int]? = None,
   def_ranks_full~ : Array[Int]? = None,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Int {
   weighted_mean_floor(
     compute_damage_variants(
@@ -659,6 +660,7 @@ fn compute_mean_damage(
       atk_burn~,
       atk_ranks_full~,
       def_ranks_full~,
+      weather~,
     ),
   )
 }
@@ -685,6 +687,7 @@ fn compute_damage_variants(
   allow_reflect~ : Bool = true,
   atk_ranks_full~ : Array[Int]? = None,
   def_ranks_full~ : Array[Int]? = None,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -709,12 +712,13 @@ fn compute_damage_variants(
           atk_burn~,
           atk_ranks_full~,
           def_ranks_full~,
+          weather~,
         )
       None => ()
     }
   }
   let r = @damage.calc_damage(
-    build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank),
+    build_input_with_ranks(attacker, defender, mv, atk_rank, def_rank, weather~),
   )
   if r.is_immune {
     return [
@@ -763,6 +767,7 @@ fn reflect_damage_outcomes(
   atk_burn~ : Bool,
   atk_ranks_full~ : Array[Int]? = None,
   def_ranks_full~ : Array[Int]? = None,
+  weather~ : @model.Weather = @model.Weather::None,
 ) -> Array[@model.DamageOutcome] {
   let _ = atk_burn
   // Type immunity check: reflect move's own type vs the OPPONENT (defender,
@@ -831,6 +836,7 @@ fn reflect_damage_outcomes(
       defender, attacker, mv_i, step1_atk_rank, step1_def_rank,
       atk_burn=false,
       allow_reflect=false,
+      weather~,
     )
     let step1_mean = avg_mean_damage(step1_outcomes)
     let p_slow_i = compute_p_slow(kind, mv_i, attacker, defender)

@@ -431,6 +431,95 @@ test "maybe_apply_status_fanout: Misty field blocks Sleep" {
 }
 
 // =================================================================
+// G-2-H (#143 review): Electric Terrain sleep block in
+// maybe_apply_status_fanout
+//
+// エレキフィールドは grounded を「眠らせない」効果のみを持つため、ねむり
+// (SleepKind) と あくび予告 (DrowsyKind) だけを阻止し、まひ / やけど / どく
+// 等は通常通り入る。Misty (全状態阻止) との差分を pin する。grounded gate は
+// Misty と同一経路 (`field_blocks_status` + `is_grounded`)。
+// =================================================================
+
+///|
+/// Case G-2-H-A: エレキフィールド + grounded defender への 75% sleep 技は
+/// 阻止される (1 leaf, no status — 確率分岐も出ない)。
+test "maybe_apply_status_fanout: Electric field blocks Sleep on grounded defender" {
+  let state0 = mk_field_eff_state()
+  let state = {
+    ..state0,
+    field: @model.Field::Electric,
+    field_turns_left: 5,
+  }
+  let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let mv = mk_status_move("ねむりごな", "くさ", @model.SleepKind, 75)
+  let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
+  @debug.assert_eq(leaves.length(), 1)
+  let (p, s) = leaves[0]
+  @debug.assert_eq(p, 1.0)
+  @debug.assert_eq(s.opp_status[0], @model.None)
+}
+
+///|
+/// Case G-2-H-B: エレキフィールド + grounded defender への あくび (Drowsy 予告)
+/// も阻止される (Yawn は grounded を眠らせる予告なので Electric 下で fizzle)。
+test "maybe_apply_status_fanout: Electric field blocks Drowsy (Yawn) on grounded defender" {
+  let state0 = mk_field_eff_state()
+  let state = {
+    ..state0,
+    field: @model.Field::Electric,
+    field_turns_left: 5,
+  }
+  let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let mv = mk_status_move("あくび", "ノーマル", @model.DrowsyKind, 100)
+  let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
+  @debug.assert_eq(leaves.length(), 1)
+  let (p, s) = leaves[0]
+  @debug.assert_eq(p, 1.0)
+  @debug.assert_eq(s.opp_status[0], @model.None)
+}
+
+///|
+/// Case G-2-H-C: エレキフィールド + grounded defender でも paralyze は阻止
+/// されない (Electric は sleep 限定)。でんじは 100% で Paralyze が付与される。
+/// Misty (全状態阻止) との決定的な差分。
+test "maybe_apply_status_fanout: Electric field does NOT block Paralyze on grounded defender" {
+  let state0 = mk_field_eff_state()
+  let state = {
+    ..state0,
+    field: @model.Field::Electric,
+    field_turns_left: 5,
+  }
+  let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
+  let mv = mk_status_move("でんじは", "でんき", @model.ParalyzeKind, 100)
+  let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
+  @debug.assert_eq(leaves.length(), 1)
+  let (_, s) = leaves[0]
+  @debug.assert_eq(s.opp_status[0], @model.Paralyze)
+}
+
+///|
+/// Case G-2-H-D: エレキフィールド + 非 grounded (ひこう) defender への sleep は
+/// 阻止されない (Electric の sleep block は grounded 限定)。100% sleep 技で
+/// Sleep(2) が付与される。
+test "maybe_apply_status_fanout: Electric field does NOT block Sleep on airborne defender" {
+  let state0 = mk_field_eff_state()
+  let state = {
+    ..state0,
+    field: @model.Field::Electric,
+    field_turns_left: 5,
+  }
+  let opp_team = [
+    mk_field_eff_combatant(type1="ノーマル", type2="ひこう"),
+    mk_field_eff_combatant(),
+  ]
+  let mv = mk_status_move("ねむらせる", "エスパー", @model.SleepKind, 100)
+  let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
+  @debug.assert_eq(leaves.length(), 1)
+  let (_, s) = leaves[0]
+  @debug.assert_eq(s.opp_status[0], @model.Sleep(2))
+}
+
+// =================================================================
 // G-3: Psychic priority block in resolve_attacker_leg
 //
 // state.field == Psychic AND is_grounded(defender) AND mv.priority > 0 なら

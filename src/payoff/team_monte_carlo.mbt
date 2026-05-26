@@ -286,6 +286,17 @@ fn team_apply_post_hit(
   let attacker_ability = attacker_team[attacker_active].ability
   let defender_ability = defender_team[defender_active].ability
   let weather = weather_state[0]
+  // Stage H (terrain × sleep): Rest がエレキ / ミストフィールド下で grounded
+  // 使用者に失敗する DP 挙動を MC でも再現する。MC は mega を模さないため raw
+  // combatant で grounded を解く (DP の `effective_combatant(_, false)` に相当
+  // — mc_psychic_priority_blocked と同方針)。field は現在の field_state[0]。
+  let attacker_c = attacker_team[attacker_active]
+  let attacker_grounded = @damage.is_grounded(
+    type1=attacker_c.pokemon.type1,
+    type2=attacker_c.pokemon.type2,
+    ability=attacker_c.ability,
+    item=attacker_c.item,
+  )
   apply_healing(
     mv,
     attacker_active,
@@ -296,6 +307,8 @@ fn team_apply_post_hit(
     attacker_ability,
     dmg,
     defender_ability,
+    field=field_state[0],
+    attacker_grounded~,
   )
   // Stage 13: LeechSeed 植え付け (apply_healing は attacker 側バッファしか
   // 触れない設計なので、defender_leech_seeded への書き込みは専用パス)。
@@ -552,19 +565,19 @@ fn mc_try_apply_status(
   if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
     return
   }
-  // Stage H: Misty Terrain は grounded defender への状態異常付与を全て阻止
-  // する (DP `maybe_apply_status_fanout` Stage G-2 と semantics 一致)。
-  match field {
-    @model.Field::Misty =>
-      if @damage.is_grounded(
-          type1=c.pokemon.type1,
-          type2=c.pokemon.type2,
-          ability=c.ability,
-          item=c.item,
-        ) {
-        return
-      }
-    _ => ()
+  // Stage H: terrain (Misty / Electric) は grounded defender への状態異常付与を
+  // 阻止する (DP `maybe_apply_status_fanout` Stage G-2 / H と semantics 一致)。
+  // 阻止対象 kind は `field_blocks_status` に集約: Misty は全状態、Electric は
+  // ねむり / あくび予告 のみ。MC は mega を模さないため raw combatant で判定。
+  if field_blocks_status(field, kind) {
+    if @damage.is_grounded(
+        type1=c.pokemon.type1,
+        type2=c.pokemon.type2,
+        ability=c.ability,
+        item=c.item,
+      ) {
+      return
+    }
   }
   if !(rand_bool(rng, chance.to_double() / 100.0)) {
     return

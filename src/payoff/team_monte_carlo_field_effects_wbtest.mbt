@@ -69,6 +69,75 @@ test "mc_try_apply_status: Misty Terrain does not block airborne defender" {
 }
 
 ///|
+/// **Case M-3 (Electric Terrain blocks sleep on grounded — direct)**: #143
+/// review parity. エレキフィールドは grounded を眠らせないため、grounded
+/// defender への 100% sleep 技は status を付与しない。field=None では Sleep(2)
+/// が付与される。DP `maybe_apply_status_fanout` の Electric sleep block (Case
+/// G-2-H-A) と一致する MC 側 pin。
+test "mc_try_apply_status: Electric Terrain blocks sleep on grounded defender" {
+  let grounded = mk_pokemon("Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let spore = mk_move(
+    "ねむらせる", "エスパー", @model.Status, 0,
+    status_effect=Some((@model.SleepKind, 100)),
+  )
+  let def_team = [mk_combatant(grounded, [spore])]
+  let hps = [200]
+  let rng = seeded_rng(1UL)
+  // Electric + grounded + sleep → 阻止 (None のまま)。
+  let st_electric : Array[@model.StatusCondition] = [@model.None]
+  mc_try_apply_status(
+    rng, spore, def_team, hps, st_electric, 0, field=@model.Field::Electric,
+  )
+  @debug.assert_eq(st_electric[0], @model.None)
+  // None field → Sleep(2) が付与される。
+  let st_none : Array[@model.StatusCondition] = [@model.None]
+  mc_try_apply_status(
+    rng, spore, def_team, hps, st_none, 0, field=@model.Field::None,
+  )
+  @debug.assert_eq(st_none[0], @model.Sleep(2))
+}
+
+///|
+/// **Case M-4 (Electric Terrain does not block paralyze — direct)**: Electric は
+/// sleep 限定の阻止なので、grounded defender への 100% paralyze は通常通り入る。
+/// Misty (全状態阻止) との決定的差分を MC でも pin。DP Case G-2-H-C と一致。
+test "mc_try_apply_status: Electric Terrain does not block paralyze on grounded defender" {
+  let grounded = mk_pokemon("Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let thunderwave = mk_move(
+    "でんじは", "でんき", @model.Status, 0,
+    status_effect=Some((@model.ParalyzeKind, 100)),
+  )
+  let def_team = [mk_combatant(grounded, [thunderwave])]
+  let hps = [200]
+  let rng = seeded_rng(1UL)
+  let st : Array[@model.StatusCondition] = [@model.None]
+  mc_try_apply_status(
+    rng, thunderwave, def_team, hps, st, 0, field=@model.Field::Electric,
+  )
+  @debug.assert_eq(st[0], @model.Paralyze)
+}
+
+///|
+/// **Case M-5 (Electric Terrain does not block airborne sleep — direct)**:
+/// Electric の sleep block は grounded 限定。ひこう (= 非 grounded) には Electric
+/// 下でも sleep が付与される。DP Case G-2-H-D と一致。
+test "mc_try_apply_status: Electric Terrain does not block sleep on airborne defender" {
+  let flyer = mk_pokemon("Flyer", "ひこう", "", 200, 100, 100, 100, 100, 100)
+  let spore = mk_move(
+    "ねむらせる", "エスパー", @model.Status, 0,
+    status_effect=Some((@model.SleepKind, 100)),
+  )
+  let def_team = [mk_combatant(flyer, [spore])]
+  let hps = [200]
+  let rng = seeded_rng(1UL)
+  let st : Array[@model.StatusCondition] = [@model.None]
+  mc_try_apply_status(
+    rng, spore, def_team, hps, st, 0, field=@model.Field::Electric,
+  )
+  @debug.assert_eq(st[0], @model.Sleep(2))
+}
+
+///|
 /// **Case P-1 (Psychic priority block — direct, deterministic)**: priority>0 の
 /// 技は grounded defender に対し Psychic Terrain で無効化される。priority<=0 /
 /// Field != Psychic / 非 grounded defender の各境界では false を返す。DP

@@ -757,6 +757,79 @@ test "apply_healing: Magic Guard does NOT block Rest (Sleep is inflicted)" {
   @debug.assert_eq(status[0], @model.Sleep(2))
 }
 
+// -----------------------------------------------------------------
+// Stage H (terrain × sleep): エレキ / ミストフィールド下で grounded な
+// 使用者は Rest で眠れず失敗する (HP も status も不変)。grounded 判定は
+// caller が解決して `attacker_grounded` で渡す。apply_healing は DP /
+// MC 両方が共有するため、ここでの pin は両 value path の parity を兼ねる。
+// -----------------------------------------------------------------
+
+///|
+/// Case R-8: エレキフィールド + grounded 使用者の Rest は失敗 (HP=1 / Burn の
+/// まま不変)。`attacker_grounded=true` を渡す。
+test "apply_healing: Rest fails on grounded user under Electric Terrain" {
+  let hps = [1, 100]
+  let status : Array[@model.StatusCondition] = [@model.Burn, @model.None]
+  let mv = mk_rest_move()
+  apply_healing(
+    mv, 0, hps, 100, @model.Weather::None, status, "", 0, "",
+    field=@model.Field::Electric,
+    attacker_grounded=true,
+  )
+  @debug.assert_eq(hps[0], 1)
+  @debug.assert_eq(status[0], @model.Burn)
+}
+
+///|
+/// Case R-9: ミストフィールド + grounded 使用者の Rest も同様に失敗。Misty は
+/// 全状態異常を阻止するため Sleep 付与の Rest が unfire になる。
+test "apply_healing: Rest fails on grounded user under Misty Terrain" {
+  let hps = [1, 100]
+  let status : Array[@model.StatusCondition] = [@model.Burn, @model.None]
+  let mv = mk_rest_move()
+  apply_healing(
+    mv, 0, hps, 100, @model.Weather::None, status, "", 0, "",
+    field=@model.Field::Misty,
+    attacker_grounded=true,
+  )
+  @debug.assert_eq(hps[0], 1)
+  @debug.assert_eq(status[0], @model.Burn)
+}
+
+///|
+/// Case R-10: エレキフィールド でも **非 grounded** (ひこう / ふゆう / ふうせん
+/// で浮いている) 使用者は眠れるので Rest は通常通り成功する。grounded gate が
+/// `attacker_grounded` に正しく依存していることの境界 pin。
+test "apply_healing: Rest succeeds on airborne user under Electric Terrain" {
+  let hps = [1, 100]
+  let status : Array[@model.StatusCondition] = [@model.Burn, @model.None]
+  let mv = mk_rest_move()
+  apply_healing(
+    mv, 0, hps, 100, @model.Weather::None, status, "", 0, "",
+    field=@model.Field::Electric,
+    attacker_grounded=false,
+  )
+  @debug.assert_eq(hps[0], 100)
+  @debug.assert_eq(status[0], @model.Sleep(2))
+}
+
+///|
+/// Case R-11: グラスフィールド / サイコフィールド は sleep を阻止しないため、
+/// grounded 使用者でも Rest は成功する (Misty / Electric 以外では gate が
+/// 発火しないことの境界 pin)。
+test "apply_healing: Rest succeeds on grounded user under Grassy Terrain" {
+  let hps = [1, 100]
+  let status : Array[@model.StatusCondition] = [@model.Burn, @model.None]
+  let mv = mk_rest_move()
+  apply_healing(
+    mv, 0, hps, 100, @model.Weather::None, status, "", 0, "",
+    field=@model.Field::Grassy,
+    attacker_grounded=true,
+  )
+  @debug.assert_eq(hps[0], 100)
+  @debug.assert_eq(status[0], @model.Sleep(2))
+}
+
 // =================================================================
 // Stage 8: Drain + Liquid Ooze (ヘドロえき) 反転
 // =================================================================
@@ -2677,15 +2750,19 @@ test "apply_eot: Sand chip skipped by マジックガード" {
 }
 
 ///|
-/// Sand チップは すなかき / すながくれ / すなのちから / すなおこし も block。
-test "apply_eot: Sand chip skipped by sand-related abilities" {
+/// Sand チップは すなかき / すながくれ / すなのちから が block する。一方
+/// すなおこし (Sand Stream) は砂を**呼ぶ**だけで chip 免疫を持たないため、
+/// 非免疫タイプ (ここでは素ノーマル) の すなおこし 持ちは通常通り max/16 を
+/// 失う。本家ユーザー (バンギラス等) はタイプ免疫で守られるが、それは call
+/// site の type 判定であってこの ability では守られない。
+test "apply_eot: Sand chip skipped by sand-related abilities (not すなおこし)" {
   let mut state = mk_seed_state()
   state = { ..state, weather: @model.Sand, weather_turns_left: 5 }
   let my_team = [mk_seed_combatant(ability="すなかき"), mk_seed_combatant()]
   let opp_team = [mk_seed_combatant(ability="すなおこし"), mk_seed_combatant()]
   let new_state = apply_eot(state, my_team, opp_team)
-  @debug.assert_eq(new_state.my_hps[0], 100)
-  @debug.assert_eq(new_state.opp_hps[0], 100)
+  @debug.assert_eq(new_state.my_hps[0], 100) // すなかき で免疫
+  @debug.assert_eq(new_state.opp_hps[0], 94) // すなおこし は免疫なし → max/16 減
 }
 
 ///|

@@ -120,6 +120,37 @@ pub fn per_side_attempt(
 pub const TOXIC_MAX_TICKS : Int = 15
 
 ///|
+/// Return `true` when `field` prevents a status of `kind` from being applied
+/// to a **grounded** Pokemon. The grounded check itself is the caller's
+/// responsibility (it needs the post-mega type/ability/item) — this helper
+/// only encodes the field → status-kind truth table:
+///
+///   - ミストフィールド (Misty): blocks every status the model carries
+///     (まひ / やけど / どく / もうどく / ねむり / あくび予告) — mainline
+///     「状態異常にならない」.
+///   - エレキフィールド (Electric): blocks sleep only — direct ねむり
+///     (SleepKind) と あくび の予告 (DrowsyKind)。他の状態異常は通常通り入る。
+///   - Grassy / Psychic / None: no status block.
+///
+/// Shared SSoT for the DP status fanout (`maybe_apply_status_fanout`), the DP
+/// Rest path (`apply_healing`), and the MC status roll (`mc_try_apply_status`)
+/// so terrain semantics stay identical across the two value paths.
+pub fn field_blocks_status(
+  field : @model.Field,
+  kind : @model.StatusKind,
+) -> Bool {
+  match field {
+    @model.Field::Misty => true
+    @model.Field::Electric =>
+      match kind {
+        SleepKind | DrowsyKind => true
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
 /// Produce probabilistic next-state outcomes for a status-effect fan-out.
 /// Given `state_after_dmg` (already updated for damage and stat boosts) plus
 /// the attacking `move` and the target slot, returns either a single 1.0
@@ -161,35 +192,35 @@ pub fn maybe_apply_status_fanout(
   ) {
     return [(1.0, state)]
   }
-  // Stage G-2: Misty field blocks status infliction on grounded defenders.
-  // 対象は major status (まひ / やけど / どく / もうどく / ねむり / こおり) +
-  // confusion (こんらん) すべて。フリーズドライによる凍りも防ぐ。Gen9 mainline
-  // 仕様 — Misty Surge / ミストフィールド の効果テキスト「状態異常にならない」。
+  // Stage G-2 / H: terrain blocks status infliction on grounded defenders.
+  // ミストフィールド は major status (まひ / やけど / どく / もうどく / ねむり /
+  // こおり) + confusion (こんらん) を全て阻止 (Misty Surge の「状態異常に
+  // ならない」)。エレキフィールド は grounded を眠らせない効果しか持たないため
+  // ねむり (SleepKind) と あくび予告 (DrowsyKind) のみ阻止する。どの field ×
+  // kind が阻止対象かは `field_blocks_status` に集約 (DP / MC 共通 SSoT)。Gen9
+  // mainline 仕様。
   //
   // Mega 後の type/ability/item を反映するため `effective_combatant` 経由で
   // grounded 判定する (Mega Gengar はメガ後にふゆうが消えて grounded になる等)。
   // grounded SSoT は `@damage.is_grounded` (Stage F-1)。
   // `target_megaed` は target_is_me に応じて my_megaed / opp_megaed を選ぶ。
-  match state.field {
-    @model.Field::Misty => {
-      let target_megaed = if target_is_me {
-        state.my_megaed
-      } else {
-        state.opp_megaed
-      }
-      let is_mega = target_slot < target_megaed.length() &&
-        target_megaed[target_slot]
-      let eff = effective_combatant(combatant, is_mega)
-      if @damage.is_grounded(
-          type1=eff.pokemon.type1,
-          type2=eff.pokemon.type2,
-          ability=eff.ability,
-          item=eff.item,
-        ) {
-        return [(1.0, state)]
-      }
+  if field_blocks_status(state.field, kind) {
+    let target_megaed = if target_is_me {
+      state.my_megaed
+    } else {
+      state.opp_megaed
     }
-    _ => ()
+    let is_mega = target_slot < target_megaed.length() &&
+      target_megaed[target_slot]
+    let eff = effective_combatant(combatant, is_mega)
+    if @damage.is_grounded(
+        type1=eff.pokemon.type1,
+        type2=eff.pokemon.type2,
+        ability=eff.ability,
+        item=eff.item,
+      ) {
+      return [(1.0, state)]
+    }
   }
   // #91 Phase 2-C: per-hit independent secondary roll. p_per_hit = chance/100,
   // p_set after `hits_count` hits = 1 - (1 - p_per_hit)^hits_count. hits_count
@@ -962,7 +993,7 @@ pub fn apply_eot(
   // === Step 1: 天候ダメ (Sand chip) ===
   // Gen9 Sand deals max/16 chip damage at EOT to every active Pokemon that is
   // not はがね / いわ / じめん and whose ability does not block it (Magic
-  // Guard / すなかき / すながくれ / すなのちから / すなおこし). Type lookup
+  // Guard / すなかき / すながくれ / すなのちから / ぼうじん). Type lookup
   // uses `effective_combatant` so the post-mega type pair is honoured —
   // an Aerodactyl that megas into Rock-typed form will not take Sand chip on
   // the same turn it megas (and pre-mega it was Rock anyway, so this is
@@ -1434,6 +1465,16 @@ pub fn sub_hp_floor0(hps : Array[Int], slot : Int, amount : Int) -> Unit {
 /// FixedFraction / WeatherDependent / Rest は `dmg` / `defender_ability` を
 /// 参照しない。
 ///
+/// 引数 `field` / `attacker_grounded` は Stage H (terrain × sleep) で追加。
+/// エレキフィールド / ミストフィールド 下で grounded な使用者は Rest で
+/// 眠れず失敗する (HP も status も不変) — `field_blocks_status(field,
+/// SleepKind)` が阻止対象を判定し、`attacker_grounded` が grounded 条件を
+/// 与える。grounded 判定は mega 後の type/ability/item を要するため caller が
+/// 解決して渡す (apply_healing 内では mega 解決経路を再通しない)。Rest 以外の
+/// バリアントは `field` / `attacker_grounded` を参照しない。両引数のデフォルト
+/// (`Field::None` / `true`) では `field_blocks_status` が false を返すため
+/// 既存挙動と完全に一致する (terrain を渡さない呼び出しは無影響)。
+///
 /// `with_post_hit_effects` の末尾、`self_ko` の手前で呼ばれる。`self_ko`
 /// 側で attacker HP を 0 にする本家挙動を妨げないよう、必ず先に回復してから
 /// `self_ko` が後勝ちで HP を 0 化する。
@@ -1447,6 +1488,8 @@ pub fn apply_healing(
   attacker_ability : String,
   dmg : Int,
   defender_ability : String,
+  field~ : @model.Field = @model.Field::None,
+  attacker_grounded~ : Bool = true,
 ) -> Unit {
   match mv.healing {
     None => ()
@@ -1494,6 +1537,14 @@ pub fn apply_healing(
       // immunity であって status immunity ではない) ので、ability_blocks_status
       // の truth table から意図的に外している (ability_immunity.mbt 参照)。
       if ability_blocks_status(attacker_ability, @model.SleepKind) {
+        return
+      }
+      // エレキフィールド / ミストフィールド 下で grounded な使用者は眠れない
+      // ため Rest が「ねむれない！」で失敗し、HP も status も不変。grounded
+      // 判定は caller が mega 後形態で解決して `attacker_grounded` で渡す。
+      // field → kind の阻止表は `field_blocks_status` に集約しており、DP の
+      // status fanout / MC の status roll と完全に同一 semantics になる。
+      if attacker_grounded && field_blocks_status(field, @model.SleepKind) {
         return
       }
       // 本家挙動: HP が既に max のとき Rest は「体力がいっぱいで眠れない」で

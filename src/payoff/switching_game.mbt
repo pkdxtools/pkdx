@@ -1182,6 +1182,25 @@ fn with_post_hit_effects(
   // mega 解決経路を再通する必要はない。
   let attacker_ability = attacker_team[attacker_active].ability
   let defender_ability = defender_team[defender_active].ability
+  // Stage H (terrain × sleep): Rest がエレキ / ミストフィールド下で grounded
+  // 使用者に失敗する判定のため `state.field` と attacker の grounded 状態を
+  // 渡す。grounded は mega 後の type/ability/item で解くため、status fanout
+  // (`maybe_apply_status_fanout`) と同じく attacker 側 megaed を見て
+  // `effective_combatant` 経由で評価する (Mega Gengar が grounded 化する等)。
+  let attacker_megaed = if attacker_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let atk_is_mega = attacker_active < attacker_megaed.length() &&
+    attacker_megaed[attacker_active]
+  let atk_eff = effective_combatant(attacker_team[attacker_active], atk_is_mega)
+  let attacker_grounded = @damage.is_grounded(
+    type1=atk_eff.pokemon.type1,
+    type2=atk_eff.pokemon.type2,
+    ability=atk_eff.ability,
+    item=atk_eff.item,
+  )
   apply_healing(
     mv,
     attacker_active,
@@ -1192,6 +1211,8 @@ fn with_post_hit_effects(
     attacker_ability,
     dmg,
     defender_ability,
+    field=state.field,
+    attacker_grounded~,
   )
   // Stage 9 (LeechSeed planting): `apply_healing` は attacker 側のバッファ
   // (HP / status) しか書き換えられない設計だが、LeechSeed は defender 側の

@@ -126,22 +126,25 @@ test "ability_reverses_drain_other_abilities_return_false" {
 }
 
 ///|
-/// Magic Guard / Sand Rush / Sand Veil / Sand Force / Sand Stream / Overcoat
-/// all hold implicit sandstorm immunity in mainline behaviour. Type-based
-/// immunity (はがね / いわ / じめん) is enforced at the call site, not
-/// through this helper, so the truth table here only enumerates ability-side
-/// blockers.
+/// Magic Guard / Sand Rush / Sand Veil / Sand Force / Overcoat all hold
+/// implicit sandstorm immunity in mainline behaviour. Type-based immunity
+/// (はがね / いわ / じめん) is enforced at the call site, not through this
+/// helper, so the truth table here only enumerates ability-side blockers.
 test "ability_blocks_sand_damage_truth_table" {
   @debug.assert_eq(ability_blocks_sand_damage("マジックガード"), true)
   @debug.assert_eq(ability_blocks_sand_damage("すなかき"), true)
   @debug.assert_eq(ability_blocks_sand_damage("すながくれ"), true)
   @debug.assert_eq(ability_blocks_sand_damage("すなのちから"), true)
-  @debug.assert_eq(ability_blocks_sand_damage("すなおこし"), true)
   @debug.assert_eq(ability_blocks_sand_damage("ぼうじん"), true)
 }
 
 ///|
+/// すなおこし (Sand Stream) only *summons* sand — it does not itself grant
+/// sandstorm chip immunity, so the helper must return false. Its canonical
+/// users (バンギラス / カバルドン / ギガイアス 等) are Rock / Ground and are
+/// covered by the type-immunity check at the call site, never by this helper.
 test "ability_blocks_sand_damage_other_abilities_return_false" {
+  @debug.assert_eq(ability_blocks_sand_damage("すなおこし"), false)
   @debug.assert_eq(ability_blocks_sand_damage("ふみん"), false)
   @debug.assert_eq(ability_blocks_sand_damage("やるき"), false)
   @debug.assert_eq(ability_blocks_sand_damage("スイートベール"), false)

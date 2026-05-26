@@ -51,18 +51,19 @@ pub fn ability_reverses_drain(ability : String) -> Bool {
 /// Return `true` when the ability suppresses sandstorm chip damage at EOT.
 /// Mirrors the mainline immunity set: マジックガード (Magic Guard) blocks all
 /// indirect damage including sandstorm; すなかき (Sand Rush) / すながくれ
-/// (Sand Veil) / すなのちから (Sand Force) / すなおこし (Sand Stream) hold
-/// implicit weather immunity; ぼうじん (Overcoat) is the Gen6+ dust/sand
-/// blocker that also nullifies sandstorm chip. Type-based immunity
-/// (はがね / いわ / じめん) is handled at the call site against the
-/// post-mega type pair returned by `effective_combatant`.
+/// (Sand Veil) / すなのちから (Sand Force) hold implicit sandstorm immunity;
+/// ぼうじん (Overcoat) is the Gen6+ dust/sand blocker that also nullifies
+/// sandstorm chip. すなおこし (Sand Stream) only *summons* sand — it grants
+/// no chip immunity of its own, so it is intentionally absent here; its
+/// canonical users are Rock / Ground and covered by the type check at the
+/// call site. Type-based immunity (はがね / いわ / じめん) is handled at the
+/// call site against the post-mega type pair returned by `effective_combatant`.
 pub fn ability_blocks_sand_damage(ability : String) -> Bool {
   match ability {
     "マジックガード" => true
     "すなかき" => true
     "すながくれ" => true
     "すなのちから" => true
-    "すなおこし" => true
     "ぼうじん" => true
     _ => false
   }

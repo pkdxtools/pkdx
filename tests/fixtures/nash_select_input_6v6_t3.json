@@ -3,12 +3,12 @@
     {"name":"TankRec","type1":"ノーマル","type2":"","hp":200,"atk":80,"def":120,"spa":80,"spd":120,"spe":60,"ability":"","item":"","tera":"",
      "moves":[
        {"name":"のしかかり","type":"ノーマル","category":"物理","power":85},
-       {"name":"じこさいせい","type":"ノーマル","category":"変化","power":0,"heal_kind":"fixed_fraction","heal_num":1,"heal_den":2}
+       {"name":"じこさいせい","type":"ノーマル","category":"変化","power":0,"heal_kind":"fixed","heal_num":1,"heal_den":2}
      ]},
     {"name":"SunHealer","type1":"くさ","type2":"","hp":160,"atk":70,"def":90,"spa":120,"spd":90,"spe":100,"ability":"","item":"","tera":"",
      "moves":[
        {"name":"エナジーボール","type":"くさ","category":"特殊","power":90},
-       {"name":"つきのひかり","type":"フェアリー","category":"変化","power":0,"heal_kind":"weather_dependent","heal_num":1,"heal_den":2,"heal_sunny_num":2,"heal_sunny_den":3,"heal_harsh_num":1,"heal_harsh_den":4},
+       {"name":"つきのひかり","type":"フェアリー","category":"変化","power":0,"heal_kind":"weather","heal_num":1,"heal_den":2,"heal_sunny_num":2,"heal_sunny_den":3,"heal_harsh_num":1,"heal_harsh_den":4},
        {"name":"にほんばれ","type":"ほのお","category":"変化","power":0,"weather_set":"sun"}
      ]},
     {"name":"GrassyTerra","type1":"くさ","type2":"フェアリー","hp":170,"atk":110,"def":100,"spa":80,"spd":100,"spe":85,"ability":"","item":"","tera":"",

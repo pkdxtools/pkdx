@@ -361,6 +361,45 @@ test "parse_move_json_reads_field_set" {
 }
 
 ///|
+/// `heal_kind` が present でも正準値 (fixed / weather / drain / rest /
+/// leech_seed / pain_split / wish) でない場合は `InvalidJson` で弾く。回復技を
+/// 黙って非回復として扱うと payoff 行列が静かに変質し、利用者は回復を入れた
+/// つもりで非回復の数値を受け取ってしまうため (PR #143 review)。`fixed_fraction`
+/// は正準値 `fixed` の表記ゆれを模した未知値。
+test "parse_move_json_rejects_unknown_heal_kind" {
+  let raw =
+    #|{
+    #|  "team": [
+    #|    {"name":"A","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"じこさいせい","type":"ノーマル","category":"変化","power":0,"heal_kind":"fixed_fraction","heal_num":1,"heal_den":2}]}
+    #|  ]
+    #|}
+  let team_json = match @json.parse(raw) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => t
+        None => {
+          assert_true(false)
+          return
+        }
+      }
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let msg = try {
+    let _ = parse_team_array(team_json, "team")
+    ""
+  } catch {
+    InvalidJson(msg) => msg
+    e => @debug.to_string(e)
+  }
+  assert_true(msg.contains("unknown healing kind"))
+  assert_true(msg.contains("fixed_fraction"))
+}
+
+///|
 /// Phase 14: ScreenedSwitchingGame(1) returns a SelectResult whose `selections`
 /// / `selection_names` / `row_strategy` are filtered down to retained rows
 /// only. `6 × C(5, 2) = 60` selections on each side × `keep_top = 0.5` →

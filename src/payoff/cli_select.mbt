@@ -58,10 +58,20 @@
 /// 通常運用では `pkdx query` 経由で DB から読まれた値が input JSON に乗るため
 /// この path も DB と同じセマンティクスを保つ必要がある — そのため
 /// `@db.parse_healing` を共有する。
-fn parse_healing_json(m : Map[String, Json]) -> @model.HealingEffect? {
+///
+/// `heal_kind` が present かつ未知の値 (typo / legacy 名) のとき
+/// `@db.parse_healing` は `None` を返すが、ここで黙って回復技を無効化すると
+/// payoff 行列が静かに変質し、利用者は回復技を入れたつもりで非回復として
+/// 計算された結果を受け取ってしまう。select の数値は行列に直接効くので、
+/// `parse_nature_field` と同様に検出可能な入力エラーは raise して気付かせる。
+fn parse_healing_json(
+  m : Map[String, Json],
+  ctx : String,
+) -> @model.HealingEffect? raise NashCliError {
   let kind = match m.get("heal_kind") {
+    None => ""
     Some(String(s)) => s
-    _ => ""
+    Some(_) => raise InvalidJson(ctx + ".heal_kind must be a string")
   }
   if kind == "" {
     return None
@@ -90,7 +100,18 @@ fn parse_healing_json(m : Map[String, Json]) -> @model.HealingEffect? {
     Some(Number(x, ..)) => x.to_int()
     _ => 1
   }
-  @db.parse_healing(kind, n, d, sn, sd, hn, hd)
+  // `kind` は空文字を上で早期 return 済みなので、ここで `None` が返るのは
+  // `@db.parse_healing` が受理しない未知の heal_kind に限られる。
+  match @db.parse_healing(kind, n, d, sn, sd, hn, hd) {
+    Some(h) => Some(h)
+    None =>
+      raise InvalidJson(
+        ctx +
+        ".heal_kind: unknown healing kind \"" +
+        kind +
+        "\" (expected one of fixed / weather / drain / rest / leech_seed / pain_split / wish)",
+      )
+  }
 }
 
 ///|
@@ -153,7 +174,7 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
       // golden / E2E test では DB 接続なしで CLI JSON 経由で move を組み立て
       // たいため、`heal_kind` / `weather_set` キーを optional で受ける。`heal_kind`
       // の値域とパーサは @db.parse_healing と同一 (整合性を確保するため共有)。
-      let healing = parse_healing_json(m)
+      let healing = parse_healing_json(m, ctx)
       let weather_set = match m.get("weather_set") {
         Some(String(s)) => @db.parse_weather_set(s)
         _ => None

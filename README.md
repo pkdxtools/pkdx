@@ -162,6 +162,8 @@ MIT
 |---|---|:---:|---|
 | フォーマット | 3v3 シングル | ✅ | 6匹 → 3匹選出 |
 | フォーマット | ダブル (4v4) | ❌ | 未実装 |
+| Nash 計算 | exact LP simplex solver | ✅ | LP simplex (Phase-1/Phase-2 + Bland's rule) で exact Nash 解。pure-saddle fast path で trivial degenerate ケースを sidestep |
+| Nash 計算 | degenerate matrix fallback | ✅ | `pkdx select` で simplex iteration limit を超えた degenerate payoff matrix では fictitious_play (Robinson 1951) → multiplicative weights update (Freund & Schapire 1999) の順で iterative learner に自動 fallback、exploitability < tol (default 0.05 = 5% 勝率) で approximate Nash 採用。出力 JSON の `nash_solver` field で経路 (`"simplex"` / `"fictitious_play"` / `"mwu"`) を確認可能。入力 JSON の `nash_solver_config.tol` / `iterations` で上書き可。`pkdx nash solve` は user 任意 payoff のため別 PR で対応予定 |
 | ダメージ計算 | 16段階乱数 / 一致 / 相性 / ランク / 急所 | ✅ | |
 | ダメージ計算 | テラスタル | ✅ | |
 | ダメージ計算 | 天候補正 | ✅ | 晴で炎 1.5x・水 0.5x、雨で水 1.5x・炎 0.5x、砂で岩タイプ防御側 SpD 1.5x、雪で氷タイプ防御側 Def 1.5x。`pkdx damage` 単体 / 状態遷移内 / 回復技 / EOT すべて現在天候を反映 |

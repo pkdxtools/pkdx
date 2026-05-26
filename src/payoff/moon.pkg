@@ -8,16 +8,13 @@ import {
   "pkdxtools/pkdx/src/process" @process,
   "pkdxtools/pkdx/src/db" @db,
   "moonbitlang/core/json" @json,
+  "moonbitlang/core/math" @math,
   "moonbitlang/core/random" @random,
   "moonbitlang/core/string" @string,
   "moonbitlang/core/hashmap" @hashmap,
   "moonbitlang/x/sys" @sys,
   "moonbitlang/core/debug" @debug,
 }
-
-import {
-  "moonbitlang/core/math" @math,
-} for "test"
 
 supported_targets = "native"
 

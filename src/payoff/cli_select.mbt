@@ -614,6 +614,54 @@ fn parse_format(s : String) -> BattleFormat raise NashCliError {
 }
 
 ///|
+/// Parse the optional top-level `"nash_solver_config"` object. Both `tol` and
+/// `iterations` are individually optional; missing fields fall back to
+/// `NashSolverConfig::default()`. Validates that `tol > 0` and `iterations > 0`
+/// because both feed into the iterative fallback chain.
+fn parse_nash_solver_config(
+  j : Json?,
+) -> NashSolverConfig raise NashCliError {
+  let default = NashSolverConfig::default()
+  match j {
+    None => default
+    Some(Object(m)) => {
+      let tol = match m.get("tol") {
+        None => default.tol
+        Some(Number(n, ..)) => n
+        Some(_) => raise InvalidJson("nash_solver_config.tol must be a number")
+      }
+      let iterations = match m.get("iterations") {
+        None => default.iterations
+        Some(Number(n, ..)) => {
+          let i = n.to_int()
+          // Reject fractional values (1.5 等) explicitly: to_int() は黙って
+          // 切り捨てるため、config の打ち間違いが要求より低い反復回数で
+          // fallback chain を走らせてしまう
+          if i.to_double() != n {
+            raise InvalidJson(
+              "nash_solver_config.iterations must be a positive integer",
+            )
+          }
+          i
+        }
+        Some(_) =>
+          raise InvalidJson(
+            "nash_solver_config.iterations must be a positive integer",
+          )
+      }
+      if tol <= 0.0 {
+        raise InvalidJson("nash_solver_config.tol must be > 0")
+      }
+      if iterations <= 0 {
+        raise InvalidJson("nash_solver_config.iterations must be > 0")
+      }
+      { tol, iterations }
+    }
+    Some(_) => raise InvalidJson("nash_solver_config must be an object")
+  }
+}
+
+///|
 /// Parse `team_payoff_model` string:
 /// - `"switching_game"` → `SwitchingGame` (turn_limit = `DP_TURN_LIMIT`)
 /// - `"screened_switching_game:<trials>:<seed>:<keep_top>"` → `ScreenedSwitchingGame`
@@ -804,11 +852,13 @@ fn auto_upgrade_team_model(m : TeamPayoffModel) -> TeamPayoffModel {
 
 ///|
 /// Selection result: distribution over k-selections for both sides, plus
-/// game value and exploitability.
+/// game value, exploitability, and which solver in the fallback chain
+/// produced the strategies (`solver_path`).
 pub(all) struct SelectResult {
   format : BattleFormat
   value : Double
   exploitability : Double
+  solver_path : NashSolverPath
   team_size : Int
   opp_size : Int
   selections : Array[Array[Int]]
@@ -854,6 +904,7 @@ pub fn compute_select_with_team_model(
   input_path~ : String = "",
   child_progress_mode~ : String = "off",
   child_progress_every~ : Int = 0,
+  nash_config~ : NashSolverConfig = NashSolverConfig::default(),
 ) -> SelectResult raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
@@ -924,6 +975,7 @@ pub fn compute_select_with_team_model(
   progress(PhaseStart("select-nash", 1))
   let result = build_select_result(
     format, team, opponent, matrix, retained_rows, retained_cols,
+    nash_config~,
   )
   progress(PhaseEnd("select-nash"))
   result
@@ -943,25 +995,22 @@ fn build_select_result(
   matrix : @nash.FiniteMatrix,
   retained_rows : Array[Int]?,
   retained_cols : Array[Int]?,
+  nash_config~ : NashSolverConfig = NashSolverConfig::default(),
 ) -> SelectResult raise NashCliError {
   let k = match format {
     Single => 3
     Double => 4
   }
-  let lp = try @nash.solve_zero_sum(matrix) catch {
-    err => raise InnerError(err.to_string())
-  }
-  let (value, p, q) = match lp {
-    Optimal(value~, row_strategy~, col_strategy~) =>
-      (value, strategy_to_array(row_strategy), strategy_to_array(col_strategy))
-    Infeasible => raise InfeasibleGame
-    Unbounded => raise UnboundedGame
-  }
-  let expl = match lp {
-    Optimal(row_strategy~, col_strategy~, ..) =>
-      @nash.exploitability(matrix, row_strategy, col_strategy)
-    _ => 0.0
-  }
+  // `solve_with_fallback` raises the same `NashCliError` variants the old
+  // direct `solve_zero_sum` callsite mapped to (Infeasible / Unbounded /
+  // InnerError), plus `NashFallbackExhausted` when both iterative fallbacks
+  // also exceed `nash_config.tol`.
+  let result = solve_with_fallback(matrix, config=nash_config)
+  let value = result.value
+  let p = strategy_to_array(result.row_strategy)
+  let q = strategy_to_array(result.col_strategy)
+  let expl = result.exploitability
+  let solver_path = result.solver_path
   let all_team = combinations_with_lead(team.length(), k)
   let all_opp = combinations_with_lead(opponent.length(), k)
   let team_indices = match retained_rows {
@@ -1000,6 +1049,7 @@ fn build_select_result(
     format,
     value,
     exploitability: expl,
+    solver_path,
     team_size: team.length(),
     opp_size: opponent.length(),
     selections: sel_team,
@@ -1098,6 +1148,7 @@ pub fn run_select_typed(
       )
     _ => ()
   }
+  let nash_config = parse_nash_solver_config(obj.get("nash_solver_config"))
   // For the parallel path the children re-read the same raw JSON
   // (`team_payoff_model` is the auto-upgraded form by then, so the
   // worker also runs auto_upgrade and lands on the same params).
@@ -1132,6 +1183,7 @@ pub fn run_select_typed(
       input_path~,
       child_progress_mode~,
       child_progress_every~,
+      nash_config~,
     ) catch {
     err => {
       if input_path.length() > 0 {
@@ -1156,6 +1208,7 @@ pub fn serialize_select_result(r : SelectResult) -> String {
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()
   out = out + ",\"exploitability\":" + r.exploitability.to_string()
+  out = out + ",\"nash_solver\":\"" + solver_path_string(r.solver_path) + "\""
   out = out + ",\"selections\":" + fmt_int_2d(r.selections)
   out = out + ",\"selection_names\":" + fmt_string_2d(r.selection_names)
   out = out + ",\"opp_selections\":" + fmt_int_2d(r.opp_selections)

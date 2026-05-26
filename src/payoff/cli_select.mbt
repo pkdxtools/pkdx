@@ -170,23 +170,52 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(True) => true
         _ => false
       }
-      // healing / weather_set: 通常運用では DB 経路で m014 由来の値が乗る。
-      // golden / E2E test では DB 接続なしで CLI JSON 経由で move を組み立て
-      // たいため、`heal_kind` / `weather_set` キーを optional で受ける。`heal_kind`
-      // の値域とパーサは @db.parse_healing と同一 (整合性を確保するため共有)。
+      // healing / weather_set / field_set: 通常運用では DB 経路で m014 / m015
+      // 由来の値が乗る。golden / E2E test では DB 接続なしで CLI JSON 経由で
+      // move を組み立てたいため optional 受け。値域とパーサは @db.parse_healing
+      // / parse_weather_set / parse_field_set と同一 (整合性を確保するため共有)。
+      //
+      // heal_kind と同じく、weather_set / field_set も present かつ未知の値は
+      // payoff 行列を黙って変質させるため、parse_healing_json と同じ fail-fast
+      // policy で raise する (PR #143 AI Rally suggestion)。
       let healing = parse_healing_json(m, ctx)
       let weather_set = match m.get("weather_set") {
-        Some(String(s)) => @db.parse_weather_set(s)
-        _ => None
+        Some(String(s)) =>
+          if s == "" {
+            None
+          } else {
+            match @db.parse_weather_set(s) {
+              Some(_) as ok => ok
+              None =>
+                raise InvalidJson(
+                  ctx +
+                  ".weather_set: unknown weather \"" +
+                  s +
+                  "\" (expected one of sun / rain / sand / snow)",
+                )
+            }
+          }
+        Some(_) => raise InvalidJson(ctx + ".weather_set must be a string")
+        None => None
       }
-      // Stage E: `field_set` を weather_set と完全対称な pattern で受ける。
-      // 通常運用では DB 経路で m015 由来の値が乗るが、golden / E2E test では
-      // DB 接続なしで CLI JSON 経由で move を組み立てたいため optional 受け。
-      // 値域とパーサは `@db.parse_field_set` と同一 (整合性を確保するため共有)。
-      // 値が無い move は field_set: None (= field 設定技でない通常技)。
       let field_set = match m.get("field_set") {
-        Some(String(s)) => @db.parse_field_set(s)
-        _ => None
+        Some(String(s)) =>
+          if s == "" {
+            None
+          } else {
+            match @db.parse_field_set(s) {
+              Some(_) as ok => ok
+              None =>
+                raise InvalidJson(
+                  ctx +
+                  ".field_set: unknown field \"" +
+                  s +
+                  "\" (expected one of electric / grassy / misty / psychic)",
+                )
+            }
+          }
+        Some(_) => raise InvalidJson(ctx + ".field_set must be a string")
+        None => None
       }
       {
         name,

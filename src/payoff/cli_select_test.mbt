@@ -400,6 +400,79 @@ test "parse_move_json_rejects_unknown_heal_kind" {
 }
 
 ///|
+/// `parse_move_json` の `weather_set` も `heal_kind` と同じく fail-fast にする
+/// (PR #143 AI Rally suggestion)。canonical 値 `sun` / `rain` / `sand` / `snow` 以外を
+/// 受けたら payoff 行列が静かに変質するため、`InvalidJson` で弾く。
+test "parse_move_json_rejects_unknown_weather_set" {
+  let raw =
+    #|{
+    #|  "team": [
+    #|    {"name":"A","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"にほんばれ","type":"ほのお","category":"変化","power":0,"weather_set":"sunny"}]}
+    #|  ]
+    #|}
+  let team_json = match @json.parse(raw) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => t
+        None => {
+          assert_true(false)
+          return
+        }
+      }
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let msg = try {
+    let _ = parse_team_array(team_json, "team")
+    ""
+  } catch {
+    InvalidJson(msg) => msg
+    e => @debug.to_string(e)
+  }
+  assert_true(msg.contains("unknown weather"))
+  assert_true(msg.contains("sunny"))
+}
+
+///|
+/// `parse_move_json` の `field_set` も同じ fail-fast policy。canonical 値
+/// `electric` / `grassy` / `misty` / `psychic` 以外を受けたら `InvalidJson` で弾く。
+test "parse_move_json_rejects_unknown_field_set" {
+  let raw =
+    #|{
+    #|  "team": [
+    #|    {"name":"A","type1":"ノーマル","type2":"","hp":100,"atk":100,"def":100,"spa":100,"spd":100,"spe":100,
+    #|     "moves":[{"name":"エレキフィールド","type":"でんき","category":"変化","power":0,"field_set":"electric_terrain"}]}
+    #|  ]
+    #|}
+  let team_json = match @json.parse(raw) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => t
+        None => {
+          assert_true(false)
+          return
+        }
+      }
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let msg = try {
+    let _ = parse_team_array(team_json, "team")
+    ""
+  } catch {
+    InvalidJson(msg) => msg
+    e => @debug.to_string(e)
+  }
+  assert_true(msg.contains("unknown field"))
+  assert_true(msg.contains("electric_terrain"))
+}
+
+///|
 /// Phase 14: ScreenedSwitchingGame(1) returns a SelectResult whose `selections`
 /// / `selection_names` / `row_strategy` are filtered down to retained rows
 /// only. `6 × C(5, 2) = 60` selections on each side × `keep_top = 0.5` →

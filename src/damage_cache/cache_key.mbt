@@ -39,6 +39,11 @@ pub(all) struct CacheKeyInput {
   def_item_removable : Bool
   multi_hit_mode : String
   disguise_active : Bool
+  // へんげんじざい / リベロ が「この交代出しで既に発動済み」か。false (既定) =
+  // 出てきて最初の攻撃 → 技タイプへ変化して STAB が乗る。true = 再変化せず
+  // Protean/Libero 由来の STAB なし。boosted / unboosted 2 ケースのダメージは
+  // 異なるため、別エントリとして分離する必要がある。
+  protean_consumed : Bool
   // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) の Step1
   // 入力一式。空文字 / 0 / false = 非反射技または無補正。schema_version bump
   // (v3→v4) で既存 damage_cache.sqlite は自動 invalidate される。
@@ -147,9 +152,10 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
   let screen_pierce_s = if input.screen_pierce { "1" } else { "0" }
   let def_item_removable_s = if input.def_item_removable { "1" } else { "0" }
   let disguise_active_s = if input.disguise_active { "1" } else { "0" }
+  let protean_consumed_s = if input.protean_consumed { "1" } else { "0" }
   let incoming_critical_s = if input.incoming_critical { "1" } else { "0" }
   let parts : Array[String] = [
-    "v4",
+    "v5",
     input.version,
     input.regulation,
     input.attacker,
@@ -186,9 +192,12 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     def_item_removable_s,
     input.multi_hit_mode,
     disguise_active_s,
+    // へんげんじざい / リベロ の発動済みフラグ (v5 で追加)。false = 出てきて
+    // 最初の攻撃 (STAB あり)、true = 発動済み (STAB なし)。
+    protean_consumed_s,
     // 反射技セクション (v3 で追加、v4 で incoming 側 modifier を拡張)。
     // 空文字 / 0 / false = 非反射技または無補正で legacy 互換。version prefix
-    // (v4) のため pre-v4 entries とは別キー扱いになる。
+    // (v5) のため pre-v5 entries とは別キー扱いになる。
     input.incoming_attacker,
     input.incoming_move,
     input.incoming_atk_ability,

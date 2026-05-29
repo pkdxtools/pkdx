@@ -176,6 +176,7 @@ pub fn calc_reflect_damage(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
+    protean_consumed: false,
     incoming: None,
   }
   let step1 = calc_damage(step1_input)

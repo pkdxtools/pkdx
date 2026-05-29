@@ -56,6 +56,7 @@ fn int_baseline() -> CacheKeyInput {
     def_item_removable: false,
     multi_hit_mode: "",
     disguise_active: false,
+    protean_consumed: false,
     incoming_attacker: "",
     incoming_move: "",
     incoming_atk_ability: "",

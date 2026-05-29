@@ -50,6 +50,12 @@ pub(all) struct DamageCalcInput {
   // ばけのかわ初撃フラグ。true のとき engine は damages=0 / disguise_blocked
   // を立てて早期 return する。
   disguise_active : Bool
+  // へんげんじざい / リベロ は Gen 9 では「場に出てから 1 回だけ」発動する。
+  // false (既定) = まだ発動していない (= 出てきて最初の攻撃) 前提で、技タイプへ
+  // 変化して STAB が乗る。true = この交代出しで既に発動済みのため再変化せず、
+  // この技には Protean/Libero 由来の STAB を付与しない (使用者は変化後の実タイプを
+  // attacker.type1/type2 で表現する)。tera_type 指定時はそもそも非発動。
+  protean_consumed : Bool
   // 反射技 (カウンター / ミラーコート / メタルバースト / ほうふく) の Step1
   // 入力一式。Some のとき engine は反射経路に分岐 (受けたダメージ × 倍率)。
   // None なら通常の威力ベース計算。`IncomingOpts` は incoming 側の attacker /

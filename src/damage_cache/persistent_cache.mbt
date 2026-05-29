@@ -18,7 +18,11 @@
 /// 性格 / ランク / 天候 / 各種フラグ) — LLM が damages/percents 単独で
 /// 推論を誤らないよう echo back する。v3 cache entries はこの field を
 /// 欠くため一括で再生成する。
-pub const SCHEMA_VERSION : Int = 4
+///
+/// v5: へんげんじざい / リベロ の "発動済み" 状態を表す `protean_consumed`
+/// フラグを input echo に追加。boosted / unboosted の 2 ケースで JSON が
+/// 異なるため、この field を欠く v4 entries は再生成する。
+pub const SCHEMA_VERSION : Int = 5
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

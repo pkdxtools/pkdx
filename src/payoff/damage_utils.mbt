@@ -184,6 +184,9 @@ fn build_input_with_ranks(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
+    // payoff は Protean/Libero の発動済み状態を変化させない。false 固定 = 出てきて
+    // 最初の攻撃前提 (STAB あり) で、CLI 既定と一致する。
+    protean_consumed: false,
     incoming: None,
   }
 }

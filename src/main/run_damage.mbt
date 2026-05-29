@@ -38,6 +38,7 @@ struct DamageRev2Opts {
   multi_hit : @model.MultiHit
   multi_hit_str : String
   disguise_active : Bool
+  protean_consumed : Bool
 }
 
 ///|
@@ -229,6 +230,7 @@ fn run_damage(
       def_item_removable: rev2.def_item_removable,
       multi_hit_mode: rev2.multi_hit_str,
       disguise_active: rev2.disguise_active,
+      protean_consumed: rev2.protean_consumed,
       incoming_attacker: incoming_attacker_name,
       incoming_move: incoming_move_name,
       incoming_atk_ability,
@@ -402,6 +404,7 @@ fn run_damage(
       def_item_removable: rev2.def_item_removable,
       multi_hit_mode: rev2.multi_hit,
       disguise_active: rev2.disguise_active,
+      protean_consumed: rev2.protean_consumed,
       incoming: incoming_opt,
     }
     let result = @damage.calc_damage(input)

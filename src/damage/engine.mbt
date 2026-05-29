@@ -52,6 +52,23 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       tera_stab_bonus = true
     }
   }
+  // へんげんじざい / リベロ: 技を出す瞬間に使用者タイプが技タイプへ変化し
+  // STAB が乗る。ただし Gen 9 ではこの変化は「場に出てから 1 回だけ」発動する。
+  // - mv.category == Status: 変化技は STAB の乗りようがない攻撃でないため非対象。
+  //   ここでゲートしないと status 技に has_stab=true が漏れ、ダメージを伴う他経路
+  //   (可変威力・status-like) へ波及しうる。ダメージ技 (Physical / Special) のみ加える。
+  // - tera_type 指定時: テラスタルでタイプが固定され非発動 → 追加しない。
+  // - protean_consumed=true: この交代出しで既に発動済みのため再変化せず、この技
+  //   には Protean/Libero 由来の STAB を付与しない (使用者は変化後の実タイプを
+  //   attacker.type1/type2 で渡す。技がその実タイプと一致すれば通常 STAB が成立)。
+  // - 上記いずれでもない (= 出てきて最初の攻撃) 場合のみ move_type を STAB 対象に
+  //   加える (skin 解決後の最終 type)。
+  if mv.category != @model.MoveCategory::Status &&
+    tera_type.length() == 0 &&
+    !(input.protean_consumed) &&
+    (atk_ability == "へんげんじざい" || atk_ability == "リベロ") {
+    stab_types.push(move_type)
+  }
 
   // StatResolution に body press / psyshock / shell side arm / secret sword /
   // unaware / critical を集約する。ここでは base stat (未補正) を比較材料と

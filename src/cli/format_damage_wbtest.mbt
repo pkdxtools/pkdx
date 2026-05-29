@@ -90,6 +90,7 @@ fn fd_input(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
+    protean_consumed: false,
     incoming,
   }
 }
@@ -180,8 +181,8 @@ test "format_damage JSON: reflect echo carries incoming-side modifiers" {
 
 ///|
 /// Backward compatibility byte-level pin: a non-reflect call with both
-/// incoming_* = None must produce JSON whose `input` block ends with the
-/// pre-existing `"disguise_active":...}` and contains NO `reflect` field.
+/// incoming_* = None must produce JSON whose `input` block ends with
+/// `"protean_consumed":...}` and contains NO `reflect` field.
 /// If a future refactor accidentally adds a stray field, this test fails.
 test "format_damage JSON: non-reflect input has no reflect sub-object (legacy compat)" {
   let attacker = fd_pokemon("ガブリアス", "ドラゴン", 200)
@@ -191,9 +192,9 @@ test "format_damage JSON: non-reflect input has no reflect sub-object (legacy co
   let json = damage_input_to_json(input)
   // Negative pin: the reflect field name does not appear.
   assert_true(!json.contains("\"reflect\":"))
-  // Positive pin: the JSON closes immediately after disguise_active, exactly
-  // as it did before the reflect addition.
-  assert_true(json.has_suffix("\"disguise_active\":false}"))
+  // Positive pin: the JSON closes immediately after protean_consumed (the
+  // last non-reflect field), exactly as the non-reflect shape requires.
+  assert_true(json.has_suffix("\"protean_consumed\":false}"))
 }
 
 ///|

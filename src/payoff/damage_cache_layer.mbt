@@ -214,6 +214,8 @@ fn combatant_to_cache_key_input(
     def_item_removable: false,
     multi_hit_mode: "",
     disguise_active: false,
+    // payoff は Protean/Libero の発動済み状態を変化させない (false 固定)。
+    protean_consumed: false,
     incoming_attacker: "",
     incoming_move: "",
     incoming_atk_ability: "",

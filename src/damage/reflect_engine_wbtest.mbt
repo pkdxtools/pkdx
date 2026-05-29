@@ -108,6 +108,7 @@ fn rf_input(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
+    protean_consumed: false,
     incoming: Some(
       @model.IncomingOpts::{
         attacker: incoming_attacker,

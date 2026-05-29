@@ -106,6 +106,8 @@ fn damage_input_to_json(input : @model.DamageCalcInput) -> String {
   multi_hit_to_canonical(input.multi_hit_mode) +
   "\",\"disguise_active\":" +
   bool_to_json(input.disguise_active) +
+  ",\"protean_consumed\":" +
+  bool_to_json(input.protean_consumed) +
   reflect_section_or_empty(input) +
   "}"
 }

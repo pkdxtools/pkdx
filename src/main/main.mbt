@@ -592,6 +592,7 @@ fn run_damage_bench(
     def_item_removable: false,
     multi_hit_mode: "",
     disguise_active: false,
+    protean_consumed: false,
     incoming_attacker: "",
     incoming_move: "",
     incoming_atk_ability: "",
@@ -673,6 +674,7 @@ fn run_damage_bench(
       def_item_removable: false,
       multi_hit_mode: @model.MultiHit::Auto,
       disguise_active: false,
+      protean_consumed: false,
       incoming: None,
     }
     let json_format = @cli.parse_output_format("json")
@@ -1360,6 +1362,10 @@ fn cmd_damage() -> @admiral.CommandDef {
         "disguise-active",
         description="ばけのかわ still intact: adds 1/8 max-HP chip on top of normal damage (disguise_blocked=true, disguise_chip=def_hp/8)",
       ),
+      @admiral.bool(
+        "protean-consumed",
+        description="へんげんじざい/リベロ already activated this switch-in (Gen 9: once per switch-in). Suppresses the auto-STAB; default false = first move after entry, type changes and STAB applies",
+      ),
       // --- reflect moves (Counter / MirrorCoat / MetalBurst / Comeuppance) ---
       // --incoming-attacker / --incoming-move are required together when
       // --move is a reflect move. The remaining --incoming-* flags mirror
@@ -1472,6 +1478,7 @@ fn cmd_damage() -> @admiral.CommandDef {
         multi_hit: @model.multi_hit_from_str(multi_hit_s),
         multi_hit_str: multi_hit_s,
         disguise_active: ctx.get_bool("disguise-active"),
+        protean_consumed: ctx.get_bool("protean-consumed"),
       }
       run_damage(
         ctx_str(ctx, "attacker"),

@@ -97,6 +97,7 @@ fn pb_input(
     def_item_removable: false,
     multi_hit_mode,
     disguise_active: false,
+    protean_consumed: false,
     incoming: None,
   }
 }

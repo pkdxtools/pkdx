@@ -17,6 +17,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/type-claim-guard.py",
+            "timeout": 5000
+          }
+        ]
+      }
     ]
   }
 }

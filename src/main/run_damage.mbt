@@ -244,6 +244,10 @@ fn run_damage(
       incoming_atk_hp_den,
       incoming_tera_type,
       incoming_critical,
+      // CLI `pkdx damage` は Protean/Libero ロックタイプを公開フラグに持たない
+      // ため常に未ロック ("")。payoff layer のみがこのトークンを実値で埋める。
+      atk_protean_locked: "",
+      def_protean_locked: "",
     }
     match @damage_cache.build_cache_key(key_input) {
       Ok(k) => Some(k)

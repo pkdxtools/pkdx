@@ -84,6 +84,10 @@ priv struct TurnWorkspace {
   weather_turns_left : Int
   my_leech_seeded : Array[Bool]
   opp_leech_seeded : Array[Bool]
+  // per-slot Protean/Libero ロックタイプ。""=未発動、型名=ロック中。
+  // switch-out と mega でリセット（後段）。
+  my_protean_locked : Array[String]
+  opp_protean_locked : Array[String]
   my_wish_turns : Int
   opp_wish_turns : Int
   // Stage D (field semantics): mirror state.field / state.field_turns_left so
@@ -119,6 +123,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     weather_turns_left: state.weather_turns_left,
     my_leech_seeded: state.my_leech_seeded.copy(),
     opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_protean_locked: state.my_protean_locked.copy(),
+    opp_protean_locked: state.opp_protean_locked.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
@@ -152,6 +158,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     weather_turns_left: ws.weather_turns_left,
     my_leech_seeded: ws.my_leech_seeded.copy(),
     opp_leech_seeded: ws.opp_leech_seeded.copy(),
+    my_protean_locked: ws.my_protean_locked.copy(),
+    opp_protean_locked: ws.opp_protean_locked.copy(),
     my_wish_turns: ws.my_wish_turns,
     opp_wish_turns: ws.opp_wish_turns,
     field: ws.field,
@@ -280,6 +288,29 @@ fn resolve_attacker_leg(
     ) {
     return [(1.0, pre_damage_state)]
   }
+  // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
+  // 被弾側スロットの type は変化後タイプ (防御相性) に override する。攻撃側の
+  // 配列は attacker_is_me で決まり、被弾側はその逆。index は active スロット。
+  let atk_locked_arr = if attacker_is_me {
+    ws.my_protean_locked
+  } else {
+    ws.opp_protean_locked
+  }
+  let def_locked_arr = if attacker_is_me {
+    ws.opp_protean_locked
+  } else {
+    ws.my_protean_locked
+  }
+  let atk_protean_locked = if attacker_active < atk_locked_arr.length() {
+    atk_locked_arr[attacker_active]
+  } else {
+    ""
+  }
+  let def_protean_locked = if defender_active < def_locked_arr.length() {
+    def_locked_arr[defender_active]
+  } else {
+    ""
+  }
   let outcomes = damage_variants_cached(
     dmg_cache,
     attacker_is_me,
@@ -297,6 +328,8 @@ fn resolve_attacker_leg(
     def_item_consumed=def_consumed,
     weather=ws.weather,
     field=ws.field,
+    atk_protean_locked~,
+    def_protean_locked~,
   )
   apply_damage_variants_fanout(
     pre_damage_state,
@@ -341,9 +374,20 @@ fn resolve_moves(
   let ws = ws_from_state(state)
   if my_mega_now {
     ws.my_megaed[state.my_active] = true
+    // Stage 5: mega は Protean ロックを解除し再発動可能にする (= 引っ込めて
+    // 出し直しと等価)。このリセットは resolve_attacker_leg の damage 呼び出し
+    // (ws.my_protean_locked を読む) より前に走るため、mega 発動技は
+    // protean_consumed=false で STAB を得て、その後 with_post_hit_effects が
+    // 新しいタイプで再ロックする。
+    if state.my_active < ws.my_protean_locked.length() {
+      ws.my_protean_locked[state.my_active] = ""
+    }
   }
   if opp_mega_now {
     ws.opp_megaed[state.opp_active] = true
+    if state.opp_active < ws.opp_protean_locked.length() {
+      ws.opp_protean_locked[state.opp_active] = ""
+    }
   }
   let ws : TurnWorkspace = {
     ..ws,
@@ -461,6 +505,8 @@ fn clone_state(
     weather_turns_left: state.weather_turns_left,
     my_leech_seeded: state.my_leech_seeded.copy(),
     opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_protean_locked: state.my_protean_locked.copy(),
+    opp_protean_locked: state.opp_protean_locked.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
@@ -476,6 +522,27 @@ pub fn target_active(state : SwitchingGameState, is_me : Bool) -> Int {
     state.my_active
   } else {
     state.opp_active
+  }
+}
+
+///|
+/// Read the Protean/Libero type lock for `slot` on the `is_me` side from a
+/// `SwitchingGameState`. Returns "" (= no lock) when out of bounds, so callers
+/// that pass it to `damage_variants_cached` default to base-type behaviour.
+fn protean_locked_of(
+  state : SwitchingGameState,
+  is_me : Bool,
+  slot : Int,
+) -> String {
+  let arr = if is_me {
+    state.my_protean_locked
+  } else {
+    state.opp_protean_locked
+  }
+  if slot >= 0 && slot < arr.length() {
+    arr[slot]
+  } else {
+    ""
   }
 }
 
@@ -526,11 +593,20 @@ pub fn transition_with_cache(
   // arm では state.copy() が base_state にそのまま流れるので影響なし。
   let my_leech_seeded_new = state.my_leech_seeded.copy()
   let opp_leech_seeded_new = state.opp_leech_seeded.copy()
+  let my_protean_locked_new = state.my_protean_locked.copy()
+  let opp_protean_locked_new = state.opp_protean_locked.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
+    // Stage 5: mega は Protean ロックを解除し再発動可能にする (megaed と対)。
+    if state.my_active < my_protean_locked_new.length() {
+      my_protean_locked_new[state.my_active] = ""
+    }
   }
   if opp_mega_trigger {
     opp_megaed_new[state.opp_active] = true
+    if state.opp_active < opp_protean_locked_new.length() {
+      opp_protean_locked_new[state.opp_active] = ""
+    }
   }
   let my_mega_used_new = state.my_mega_used || my_mega_trigger
   let opp_mega_used_new = state.opp_mega_used || opp_mega_trigger
@@ -573,6 +649,15 @@ pub fn transition_with_cache(
       if state.opp_active < opp_leech_seeded_new.length() {
         opp_leech_seeded_new[state.opp_active] = false
       }
+      // Stage 4: switched-out slot の Protean/Libero ロックを解除。再登場時に
+      // 未発動 ("") へ戻すことで新しいタイプで再発動できる。leech_seeded と
+      // 同じ境界ガード・同じ index で出ていくスロットをリセットする。
+      if state.my_active < my_protean_locked_new.length() {
+        my_protean_locked_new[state.my_active] = ""
+      }
+      if state.opp_active < opp_protean_locked_new.length() {
+        opp_protean_locked_new[state.opp_active] = ""
+      }
     }
     (Switch(i), UseMove(mj)) => {
       my_active_new = i
@@ -586,6 +671,10 @@ pub fn transition_with_cache(
       // legacy test fixtures may size leech_seeded shorter than my_team.
       if state.my_active < my_leech_seeded_new.length() {
         my_leech_seeded_new[state.my_active] = false
+      }
+      // Stage 4: switched-out my slot の Protean/Libero ロックを解除。
+      if state.my_active < my_protean_locked_new.length() {
+        my_protean_locked_new[state.my_active] = ""
       }
       // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
       // are deferred to apply_damage_variants_fanout in the Some(...) arm
@@ -609,6 +698,10 @@ pub fn transition_with_cache(
       // legacy test fixtures may size leech_seeded shorter than opp_team.
       if state.opp_active < opp_leech_seeded_new.length() {
         opp_leech_seeded_new[state.opp_active] = false
+      }
+      // Stage 4: switched-out opp slot の Protean/Libero ロックを解除。
+      if state.opp_active < opp_protean_locked_new.length() {
+        opp_protean_locked_new[state.opp_active] = ""
       }
       // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
       // post-hit effects are handled per-variant in the Some(...) arm.
@@ -696,6 +789,8 @@ pub fn transition_with_cache(
     weather_turns_left: state.weather_turns_left,
     my_leech_seeded: my_leech_seeded_new,
     opp_leech_seeded: opp_leech_seeded_new,
+    my_protean_locked: my_protean_locked_new,
+    opp_protean_locked: opp_protean_locked_new,
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
@@ -761,6 +856,16 @@ pub fn transition_with_cache(
       } else {
         false
       }
+      // Protean/Libero: 攻撃側 (attacker_slot) のロックで attacker STAB を、
+      // 被弾側 (target_slot) のロックで防御相性を override する。
+      let atk_protean_locked = protean_locked_of(
+        base_state, attacker_is_me, attacker_slot,
+      )
+      let def_protean_locked = protean_locked_of(
+        base_state,
+        !attacker_is_me,
+        target_slot,
+      )
       let outcomes = damage_variants_cached(
         dmg_cache,
         attacker_is_me,
@@ -778,6 +883,8 @@ pub fn transition_with_cache(
         def_item_consumed~,
         weather=base_state.weather,
         field=base_state.field,
+        atk_protean_locked~,
+        def_protean_locked~,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -900,6 +1007,8 @@ fn pass_turn_state(
     weather_turns_left: state.weather_turns_left,
     my_leech_seeded: state.my_leech_seeded.copy(),
     opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_protean_locked: state.my_protean_locked.copy(),
+    opp_protean_locked: state.opp_protean_locked.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
@@ -992,6 +1101,8 @@ pub fn attempt_turn_with_cache(
         weather_turns_left: state.weather_turns_left,
         my_leech_seeded: state.my_leech_seeded,
         opp_leech_seeded: state.opp_leech_seeded,
+        my_protean_locked: state.my_protean_locked,
+        opp_protean_locked: state.opp_protean_locked,
         my_wish_turns: state.my_wish_turns,
         opp_wish_turns: state.opp_wish_turns,
         field: state.field,
@@ -1081,6 +1192,11 @@ fn partial_act_outcomes(
   let opp_item_consumed = state.opp_item_consumed.copy()
   let my_moves_used = state.my_moves_used.copy()
   let opp_moves_used = state.opp_moves_used.copy()
+  // Stage 4: Switch arm で switched-out slot の Protean/Libero ロックを
+  // "" へ戻すため、leech_seeded と同様に local mutable コピーを持つ
+  // (base_state はこのコピーを参照する)。
+  let my_protean_locked = state.my_protean_locked.copy()
+  let opp_protean_locked = state.opp_protean_locked.copy()
   let mut my_active = state.my_active
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
@@ -1100,6 +1216,10 @@ fn partial_act_outcomes(
       my_status_copy[state.my_active] = reset_toxic_counter_on_switch(
         my_status_copy[state.my_active],
       )
+      // Stage 4: switched-out my slot の Protean/Libero ロックを解除。
+      if state.my_active < my_protean_locked.length() {
+        my_protean_locked[state.my_active] = ""
+      }
     }
     (false, Switch(j)) => {
       opp_active = j
@@ -1109,11 +1229,19 @@ fn partial_act_outcomes(
       opp_status_copy[state.opp_active] = reset_toxic_counter_on_switch(
         opp_status_copy[state.opp_active],
       )
+      // Stage 4: switched-out opp slot の Protean/Libero ロックを解除。
+      if state.opp_active < opp_protean_locked.length() {
+        opp_protean_locked[state.opp_active] = ""
+      }
     }
     (true, UseMove(mi)) => {
       if mega_trigger {
         my_megaed[state.my_active] = true
         my_mega_used = true
+        // Stage 5: mega は Protean ロックを解除し再発動可能にする (megaed と対)。
+        if state.my_active < my_protean_locked.length() {
+          my_protean_locked[state.my_active] = ""
+        }
       }
       // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
       // are handled per-variant in the Some(...) arm via
@@ -1129,6 +1257,10 @@ fn partial_act_outcomes(
       if mega_trigger {
         opp_megaed[state.opp_active] = true
         opp_mega_used = true
+        // Stage 5: mega は Protean ロックを解除し再発動可能にする (megaed と対)。
+        if state.opp_active < opp_protean_locked.length() {
+          opp_protean_locked[state.opp_active] = ""
+        }
       }
       // Phase 2-E (#91): see (true, UseMove) for rationale.
       pre_dmg_defender_hp = my_hps[state.my_active]
@@ -1162,6 +1294,8 @@ fn partial_act_outcomes(
     weather_turns_left: state.weather_turns_left,
     my_leech_seeded: state.my_leech_seeded.copy(),
     opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_protean_locked,
+    opp_protean_locked,
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
@@ -1226,6 +1360,16 @@ fn partial_act_outcomes(
       } else {
         false
       }
+      // Protean/Libero: 攻撃側 (attacker_slot) のロックで attacker STAB を、
+      // 被弾側 (target_slot) のロックで防御相性を override する。
+      let atk_protean_locked = protean_locked_of(
+        base_state, attacker_is_me, attacker_slot,
+      )
+      let def_protean_locked = protean_locked_of(
+        base_state,
+        !attacker_is_me,
+        target_slot,
+      )
       let outcomes = damage_variants_cached(
         dmg_cache,
         attacker_is_me,
@@ -1243,6 +1387,8 @@ fn partial_act_outcomes(
         def_item_consumed~,
         weather=base_state.weather,
         field=base_state.field,
+        atk_protean_locked~,
+        def_protean_locked~,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -1592,6 +1738,8 @@ pub fn switching_game_winrate_stats(
     weather_turns_left: 0,
     my_leech_seeded: Array::make(my_team.length(), false),
     opp_leech_seeded: Array::make(opp_team.length(), false),
+    my_protean_locked: Array::make(my_team.length(), ""),
+    opp_protean_locked: Array::make(opp_team.length(), ""),
     my_wish_turns: no_wish_pending(my_team.length()),
     opp_wish_turns: no_wish_pending(opp_team.length()),
     field: @model.Field::None,

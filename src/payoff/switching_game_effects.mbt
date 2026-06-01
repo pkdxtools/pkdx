@@ -855,6 +855,8 @@ fn with_status_set(
     weather_turns_left: state.weather_turns_left,
     my_leech_seeded: state.my_leech_seeded.copy(),
     opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_protean_locked: state.my_protean_locked.copy(),
+    opp_protean_locked: state.opp_protean_locked.copy(),
     my_wish_turns: state.my_wish_turns,
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
@@ -1272,6 +1274,8 @@ pub fn apply_eot(
     weather_turns_left: next_weather_turns,
     my_leech_seeded: state.my_leech_seeded.copy(),
     opp_leech_seeded: state.opp_leech_seeded.copy(),
+    my_protean_locked: state.my_protean_locked.copy(),
+    opp_protean_locked: state.opp_protean_locked.copy(),
     my_wish_turns: my_wish_turns_new,
     opp_wish_turns: opp_wish_turns_new,
     // Stage E: field counter tick — `next_field` / `next_field_turns` は

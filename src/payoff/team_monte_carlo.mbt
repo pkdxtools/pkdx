@@ -28,7 +28,28 @@ fn best_expected_damage(
   def_ranks : Array[Int],
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  atk_protean_locked? : String = "",
+  def_protean_locked? : String = "",
 ) -> Double {
+  // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
+  // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
+  // 固定で DP 側 `effective_combatant` を再利用する (SSoT 共有)。`protean_locked`
+  // が "" のときは override 無し (= 元 combatant そのまま、bit-exact)。
+  // `protean_consumed = (locked != "")` を build_input_with_ranks に渡し、ロック中は
+  // engine の Protean STAB gate を止める (override 済み type1 で通常 STAB 経路を
+  // 通す)。team_perform_attack と同一の override をここでも掛けることで greedy
+  // 選択と実ダメージの乖離を防ぐ。
+  let atk_eff = effective_combatant(
+    atk,
+    false,
+    protean_locked=atk_protean_locked,
+  )
+  let dfn_eff = effective_combatant(
+    dfn,
+    false,
+    protean_locked=def_protean_locked,
+  )
+  let atk_consumed = atk_protean_locked != ""
   let mut best = 0.0
   for i in 0..<atk.moves.length() {
     let mv = atk.moves[i]
@@ -53,7 +74,16 @@ fn best_expected_damage(
       @model.Status => 0
     }
     let r = @damage.calc_damage(
-      build_input_with_ranks(atk, dfn, mv, ar, dr, weather~, field~),
+      build_input_with_ranks(
+        atk_eff,
+        dfn_eff,
+        mv,
+        ar,
+        dr,
+        weather~,
+        field~,
+        protean_consumed=atk_consumed,
+      ),
     )
     let avg = avg_damage(r)
     if avg > best {
@@ -100,7 +130,19 @@ fn greedy_team_action(
   must_recharge? : Bool = false,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  my_protean_locked? : Array[String] = [],
+  opp_protean_locked? : Array[String] = [],
 ) -> TeamAction? {
+  // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
+  // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
+  // "" を返す (= override 無し)。
+  fn locked_of(arr : Array[String], slot : Int) -> String {
+    if slot >= 0 && slot < arr.length() {
+      arr[slot]
+    } else {
+      ""
+    }
+  }
   if must_recharge && my_hps[active] > 0 {
     return Some(TmUseMove(0))
   }
@@ -118,6 +160,7 @@ fn greedy_team_action(
     let mut best = alive_slots[0]
     let mut best_score = -1.0
     let zero_ranks = [0, 0, 0, 0, 0]
+    let opp_locked = locked_of(opp_protean_locked, opp_active)
     for s in alive_slots {
       let score = best_expected_damage(
         my_team[s],
@@ -126,6 +169,8 @@ fn greedy_team_action(
         opp_ranks,
         weather~,
         field~,
+        atk_protean_locked=locked_of(my_protean_locked, s),
+        def_protean_locked=opp_locked,
       )
       if score > best_score {
         best_score = score
@@ -178,6 +223,8 @@ fn greedy_team_action(
       1.0
     }
   }
+  let opp_locked = locked_of(opp_protean_locked, opp_active)
+  let active_locked = locked_of(my_protean_locked, active)
   let stay_value = best_expected_damage(
       my_team[active],
       opp_team[opp_active],
@@ -185,6 +232,8 @@ fn greedy_team_action(
       opp_ranks,
       weather~,
       field~,
+      atk_protean_locked=active_locked,
+      def_protean_locked=opp_locked,
     ) /
     opp_hp_denom
   let mut best_switch = -1
@@ -201,6 +250,8 @@ fn greedy_team_action(
         opp_ranks,
         weather~,
         field~,
+        atk_protean_locked=locked_of(my_protean_locked, s),
+        def_protean_locked=opp_locked,
       ) /
       opp_hp_denom
     if v > best_switch_value {
@@ -212,6 +263,8 @@ fn greedy_team_action(
     return Some(TmSwitch(best_switch))
   }
   // UseMove: greedy max-damage move. Fall back to move 0 if no damaging move.
+  // Stage 7: ロック中の Protean 個体は active_locked / opp_locked を渡して
+  // 実ダメージ (`team_perform_attack`) と同じ override で move を選ぶ。
   match
     pick_best_move(
       my_team[active],
@@ -220,6 +273,8 @@ fn greedy_team_action(
       def_ranks=opp_ranks,
       weather~,
       field~,
+      atk_protean_locked=active_locked,
+      def_protean_locked=opp_locked,
     ) {
     Some(i) => Some(TmUseMove(i))
     None => Some(TmUseMove(0))
@@ -448,6 +503,8 @@ fn team_perform_attack(
   atk_burn? : Bool = false,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  atk_protean_locked? : String = "",
+  def_protean_locked? : String = "",
 ) -> Int {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
@@ -465,15 +522,32 @@ fn team_perform_attack(
     @model.Special => def_ranks[3]
     @model.Status => 0
   }
+  // Stage 7 (Protean / Libero MC parity): 実ダメージ解決も greedy 選択
+  // (`best_expected_damage` / `pick_best_move`) と **同一の** Protean override を
+  // 適用する。片側だけ override すると greedy と実ダメージが乖離して DP / MC
+  // parity が崩れる (過去類似バグ)。MC は mega 未モデルなので is_mega=false 固定で
+  // `effective_combatant` を再利用 (SSoT)。"" のときは override 無しで bit-exact。
+  let attacker_eff = effective_combatant(
+    attacker,
+    false,
+    protean_locked=atk_protean_locked,
+  )
+  let defender_eff = effective_combatant(
+    defender,
+    false,
+    protean_locked=def_protean_locked,
+  )
+  let atk_consumed = atk_protean_locked != ""
   let r = @damage.calc_damage(
     build_input_with_ranks(
-      attacker,
-      defender,
+      attacker_eff,
+      defender_eff,
       mv,
       atk_rank,
       def_rank,
       weather~,
       field~,
+      protean_consumed=atk_consumed,
     ),
   )
   if r.is_immune {
@@ -642,6 +716,35 @@ fn mc_psychic_priority_blocked(
 // pre-Stage-13 と完全一致 (関数本体が同じ).
 
 ///|
+/// Stage 7 (Protean / Libero MC parity): 攻撃が解決した直後に attacker スロットへ
+/// Protean ロックを記録する。DP 側 `with_post_hit_effects` の記録条件と semantics
+/// 一致:
+///   - 実効特性が へんげんじざい / リベロ (MC は mega 未モデルなので raw ability)
+///   - tera_type == "" (テラス中は型固定で Protean 非発動)
+///   - 当該 slot が未ロック ("") — once per switch-in
+/// 記録値は `mv.type_`。status 技でもカテゴリゲートなしで発動する。
+fn record_protean_lock(
+  locked : Array[String],
+  active : Int,
+  attacker : Combatant,
+  mv : @model.Move,
+) -> Unit {
+  if active < 0 || active >= locked.length() {
+    return
+  }
+  if locked[active] != "" {
+    return
+  }
+  if attacker.tera_type != "" {
+    return
+  }
+  if attacker.ability == "へんげんじざい" ||
+    attacker.ability == "リベロ" {
+    locked[active] = mv.type_
+  }
+}
+
+///|
 /// Run a single team rollout trial. Returns own-side value in `[-1, +1]`:
 ///
 /// - `+1.0` when all opponents are KO'd
@@ -714,6 +817,13 @@ pub fn team_rollout(
   let opp_wish_turns : Array[Int] = [-1]
   let own_megaed : Array[Bool] = Array::make(own.length(), false)
   let opp_megaed : Array[Bool] = Array::make(opp.length(), false)
+  // Stage 7 (Protean / Libero MC parity): per-slot ロックタイプ。へんげんじざい /
+  // リベロ 使用者が初手で撃った技のタイプを記録し、以降の攻撃 STAB / 被弾相性に
+  // override で効かせる (DP 側 `SwitchingGameState.{my,opp}_protean_locked` と同じ
+  // slot-bound semantics)。"" = 未ロック。switch-out で "" に戻る (once per
+  // switch-in)。MC は mega 未モデルなので mega リセットは無い。
+  let own_protean_locked : Array[String] = Array::make(own.length(), "")
+  let opp_protean_locked : Array[String] = Array::make(opp.length(), "")
   let mut own_active = 0
   let mut opp_active = 0
   for _ in 0..<turn_limit {
@@ -730,6 +840,8 @@ pub fn team_rollout(
       must_recharge=own_must_recharge[own_active],
       weather=weather_state[0],
       field=field_state[0],
+      my_protean_locked=own_protean_locked,
+      opp_protean_locked~,
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -744,6 +856,8 @@ pub fn team_rollout(
       must_recharge=opp_must_recharge[opp_active],
       weather=weather_state[0],
       field=field_state[0],
+      my_protean_locked=opp_protean_locked,
+      opp_protean_locked=own_protean_locked,
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -815,6 +929,12 @@ pub fn team_rollout(
             if own_active < own_leech_seeded.length() {
               own_leech_seeded[own_active] = false
             }
+            // Stage 7: switch-out で出ていくスロットの Protean ロックを解除
+            // (DP 側 transition_with_cache / partial_act_outcomes の Switch arm と
+            // 同 semantics)。leech_seeded と同じ index・同じタイミング。
+            if own_active < own_protean_locked.length() {
+              own_protean_locked[own_active] = ""
+            }
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -827,6 +947,9 @@ pub fn team_rollout(
             )
             if opp_active < opp_leech_seeded.length() {
               opp_leech_seeded[opp_active] = false
+            }
+            if opp_active < opp_protean_locked.length() {
+              opp_protean_locked[opp_active] = ""
             }
             opp_active = i
             reset_ranks(opp_ranks)
@@ -905,6 +1028,8 @@ pub fn team_rollout(
                 atk_burn=is_burned(own_pre_status),
                 weather=weather_state[0],
                 field=field_state[0],
+                atk_protean_locked=own_protean_locked[own_active],
+                def_protean_locked=opp_protean_locked[opp_active],
               )
               team_apply_post_hit(
                 own_hps,
@@ -926,6 +1051,12 @@ pub fn team_rollout(
                 field_turns_state,
                 mv_own,
                 before - opp_hps[opp_active],
+              )
+              record_protean_lock(
+                own_protean_locked,
+                own_active,
+                own[own_active],
+                mv_own,
               )
               mc_try_apply_status(
                 rng,
@@ -973,6 +1104,8 @@ pub fn team_rollout(
                 atk_burn=opp_burn_now,
                 weather=weather_state[0],
                 field=field_state[0],
+                atk_protean_locked=opp_protean_locked[opp_active],
+                def_protean_locked=own_protean_locked[own_active],
               )
               team_apply_post_hit(
                 opp_hps,
@@ -994,6 +1127,12 @@ pub fn team_rollout(
                 field_turns_state,
                 mv_opp,
                 before - own_hps[own_active],
+              )
+              record_protean_lock(
+                opp_protean_locked,
+                opp_active,
+                opp[opp_active],
+                mv_opp,
               )
               mc_try_apply_status(
                 rng,
@@ -1033,6 +1172,8 @@ pub fn team_rollout(
                 atk_burn=is_burned(opp_pre_status),
                 weather=weather_state[0],
                 field=field_state[0],
+                atk_protean_locked=opp_protean_locked[opp_active],
+                def_protean_locked=own_protean_locked[own_active],
               )
               team_apply_post_hit(
                 opp_hps,
@@ -1054,6 +1195,12 @@ pub fn team_rollout(
                 field_turns_state,
                 mv_opp,
                 before - own_hps[own_active],
+              )
+              record_protean_lock(
+                opp_protean_locked,
+                opp_active,
+                opp[opp_active],
+                mv_opp,
               )
               mc_try_apply_status(
                 rng,
@@ -1099,6 +1246,8 @@ pub fn team_rollout(
                 atk_burn=own_burn_now,
                 weather=weather_state[0],
                 field=field_state[0],
+                atk_protean_locked=own_protean_locked[own_active],
+                def_protean_locked=opp_protean_locked[opp_active],
               )
               team_apply_post_hit(
                 own_hps,
@@ -1120,6 +1269,12 @@ pub fn team_rollout(
                 field_turns_state,
                 mv_own,
                 before - opp_hps[opp_active],
+              )
+              record_protean_lock(
+                own_protean_locked,
+                own_active,
+                own[own_active],
+                mv_own,
               )
               mc_try_apply_status(
                 rng,
@@ -1164,6 +1319,8 @@ pub fn team_rollout(
               atk_burn=own_burn,
               weather=weather_state[0],
               field=field_state[0],
+              atk_protean_locked=own_protean_locked[own_active],
+              def_protean_locked=opp_protean_locked[opp_active],
             )
             team_apply_post_hit(
               own_hps,
@@ -1185,6 +1342,12 @@ pub fn team_rollout(
               field_turns_state,
               mv_own,
               before - opp_hps[opp_active],
+            )
+            record_protean_lock(
+              own_protean_locked,
+              own_active,
+              own[own_active],
+              mv_own,
             )
             mc_try_apply_status(
               rng,
@@ -1228,6 +1391,8 @@ pub fn team_rollout(
               atk_burn=opp_burn,
               weather=weather_state[0],
               field=field_state[0],
+              atk_protean_locked=opp_protean_locked[opp_active],
+              def_protean_locked=own_protean_locked[own_active],
             )
             team_apply_post_hit(
               opp_hps,
@@ -1249,6 +1414,12 @@ pub fn team_rollout(
               field_turns_state,
               mv_opp,
               before - own_hps[own_active],
+            )
+            record_protean_lock(
+              opp_protean_locked,
+              opp_active,
+              opp[opp_active],
+              mv_opp,
             )
             mc_try_apply_status(
               rng,

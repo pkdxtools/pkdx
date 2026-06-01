@@ -45,7 +45,25 @@ pub fn pick_best_move(
   def_ranks? : Array[Int] = [0, 0, 0, 0, 0],
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  atk_protean_locked? : String = "",
+  def_protean_locked? : String = "",
 ) -> Int? {
+  // Stage 7 (Protean / Libero MC parity): greedy 選択も `best_expected_damage` /
+  // `team_perform_attack` と同じ Protean override を見る。ロック中の Protean 個体は
+  // ロックタイプ技だけが STAB を保つので、ロックタイプ技を選ぶ greedy が
+  // 実ダメージと一致する。MC は mega 未モデルなので is_mega=false 固定で
+  // `effective_combatant` を再利用 (SSoT)。"" のときは override 無しで bit-exact。
+  let atk_eff = effective_combatant(
+    atk,
+    false,
+    protean_locked=atk_protean_locked,
+  )
+  let dfn_eff = effective_combatant(
+    dfn,
+    false,
+    protean_locked=def_protean_locked,
+  )
+  let atk_consumed = atk_protean_locked != ""
   let mut best_idx = -1
   let mut best_avg = 0.0
   for i in 0..<atk.moves.length() {
@@ -83,7 +101,16 @@ pub fn pick_best_move(
       @model.Status => 0
     }
     let r = @damage.calc_damage(
-      build_input_with_ranks(atk, dfn, mv, ar, dr, weather~, field~),
+      build_input_with_ranks(
+        atk_eff,
+        dfn_eff,
+        mv,
+        ar,
+        dr,
+        weather~,
+        field~,
+        protean_consumed=atk_consumed,
+      ),
     )
     let avg = avg_damage(r)
     if avg > best_avg {

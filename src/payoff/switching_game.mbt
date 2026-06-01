@@ -112,6 +112,10 @@ pub(all) struct SwitchingGameState {
   weather_turns_left : Int
   my_leech_seeded : Array[Bool]
   opp_leech_seeded : Array[Bool]
+  // per-slot Protean/Libero ロックタイプ。""=未発動、型名=ロック中。
+  // switch-out と mega でリセット（後段）。
+  my_protean_locked : Array[String]
+  opp_protean_locked : Array[String]
   my_wish_turns : Int
   opp_wish_turns : Int
   // Stage D (field semantics): mirror weather / weather_turns_left for terrain.
@@ -429,8 +433,24 @@ pub fn terminal_value(
 /// when `is_mega` is true and the original has a `mega_form`. HP is intentionally
 /// preserved from the base Pokemon (mega does not change max or current HP).
 /// Items and move list stay untouched.
-fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
-  match (is_mega, c.mega_form) {
+///
+/// Precedence (適用順):
+///   1. mega form 解決 — `is_mega && mega_form` のとき type/ability/stats を override
+///   2. tera 中 (`c.tera_type != ""`) は Protean override 無効 — テラスタルが
+///      タイプを支配し、後段の Tera 処理 (engine の `tera_type` 経路) に委ねる
+///   3. Protean lock を最後に適用 — `protean_locked != "" && tera_type == ""` の
+///      とき返す Pokemon を `type1=protean_locked, type2=""` に上書きする
+///      (へんげんじざい / リベロ は使用者を変化技タイプの単タイプにする)
+///
+/// override を最後に適用することで mega 解決結果にも一律でかぶせられる。mega と
+/// Protean は同ターン両立しない (mega が Protean をリセットする) が、順序非依存に
+/// するため override を末尾に置く。
+fn effective_combatant(
+  c : Combatant,
+  is_mega : Bool,
+  protean_locked? : String = "",
+) -> Combatant {
+  let base_or_mega : Combatant = match (is_mega, c.mega_form) {
     (true, Some(m)) => {
       let base = c.pokemon
       let effective_pokemon : @model.Pokemon = {
@@ -473,6 +493,18 @@ fn effective_combatant(c : Combatant, is_mega : Bool) -> Combatant {
       }
     }
     _ => c
+  }
+  // Protean lock: tera 中は型固定なので override しない (テラスが支配)。
+  if protean_locked != "" && base_or_mega.tera_type == "" {
+    let p = base_or_mega.pokemon
+    let locked_pokemon : @model.Pokemon = {
+      ..p,
+      type1: protean_locked,
+      type2: "",
+    }
+    { ..base_or_mega, pokemon: locked_pokemon }
+  } else {
+    base_or_mega
   }
 }
 
@@ -667,6 +699,7 @@ fn compute_mean_damage(
   def_ranks_full? : Array[Int]? = None,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  protean_consumed? : Bool = false,
 ) -> Int {
   weighted_mean_floor(
     compute_damage_variants(
@@ -680,6 +713,7 @@ fn compute_mean_damage(
       def_ranks_full~,
       weather~,
       field~,
+      protean_consumed~,
     ),
   )
 }
@@ -708,6 +742,7 @@ fn compute_damage_variants(
   def_ranks_full? : Array[Int]? = None,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  protean_consumed? : Bool = false,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -749,6 +784,7 @@ fn compute_damage_variants(
       def_rank,
       weather~,
       field~,
+      protean_consumed~,
     ),
   )
   if r.is_immune {
@@ -1145,6 +1181,8 @@ fn with_post_hit_effects(
   // attacker_is_me=false → my_leech_seeded)。
   let my_leech_seeded = state.my_leech_seeded.copy()
   let opp_leech_seeded = state.opp_leech_seeded.copy()
+  let my_protean_locked = state.my_protean_locked.copy()
+  let opp_protean_locked = state.opp_protean_locked.copy()
   // Stage 11 (Wish): attacker 側の wish_turns scalar を書き換える可能性があるため
   // ローカルに展開。Wish 以外の経路では unchanged のまま base state を経由して
   // 最終 state にスレッドされる。Wish の発動は attacker_is_me に応じて
@@ -1296,6 +1334,43 @@ fn with_post_hit_effects(
       }
     _ => ()
   }
+  // Stage 2 (Protean / Libero): へんげんじざい / リベロ は技を撃った瞬間に
+  // 使用者をその技のタイプ 1 つに変える。記録は attacker 側 (LeechSeed が
+  // defender 側だったのと対照的) の `*_protean_locked[active]` に `mv.type_`
+  // を書き込む。発動条件:
+  //   - ability が へんげんじざい / リベロ
+  //   - tera_type == "" (テラスタル中は型固定で Protean 非発動)
+  //   - 当該 slot が未ロック ("") — once per switch-in。既にロック済みなら
+  //     何度撃っても最初のタイプのまま (再変化しない)
+  //   - カテゴリゲートなし: Status 技でも発動する
+  // ダメージ計算は本フックより前に走るため、発動技自身のダメージは pre-lock
+  // 状態で計算済み。ここで記録するロックは「次手以降」の damage / type-chart に
+  // 効く。記録値は `mv.type_` で variant 非依存なので、`apply_damage_variants-
+  // _fanout` から variant ごとに呼ばれても全 leaf が同一値に収束する。
+  //
+  // Stage 5: 発動判定は base ability ではなく **mega 後の実効特性** (`atk_eff`)
+  // を見る。base げきりゅう → mega へんげんじざい のように mega で初めて Protean
+  // を得る個体でも正しく発動を記録するため。`atk_eff` は上で grounded 判定用に
+  // `effective_combatant(_, atk_is_mega)` で解決済み (mega 解決のみ・protean
+  // override なしなので ability は base/mega いずれも正しく出る)。tera 判定も
+  // `atk_eff.tera_type` で統一する (effective_combatant は tera_type を変えない
+  // ので atk.tera_type と等価だが、実効 combatant 経由で一貫させる)。
+  let attacker_protean = if attacker_is_me {
+    my_protean_locked
+  } else {
+    opp_protean_locked
+  }
+  if attacker_active < attacker_team.length() {
+    if (
+        atk_eff.ability == "へんげんじざい" ||
+        atk_eff.ability == "リベロ"
+      ) &&
+      atk_eff.tera_type == "" &&
+      attacker_active < attacker_protean.length() &&
+      attacker_protean[attacker_active] == "" {
+      attacker_protean[attacker_active] = mv.type_
+    }
+  }
   if mv.self_ko {
     attacker_hps[attacker_active] = 0
   }
@@ -1341,6 +1416,8 @@ fn with_post_hit_effects(
     weather_turns_left: new_weather_turns,
     my_leech_seeded,
     opp_leech_seeded,
+    my_protean_locked,
+    opp_protean_locked,
     my_wish_turns,
     opp_wish_turns,
     field: new_field,

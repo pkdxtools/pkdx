@@ -69,6 +69,8 @@ fn int_baseline() -> CacheKeyInput {
     incoming_atk_hp_den: 0,
     incoming_tera_type: "",
     incoming_critical: false,
+    atk_protean_locked: "",
+    def_protean_locked: "",
   }
 }
 

@@ -635,6 +635,8 @@ fn run_damage_bench(
     incoming_atk_hp_den: 0,
     incoming_tera_type: "",
     incoming_critical: false,
+    atk_protean_locked: "",
+    def_protean_locked: "",
   }
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k

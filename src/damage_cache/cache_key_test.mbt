@@ -50,6 +50,8 @@ fn baseline() -> CacheKeyInput {
     incoming_atk_hp_den: 0,
     incoming_tera_type: "",
     incoming_critical: false,
+    atk_protean_locked: "",
+    def_protean_locked: "",
   }
 }
 
@@ -122,6 +124,9 @@ test "build_cache_key: single-field change yields distinct key" {
     { ..baseline(), incoming_atk_hp_den: 4 },
     { ..baseline(), incoming_tera_type: "じめん" },
     { ..baseline(), incoming_critical: true },
+    // v6 additions: Protean/Libero ロックタイプの両側トークン。
+    { ..baseline(), atk_protean_locked: "ほのお" },
+    { ..baseline(), def_protean_locked: "みず" },
   ]
   for i = 0; i < mutations.length(); i = i + 1 {
     guard build_cache_key(mutations[i]) is Ok(k) else {
@@ -211,11 +216,11 @@ test "build_cache_key: rejects trailing whitespace" {
 }
 
 ///|
-/// v5 schema bump: baseline key must start with the new version prefix so a
-/// damage_cache.sqlite written under v2/v3/v4 cannot collide with v5 entries.
-test "build_cache_key: v5 schema prefix" {
+/// v6 schema bump: baseline key must start with the new version prefix so a
+/// damage_cache.sqlite written under v2/v3/v4/v5 cannot collide with v6 entries.
+test "build_cache_key: v6 schema prefix" {
   guard build_cache_key(baseline()) is Ok(k) else { fail("unexpected Err") }
-  assert_true(k.has_prefix("v5|"))
+  assert_true(k.has_prefix("v6|"))
 }
 
 ///|

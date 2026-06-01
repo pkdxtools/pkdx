@@ -126,6 +126,7 @@ fn build_input_with_ranks(
   def_rank : Int,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  protean_consumed? : Bool = false,
 ) -> @model.DamageCalcInput {
   let (atk_idx, def_idx) = attack_defense_stat_indices(mv)
   let atk_stat_override = match atk.actual_stats {
@@ -173,9 +174,12 @@ fn build_input_with_ranks(
     def_item_removable: false,
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
-    // payoff は Protean/Libero の発動済み状態を変化させない。false 固定 = 出てきて
-    // 最初の攻撃前提 (STAB あり) で、CLI 既定と一致する。
-    protean_consumed: false,
+    // Protean/Libero ロック中 (`protean_consumed=true`) は attacker の type1 が
+    // ロックタイプへ override 済み (effective_combatant)。engine の通常 STAB 経路が
+    // 「ロックタイプ一致技に STAB」「ロックタイプで被弾」を担うため、engine 側の
+    // Protean gate (二重 push) は止める。未ロック (false) なら発動技に engine が
+    // STAB を push する (出てきて最初の攻撃挙動 = CLI 既定と一致)。
+    protean_consumed,
     incoming: None,
   }
 }

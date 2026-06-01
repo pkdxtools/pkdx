@@ -22,7 +22,13 @@
 /// v5: へんげんじざい / リベロ の "発動済み" 状態を表す `protean_consumed`
 /// フラグを input echo に追加。boosted / unboosted の 2 ケースで JSON が
 /// 異なるため、この field を欠く v4 entries は再生成する。
-pub const SCHEMA_VERSION : Int = 5
+///
+/// v6: Protean/Libero ロックタイプ (atk_protean_locked / def_protean_locked) を
+/// cache key 末尾へ追加。同一種族・同一技でも未ロック / ほのおロック / みず
+/// ロックでダメージが変わる (effective_combatant が type を override)。key
+/// 末尾へ要素を増やすと空値でも全 key 文字列が変わる (trailing `|`) ため、
+/// 旧 v5 entries との混在を避ける一括 invalidate が必要。
+pub const SCHEMA_VERSION : Int = 6
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

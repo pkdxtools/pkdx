@@ -200,7 +200,9 @@ test "with_post_hit_effects: FixedFraction heals attacker active slot" {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -302,7 +304,9 @@ fn mk_weather_state() -> SwitchingGameState {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -1264,7 +1268,9 @@ test "with_post_hit_effects: Drain heals attacker by dealt/2" {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -1343,7 +1349,9 @@ test "with_post_hit_effects: Drain reversed by defender's ヘドロえき" {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -1472,7 +1480,9 @@ fn mk_seed_state() -> SwitchingGameState {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -1648,7 +1658,9 @@ test "apply_eot: LeechSeed tick — both sides seeded simultaneously" {
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [true, false],
+    opp_protean_locked: ["", ""],
   }
   let team = [mk_seed_combatant(), mk_seed_combatant()]
   let new_state = apply_eot(state, team, team)
@@ -1673,7 +1685,12 @@ test "apply_eot: LeechSeed tick — both sides seeded simultaneously" {
 /// 0 化される。
 test "apply_eot: LeechSeed Magic Guard — seeded loses 0 HP, opp gains 0" {
   let mut state = mk_seed_state()
-  state = { ..state, my_leech_seeded: [true, false], opp_hps: [50, 100] }
+  state = {
+    ..state,
+    my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
+    opp_hps: [50, 100],
+  }
   // my[0] を マジックガード 持ちに。
   let my_team = [
     mk_seed_combatant(ability="マジックガード"),
@@ -1701,6 +1718,7 @@ test "apply_eot: LeechSeed faint-from-tick — opp gains only actual drained" {
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     my_hps: [10, 100],
     opp_hps: [50, 100],
   }
@@ -1761,6 +1779,7 @@ test "apply_eot: LeechSeed extreme overkill — opp gains exactly drained amount
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     my_hps: [1, 100],
     opp_hps: [50, 100],
   }
@@ -1782,6 +1801,7 @@ test "apply_eot: LeechSeed HP=0 slot skips tick" {
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     my_hps: [0, 100],
     opp_hps: [50, 100],
   }
@@ -1801,7 +1821,12 @@ test "apply_eot: LeechSeed HP=0 slot skips tick" {
 /// 100→88、opp HP は 50→38。
 test "apply_eot: LeechSeed Liquid Ooze (seeded side) damages opp instead of healing" {
   let mut state = mk_seed_state()
-  state = { ..state, my_leech_seeded: [true, false], opp_hps: [50, 100] }
+  state = {
+    ..state,
+    my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
+    opp_hps: [50, 100],
+  }
   let my_team = [
     mk_seed_combatant(ability="ヘドロえき"),
     mk_seed_combatant(),
@@ -1820,7 +1845,12 @@ test "apply_eot: LeechSeed Liquid Ooze (seeded side) damages opp instead of heal
 /// opp は 0 に落ちる (overkill 分は捨てる、回復側 cap の対称構造)。
 test "apply_eot: LeechSeed Liquid Ooze reversal floors opp HP at 0" {
   let mut state = mk_seed_state()
-  state = { ..state, my_leech_seeded: [true, false], opp_hps: [5, 100] }
+  state = {
+    ..state,
+    my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
+    opp_hps: [5, 100],
+  }
   let my_team = [
     mk_seed_combatant(ability="ヘドロえき"),
     mk_seed_combatant(),
@@ -1837,7 +1867,12 @@ test "apply_eot: LeechSeed Liquid Ooze reversal floors opp HP at 0" {
 /// 受ける。
 test "apply_eot: LeechSeed Liquid Ooze (opp side seeded) damages my instead of healing" {
   let mut state = mk_seed_state()
-  state = { ..state, opp_leech_seeded: [true, false], my_hps: [50, 100] }
+  state = {
+    ..state,
+    opp_leech_seeded: [true, false],
+    opp_protean_locked: ["", ""],
+    my_hps: [50, 100],
+  }
   let my_team = [mk_seed_combatant(), mk_seed_combatant()]
   let opp_team = [
     mk_seed_combatant(ability="ヘドロえき"),
@@ -1879,7 +1914,9 @@ test "transition_with_cache: simultaneous Switch clears both seeded slots" {
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [true, false],
+    opp_protean_locked: ["", ""],
   }
   let team = [mk_seed_combatant(), mk_seed_combatant()]
   let cache = new_damage_cache()
@@ -2041,7 +2078,9 @@ fn mk_painsplit_state() -> SwitchingGameState {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -2315,7 +2354,9 @@ fn mk_wish_state() -> SwitchingGameState {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -2755,7 +2796,9 @@ test "attempt_turn_with_cache: Wish used on turn T heals at EOT(T+1)" {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false],
+    opp_protean_locked: [""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -2857,7 +2900,9 @@ test "attempt_turn_with_cache: Switch threads Wish to replacement (real path)" {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false],
+    opp_protean_locked: [""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -3069,6 +3114,7 @@ test "apply_eot order: Leech precedes Status (BadPoison counter frozen on faint)
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     my_hps: [12, 100],
     my_status: [@model.BadPoison(3), @model.None],
   }
@@ -3100,6 +3146,7 @@ test "apply_eot order: Leech + Burn — opp gains max/8 regardless of fade" {
   state = {
     ..state,
     my_leech_seeded: [true, false],
+    my_protean_locked: ["", ""],
     my_hps: [12, 100],
     opp_hps: [50, 100],
     my_status: [@model.Burn, @model.None],

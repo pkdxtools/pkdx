@@ -401,6 +401,62 @@ contact-proc と secondary status は **hits_count を渡されて per-hit Berno
 - `switching_game_variants_test.mbt` — black-box e2e (mirror match の anti-symmetry / 多重 fanout の per-hit compounding)
 - `branch_count_test.mbt` — 決定論的 cached_states 上限 (Triple Axel ≤ 800 / PopulationBomb ≤ 4500 / 多重 fanout ≤ 1000)
 
+## Protean / Libero (へんげんじざい / リベロ)
+
+へんげんじざい / リベロ は「場に出てから最初に撃った技のタイプ」に使用者を単タイプ化する特性。SwitchingGame (DP) と team-level MC の両方で再現する。engine (`@damage`) は非改変で、payoff 層が per-slot のロックタイプを保持し `effective_combatant` で type を override する。
+
+### 状態 (per-slot ロックタイプ)
+
+`SwitchingGameState` / `TurnWorkspace` に `my_protean_locked : Array[String]` / `opp_protean_locked : Array[String]` を持つ (長さ = チーム数)。`"" = 未発動`、型名 (`"ほのお"` 等) = ロック中。HP / ランク等と同じく状態の一部なので DP の cache key に含まれ、ロック有無で別 state として memoize される。team MC 側は `team_rollout` 内のローカル `own_protean_locked` / 相手側配列で同じ per-slot 表現を持つ。
+
+### 発動 (ロックの記録)
+
+`with_post_hit_effects` (DP) / `record_protean_lock` (MC) が攻撃解決の直後に attacker スロットへ `mv.type_` を書き込む。発動条件:
+
+- 実効特性 (`atk_eff.ability`) が `へんげんじざい` または `リベロ`
+- `atk_eff.tera_type == ""` — テラスタル中は型固定で Protean 非発動
+- 当該スロットが未ロック (`== ""`) — **once per switch-in**。ロック済みなら以降何度撃っても最初のタイプのまま (再変化しない)
+- カテゴリゲートなし — Status 技でも発動する
+
+特性判定は base ではなく **mega 後の実効特性** (`effective_combatant(_, atk_is_mega)`) を見る。base げきりゅう → mega へんげんじざい のように mega で初めて Protean を得る個体でも正しく記録するため。発動技自身のダメージはこのフックより前に計算済みなので、記録されたロックは「次手以降」の damage / type-chart に効く。`mv.type_` は variant 非依存なので、`apply_damage_variants_fanout` から variant ごとに呼ばれても全 leaf が同一ロック値へ収束する。
+
+### ダメージへの反映 (`effective_combatant` override)
+
+`effective_combatant(c, is_mega, protean_locked?)` の適用順 (precedence):
+
+1. **mega form 解決** — `is_mega && mega_form` のとき type/ability/stats を override
+2. **tera ゲート** — `tera_type != ""` のとき Protean override を無効化 (テラスがタイプを支配し、engine の `tera_type` 経路に委ねる)
+3. **Protean lock** — `protean_locked != "" && tera_type == ""` のとき返す Pokemon を `type1=protean_locked, type2=""` に上書き
+
+override を末尾に置くことで mega 解決結果にも一律でかぶせられる (mega と Protean は同ターン両立しないが、順序非依存にするため末尾)。
+
+ロック中は attacker の type1 が override 済みなので、`build_input_with_ranks` / cache key の `protean_consumed = (atk_protean_locked != "")` を立てて engine 側の Protean STAB gate (二重 push) を止める。通常 STAB 経路が「ロックタイプ一致技に STAB」「ロックタイプで被弾」を担う。これにより:
+
+- **offense**: ロック後はロックタイプ技にのみ STAB。未ロックの発動技には engine が STAB を push する (出てきて最初の攻撃挙動 = CLI 既定)
+- **defense**: ロック後は被弾時の防御相性が変化後タイプで計算される
+
+### リセット
+
+ロックは以下で `""` へ戻り、再登場時に新しいタイプで再発動できる:
+
+- **switch-out** — `transition_with_cache` / `partial_act_outcomes` の Switch arm で出ていくスロットを解除 (leech_seeded と同じ境界ガード・同じ index)
+- **mega** — mega 発動はロックを解除し再発動可能にする (`megaed` と対)。mega 発動技は `protean_consumed=false` で STAB を得て、その後 `with_post_hit_effects` が新タイプで再ロックする
+
+テラスタルはロックを記録しない (発動ゲートで弾く)。
+
+### L2 cache key (v6)
+
+`DamageKey` / `CacheKeyInput` に `atk_protean_locked` / `def_protean_locked` を追加。同一種族・同一技でも未ロック / ほのおロック / みずロック でダメージが変わる (type override) 一方 name_ja は不変なため、これらを key に含めないとロック前にキャッシュされた matchup が以降のロック後 lookup を shadow する (異なるロックタイプ同士も alias する)。`SCHEMA_VERSION` を v5→v6 に bump し、既存 `damage_cache.sqlite` は自動 invalidate される。
+
+### MC parity
+
+team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装。greedy 選択 (`pick_best_move` / `best_expected_damage` / `greedy_team_action`) と実ダメージ解決 (`team_perform_attack`) が **同一の** Protean override を共有し、ロック中の Protean 個体はロックタイプ技を選ぶ greedy が実ダメージと一致する。MC は mega 未モデルなので `is_mega=false` 固定で DP 側 `effective_combatant` を再利用 (SSoT)。
+
+### 検証範囲
+
+- `switching_game_protean_wbtest.mbt` — DP の発動条件 (初手ロック / Status 技 / テラス非発動 / 2手目再ロックなし / 非Protean no-op / opp 側記録 / fanout 全 leaf 同一値)、offense STAB / defense type-chart、`effective_combatant` precedence (tera 優先 / 単タイプ override / `""` no-op)、switch / mega リセット、mega-acquired Protean、mega + Status
+- `team_monte_carlo_protean_parity_wbtest.mbt` — MC/DP value parity を `|dp - mc| < 0.15` で pin (offense STAB + defense type-chart、自分側 / 相手側)、非Protean の決定性 (no-op)、テラス中の bit-exact (ロックゲート off)、greedy/damage coherence (ロック個体が STAB 技を選ぶ)
+
 ## 将来拡張
 
 - `SwitchingGame` / `ScreenedSwitchingGame` の Double format 対応 (現在 Single 専用)

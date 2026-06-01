@@ -60,6 +60,13 @@ pub(all) struct CacheKeyInput {
   incoming_atk_hp_den : Int
   incoming_tera_type : String
   incoming_critical : Bool
+  // へんげんじざい / リベロ でロックされたタイプ ("" = 未ロック)。
+  // `effective_combatant` が type1/type2 を override するため、同一種族・同一技
+  // でも未ロック / ほのおロック / みずロック でダメージが変わる。name_ja は
+  // 不変なので attacker/defender トークンだけでは衝突する。schema_version bump
+  // (v5→v6) で既存 damage_cache.sqlite は自動 invalidate される。
+  atk_protean_locked : String
+  def_protean_locked : String
 }
 
 ///|
@@ -135,6 +142,8 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     ("incoming_atk_nature", input.incoming_atk_nature),
     ("incoming_atk_status", input.incoming_atk_status),
     ("incoming_tera_type", input.incoming_tera_type),
+    ("atk_protean_locked", input.atk_protean_locked),
+    ("def_protean_locked", input.def_protean_locked),
   ]
   for i = 0; i < string_fields.length(); i = i + 1 {
     let (name, value) = string_fields[i]
@@ -151,7 +160,7 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
   let protean_consumed_s = if input.protean_consumed { "1" } else { "0" }
   let incoming_critical_s = if input.incoming_critical { "1" } else { "0" }
   let parts : Array[String] = [
-    "v5",
+    "v6",
     input.version,
     input.regulation,
     input.attacker,
@@ -207,6 +216,11 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     input.incoming_atk_hp_den.to_string(),
     input.incoming_tera_type,
     incoming_critical_s,
+    // Protean/Libero ロックタイプセクション (v6 で追加)。"" = 未ロック。
+    // effective_combatant が type1/type2 を override しダメージが変わるため、
+    // name_ja が同じでもロック値ごとに別キーへ分離する。
+    input.atk_protean_locked,
+    input.def_protean_locked,
   ]
   Ok(parts.join("|"))
 }

@@ -116,6 +116,8 @@ fn key_of(
   atk_rank? : Int = 0,
   def_rank? : Int = 0,
   weather? : @model.Weather = @model.Weather::None,
+  atk_protean_locked? : String = "",
+  def_protean_locked? : String = "",
 ) -> String raise {
   let input = combatant_to_cache_key_input(
     atk,
@@ -124,6 +126,8 @@ fn key_of(
     atk_rank,
     def_rank,
     weather~,
+    atk_protean_locked~,
+    def_protean_locked~,
   )
   guard @damage_cache.build_cache_key(input) is Ok(k) else {
     fail("build_cache_key failed")
@@ -328,6 +332,47 @@ test "cache key: weather variants each distinguish the key (B-3)" {
   assert_true(k_sand != k_snow)
 }
 
+///|
+/// Stage 6 (protean-libero): attacker の Protean/Libero ロックタイプは
+/// `effective_combatant` が type1/type2 を override しダメージを変えるが、
+/// name_ja は不変なので attacker トークンだけでは衝突する。未ロック ("") と
+/// ほのおロックで L2 key が分離することを pin する。
+test "cache key: attacker protean lock distinguishes the key" {
+  let a = base_atk()
+  let b = base_def()
+  let mv = base_move()
+  assert_true(
+    key_of(a, b, mv, atk_protean_locked="") !=
+    key_of(a, b, mv, atk_protean_locked="ほのお"),
+  )
+}
+
+///|
+/// 異なるロックタイプ同士 (ほのお vs みず) も別キーへ分離する — 1 つのトークンへ
+/// 全ロックが畳まれる regression を直接捕捉する。
+test "cache key: distinct attacker locked types distinguish the key" {
+  let a = base_atk()
+  let b = base_def()
+  let mv = base_move()
+  assert_true(
+    key_of(a, b, mv, atk_protean_locked="ほのお") !=
+    key_of(a, b, mv, atk_protean_locked="みず"),
+  )
+}
+
+///|
+/// defender 側ロックも独立して key を分ける (両側トークンが同じ segment に
+/// 縮退していないことの担保)。
+test "cache key: defender protean lock distinguishes the key" {
+  let a = base_atk()
+  let b = base_def()
+  let mv = base_move()
+  assert_true(
+    key_of(a, b, mv, def_protean_locked="") !=
+    key_of(a, b, mv, def_protean_locked="ほのお"),
+  )
+}
+
 // ─── SwitchingGameState Hash 完全性 (stage 2: healing infra) ──────────────────
 //
 // Plan K-4: each new state field added in stage 2 (weather / weather_turns_left
@@ -364,7 +409,9 @@ fn ck_state_base() -> SwitchingGameState {
     weather: @model.Weather::None,
     weather_turns_left: 0,
     my_leech_seeded: [false, false],
+    my_protean_locked: ["", ""],
     opp_leech_seeded: [false, false],
+    opp_protean_locked: ["", ""],
     my_wish_turns: -1,
     opp_wish_turns: -1,
     field: @model.Field::None,
@@ -417,6 +464,28 @@ test "state cache key: opp_leech_seeded distinguishes the key" {
   let base = ck_state_base()
   let seeded = { ..base, opp_leech_seeded: [false, true] }
   assert_distinct_state_keys(base, seeded)
+}
+
+///|
+test "state hash: protean lock distinguishes states" {
+  let base = ck_state_base()
+  let locked = { ..base, my_protean_locked: ["ほのお", ""] }
+  assert_distinct_state_keys(base, locked)
+}
+
+///|
+test "state hash: empty protean lock is a no-op" {
+  // 2 つの base state（両側 protean_locked が all-""）は完全に等しい =
+  // 空既定が key/Hash/Eq に対して no-op であることを pin する。
+  let a = ck_state_base()
+  let b = ck_state_base()
+  assert_true(a == b)
+  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  cache[a] = 1.0
+  match cache.get(b) {
+    Some(v) => assert_true(v == 1.0)
+    None => assert_true(false)
+  }
 }
 
 ///|

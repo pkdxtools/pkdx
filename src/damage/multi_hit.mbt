@@ -42,20 +42,14 @@ pub(all) enum HitPlan {
 ///|
 /// Moves that always hit exactly twice.
 let fixed_2_hit : Array[String] = [
-  "にどげり",
-  "ダブルアタック",
-  "ダブルウイング",
-  "ドラゴンアロー",
+  "にどげり", "ダブルアタック", "ダブルウイング", "ドラゴンアロー",
   "ツインビーム",
 ]
 
 ///|
 /// Moves that always hit exactly three times.
 let fixed_3_hit : Array[String] = [
-  "トリプルキック",
-  "トリプルアクセル",
-  "トリプルダイブ",
-  "すいりゅうれんだ",
+  "トリプルキック", "トリプルアクセル", "トリプルダイブ", "すいりゅうれんだ",
 ]
 
 ///|
@@ -64,23 +58,18 @@ let fixed_3_hit : Array[String] = [
 /// と、移動が成功した (= hit 1 が当たった) 条件下での landed-hit 分布は
 /// p(1)=0.10, p(2)=0.09, p(3)=0.81 になる。すいりゅうれんだ /
 /// トリプルダイブ are deterministic 3-hits and stay on FixedHits(3).
-let triple_variant_hit : Array[String] = ["トリプルキック", "トリプルアクセル"]
+let triple_variant_hit : Array[String] = [
+  "トリプルキック", "トリプルアクセル",
+]
 
 ///|
 /// Moves that hit 2-5 times with the standard distribution
 /// (P(2)=P(3)=3/8, P(4)=P(5)=1/8 → E[n] = 19/6). Under Skill Link they
 /// upgrade to fixed 5; Auto collapses them to the center value 3.
 let random_2_5_hit : Array[String] = [
-  "みだれひっかき",
-  "みだれづき",
-  "ボーンラッシュ",
-  "ロックブラスト",
-  "タネマシンガン",
-  "みずしゅりけん",
-  "つららばり",
-  "ミサイルばり",
-  "つっぱり",
-  "スケイルショット",
+  "みだれひっかき", "みだれづき", "ボーンラッシュ", "ロックブラスト",
+  "タネマシンガン", "みずしゅりけん", "つららばり", "ミサイルばり",
+  "つっぱり", "スケイルショット",
 ]
 
 ///|
@@ -128,11 +117,7 @@ pub fn resolve_hit_plan(
 ) -> HitPlan {
   match mode {
     @model.MultiHit::Fixed(n) => {
-      let c = if n < 1 {
-        1
-      } else {
-        n
-      }
+      let c = if n < 1 { 1 } else { n }
       return FixedHits(c)
     }
     @model.MultiHit::Expected =>

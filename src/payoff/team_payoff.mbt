@@ -151,9 +151,9 @@ pub fn team_payoff_matrix_switching(
   team_b : Array[Combatant],
   format : BattleFormat,
   turn_limit : Int,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> @nash.FiniteMatrix raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -185,7 +185,12 @@ pub fn team_payoff_matrix_switching(
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
       row[j] = switching_game_winrate(
-        picked_a, picked_b, turn_limit, disk~, progress~, dp_log_every~,
+        picked_a,
+        picked_b,
+        turn_limit,
+        disk~,
+        progress~,
+        dp_log_every~,
       )
       progress(CellDone(sel_a[i], sel_b[j], i, j, "dp-full"))
       progress(PhaseProgress("dp-full", i * size_b + j + 1, total))
@@ -214,9 +219,9 @@ pub fn team_payoff_matrix_with_team_model(
   team_b : Array[Combatant],
   format : BattleFormat,
   team_model : TeamPayoffModel,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> @nash.FiniteMatrix raise PayoffError {
   match team_model {
     SwitchingGame(turn_limit) => {

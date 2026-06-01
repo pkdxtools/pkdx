@@ -167,7 +167,7 @@ pub fn maybe_apply_status_fanout(
   target_slot : Int,
   target_team : Array[Combatant],
   mv : @model.Move,
-  hits_count~ : Int = 1,
+  hits_count? : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
   let eff = match mv.status_effect {
     None => return [(1.0, state)]
@@ -181,15 +181,21 @@ pub fn maybe_apply_status_fanout(
   if target_hps[target_slot] <= 0 {
     return [(1.0, state)]
   }
-  let target_status = if target_is_me { state.my_status } else { state.opp_status }
+  let target_status = if target_is_me {
+    state.my_status
+  } else {
+    state.opp_status
+  }
   let cur = target_status[target_slot]
   if cur != @model.None {
     return [(1.0, state)]
   }
   let combatant = target_team[target_slot]
   if @model.immune_to_status(
-    kind, combatant.pokemon.type1, combatant.pokemon.type2,
-  ) {
+      kind,
+      combatant.pokemon.type1,
+      combatant.pokemon.type2,
+    ) {
     return [(1.0, state)]
   }
   // Stage G-2 / H: terrain blocks status infliction on grounded defenders.
@@ -289,7 +295,7 @@ pub fn apply_contact_proc_fanout(
   attacker_team : Array[Combatant],
   defender_team : Array[Combatant],
   mv : @model.Move,
-  hits_count~ : Int? = None,
+  hits_count? : Int? = None,
 ) -> Array[(Double, SwitchingGameState)] {
   // mega 後の ability/stats を damage 計算側と同じ経路で解決する。
   // raw team の ability を読むと Mega Kangaskhan の おやこあい や
@@ -318,7 +324,7 @@ pub fn apply_contact_proc_fanout(
     def_ability=defender.ability,
     critical=false,
   )
-  if !(@damage.resolve_move_contact(mv, sr.force_contact)) {
+  if !@damage.resolve_move_contact(mv, sr.force_contact) {
     return [(1.0, state)]
   }
   // move 自体が連結しないケース (type immunity / ability immunity) は
@@ -337,7 +343,9 @@ pub fn apply_contact_proc_fanout(
   // Normal では check_def_immunity が false を返すため、虚偽の proc branch が
   // 出る。payoff の weather は build_input_with_ranks と同じく None 固定。
   let resolved_move_type = @damage.resolve_effective_move_type(
-    mv, @model.Weather::None, attacker.ability,
+    mv,
+    @model.Weather::None,
+    attacker.ability,
   )
   if @damage.check_def_immunity(defender.ability, resolved_move_type) {
     return [(1.0, state)]
@@ -397,8 +405,10 @@ pub fn apply_contact_proc_fanout(
       continue
     }
     if @model.immune_to_status(
-      kind, attacker.pokemon.type1, attacker.pokemon.type2,
-    ) {
+        kind,
+        attacker.pokemon.type1,
+        attacker.pokemon.type2,
+      ) {
       continue
     }
     viable_ability_chance = viable_ability_chance + chance
@@ -412,8 +422,10 @@ pub fn apply_contact_proc_fanout(
       continue
     }
     if @model.immune_to_status(
-      kind, attacker.pokemon.type1, attacker.pokemon.type2,
-    ) {
+        kind,
+        attacker.pokemon.type1,
+        attacker.pokemon.type2,
+      ) {
       continue
     }
     viable_item_chance = viable_item_chance + chance
@@ -424,7 +436,11 @@ pub fn apply_contact_proc_fanout(
   }
   // 各 source は単発の roll なので 100% に cap。current data では既に <=100 だが、
   // 将来データ拡張 (proc 同士の合算や cap 越え item 追加) で破綻しないよう保険。
-  let cap_a = if viable_ability_chance > 100 { 100 } else { viable_ability_chance }
+  let cap_a = if viable_ability_chance > 100 {
+    100
+  } else {
+    viable_ability_chance
+  }
   let cap_i = if viable_item_chance > 100 { 100 } else { viable_item_chance }
   let q_a = 1.0 - cap_a.to_double() / 100.0
   let q_i = 1.0 - cap_i.to_double() / 100.0
@@ -451,7 +467,7 @@ pub fn apply_contact_proc_fanout(
         break
       }
     }
-    if !(merged) {
+    if !merged {
       combined.push((kind, item_contrib))
     }
   }
@@ -501,10 +517,9 @@ pub fn apply_contact_proc_fanout(
   for i = 0; i < combined.length(); i = i + 1 {
     let (kind, per_hit_set) = combined[i]
     let mass = p_set * per_hit_set / denom
-    outcomes.push((
-      mass,
-      with_status_set(state, attacker_is_me, attacker_slot, kind),
-    ))
+    outcomes.push(
+      (mass, with_status_set(state, attacker_is_me, attacker_slot, kind)),
+    )
   }
   outcomes
 }
@@ -552,7 +567,7 @@ pub fn apply_item_pre_damage_proc_fanout(
   attacker_team : Array[Combatant],
   pre_dmg_hp : Int,
   mv : @model.Move,
-  hits_count~ : Int = 1,
+  hits_count? : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
   // #91 Phase 2-C: hits_count 引数は将来の per-hit item proc 拡張用。現状は
   // 1 hit しか反映しない resist berry / item consumption ロジックなので、
@@ -584,9 +599,7 @@ pub fn apply_item_pre_damage_proc_fanout(
   } else {
     state.opp_megaed[defender_slot]
   }
-  let defender = effective_combatant(
-    defender_team[defender_slot], def_megaed,
-  )
+  let defender = effective_combatant(defender_team[defender_slot], def_megaed)
   let berry_type = @damage.get_resist_berry_type(defender.item)
   if berry_type.length() == 0 {
     return [(1.0, state)]
@@ -601,9 +614,7 @@ pub fn apply_item_pre_damage_proc_fanout(
   } else {
     state.my_megaed[attacker_active]
   }
-  let attacker = effective_combatant(
-    attacker_team[attacker_active], atk_megaed,
-  )
+  let attacker = effective_combatant(attacker_team[attacker_active], atk_megaed)
   let resolved_type = resolve_engine_move_type(mv, attacker.ability)
   if resolved_type != berry_type {
     return [(1.0, state)]
@@ -612,11 +623,11 @@ pub fn apply_item_pre_damage_proc_fanout(
   // resist berries trigger only on super-effective hits. Mirrors the engine
   // gate in `damage/engine.mbt`'s resist-berry block.
   let triggers_on_neutral = defender.item == "ホズのみ"
-  if !(triggers_on_neutral) &&
-    !(
-      @damage.is_super_effective(
-        resolved_type, defender.pokemon.type1, defender.pokemon.type2,
-      ),
+  if !triggers_on_neutral &&
+    !@damage.is_super_effective(
+      resolved_type,
+      defender.pokemon.type1,
+      defender.pokemon.type2,
     ) {
     return [(1.0, state)]
   }
@@ -671,7 +682,7 @@ pub fn apply_item_post_damage_proc_fanout(
   attacker_team : Array[Combatant],
   pre_dmg_hp : Int,
   mv : @model.Move,
-  hits_count~ : Int = 1,
+  hits_count? : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
   // #91 Phase 2-C: hits_count 引数は将来の per-hit item proc 拡張用。現状は
   // single-shot consumption ロジックのみで内部不変。
@@ -697,9 +708,7 @@ pub fn apply_item_post_damage_proc_fanout(
   } else {
     state.opp_megaed[defender_slot]
   }
-  let defender = effective_combatant(
-    defender_team[defender_slot], def_megaed,
-  )
+  let defender = effective_combatant(defender_team[defender_slot], def_megaed)
   let max_hp = defender.pokemon.hp
   let post_hp = if defender_is_me {
     state.my_hps[defender_slot]
@@ -720,16 +729,19 @@ pub fn apply_item_post_damage_proc_fanout(
       state.my_megaed[attacker_active]
     }
     let attacker = effective_combatant(
-      attacker_team[attacker_active], atk_megaed,
+      attacker_team[attacker_active],
+      atk_megaed,
     )
     let hit_plan = @damage.resolve_hit_plan(
-      mv, attacker.ability, @model.MultiHit::Auto,
+      mv,
+      attacker.ability,
+      @model.MultiHit::Auto,
     )
     let is_multi_hit = match hit_plan {
       @damage.HitPlan::Single => false
       _ => true
     }
-    if !(is_multi_hit) {
+    if !is_multi_hit {
       return [
         (
           1.0,
@@ -765,7 +777,9 @@ pub fn apply_item_post_damage_proc_fanout(
         return [
           (
             1.0,
-            with_hp_and_item_consumed(state, defender_is_me, defender_slot, capped),
+            with_hp_and_item_consumed(
+              state, defender_is_me, defender_slot, capped,
+            ),
           ),
         ]
       }
@@ -878,14 +892,13 @@ pub fn eot_slip_active(
       let dmg = max_hp * ticks / 16
       (clamp_zero(current_hp - dmg), @model.BadPoison(ticks))
     }
-    @model.Drowsy(n) => {
+    @model.Drowsy(n) =>
       // n>0: まだ猶予あり、カウンタを 1 減らす。n==0: ここでねむり発動。
       if n > 0 {
         (current_hp, @model.Drowsy(n - 1))
       } else {
         (current_hp, @model.Sleep(2))
       }
-    }
     _ => (current_hp, status)
   }
 }
@@ -1000,10 +1013,19 @@ pub fn apply_eot(
   // mostly insurance). Other weathers (Rain / Sun / Snow / None) deal no
   // chip damage in Gen9 (Hail was retired in favour of Snow).
   apply_sand_damage_active(
-    state.my_active, my_hps, my_team, state.my_megaed, my_max, state.weather,
+    state.my_active,
+    my_hps,
+    my_team,
+    state.my_megaed,
+    my_max,
+    state.weather,
   )
   apply_sand_damage_active(
-    state.opp_active, opp_hps, opp_team, state.opp_megaed, opp_max,
+    state.opp_active,
+    opp_hps,
+    opp_team,
+    state.opp_megaed,
+    opp_max,
     state.weather,
   )
 
@@ -1014,10 +1036,14 @@ pub fn apply_eot(
   // 早期 return が掛かっており、helper の add_hp_capped 経路と契約が分離
   // されているため、Sand → leftovers の順序が間違いなく観測できる。
   let my_hp_after_heal = eot_leftovers_heal(
-    my_hps[state.my_active], my_max, my_team[state.my_active].item,
+    my_hps[state.my_active],
+    my_max,
+    my_team[state.my_active].item,
   )
   let opp_hp_after_heal = eot_leftovers_heal(
-    opp_hps[state.opp_active], opp_max, opp_team[state.opp_active].item,
+    opp_hps[state.opp_active],
+    opp_max,
+    opp_team[state.opp_active].item,
   )
   my_hps[state.my_active] = my_hp_after_heal
   opp_hps[state.opp_active] = opp_hp_after_heal
@@ -1030,10 +1056,20 @@ pub fn apply_eot(
   // grounded 判定は `@damage.is_grounded` の単一 SSoT を再利用し、mega 後の
   // type/ability/item を反映するため `effective_combatant` 経由で読む。
   apply_grassy_heal_active(
-    state.my_active, my_hps, my_team, state.my_megaed, my_max, state.field,
+    state.my_active,
+    my_hps,
+    my_team,
+    state.my_megaed,
+    my_max,
+    state.field,
   )
   apply_grassy_heal_active(
-    state.opp_active, opp_hps, opp_team, state.opp_megaed, opp_max, state.field,
+    state.opp_active,
+    opp_hps,
+    opp_team,
+    state.opp_megaed,
+    opp_max,
+    state.field,
   )
 
   // === Step 3: やどりぎのタネ tick ===
@@ -1118,12 +1154,16 @@ pub fn apply_eot(
   // も不変)。これは mainline 挙動 (faint 後の status は燃え尽きない / Toxic
   // counter は death で凍結) と一致する。
   let (my_hp_new, my_st_new) = eot_slip_active(
-    my_hps[state.my_active], my_max, my_status[state.my_active],
+    my_hps[state.my_active],
+    my_max,
+    my_status[state.my_active],
   )
   my_hps[state.my_active] = my_hp_new
   my_status[state.my_active] = my_st_new
   let (opp_hp_new, opp_st_new) = eot_slip_active(
-    opp_hps[state.opp_active], opp_max, opp_status[state.opp_active],
+    opp_hps[state.opp_active],
+    opp_max,
+    opp_status[state.opp_active],
   )
   opp_hps[state.opp_active] = opp_hp_new
   opp_status[state.opp_active] = opp_st_new
@@ -1272,12 +1312,12 @@ pub fn apply_grassy_heal_active(
       }
       let is_mega = active < megaed.length() && megaed[active]
       let eff = effective_combatant(team[active], is_mega)
-      if !(@damage.is_grounded(
+      if !@damage.is_grounded(
           type1=eff.pokemon.type1,
           type2=eff.pokemon.type2,
           ability=eff.ability,
           item=eff.item,
-        )) {
+        ) {
         return
       }
       // max_hp / 16 を回復。整数除算で 0 になる low-max ケースは max(1, _) で
@@ -1488,8 +1528,8 @@ pub fn apply_healing(
   attacker_ability : String,
   dmg : Int,
   defender_ability : String,
-  field~ : @model.Field = @model.Field::None,
-  attacker_grounded~ : Bool = true,
+  field? : @model.Field = @model.Field::None,
+  attacker_grounded? : Bool = true,
 ) -> Unit {
   match mv.healing {
     None => ()
@@ -1508,8 +1548,8 @@ pub fn apply_healing(
         sunny_n,
         sunny_d,
         harsh_n,
-        harsh_d,
-      ),
+        harsh_d
+      )
     ) => {
       // weather に応じて 3 系統から (n, d) を選択する。
       //   Sun                → sunny (= 2/3 for moonlight family)
@@ -1588,9 +1628,7 @@ pub fn apply_healing(
         // デフォルトで反転して食らう。
         sub_hp_floor0(attacker_hps, attacker_active_slot, amount)
       } else {
-        add_hp_capped(
-          attacker_hps, attacker_active_slot, amount, attacker_max,
-        )
+        add_hp_capped(attacker_hps, attacker_active_slot, amount, attacker_max)
       }
     }
     // 他バリアントは段階 9 以降で順次実装。本段階ではランタイム no-op。

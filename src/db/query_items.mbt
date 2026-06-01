@@ -65,7 +65,7 @@ fn parse_effect_kind(s : String) -> ItemEffectKind {
 pub fn query_item_effects(
   db : Db,
   item_name : String,
-  db_alias~ : String = "",
+  db_alias? : String = "",
 ) -> Result[Array[ItemEffect], String] {
   let prefix = if db_alias.length() > 0 { db_alias + "." } else { "" }
   let sql = "SELECT effect_kind, apply_order, COALESCE(num, 0), " +
@@ -136,5 +136,9 @@ fn parse_int_or_zero(s : String) -> Int {
     }
     i = i + 1
   }
-  if started { n * sign } else { 0 }
+  if started {
+    n * sign
+  } else {
+    0
+  }
 }

@@ -100,7 +100,11 @@ pub fn parse_variants_from_json(json_str : String) -> Array[ParsedVariant]? {
                       }
                       _ => return None
                     }
-                    out.push({ probability: prob, hits_count, total_damages: total })
+                    out.push({
+                      probability: prob,
+                      hits_count,
+                      total_damages: total,
+                    })
                   }
                   _ => return None
                 }

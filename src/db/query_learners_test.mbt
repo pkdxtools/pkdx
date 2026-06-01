@@ -20,12 +20,18 @@ test "query_learners: じしん scarlet_violet" {
       for i = 0; i < results.length(); i = i + 1 {
         if results[i].name_ja == "ガブリアス" {
           found = true
-          @debug.debug_inspect(results[i].type1, content=(
-            #|"じめん"
-          ))
-          @debug.debug_inspect(results[i].type2, content=(
-            #|"ドラゴン"
-          ))
+          @debug.debug_inspect(
+            results[i].type1,
+            content=(
+              #|"じめん"
+            ),
+          )
+          @debug.debug_inspect(
+            results[i].type2,
+            content=(
+              #|"ドラゴン"
+            ),
+          )
           @debug.debug_inspect(results[i].bst, content="600")
         }
       }
@@ -75,7 +81,11 @@ test "query_learners: nonexistent move returns empty" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(db, "そんざいしないわざ", @model.Other("scarlet_violet"))
+  let result = query_learners(
+    db,
+    "そんざいしないわざ",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
     Ok(results) => @debug.debug_inspect(results.length(), content="0")
@@ -97,18 +107,20 @@ test "query_learners: no duplicate globalNo" {
   let result = query_learners(db, "じしん", @model.Other("scarlet_violet"))
   close(db)
   match result {
-    Ok(results) => {
+    Ok(results) =>
       for i = 0; i < results.length(); i = i + 1 {
         for j = i + 1; j < results.length(); j = j + 1 {
           if results[i].global_no == results[j].global_no {
             fail(
-              "duplicate globalNo: " + results[i].global_no + " (" + results[i].name_ja +
+              "duplicate globalNo: " +
+              results[i].global_no +
+              " (" +
+              results[i].name_ja +
               ")",
             )
           }
         }
       }
-    }
     Err(e) => fail("query_learners failed: " + e)
   }
 }

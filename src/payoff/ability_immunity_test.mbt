@@ -32,18 +32,30 @@ test "ability_blocks_status_sweet_veil_blocks_sleep_and_drowsy" {
 
 ///|
 test "ability_blocks_status_insomnia_does_not_block_non_sleep_kinds" {
-  @debug.assert_eq(ability_blocks_status("ふみん", @model.ParalyzeKind), false)
+  @debug.assert_eq(
+    ability_blocks_status("ふみん", @model.ParalyzeKind),
+    false,
+  )
   @debug.assert_eq(ability_blocks_status("ふみん", @model.BurnKind), false)
   @debug.assert_eq(ability_blocks_status("ふみん", @model.PoisonKind), false)
-  @debug.assert_eq(ability_blocks_status("ふみん", @model.BadPoisonKind), false)
+  @debug.assert_eq(
+    ability_blocks_status("ふみん", @model.BadPoisonKind),
+    false,
+  )
 }
 
 ///|
 test "ability_blocks_status_vital_spirit_does_not_block_non_sleep_kinds" {
-  @debug.assert_eq(ability_blocks_status("やるき", @model.ParalyzeKind), false)
+  @debug.assert_eq(
+    ability_blocks_status("やるき", @model.ParalyzeKind),
+    false,
+  )
   @debug.assert_eq(ability_blocks_status("やるき", @model.BurnKind), false)
   @debug.assert_eq(ability_blocks_status("やるき", @model.PoisonKind), false)
-  @debug.assert_eq(ability_blocks_status("やるき", @model.BadPoisonKind), false)
+  @debug.assert_eq(
+    ability_blocks_status("やるき", @model.BadPoisonKind),
+    false,
+  )
 }
 
 ///|

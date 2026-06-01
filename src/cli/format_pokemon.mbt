@@ -116,11 +116,7 @@ fn pokemon_to_table(p : @model.Pokemon) -> String {
   } else {
     ""
   }) +
-  (if p.forms.length() > 0 {
-    "\nForms: " + forms_joined(p.forms)
-  } else {
-    ""
-  })
+  (if p.forms.length() > 0 { "\nForms: " + forms_joined(p.forms) } else { "" })
 }
 
 ///|

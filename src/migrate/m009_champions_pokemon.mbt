@@ -9,7 +9,7 @@ pub fn run_009(db : @db.Db, repo_root : String) -> Result[String, String] {
     None => return Err(path + " not found.")
     Some(s) => s
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match @champions_schema.parse_pokemon_entries(json) {
@@ -29,7 +29,8 @@ pub fn run_009(db : @db.Db, repo_root : String) -> Result[String, String] {
   }
   for i = 0; i < entries.length(); i = i + 1 {
     let e = entries[i]
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "INSERT INTO pokemon (id, no, global_no, form, pokedex, type1, type2, hp, attack, defense, special_attack, special_defense, speed, ability1, ability2, dream_ability) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
@@ -54,7 +55,8 @@ pub fn run_009(db : @db.Db, repo_root : String) -> Result[String, String] {
       Err(err) => return Err(err)
       Ok(_) => ()
     }
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "INSERT INTO pokemon_name (id, language, name) VALUES (?, ?, ?)",
         [@db.BindText(e.id), @db.BindText("jpn"), @db.BindText(e.name_jpn)],

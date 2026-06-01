@@ -63,11 +63,9 @@ fn init_schema(cache_db : @db.Db) -> Result[Unit, String] {
 /// Read a single meta row, returning `None` when the key is absent.
 fn read_meta(cache_db : @db.Db, k : String) -> Result[String?, String] {
   match
-    @db.query_binds(
-      cache_db,
-      "SELECT v FROM damage_cache_meta WHERE k = ?",
-      [@db.BindText(k)],
-    ) {
+    @db.query_binds(cache_db, "SELECT v FROM damage_cache_meta WHERE k = ?", [
+      @db.BindText(k),
+    ]) {
     Err(e) => Err(e)
     Ok(rows) =>
       if rows.length() == 0 {
@@ -157,7 +155,7 @@ fn try_open_and_init(
               @db.close(cache_db)
               Err(e)
             }
-            Ok(_) => Ok({ db: cache_db, path, })
+            Ok(_) => Ok({ db: cache_db, path })
           }
       }
   }
@@ -212,12 +210,7 @@ pub fn get(cache : DamageDiskCache, key : String) -> String? {
       [@db.BindText(key)],
     ) {
     Err(_) => None
-    Ok(rows) =>
-      if rows.length() == 0 {
-        None
-      } else {
-        rows[0][0]
-      }
+    Ok(rows) => if rows.length() == 0 { None } else { rows[0][0] }
   }
 }
 

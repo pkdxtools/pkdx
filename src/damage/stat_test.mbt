@@ -110,12 +110,18 @@ test "calc_all_stats: ガブリアス いじっぱり AS252 D4" {
 
 ///|
 test "reverse_base_from_stat: Atk 200 → base 130" {
-  @debug.debug_inspect(reverse_base_from_stat(200, 31, 252, false, 11, 10), content="130")
+  @debug.debug_inspect(
+    reverse_base_from_stat(200, 31, 252, false, 11, 10),
+    content="130",
+  )
 }
 
 ///|
 test "reverse_base_from_stat: HP 183 → base 108" {
-  @debug.debug_inspect(reverse_base_from_stat(183, 31, 0, true, 1, 1), content="108")
+  @debug.debug_inspect(
+    reverse_base_from_stat(183, 31, 0, true, 1, 1),
+    content="108",
+  )
 }
 
 ///|
@@ -461,13 +467,17 @@ test "sp_for_non_hp_champions: round-trip all SP values" {
 
 ///|
 test "reverse_base_from_stat_champions: HP 183 → base 108" {
-  @debug.debug_inspect(reverse_base_from_stat_champions(183, 0, true, 1, 1), content="108")
+  @debug.debug_inspect(
+    reverse_base_from_stat_champions(183, 0, true, 1, 1),
+    content="108",
+  )
 }
 
 ///|
 test "reverse_base_from_stat_champions: Atk 200, SP=32, nature up → base 130" {
   @debug.debug_inspect(
-    reverse_base_from_stat_champions(200, 32, false, 11, 10), content="130",
+    reverse_base_from_stat_champions(200, 32, false, 11, 10),
+    content="130",
   )
 }
 
@@ -577,7 +587,9 @@ test "calc_stat wrappers: non-HP parameterised golden across natures" {
     assert_true(calc_stat(b, nature_num=nn, nature_den=nd) == off)
     assert_true(calc_stat_champions(b, nature_num=nn, nature_den=nd) == off)
     assert_true(calc_def_stat(b, nature_num=nn, nature_den=nd) == def_)
-    assert_true(calc_def_stat_champions(b, nature_num=nn, nature_den=nd) == def_)
+    assert_true(
+      calc_def_stat_champions(b, nature_num=nn, nature_den=nd) == def_,
+    )
   }
 }
 

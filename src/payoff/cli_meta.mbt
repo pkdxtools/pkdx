@@ -44,7 +44,9 @@ fn parse_usage(j : Json) -> Array[Double] raise MetaCliError {
       for i in 0..<arr.length() {
         let v = json_number_meta(arr[i], "usage[" + i.to_string() + "]")
         if v < 0.0 {
-          raise InvalidJsonMeta("usage[" + i.to_string() + "] must be non-negative")
+          raise InvalidJsonMeta(
+            "usage[" + i.to_string() + "] must be non-negative",
+          )
         }
         out[i] = v
         total = total + v
@@ -79,7 +81,10 @@ fn parse_meta_matrix(j : Json) -> Array[Array[Double]] raise MetaCliError {
             }
             data[i] = row
           }
-          _ => raise InvalidJsonMeta("matrix[" + i.to_string() + "] must be an array")
+          _ =>
+            raise InvalidJsonMeta(
+              "matrix[" + i.to_string() + "] must be an array",
+            )
         }
       }
       let cols = data[0].length()
@@ -182,7 +187,7 @@ fn fmt_labels_meta(labels : Array[String], n : Int) -> Array[String] {
 /// Run `pkdx meta-divergence`. Accepts the input JSON and returns a JSON
 /// string report.
 pub fn run_meta_divergence(input_json : String) -> String raise MetaCliError {
-  let root = try @json.parse(input_json) catch {
+  let root = @json.parse(input_json) catch {
     err => raise InvalidJsonMeta(@debug.to_string(err))
   }
   let obj = match root {

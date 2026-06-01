@@ -126,12 +126,13 @@ fn try_mwu(
 /// both observed exploitabilities.
 pub fn solve_with_fallback(
   matrix : @nash.FiniteMatrix,
-  config~ : NashSolverConfig = NashSolverConfig::default(),
+  config? : NashSolverConfig = NashSolverConfig::default(),
 ) -> NashSolverResult raise NashCliError {
-  let lp = try @nash.solve_zero_sum(matrix) catch {
+  let lp = @nash.solve_zero_sum(matrix) catch {
     @nash.SimplexFailure(_) as simplex_err => {
       // Fallback 1: fictitious_play.
-      let fp_expl = match try_fictitious(matrix, config.iterations, config.tol) {
+      let fp_expl = match
+        try_fictitious(matrix, config.iterations, config.tol) {
         Ok((p, q, expl)) => {
           let v = @nash.expected_payoff(p, matrix, q)
           return {

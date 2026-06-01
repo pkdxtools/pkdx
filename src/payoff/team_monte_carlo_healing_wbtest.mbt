@@ -60,7 +60,8 @@ fn mk_pokemon(
 
 ///|
 fn mk_combatant(
-  pokemon : @model.Pokemon, moves : Array[@model.Move],
+  pokemon : @model.Pokemon,
+  moves : Array[@model.Move],
 ) -> Combatant {
   {
     pokemon,
@@ -105,13 +106,17 @@ fn mk_combatant(
 /// strict assertion: 実装前は `v <= -0.5`、実装後は `v > -0.5` (実装前は -1.0
 /// 確定なので strict に -0.5 で境界を作れる)。
 test "team_rollout: self-heal-only own survives 20-turn rollout (recover semantics)" {
-  let own_p = mk_pokemon("Healer", "ノーマル", "", 200, 50, 200, 50, 200, 100)
+  let own_p = mk_pokemon(
+    "Healer", "ノーマル", "", 200, 50, 200, 50, 200, 100,
+  )
   let recover : @model.Move = {
     ..mk_move("じこさいせい", "ノーマル", @model.Status, 0),
     healing: Some(@model.FixedFraction(1, 2)),
   }
   let own = [mk_combatant(own_p, [recover])]
-  let opp_p = mk_pokemon("Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let opp_p = mk_pokemon(
+    "Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let opp = [mk_combatant(opp_p, [tackle])]
   let rng = seeded_rng(42UL)
@@ -134,7 +139,9 @@ test "team_rollout: no-heal control own gets KO'd in 20-turn rollout" {
   // healing=None の status move。実質「何もしない」ターンが続く。
   let noop = mk_move("nooop", "ノーマル", @model.Status, 0)
   let own = [mk_combatant(own_p, [noop])]
-  let opp_p = mk_pokemon("Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let opp_p = mk_pokemon(
+    "Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let opp = [mk_combatant(opp_p, [tackle])]
   let rng = seeded_rng(42UL)
@@ -186,13 +193,17 @@ test "team_rollout: no-heal control own gets KO'd in 20-turn rollout" {
 /// で十分担保されているため、Wish の戦略的価値の細部 (slot semantics) は
 /// DP 側 wbtest (`switching_game_healing_wbtest.mbt` の Wish ケース) に任せる。
 test "team_rollout: wish-only moveset reaches the rollout without panic" {
-  let own_p = mk_pokemon("Wisher", "ノーマル", "", 200, 50, 200, 50, 200, 100)
+  let own_p = mk_pokemon(
+    "Wisher", "ノーマル", "", 200, 50, 200, 50, 200, 100,
+  )
   let wish : @model.Move = {
     ..mk_move("ねがいごと", "ノーマル", @model.Status, 0),
     healing: Some(@model.Wish),
   }
   let own = [mk_combatant(own_p, [wish])]
-  let opp_p = mk_pokemon("Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let opp_p = mk_pokemon(
+    "Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let opp = [mk_combatant(opp_p, [tackle])]
   let rng = seeded_rng(42UL)
@@ -289,12 +300,9 @@ test "team_apply_post_hit + tick_and_fire_wish_inplace: Wish heals max/2 2 EOT l
   let field_turns_state = [0]
   // Wish を発動: wish_turns[0] = 2 にセットされる。
   team_apply_post_hit(
-    attacker_hps, 0, attacker_ranks, attacker_must_recharge,
-    attacker_status, attacker_wish_turns, attacker_team,
-    defender_hps, 0, defender_ranks,
-    defender_leech_seeded, defender_team, defender_megaed,
-    weather_state, weather_turns_state,
-    field_state, field_turns_state,
+    attacker_hps, 0, attacker_ranks, attacker_must_recharge, attacker_status, attacker_wish_turns,
+    attacker_team, defender_hps, 0, defender_ranks, defender_leech_seeded, defender_team,
+    defender_megaed, weather_state, weather_turns_state, field_state, field_turns_state,
     wish_move, 0,
   )
   @debug.assert_eq(attacker_wish_turns[0], 2)
@@ -373,9 +381,15 @@ test "team_rollout: Wish on Wisher heals Receiver after forced switch (Issue #6)
   // Opp Hitter: 高耐久 + 中等火力。Wisher を 1 撃で倒す、Receiver には ~50/turn
   // 与える程度の damage tempo。Receiver の tackle (低火力) では turn_limit 内で
   // 倒しきれない。
-  let wisher_p = mk_pokemon("Wisher", "ノーマル", "", 100, 50, 50, 50, 50, 250)
-  let receiver_p = mk_pokemon("Receiver", "ノーマル", "", 300, 50, 300, 50, 300, 50)
-  let opp_p = mk_pokemon("Hitter", "ノーマル", "", 400, 150, 200, 150, 200, 100)
+  let wisher_p = mk_pokemon(
+    "Wisher", "ノーマル", "", 100, 50, 50, 50, 50, 250,
+  )
+  let receiver_p = mk_pokemon(
+    "Receiver", "ノーマル", "", 300, 50, 300, 50, 300, 50,
+  )
+  let opp_p = mk_pokemon(
+    "Hitter", "ノーマル", "", 400, 150, 200, 150, 200, 100,
+  )
   let wish_move : @model.Move = {
     ..mk_move("ねがいごと", "ノーマル", @model.Status, 0),
     healing: Some(@model.Wish),
@@ -400,11 +414,19 @@ test "team_rollout: Wish on Wisher heals Receiver after forced switch (Issue #6)
   // 反映する境界に turn_limit を取る。
   let rng_a = seeded_rng(7777UL)
   let v_with_wish = team_rollout(
-    own_wish, opp, rng_a, turn_limit=8, epsilon=0.0,
+    own_wish,
+    opp,
+    rng_a,
+    turn_limit=8,
+    epsilon=0.0,
   )
   let rng_b = seeded_rng(7777UL)
   let v_without_wish = team_rollout(
-    own_noop, opp, rng_b, turn_limit=8, epsilon=0.0,
+    own_noop,
+    opp,
+    rng_b,
+    turn_limit=8,
+    epsilon=0.0,
   )
   // Wish 経由で Receiver HP が回復するため、Wish ありの方が最終 value で
   // strict に高い。差は max/2 = 150 HP 分相当 (Receiver の比率に直すと
@@ -422,13 +444,17 @@ test "team_rollout: Wish on Wisher heals Receiver after forced switch (Issue #6)
 /// strict criterion: DP > -0.5 のとき MC > -0.5 (両者ともに「壊滅 KO」では
 /// ないこと)。
 test "team_rollout: DP value and MC value agree on recover team viability" {
-  let own_p = mk_pokemon("Healer", "ノーマル", "", 200, 50, 200, 50, 200, 100)
+  let own_p = mk_pokemon(
+    "Healer", "ノーマル", "", 200, 50, 200, 50, 200, 100,
+  )
   let recover : @model.Move = {
     ..mk_move("じこさいせい", "ノーマル", @model.Status, 0),
     healing: Some(@model.FixedFraction(1, 2)),
   }
   let own = [mk_combatant(own_p, [recover])]
-  let opp_p = mk_pokemon("Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let opp_p = mk_pokemon(
+    "Attacker", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let opp = [mk_combatant(opp_p, [tackle])]
   // turn_limit=10 で DP を回す (1v1 + 1 move/side で state 数は小さい)。

@@ -29,8 +29,7 @@ fn select_input_json(
   format : String,
 ) -> String {
   select_input_json_with_extra(
-    team_speeds, opp_speeds, format,
-    ",\"team_payoff_model\":\"switching_game:1\"",
+    team_speeds, opp_speeds, format, ",\"team_payoff_model\":\"switching_game:1\"",
   )
 }
 
@@ -61,8 +60,7 @@ test "select_6v6_single_outputs_3pick_distribution" {
   let opp_sp = [100, 100, 100, 100, 100, 100]
   let out = run_select(
     select_input_json_with_extra(
-      team_sp, opp_sp, "single",
-      ",\"team_payoff_model\":\"switching_game:1\"",
+      team_sp, opp_sp, "single", ",\"team_payoff_model\":\"switching_game:1\"",
     ),
   )
   let j = @json.parse(out)
@@ -114,8 +112,7 @@ test "select_favours_faster_side_in_speed_asymmetric_lineup" {
   let opp_sp = [50, 50, 50, 50, 50, 50]
   let out = run_select(
     select_input_json_with_extra(
-      team_sp, opp_sp, "single",
-      ",\"team_payoff_model\":\"switching_game:2\"",
+      team_sp, opp_sp, "single", ",\"team_payoff_model\":\"switching_game:2\"",
     ),
   )
   let j = @json.parse(out)
@@ -194,10 +191,12 @@ test "select_markdown_report_written_to_box_teams" {
   let team_sp = [100, 100, 100, 100, 100, 100]
   let opp_sp = [100, 100, 100, 100, 100, 100]
   let team = parse_team_array(
-    @json.parse(build_team_json(6, "T", team_sp)), "team",
+    @json.parse(build_team_json(6, "T", team_sp)),
+    "team",
   )
   let opp = parse_team_array(
-    @json.parse(build_team_json(6, "O", opp_sp)), "opponent",
+    @json.parse(build_team_json(6, "O", opp_sp)),
+    "opponent",
   )
   let r = compute_select_with_team_model(team, opp, Single, SwitchingGame(1))
   let md = render_select_markdown(r)
@@ -211,10 +210,7 @@ test "run_select_json_rejects_malformed_team_payoff_model" {
   let team_sp = [100, 100, 100, 100, 100, 100]
   let opp_sp = [100, 100, 100, 100, 100, 100]
   let input = select_input_json_with_extra(
-    team_sp,
-    opp_sp,
-    "single",
-    ",\"team_payoff_model\":\"unknown:bad\"",
+    team_sp, opp_sp, "single", ",\"team_payoff_model\":\"unknown:bad\"",
   )
   let errored = try {
     let _ = run_select(input)
@@ -583,19 +579,38 @@ test "run_select_rejects_team_size_other_than_six" {
 ///|
 test "select_accepts_team_builder_member_format" {
   let mk = fn(name : String, speed : Int) -> String {
-    "{\"name\":\"" + name + "\",\"types\":[\"ノーマル\"],\"base_stats\":{\"h\":100,\"a\":100,\"b\":80,\"c\":80,\"d\":80,\"s\":" + speed.to_string() + "},\"ability\":\"\",\"item\":\"\",\"role\":\"軸\",\"moves\":[{\"name\":\"のしかかり\",\"type\":\"ノーマル\",\"category\":\"物理\",\"power\":85}]}"
+    "{\"name\":\"" +
+    name +
+    "\",\"types\":[\"ノーマル\"],\"base_stats\":{\"h\":100,\"a\":100,\"b\":80,\"c\":80,\"d\":80,\"s\":" +
+    speed.to_string() +
+    "},\"ability\":\"\",\"item\":\"\",\"role\":\"軸\",\"moves\":[{\"name\":\"のしかかり\",\"type\":\"ノーマル\",\"category\":\"物理\",\"power\":85}]}"
   }
-  let team = "[" + mk("T0", 100) + "," + mk("T1", 95) + "," + mk("T2", 105) + "," + mk("T3", 90) + "," + mk("T4", 110) + "," + mk("T5", 85) + "]"
-  let input = "{\"team\":" + team + ",\"opponent\":" + team + ",\"format\":\"single\",\"team_payoff_model\":\"switching_game:1\"}"
+  let team = "[" +
+    mk("T0", 100) +
+    "," +
+    mk("T1", 95) +
+    "," +
+    mk("T2", 105) +
+    "," +
+    mk("T3", 90) +
+    "," +
+    mk("T4", 110) +
+    "," +
+    mk("T5", 85) +
+    "]"
+  let input = "{\"team\":" +
+    team +
+    ",\"opponent\":" +
+    team +
+    ",\"format\":\"single\",\"team_payoff_model\":\"switching_game:1\"}"
   let out = run_select(input)
   let j = @json.parse(out)
   match j {
-    Object(m) => {
+    Object(m) =>
       match m.get("row_strategy") {
         Some(Array(arr)) => assert_true(arr.length() == 60)
         _ => assert_true(false)
       }
-    }
     _ => assert_true(false)
   }
 }
@@ -615,9 +630,8 @@ test "e2e: 6v6 turn_limit=3 degenerate fixture triggers Nash fallback" {
   // Baseline reset so other tests that may have incremented this counter
   // earlier in the same run do not pollute the assertion below.
   silent_dp_fallback_count.val = 0
-  let input_json = match @db.read_file(
-      "tests/fixtures/nash_select_input_6v6_t3.json",
-    ) {
+  let input_json = match
+    @db.read_file("tests/fixtures/nash_select_input_6v6_t3.json") {
     Some(s) => s
     None => {
       fail("missing tests/fixtures/nash_select_input_6v6_t3.json")

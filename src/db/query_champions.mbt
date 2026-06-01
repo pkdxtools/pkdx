@@ -150,8 +150,7 @@ pub fn query_champions_moves(
   } else {
     ""
   }
-  let sql =
-    "SELECT DISTINCT m.waza, m.type, m.category,\n" +
+  let sql = "SELECT DISTINCT m.waza, m.type, m.category,\n" +
     "       m.power, m.accuracy, m.pp, l.conditions AS learn_method,\n" +
     "       COALESCE(mm.priority, 0) AS priority,\n" +
     "       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,\n" +
@@ -185,8 +184,8 @@ fn collect_champions_moves_rows(
   db : Db,
   sql : String,
   binds : Array[String],
-  has_heal~ : Bool = true,
-  has_field~ : Bool = true,
+  has_heal? : Bool = true,
+  has_field? : Bool = true,
 ) -> Result[Array[@model.Move], String] {
   let rows = match query(db, sql, binds) {
     Ok(r) => r
@@ -255,7 +254,11 @@ fn collect_champions_moves_rows(
       None
     }
     let field_set = if has_field {
-      let field_set_str = if r.length() > field_base { r[field_base] } else { "" }
+      let field_set_str = if r.length() > field_base {
+        r[field_base]
+      } else {
+        ""
+      }
       parse_field_set(field_set_str)
     } else {
       None
@@ -305,8 +308,7 @@ pub fn query_champions_move(
   }
   let has_heal = heal_cols != ""
   let has_field = field_cols != ""
-  let sql =
-    "SELECT m.waza, m.type, m.category, m.power, m.accuracy, m.pp,\n" +
+  let sql = "SELECT m.waza, m.type, m.category, m.power, m.accuracy, m.pp,\n" +
     "       COALESCE(mm.priority, 0) AS priority,\n" +
     "       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,\n" +
     "       COALESCE(mm.ailment_ja, '') AS ailment_ja,\n" +
@@ -335,10 +337,14 @@ pub fn query_champions_move(
   let recoil_num = if r.length() > 10 { parse_int_simple(r[10]) } else { 0 }
   let recoil_den_raw = if r.length() > 11 { parse_int_simple(r[11]) } else { 1 }
   let recoil_den = if recoil_den_raw <= 0 { 1 } else { recoil_den_raw }
-  let self_ko = if r.length() > 12 { parse_int_simple(r[12]) != 0 } else {
+  let self_ko = if r.length() > 12 {
+    parse_int_simple(r[12]) != 0
+  } else {
     false
   }
-  let recharge = if r.length() > 13 { parse_int_simple(r[13]) != 0 } else {
+  let recharge = if r.length() > 13 {
+    parse_int_simple(r[13]) != 0
+  } else {
     false
   }
   let heal_base = 14

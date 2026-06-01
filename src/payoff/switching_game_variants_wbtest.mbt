@@ -24,8 +24,8 @@
 ///|
 fn sgvw_pokemon(
   name : String,
-  type1~ : String = "ノーマル",
-  spe~ : Int = 100,
+  type1? : String = "ノーマル",
+  spe? : Int = 100,
 ) -> @model.Pokemon {
   {
     global_no: "0000",
@@ -51,10 +51,10 @@ fn sgvw_pokemon(
 ///|
 fn sgvw_move(
   name : String,
-  power~ : Int = 25,
-  accuracy~ : Int = 100,
-  category~ : @model.MoveCategory = @model.Physical,
-  type_~ : String = "ノーマル",
+  power? : Int = 25,
+  accuracy? : Int = 100,
+  category? : @model.MoveCategory = @model.Physical,
+  type_? : String = "ノーマル",
 ) -> @model.Move {
   {
     name,
@@ -81,8 +81,8 @@ fn sgvw_move(
 fn sgvw_combatant(
   name : String,
   mv : @model.Move,
-  spe~ : Int = 100,
-  ability~ : String = "",
+  spe? : Int = 100,
+  ability? : String = "",
 ) -> Combatant {
   {
     pokemon: sgvw_pokemon(name, spe~),
@@ -163,7 +163,7 @@ fn sgvw_distinct_opp_hps(leaves : Array[(Double, SwitchingGameState)]) -> Int {
         break
       }
     }
-    if !(found) {
+    if !found {
       seen.push(hp)
     }
   }
@@ -182,7 +182,13 @@ test "Phase 3-A: parameterized matrix — leaves count + Σprob across 8 cases" 
     ("じしん", sgvw_move("じしん", power=100, type_="じめん"), "", 1),
     (
       "ハイドロポンプ",
-      sgvw_move("ハイドロポンプ", power=110, accuracy=80, category=@model.Special, type_="みず"),
+      sgvw_move(
+        "ハイドロポンプ",
+        power=110,
+        accuracy=80,
+        category=@model.Special,
+        type_="みず",
+      ),
       "",
       1,
     ),
@@ -194,7 +200,12 @@ test "Phase 3-A: parameterized matrix — leaves count + Σprob across 8 cases" 
     ),
     (
       "トリプルアクセル",
-      sgvw_move("トリプルアクセル", power=20, accuracy=90, type_="こおり"),
+      sgvw_move(
+        "トリプルアクセル",
+        power=20,
+        accuracy=90,
+        type_="こおり",
+      ),
       "",
       3,
     ),
@@ -225,10 +236,7 @@ test "Phase 3-A: parameterized matrix — leaves count + Σprob across 8 cases" 
   ]
   for i = 0; i < cases.length(); i = i + 1 {
     let (_label, mv_atk, ability, expected) = cases[i]
-    let attacker = {
-      ..sgvw_combatant("attacker", mv_atk, spe=200),
-      ability,
-    }
+    let attacker = { ..sgvw_combatant("attacker", mv_atk, spe=200), ability, }
     let defender = sgvw_combatant("defender", mv_dfn, spe=50)
     // KO 防止のため十分大きな HP (PopulationBomb 10-hit でも残るレベル)。
     let state = sgvw_state(30000, 30000)

@@ -67,7 +67,8 @@ fn count_rows(db : @db.Db) -> Int {
 /// heal_kind != '' OR weather_set != '' の行数を取得 (= 投入された healing/
 /// weather 行の総数)。
 fn count_healing_rows(db : @db.Db) -> Int {
-  let rows = match @db.query_binds(
+  let rows = match
+    @db.query_binds(
       db,
       "SELECT COUNT(*) FROM move_meta WHERE heal_kind != '' OR weather_set != ''",
       [],
@@ -89,8 +90,8 @@ fn count_healing_rows(db : @db.Db) -> Int {
 /// 実際に存在する列数を返す。
 fn count_m014_columns(db : @db.Db) -> Int {
   let expected = [
-    "heal_kind", "heal_num", "heal_den", "heal_sunny_num", "heal_sunny_den",
-    "heal_harsh_num", "heal_harsh_den", "weather_set", "weather_turns",
+    "heal_kind", "heal_num", "heal_den", "heal_sunny_num", "heal_sunny_den", "heal_harsh_num",
+    "heal_harsh_den", "weather_set", "weather_turns",
   ]
   let rows = match @db.query_binds(db, "PRAGMA table_info(move_meta)", []) {
     Ok(r) => r
@@ -105,7 +106,9 @@ fn count_m014_columns(db : @db.Db) -> Int {
         _ => ()
       }
     }
-    if hit { found = found + 1 }
+    if hit {
+      found = found + 1
+    }
   }
   found
 }
@@ -131,7 +134,8 @@ test "m014 idempotent: first run inserts all 21 entries" {
   }
   // フォーマット: "healing/weather columns added; <updated> updated, <inserted> inserted"
   @debug.debug_inspect(
-    msg, content="\"healing/weather columns added; 0 updated, 21 inserted\"",
+    msg,
+    content="\"healing/weather columns added; 0 updated, 21 inserted\"",
   )
   @debug.assert_eq(count_rows(db), 21)
   @debug.assert_eq(count_healing_rows(db), 21)
@@ -171,7 +175,8 @@ test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
     }
   }
   @debug.debug_inspect(
-    msg2, content="\"healing/weather columns added; 21 updated, 0 inserted\"",
+    msg2,
+    content="\"healing/weather columns added; 21 updated, 0 inserted\"",
   )
   @debug.assert_eq(count_rows(db), rows_after_first)
   @debug.assert_eq(count_healing_rows(db), healing_after_first)
@@ -216,7 +221,8 @@ test "m014 idempotent: third run is identical to second (steady state)" {
     }
   }
   @debug.debug_inspect(
-    msg3, content="\"healing/weather columns added; 21 updated, 0 inserted\"",
+    msg3,
+    content="\"healing/weather columns added; 21 updated, 0 inserted\"",
   )
   @debug.assert_eq(count_rows(db), 21)
   @debug.assert_eq(count_healing_rows(db), 21)

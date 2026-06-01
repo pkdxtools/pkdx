@@ -30,7 +30,15 @@ test "effective_speed_negative_ranks_scale_correctly" {
 test "turn_order_sign_priority_beats_higher_speed" {
   let a = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 50),
-    [mk_move("バレットパンチ", "はがね", @model.Physical, 40, priority=1)],
+    [
+      mk_move(
+        "バレットパンチ",
+        "はがね",
+        @model.Physical,
+        40,
+        priority=1,
+      ),
+    ],
   )
   let b = mk_combatant(
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 200),
@@ -48,11 +56,27 @@ test "turn_order_sign_priority_beats_higher_speed" {
 test "turn_order_sign_higher_priority_dominates_lower_priority" {
   let a = mk_combatant(
     mk_pokemon("A", "ノーマル", "", 100, 100, 100, 100, 100, 100),
-    [mk_move("ねこだまし", "ノーマル", @model.Physical, 40, priority=3)],
+    [
+      mk_move(
+        "ねこだまし",
+        "ノーマル",
+        @model.Physical,
+        40,
+        priority=3,
+      ),
+    ],
   )
   let b = mk_combatant(
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
-    [mk_move("バレットパンチ", "はがね", @model.Physical, 40, priority=1)],
+    [
+      mk_move(
+        "バレットパンチ",
+        "はがね",
+        @model.Physical,
+        40,
+        priority=1,
+      ),
+    ],
   )
   // +3 (ねこだまし) beats +1 (バレットパンチ).
   @debug.assert_eq(turn_order_sign(a, 3, 100, b, 1, 100), 1)

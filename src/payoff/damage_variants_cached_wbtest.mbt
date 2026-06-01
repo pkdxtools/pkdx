@@ -36,8 +36,8 @@ fn dvc_pokemon(name : String) -> @model.Pokemon {
 ///|
 fn dvc_move(
   name : String,
-  power~ : Int = 25,
-  accuracy~ : Int = 100,
+  power? : Int = 25,
+  accuracy? : Int = 100,
 ) -> @model.Move {
   {
     name,
@@ -103,18 +103,24 @@ test "compute_damage_variants: Triple Axel returns 3 outcomes with hits_count {1
   let dfn = dvc_combatant("defender", mv)
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
   @debug.debug_inspect(outcomes.length(), content="3")
-  assert_true(outcomes[0].hits_count == 1 && dvc_approx(outcomes[0].probability, 0.10, 1.0e-12))
-  assert_true(outcomes[1].hits_count == 2 && dvc_approx(outcomes[1].probability, 0.09, 1.0e-12))
-  assert_true(outcomes[2].hits_count == 3 && dvc_approx(outcomes[2].probability, 0.81, 1.0e-12))
+  assert_true(
+    outcomes[0].hits_count == 1 &&
+    dvc_approx(outcomes[0].probability, 0.10, 1.0e-12),
+  )
+  assert_true(
+    outcomes[1].hits_count == 2 &&
+    dvc_approx(outcomes[1].probability, 0.09, 1.0e-12),
+  )
+  assert_true(
+    outcomes[2].hits_count == 3 &&
+    dvc_approx(outcomes[2].probability, 0.81, 1.0e-12),
+  )
 }
 
 ///|
 test "compute_damage_variants: Skill Link rocket blast returns 1 outcome with hits_count=5" {
   let mv = dvc_move("ロックブラスト", power=25, accuracy=90)
-  let atk = {
-    ..dvc_combatant("attacker", mv),
-    ability: "スキルリンク",
-  }
+  let atk = { ..dvc_combatant("attacker", mv), ability: "スキルリンク" }
   let dfn = dvc_combatant("defender", mv)
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -196,7 +202,8 @@ test "compute_mean_damage agrees with Σ probability * mean_damage from variants
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
   let mut weighted = 0.0
   for i = 0; i < outcomes.length(); i = i + 1 {
-    weighted = weighted + outcomes[i].probability * outcomes[i].mean_damage.to_double()
+    weighted = weighted +
+      outcomes[i].probability * outcomes[i].mean_damage.to_double()
   }
   let scalar = compute_mean_damage(atk, dfn, mv, 0, 0)
   // compute_mean_damage truncates to Int, so allow +/- 1 of rounding slack.

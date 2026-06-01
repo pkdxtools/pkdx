@@ -42,9 +42,7 @@ pub fn open_rwc(path : String) -> Result[Db, String] {
   if rc == 0 {
     Ok(out[0])
   } else {
-    Err(
-      "Failed to open/create database (rc=" + rc.to_string() + "): " + path,
-    )
+    Err("Failed to open/create database (rc=" + rc.to_string() + "): " + path)
   }
 }
 
@@ -133,7 +131,11 @@ fn query_binds_impl(
   let n = binds.length()
   let tags : FixedArray[Int] = FixedArray::make(if n == 0 { 1 } else { n }, 0)
   let bind_bytes : FixedArray[Bytes] = FixedArray::make(
-    if n == 0 { 1 } else { n },
+    if n == 0 {
+      1
+    } else {
+      n
+    },
     Bytes::make(1, 0),
   )
   for i = 0; i < n; i = i + 1 {

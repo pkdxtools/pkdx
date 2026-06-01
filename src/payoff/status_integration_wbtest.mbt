@@ -8,13 +8,13 @@
 fn mk_ntypa_pokemon(
   name : String,
   type1 : String,
-  type2~ : String = "",
-  hp~ : Int = 100,
-  atk~ : Int = 100,
-  def_~ : Int = 100,
-  spa~ : Int = 100,
-  spd~ : Int = 100,
-  spe~ : Int = 100,
+  type2? : String = "",
+  hp? : Int = 100,
+  atk? : Int = 100,
+  def_? : Int = 100,
+  spa? : Int = 100,
+  spd? : Int = 100,
+  spe? : Int = 100,
 ) -> @model.Pokemon {
   {
     global_no: "0000",
@@ -66,10 +66,10 @@ fn mk_int_move(
   type_ : String,
   category : @model.MoveCategory,
   power : Int,
-  accuracy~ : Int = 100,
-  status_effect~ : (@model.StatusKind, Int)? = None,
+  accuracy? : Int = 100,
+  status_effect? : (@model.StatusKind, Int)? = None,
 ) -> @model.Move {
-  mk_move(name, type_, category, power, accuracy=accuracy, status_effect=status_effect)
+  mk_move(name, type_, category, power, accuracy~, status_effect~)
 }
 
 ///|
@@ -77,11 +77,30 @@ fn mk_int_move(
 /// type immunity, so the value should equal the baseline where rogue Will-
 /// o-wisp does nothing anyway (baseline: just a damaging filler).
 test "burn-immune fire type unaffected by Will-o-wisp" {
-  let fire_atk = mk_ntypa_pokemon("ほのおタイプ", "ほのお", atk=120, spe=90)
-  let normie = mk_ntypa_pokemon("ノーマルタイプ", "ノーマル", atk=100, spe=90)
-  let tackle = mk_int_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let fire_atk = mk_ntypa_pokemon(
+    "ほのおタイプ",
+    "ほのお",
+    atk=120,
+    spe=90,
+  )
+  let normie = mk_ntypa_pokemon(
+    "ノーマルタイプ",
+    "ノーマル",
+    atk=100,
+    spe=90,
+  )
+  let tackle = mk_int_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let wowisp = mk_int_move(
-    "おにび", "ほのお", @model.Status, 0, accuracy=85,
+    "おにび",
+    "ほのお",
+    @model.Status,
+    0,
+    accuracy=85,
     status_effect=Some((@model.BurnKind, 100)),
   )
   let my_team = [mk_int_combatant(fire_atk, [tackle])]
@@ -97,13 +116,33 @@ test "burn-immune fire type unaffected by Will-o-wisp" {
 
 ///|
 test "thunder wave on a normal-type opponent shifts value" {
-  let fast_atk = mk_ntypa_pokemon("はやいやつ", "ノーマル", atk=100, spe=130)
-  let slow_tanky = mk_ntypa_pokemon(
-    "おそいやつ", "ノーマル", hp=160, atk=80, def_=120, spd=120, spe=40,
+  let fast_atk = mk_ntypa_pokemon(
+    "はやいやつ",
+    "ノーマル",
+    atk=100,
+    spe=130,
   )
-  let tackle = mk_int_move("たいあたり", "ノーマル", @model.Physical, 60)
+  let slow_tanky = mk_ntypa_pokemon(
+    "おそいやつ",
+    "ノーマル",
+    hp=160,
+    atk=80,
+    def_=120,
+    spd=120,
+    spe=40,
+  )
+  let tackle = mk_int_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    60,
+  )
   let twave = mk_int_move(
-    "でんじは", "でんき", @model.Status, 0, accuracy=90,
+    "でんじは",
+    "でんき",
+    @model.Status,
+    0,
+    accuracy=90,
     status_effect=Some((@model.ParalyzeKind, 100)),
   )
   // Fast side can paralyze; slow side just attacks.
@@ -120,14 +159,33 @@ test "thunder wave on a normal-type opponent shifts value" {
 ///|
 test "toxic on a tanky opponent shifts value in the user's favour" {
   let tanky = mk_ntypa_pokemon(
-    "めんえき", "くさ", hp=200, def_=120, spd=120, spe=40,
+    "めんえき",
+    "くさ",
+    hp=200,
+    def_=120,
+    spd=120,
+    spe=40,
   )
   let other = mk_ntypa_pokemon(
-    "ふつう", "ノーマル", hp=120, def_=80, spd=80, spe=80,
+    "ふつう",
+    "ノーマル",
+    hp=120,
+    def_=80,
+    spd=80,
+    spe=80,
   )
-  let tackle = mk_int_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let tackle = mk_int_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let toxic_move = mk_int_move(
-    "どくどく", "どく", @model.Status, 0, accuracy=90,
+    "どくどく",
+    "どく",
+    @model.Status,
+    0,
+    accuracy=90,
     status_effect=Some((@model.BadPoisonKind, 100)),
   )
   let with_toxic = [mk_int_combatant(tanky, [tackle, toxic_move])]
@@ -143,9 +201,18 @@ test "toxic on a tanky opponent shifts value in the user's favour" {
 test "yawn: target stays awake on the turn it lands (delayed sleep)" {
   let fast = mk_ntypa_pokemon("はやい", "ノーマル", atk=100, spe=120)
   let slow = mk_ntypa_pokemon("おそい", "ノーマル", atk=100, spe=60)
-  let tackle = mk_int_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let tackle = mk_int_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let yawn = mk_int_move(
-    "あくび", "ノーマル", @model.Status, 0, accuracy=100,
+    "あくび",
+    "ノーマル",
+    @model.Status,
+    0,
+    accuracy=100,
     status_effect=Some((@model.DrowsyKind, 100)),
   )
   // fast側があくび。1ターン目でdrowsy付与、2ターン目EOTで Sleep(2)
@@ -160,15 +227,25 @@ test "yawn: target stays awake on the turn it lands (delayed sleep)" {
 
 ///|
 test "spore (sleep 100%) keeps slow attacker ahead by locking out target" {
-  let slow_mover = mk_ntypa_pokemon(
-    "ねむらせ", "くさ", atk=120, spe=60,
-  )
+  let slow_mover = mk_ntypa_pokemon("ねむらせ", "くさ", atk=120, spe=60)
   let fast_hitter = mk_ntypa_pokemon(
-    "はやいこうげき", "ノーマル", atk=100, spe=120,
+    "はやいこうげき",
+    "ノーマル",
+    atk=100,
+    spe=120,
   )
-  let tackle = mk_int_move("たいあたり", "ノーマル", @model.Physical, 50)
+  let tackle = mk_int_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    50,
+  )
   let spore = mk_int_move(
-    "キノコのほうし", "くさ", @model.Status, 0, accuracy=100,
+    "キノコのほうし",
+    "くさ",
+    @model.Status,
+    0,
+    accuracy=100,
     status_effect=Some((@model.SleepKind, 100)),
   )
   let with_spore = [mk_int_combatant(slow_mover, [tackle, spore])]

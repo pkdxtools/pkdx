@@ -34,7 +34,10 @@ test "champions_import_smoke: round_trip_vision_json_to_md" {
   let json = @json.parse(src)
 
   // Step 1: validate (Champions SP 合計 66, 各 ≤ 32 を通過)
-  {let _r = validate_pokemon_json(json); assert_true(_r is Ok(_))}
+  {
+    let _r = validate_pokemon_json(json)
+    assert_true(_r is Ok(_))
+  }
 
   // Step 2: build_pokemon_document → markdown.serialize
   let doc = build_pokemon_document(json, "マンムー")

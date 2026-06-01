@@ -296,7 +296,10 @@ test "migrate_team_meta_v011: members long-key stats are shortened" {
   let result = migrate_team_meta_v011(old)
   guard result is Ok(converted) else { fail("Expected Ok") }
   // 変換後は validate を通過する必要がある (legacy 誘導エラーが消えている)。
-  {let _r = validate_team_json(converted); assert_true(_r is Ok(_))}
+  {
+    let _r = validate_team_json(converted)
+    assert_true(_r is Ok(_))
+  }
   // members[0].base_stats が short key になっている。
   guard converted is Object(root) else { fail("root not object") }
   guard root.get("members") is Some(Array(members)) else {
@@ -343,15 +346,11 @@ test "migrate_team_meta_v011: idempotent on new-format input" {
   let input = @json.parse(src)
   let once = match migrate_team_meta_v011(input) {
     Ok(j) => j
-    Err(e) => {
-      fail("migrate failed: \{e}")
-    }
+    Err(e) => fail("migrate failed: \{e}")
   }
   let twice = match migrate_team_meta_v011(once) {
     Ok(j) => j
-    Err(e) => {
-      fail("migrate failed on new-format input: \{e}")
-    }
+    Err(e) => fail("migrate failed on new-format input: \{e}")
   }
   @debug.assert_eq(once, twice)
 }

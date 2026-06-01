@@ -31,7 +31,8 @@ pub fn run_006(db : @db.Db, _repo_root : String) -> Result[String, String] {
   let mut skipped_same = 0
   let mut skipped_no_base = 0
   for lang in langs {
-    let rows = match @db.query_binds(
+    let rows = match
+      @db.query_binds(
         db,
         "SELECT pf.id, pf.globalNo, pf.form FROM pokedex_form pf WHERE pf.language = ? AND pf.form IS NOT NULL AND pf.form != ''",
         [@db.BindText(lang)],
@@ -89,7 +90,8 @@ pub fn run_006(db : @db.Db, _repo_root : String) -> Result[String, String] {
       } else {
         (@db.BindNull, @db.text_or_null(lp_region))
       }
-      let existed = match @db.query_binds(
+      let existed = match
+        @db.query_binds(
           db,
           "SELECT 1 FROM pokedex_name WHERE id = ? AND language = ? LIMIT 1",
           [@db.BindText(id), @db.BindText(lang)],
@@ -98,7 +100,8 @@ pub fn run_006(db : @db.Db, _repo_root : String) -> Result[String, String] {
         Ok(r) => r.length() > 0
       }
       if existed {
-        match @db.exec_binds(
+        match
+          @db.exec_binds(
             db,
             "UPDATE pokedex_name SET name = ?, form = ?, region = ? WHERE id = ? AND language = ?",
             [
@@ -114,7 +117,8 @@ pub fn run_006(db : @db.Db, _repo_root : String) -> Result[String, String] {
         }
         updated = updated + 1
       } else {
-        match @db.exec_binds(
+        match
+          @db.exec_binds(
             db,
             "INSERT INTO pokedex_name (id, globalNo, form, region, mega_evolution, gigantamax, language, name) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)",
             [
@@ -239,9 +243,7 @@ fn count_diff(
       } else {
         match rows[0].get(0) {
           Some(Some(s)) => {
-            let n = try @string.parse_int(s) catch {
-              _ => 0
-            }
+            let n = @string.parse_int(s) catch { _ => 0 }
             Ok(n)
           }
           _ => Ok(0)
@@ -302,11 +304,8 @@ fn fetch_base_name(
     #|  AND COALESCE(mega_evolution, '') = ''
     #|  AND COALESCE(gigantamax, '')     = ''
     #|LIMIT 1
-  match @db.query_binds(
-      db,
-      sql,
-      [@db.BindText(global_no), @db.BindText(lang)],
-    ) {
+  match
+    @db.query_binds(db, sql, [@db.BindText(global_no), @db.BindText(lang)]) {
     Err(e) => Err(e)
     Ok(rows) =>
       if rows.length() == 0 {

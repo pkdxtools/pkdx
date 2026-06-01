@@ -4,9 +4,12 @@ test "normalize_argv: empty input becomes --help (bare pkdx)" {
   // "no command specified" because admiral has no built-in fallback.
   let out = normalize_argv([])
   @debug.debug_inspect(out.length(), content="1")
-  @debug.debug_inspect(out[0], content=(
-    #|"--help"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"--help"
+    ),
+  )
 }
 
 ///|
@@ -15,9 +18,12 @@ test "normalize_argv: 'help' subcommand becomes --help" {
   // `help` as a subcommand of pkdx, so without this shim it would error.
   let out = normalize_argv(["help"])
   @debug.debug_inspect(out.length(), content="1")
-  @debug.debug_inspect(out[0], content=(
-    #|"--help"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"--help"
+    ),
+  )
 }
 
 ///|
@@ -26,9 +32,12 @@ test "normalize_argv: 'version' subcommand becomes --version" {
   // the `help` case above.
   let out = normalize_argv(["version"])
   @debug.debug_inspect(out.length(), content="1")
-  @debug.debug_inspect(out[0], content=(
-    #|"--version"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"--version"
+    ),
+  )
 }
 
 ///|
@@ -36,31 +45,51 @@ test "normalize_argv: real subcommand passes through unchanged" {
   let input = ["query", "ガブリアス", "--format", "json"]
   let out = normalize_argv(input)
   @debug.debug_inspect(out.length(), content="4")
-  @debug.debug_inspect(out[0], content=(
-    #|"query"
-  ))
-  @debug.debug_inspect(out[1], content=(
-    #|"ガブリアス"
-  ))
-  @debug.debug_inspect(out[2], content=(
-    #|"--format"
-  ))
-  @debug.debug_inspect(out[3], content=(
-    #|"json"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"query"
+    ),
+  )
+  @debug.debug_inspect(
+    out[1],
+    content=(
+      #|"ガブリアス"
+    ),
+  )
+  @debug.debug_inspect(
+    out[2],
+    content=(
+      #|"--format"
+    ),
+  )
+  @debug.debug_inspect(
+    out[3],
+    content=(
+      #|"json"
+    ),
+  )
 }
 
 ///|
 test "normalize_argv: write teams subcommand passes through" {
   // Coverage for the new `write teams` (vs old `write --teams`) routing.
-  let out = normalize_argv(["write", "teams", "--date", "2026-04-08", "--axis", "ガブリアス"])
+  let out = normalize_argv([
+    "write", "teams", "--date", "2026-04-08", "--axis", "ガブリアス",
+  ])
   @debug.debug_inspect(out.length(), content="6")
-  @debug.debug_inspect(out[0], content=(
-    #|"write"
-  ))
-  @debug.debug_inspect(out[1], content=(
-    #|"teams"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"write"
+    ),
+  )
+  @debug.debug_inspect(
+    out[1],
+    content=(
+      #|"teams"
+    ),
+  )
 }
 
 ///|
@@ -68,21 +97,30 @@ test "normalize_argv: init-cache team subcommand passes through" {
   // Coverage for the new `init-cache team` (vs old `init-cache --team`) routing.
   let out = normalize_argv(["init-cache", "team"])
   @debug.debug_inspect(out.length(), content="2")
-  @debug.debug_inspect(out[0], content=(
-    #|"init-cache"
-  ))
-  @debug.debug_inspect(out[1], content=(
-    #|"team"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"init-cache"
+    ),
+  )
+  @debug.debug_inspect(
+    out[1],
+    content=(
+      #|"team"
+    ),
+  )
 }
 
 ///|
 test "normalize_argv: --help flag passes through unchanged" {
   let out = normalize_argv(["--help"])
   @debug.debug_inspect(out.length(), content="1")
-  @debug.debug_inspect(out[0], content=(
-    #|"--help"
-  ))
+  @debug.debug_inspect(
+    out[0],
+    content=(
+      #|"--help"
+    ),
+  )
 }
 
 ///|
@@ -210,24 +248,36 @@ test "parse_csv_ints: extra tokens beyond count are ignored" {
 test "split_csv: basic" {
   let parts = split_csv("ほのお,みず,くさ")
   @debug.debug_inspect(parts.length(), content="3")
-  @debug.debug_inspect(parts[0], content=(
-    #|"ほのお"
-  ))
-  @debug.debug_inspect(parts[1], content=(
-    #|"みず"
-  ))
-  @debug.debug_inspect(parts[2], content=(
-    #|"くさ"
-  ))
+  @debug.debug_inspect(
+    parts[0],
+    content=(
+      #|"ほのお"
+    ),
+  )
+  @debug.debug_inspect(
+    parts[1],
+    content=(
+      #|"みず"
+    ),
+  )
+  @debug.debug_inspect(
+    parts[2],
+    content=(
+      #|"くさ"
+    ),
+  )
 }
 
 ///|
 test "split_csv: single element" {
   let parts = split_csv("ドラゴン")
   @debug.debug_inspect(parts.length(), content="1")
-  @debug.debug_inspect(parts[0], content=(
-    #|"ドラゴン"
-  ))
+  @debug.debug_inspect(
+    parts[0],
+    content=(
+      #|"ドラゴン"
+    ),
+  )
 }
 
 ///|

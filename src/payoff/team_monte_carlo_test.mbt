@@ -7,11 +7,19 @@
 ///|
 /// Dominant attacker: one-shots the 100-HP dummy with STAB 150 BP move.
 fn build_dominant_team(label_prefix : String) -> Array[Combatant] {
-  let mv = mk_move("はかいこうせん", "ノーマル", @model.Physical, 150)
-  let team = Array::make(3, mk_combatant(
-    mk_pokemon("dummy", "ノーマル", "", 100, 200, 100, 100, 100, 200),
-    [mv],
-  ))
+  let mv = mk_move(
+    "はかいこうせん",
+    "ノーマル",
+    @model.Physical,
+    150,
+  )
+  let team = Array::make(
+    3,
+    mk_combatant(
+      mk_pokemon("dummy", "ノーマル", "", 100, 200, 100, 100, 100, 200),
+      [mv],
+    ),
+  )
   for i in 0..<3 {
     team[i] = mk_combatant(
       mk_pokemon(
@@ -35,10 +43,10 @@ fn build_dominant_team(label_prefix : String) -> Array[Combatant] {
 /// Fragile target: 1 HP, 1 offence, slow — guaranteed to get OHKO'd.
 fn build_fragile_team(label_prefix : String) -> Array[Combatant] {
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
-  let team = Array::make(3, mk_combatant(
-    mk_pokemon("dummy", "ノーマル", "", 1, 1, 1, 1, 1, 1),
-    [mv],
-  ))
+  let team = Array::make(
+    3,
+    mk_combatant(mk_pokemon("dummy", "ノーマル", "", 1, 1, 1, 1, 1, 1), [mv]),
+  )
   for i in 0..<3 {
     team[i] = mk_combatant(
       mk_pokemon(
@@ -118,10 +126,17 @@ test "team_rollout_single_trial_matches_monte_carlo_value_for_trivial_case" {
 /// short-circuits the slower side's attack when its status changes mid-turn
 /// from None to Sleep.
 test "team_rollout: faster Spore prevents slower target from attacking on the turn it lands" {
-  let own_p = mk_pokemon("sleeper", "ノーマル", "", 200, 100, 100, 100, 100, 120)
-  let opp_p = mk_pokemon("hitter", "ノーマル", "", 200, 100, 100, 100, 100, 60)
+  let own_p = mk_pokemon(
+    "sleeper", "ノーマル", "", 200, 100, 100, 100, 100, 120,
+  )
+  let opp_p = mk_pokemon(
+    "hitter", "ノーマル", "", 200, 100, 100, 100, 100, 60,
+  )
   let spore = mk_move(
-    "キノコのほうし", "くさ", @model.Status, 0,
+    "キノコのほうし",
+    "くさ",
+    @model.Status,
+    0,
     status_effect=Some((@model.SleepKind, 100)),
   )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
@@ -141,14 +156,20 @@ test "team_rollout: faster Spore prevents slower target from attacking on the tu
 test "team_rollout_handles_hp_ratio_draw_at_turn_limit_one" {
   // 両者ともに turn_limit=1 で KO しない構成。終了時は HP 比の差分で value を返す。
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
-  let own = Array::make(3, mk_combatant(
-    mk_pokemon("O0", "ノーマル", "", 300, 100, 100, 100, 100, 100),
-    [mv],
-  ))
-  let opp = Array::make(3, mk_combatant(
-    mk_pokemon("P0", "ノーマル", "", 300, 100, 100, 100, 100, 100),
-    [mv],
-  ))
+  let own = Array::make(
+    3,
+    mk_combatant(
+      mk_pokemon("O0", "ノーマル", "", 300, 100, 100, 100, 100, 100),
+      [mv],
+    ),
+  )
+  let opp = Array::make(
+    3,
+    mk_combatant(
+      mk_pokemon("P0", "ノーマル", "", 300, 100, 100, 100, 100, 100),
+      [mv],
+    ),
+  )
   let rng = seeded_rng(3UL)
   let v = team_rollout(own, opp, rng, turn_limit=1, epsilon=0.0)
   // 1 turn で双方生存 → HP 比 diff は [-1, +1] に収まる絶対値 ≤ 0.5 程度の小さな値

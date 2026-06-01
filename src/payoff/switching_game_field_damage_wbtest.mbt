@@ -57,7 +57,11 @@ fn f5_state_from_field(
     my_wish_turns: no_wish_pending(my_team.length()),
     opp_wish_turns: no_wish_pending(opp_team.length()),
     field: f,
-    field_turns_left: if f == @model.Field::None { 0 } else { 999 },
+    field_turns_left: if f == @model.Field::None {
+      0
+    } else {
+      999
+    },
     turn: 0,
   }
 }
@@ -97,15 +101,19 @@ fn f5_mean_damage_via_state(
 test "field F-5: Electric + でんき + grounded attacker → 1.3x boost" {
   // Grounded electric attacker (no ひこう / ふゆう / ふうせん).
   let atk_p = mk_pokemon("E-atk", "でんき", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("10まんボルト", "でんき", @model.Special, 90)],
-  )
+  let atk = mk_combatant(atk_p, [
+    mk_move("10まんボルト", "でんき", @model.Special, 90),
+  ])
   // Neutral defender — でんき is not super effective so the 1.3x is the
   // only multiplier in play. みず → 2x weak vs でんき, picked instead?
   // No — we want the 1.3x factor isolated. ノーマル (1x) keeps the math
   // clean.
-  let dfn_p = mk_pokemon("N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let dfn_p = mk_pokemon(
+    "N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let d_none = f5_mean_damage_via_state(
@@ -128,10 +136,16 @@ test "field F-5: Grassy + じしん + grounded defender → 0.5x debuff" {
   // ふうせん) but its type is not 4x weak to ground so we can observe
   // the multiplier cleanly.
   let atk_p = mk_pokemon("G-atk", "じめん", "", 100, 200, 100, 100, 100, 100)
-  let atk = mk_combatant(atk_p, [mk_move("じしん", "じめん", @model.Physical, 100)])
+  let atk = mk_combatant(atk_p, [
+    mk_move("じしん", "じめん", @model.Physical, 100),
+  ])
   // ノーマル defender: じしん 1x effective. Grounded (default).
-  let dfn_p = mk_pokemon("N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let dfn_p = mk_pokemon(
+    "N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let d_none = f5_mean_damage_via_state(
@@ -151,13 +165,19 @@ test "field F-5: Grassy + じしん + grounded defender → 0.5x debuff" {
 
 ///|
 test "field F-5: Misty + ドラゴン + grounded defender → 0.5x debuff" {
-  let atk_p = mk_pokemon("D-atk", "ドラゴン", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("りゅうのはどう", "ドラゴン", @model.Special, 85)],
+  let atk_p = mk_pokemon(
+    "D-atk", "ドラゴン", "", 100, 100, 100, 200, 100, 100,
   )
+  let atk = mk_combatant(atk_p, [
+    mk_move("りゅうのはどう", "ドラゴン", @model.Special, 85),
+  ])
   // ノーマル defender (ドラゴン 1x). Grounded (default).
-  let dfn_p = mk_pokemon("N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let dfn_p = mk_pokemon(
+    "N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let d_none = f5_mean_damage_via_state(
@@ -201,10 +221,12 @@ test "field F-5: Grassy + じしん + Levitate defender → debuff suppressed" {
   // Better setup: Misty + ドラゴン technique vs ふゆう defender. ふゆう
   // does NOT block ドラゴン moves (only ground), so we can confirm the
   // 0.5x is suppressed because the defender isn't grounded.
-  let atk_p = mk_pokemon("D-atk", "ドラゴン", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("りゅうのはどう", "ドラゴン", @model.Special, 85)],
+  let atk_p = mk_pokemon(
+    "D-atk", "ドラゴン", "", 100, 100, 100, 200, 100, 100,
   )
+  let atk = mk_combatant(atk_p, [
+    mk_move("りゅうのはどう", "ドラゴン", @model.Special, 85),
+  ])
   // Levitate defender (ふゆう). ドラゴン is 1x neutral; only the Misty
   // debuff should be suppressed because the defender is airborne.
   let dfn_p = {
@@ -212,7 +234,9 @@ test "field F-5: Grassy + じしん + Levitate defender → debuff suppressed" {
     ability1: "ふゆう",
   }
   let dfn = {
-    ..mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)]),
+    ..mk_combatant(dfn_p, [
+      mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+    ]),
     ability: "ふゆう",
   }
   let my_team = [atk]
@@ -235,14 +259,20 @@ test "field F-5: Grassy + じしん + Levitate defender → debuff suppressed" {
 
 ///|
 test "field F-5: Misty + ドラゴン + ふうせん defender → debuff suppressed" {
-  let atk_p = mk_pokemon("D-atk", "ドラゴン", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("りゅうのはどう", "ドラゴン", @model.Special, 85)],
+  let atk_p = mk_pokemon(
+    "D-atk", "ドラゴン", "", 100, 100, 100, 200, 100, 100,
   )
+  let atk = mk_combatant(atk_p, [
+    mk_move("りゅうのはどう", "ドラゴン", @model.Special, 85),
+  ])
   // ふうせん item makes defender airborne (engine reads `item`).
-  let dfn_p = mk_pokemon("N-dfn", "エスパー", "", 200, 100, 100, 100, 100, 100)
+  let dfn_p = mk_pokemon(
+    "N-dfn", "エスパー", "", 200, 100, 100, 100, 100, 100,
+  )
   let dfn = {
-    ..mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)]),
+    ..mk_combatant(dfn_p, [
+      mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+    ]),
     item: "ふうせん",
   }
   let my_team = [atk]
@@ -264,12 +294,18 @@ test "field F-5: Misty + ドラゴン + ふうせん defender → debuff suppres
 ///|
 test "field F-5: Electric + でんき + Flying attacker → boost suppressed" {
   // Attacker has ひこう as type2 → NOT grounded.
-  let atk_p = mk_pokemon("EF-atk", "でんき", "ひこう", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("10まんボルト", "でんき", @model.Special, 90)],
+  let atk_p = mk_pokemon(
+    "EF-atk", "でんき", "ひこう", 100, 100, 100, 200, 100, 100,
   )
-  let dfn_p = mk_pokemon("N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let atk = mk_combatant(atk_p, [
+    mk_move("10まんボルト", "でんき", @model.Special, 90),
+  ])
+  let dfn_p = mk_pokemon(
+    "N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let d_none = f5_mean_damage_via_state(
@@ -295,11 +331,15 @@ test "field F-5: field_turns_left=0 → no multiplier (terrain inactive)" {
   // apply_eot. Here we just confirm Field::None gives no boost — Stage E
   // pins the tick semantics; F-5 just verifies the read path agrees.
   let atk_p = mk_pokemon("E-atk", "でんき", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("10まんボルト", "でんき", @model.Special, 90)],
+  let atk = mk_combatant(atk_p, [
+    mk_move("10まんボルト", "でんき", @model.Special, 90),
+  ])
+  let dfn_p = mk_pokemon(
+    "N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100,
   )
-  let dfn_p = mk_pokemon("N-dfn", "ノーマル", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let s_off = f5_state_from_field(@model.Field::None, my_team, opp_team)

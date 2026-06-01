@@ -12,9 +12,7 @@ fn main {
   }
   let argv = @cli.normalize_argv(user_args)
   let app = build_cli()
-  try {
-    app.run(argv=Some(argv))
-  } catch {
+  app.run(argv=Some(argv)) catch {
     err => {
       pkdx_eprintln(@db.to_c_bytes("Error: " + @debug.to_string(err)))
       pkdx_exit(1)
@@ -70,7 +68,9 @@ fn ctx_format(ctx : @admiral.Context) -> @cli.OutputFormat {
 ///|
 fn version_option() -> @admiral.OptionDef {
   @admiral.string(
-    "version", description="Game version", default=Some("champions"),
+    "version",
+    description="Game version",
+    default=Some("champions"),
   )
 }
 
@@ -86,7 +86,9 @@ fn regulation_option() -> @admiral.OptionDef {
 ///|
 fn format_option() -> @admiral.OptionDef {
   @admiral.string(
-    "format", description="Output format: json|table", default=Some("table"),
+    "format",
+    description="Output format: json|table",
+    default=Some("table"),
   )
 }
 
@@ -240,7 +242,9 @@ fn cmd_regulation() -> @admiral.CommandDef {
       description="Persist a new active regulation",
       positionals=[
         @admiral.positional(
-          "name", description="Regulation name (e.g. M-A)", required=true,
+          "name",
+          description="Regulation name (e.g. M-A)",
+          required=true,
         ),
       ],
       run=Some(fn(ctx) {
@@ -278,8 +282,8 @@ fn cmd_regulation() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -295,7 +299,10 @@ fn cmd_context() -> @admiral.CommandDef {
     name="context",
     description="Emit current Champions environment context as 1-line JSON (SessionStart hook)",
     options=[
-      @admiral.bool("json", description="Emit JSON (default true; flag exists for future text mode)"),
+      @admiral.bool(
+        "json",
+        description="Emit JSON (default true; flag exists for future text mode)",
+      ),
     ],
     run=Some(fn(_ctx) {
       let r = read_box_regulation_or_default()
@@ -352,7 +359,7 @@ struct BoxRegulation {
 ///|
 fn read_box_regulation_or_default() -> BoxRegulation {
   let path = box_regulation_path()
-  if !(@db.file_exists(path)) {
+  if !@db.file_exists(path) {
     return { version: "champions", regulation: "M-A" }
   }
   let raw = match @db.read_file(path) {
@@ -413,7 +420,7 @@ fn read_repo_pkdx_version() -> String {
     Some(p) => p
     None => "moon.mod.json"
   }
-  if !(@db.file_exists(path)) {
+  if !@db.file_exists(path) {
     return ""
   }
   let raw = match @db.read_file(path) {
@@ -441,7 +448,7 @@ fn count_champions_assets() -> (Int, Int) {
     Err(_) => return (0, 0)
   }
   let champions_path = resolve_champions_db_path_from(pokedex_path)
-  if !(@db.file_exists(champions_path)) {
+  if !@db.file_exists(champions_path) {
     return (0, 0)
   }
   let db = match @db.open_for(pokedex_path, @model.Champions) {
@@ -450,7 +457,8 @@ fn count_champions_assets() -> (Int, Int) {
   }
   // champions.db が main 接続なので prefix なしで `items` / `pokemon` を
   // 直接参照する。
-  let items_count = match @db.query_binds(db, "SELECT COUNT(*) FROM items", []) {
+  let items_count = match
+    @db.query_binds(db, "SELECT COUNT(*) FROM items", []) {
     Ok(rows) =>
       if rows.length() == 0 {
         0
@@ -465,7 +473,8 @@ fn count_champions_assets() -> (Int, Int) {
   // champions.db.pokemon の行数 = レギュレーション参戦数 (form 単位)。
   // SELECT が空 / NULL / エラーなら 0 にダウングレードする (`pkdx context`
   // hook はスキーマ未整備でも block しない契約)。
-  let real_mons = match @db.query_binds(db, "SELECT COUNT(*) FROM pokemon", []) {
+  let real_mons = match
+    @db.query_binds(db, "SELECT COUNT(*) FROM pokemon", []) {
     Ok(rows) =>
       if rows.length() == 0 {
         0
@@ -501,11 +510,31 @@ fn cmd_damage_bench() -> @admiral.CommandDef {
     name="damage-bench",
     description="Benchmark the damage cache (emits per-phase median/p99 on stderr)",
     options=[
-      @admiral.int("entries", description="Seed the cache with N dummy entries before timing", default=Some(0)),
-      @admiral.int("iterations", description="Run I iterations against a fixed key (1st is a miss, rest hit)", default=Some(100)),
-      @admiral.string("attacker", description="Attacker Pokemon name", default=Some("ガブリアス")),
-      @admiral.string("defender", description="Defender Pokemon name", default=Some("バンギラス")),
-      @admiral.string("move", description="Move name", default=Some("じしん")),
+      @admiral.int(
+        "entries",
+        description="Seed the cache with N dummy entries before timing",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "iterations",
+        description="Run I iterations against a fixed key (1st is a miss, rest hit)",
+        default=Some(100),
+      ),
+      @admiral.string(
+        "attacker",
+        description="Attacker Pokemon name",
+        default=Some("ガブリアス"),
+      ),
+      @admiral.string(
+        "defender",
+        description="Defender Pokemon name",
+        default=Some("バンギラス"),
+      ),
+      @admiral.string(
+        "move",
+        description="Move name",
+        default=Some("じしん"),
+      ),
       version_option(),
     ],
     run=Some(fn(ctx) {
@@ -696,9 +725,7 @@ fn run_damage_bench(
         report.hit_count.to_string(),
       ),
     )
-    pkdx_eprintln(
-      @db.to_c_bytes(@damage_cache.format_bench_report_tsv(report)),
-    )
+    pkdx_eprintln(@db.to_c_bytes(@damage_cache.format_bench_report_tsv(report)))
   })
 }
 
@@ -721,8 +748,8 @@ fn cmd_cache_clear() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -739,7 +766,11 @@ fn cmd_convert() -> @admiral.CommandDef {
       name="meta",
       description="Migrate a single meta.json to the new schema (issue #66)",
       options=[
-        @admiral.string("in", description="Input .meta.json path", required=true),
+        @admiral.string(
+          "in",
+          description="Input .meta.json path",
+          required=true,
+        ),
         @admiral.string(
           "out",
           description="Output path (stdout if unset, ignored when --in-place is set)",
@@ -760,8 +791,8 @@ fn cmd_convert() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -820,8 +851,8 @@ fn cmd_db() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -868,9 +899,8 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
     Ok(j) => j
   }
   // 3. mapper 実行
-  let pokemons = match @champout_adapter.map_pokemon_entries(
-      bundle, personal_json,
-    ) {
+  let pokemons = match
+    @champout_adapter.map_pokemon_entries(bundle, personal_json) {
     Err(e) => {
       exit_error("pokemon mapping failed: " + e)
       return
@@ -889,9 +919,8 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
   for i = 0; i < pokemons.length(); i = i + 1 {
     valid_ids[pokemons[i].id] = true
   }
-  let learnsets = match @champout_adapter.map_learnset_entries(
-      bundle, waza_learn_json, valid_ids,
-    ) {
+  let learnsets = match
+    @champout_adapter.map_learnset_entries(bundle, waza_learn_json, valid_ids) {
     Err(e) => {
       exit_error("learnset mapping failed: " + e)
       return
@@ -910,7 +939,8 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
   let move_path = out_dir + "/010_champions_moves/data.json"
   let learnset_path = out_dir + "/011_champions_learnset/data.json"
   let item_path = out_dir + "/012_items/data.json"
-  match write_intermediate(
+  match
+    write_intermediate(
       pokemon_path,
       @champions_schema.serialize_pokemon_entries(pokemons),
     ) {
@@ -920,8 +950,10 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
     }
     Ok(_) => ()
   }
-  match write_intermediate(
-      move_path, @champions_schema.serialize_move_entries(moves),
+  match
+    write_intermediate(
+      move_path,
+      @champions_schema.serialize_move_entries(moves),
     ) {
     Err(e) => {
       exit_error(e)
@@ -929,7 +961,8 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
     }
     Ok(_) => ()
   }
-  match write_intermediate(
+  match
+    write_intermediate(
       learnset_path,
       @champions_schema.serialize_learnset_entries(learnsets),
     ) {
@@ -939,8 +972,10 @@ fn run_db_init(champout_dir : String, out_dir : String) -> Unit {
     }
     Ok(_) => ()
   }
-  match write_intermediate(
-      item_path, @champions_schema.serialize_item_entries(items),
+  match
+    write_intermediate(
+      item_path,
+      @champions_schema.serialize_item_entries(items),
     ) {
     Err(e) => {
       exit_error(e)
@@ -967,7 +1002,7 @@ fn read_json(path : String) -> Result[Json, String] {
     None => return Err("file not found: " + path)
     Some(s) => s
   }
-  try Ok(@json.parse(raw)) catch {
+  Ok(@json.parse(raw)) catch {
     e => Err("JSON parse failed at " + path + ": " + e.to_string())
   }
 }
@@ -1008,7 +1043,11 @@ fn run_cache_clear_damage() -> Unit {
 }
 
 ///|
-fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Unit {
+fn run_convert_meta(
+  in_path : String,
+  out_path : String,
+  in_place : Bool,
+) -> Unit {
   let raw = match @db.read_file(in_path) {
     None => {
       exit_error("File not found or empty: " + in_path)
@@ -1034,7 +1073,7 @@ fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Uni
     // Preserve the original content once (.bak 上書き防止) so the migration
     // is reversible for the user; subsequent runs become no-ops.
     let bak_path = in_path + ".bak"
-    if !(@db.file_exists(bak_path)) {
+    if !@db.file_exists(bak_path) {
       let rc_bak = pkdx_write_file(
         @db.to_c_bytes(bak_path),
         @db.to_c_bytes(raw),
@@ -1051,10 +1090,7 @@ fn run_convert_meta(in_path : String, out_path : String, in_place : Bool) -> Uni
     }
     println(in_path)
   } else if out_path.length() > 0 {
-    let rc = pkdx_write_file(
-      @db.to_c_bytes(out_path),
-      @db.to_c_bytes(out_str),
-    )
+    let rc = pkdx_write_file(@db.to_c_bytes(out_path), @db.to_c_bytes(out_str))
     if rc != 0 {
       exit_error("Failed to write: " + out_path)
       return
@@ -1082,7 +1118,11 @@ fn cmd_migrate() -> @admiral.CommandDef {
     run=Some(fn(ctx) {
       let repo_root = {
         let r = ctx_str(ctx, "repo-root")
-        if r.length() > 0 { r } else { "." }
+        if r.length() > 0 {
+          r
+        } else {
+          "."
+        }
       }
       run_migrate(repo_root)
     }),
@@ -1099,10 +1139,12 @@ fn run_migrate(repo_root : String) -> Unit {
   // Ensure champions.db exists — the runner refuses to open a missing
   // file. Bootstrap it lazily so first-time installs and existing
   // installs that pre-date the platform refactor both succeed.
-  if !(@db.file_exists(champions_path)) {
+  if !@db.file_exists(champions_path) {
     match @db.open_champions_rwc(champions_path) {
       Err(e) => {
-        exit_error("failed to create champions.db at " + champions_path + ": " + e)
+        exit_error(
+          "failed to create champions.db at " + champions_path + ": " + e,
+        )
         return
       }
       Ok(db) => @db.close(db)
@@ -1111,7 +1153,9 @@ fn run_migrate(repo_root : String) -> Unit {
   // Stage 1: pokedex.db migrations
   let pokedex_report = match
     @migrate.run_for(
-      db_path, repo_root, migrations=@migrate.migrations_pokedex(),
+      db_path,
+      repo_root,
+      migrations=@migrate.migrations_pokedex(),
     ) {
     Err(e) => {
       exit_error("pokedex migrations: " + e)
@@ -1166,7 +1210,9 @@ fn cmd_query() -> @admiral.CommandDef {
     options=[version_option(), regulation_option(), format_option()],
     positionals=[
       @admiral.positional(
-        "name", description="Pokemon name (ja or en)", required=true,
+        "name",
+        description="Pokemon name (ja or en)",
+        required=true,
       ),
     ],
     examples=["pkdx query ガブリアス --format json"],
@@ -1215,8 +1261,16 @@ fn cmd_search() -> @admiral.CommandDef {
     description="Search Pokemon by type and minimum speed",
     options=[
       @admiral.string("type", description="Primary type (ja)", required=true),
-      @admiral.string("type2", description="Secondary type (ja)", default=Some("")),
-      @admiral.int("min-speed", description="Minimum base speed", default=Some(0)),
+      @admiral.string(
+        "type2",
+        description="Secondary type (ja)",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "min-speed",
+        description="Minimum base speed",
+        default=Some(0),
+      ),
       version_option(),
       regulation_option(),
       format_option(),
@@ -1240,7 +1294,9 @@ fn cmd_type_chart() -> @admiral.CommandDef {
     description="Show type effectiveness multiplier",
     positionals=[
       @admiral.positional(
-        "move_type", description="Attacking move type", required=true,
+        "move_type",
+        description="Attacking move type",
+        required=true,
       ),
       @admiral.positional(
         "def_types",
@@ -1266,9 +1322,7 @@ fn cmd_coverage() -> @admiral.CommandDef {
         required=true,
       ),
     ],
-    run=Some(fn(ctx) {
-      run_coverage(@cli.split_csv(ctx_str(ctx, "types")))
-    }),
+    run=Some(fn(ctx) { run_coverage(@cli.split_csv(ctx_str(ctx, "types"))) }),
   )
 }
 
@@ -1281,24 +1335,90 @@ fn cmd_damage() -> @admiral.CommandDef {
       version_option(),
       regulation_option(),
       format_option(),
-      @admiral.string("atk-ability", description="Attacker ability (ja)", default=Some("")),
-      @admiral.string("def-ability", description="Defender ability (ja)", default=Some("")),
-      @admiral.string("atk-item", description="Attacker held item (ja)", default=Some("")),
-      @admiral.string("def-item", description="Defender held item (ja)", default=Some("")),
-      @admiral.string("weather", description="Weather (ja): はれ|あめ|すなあらし|ゆき", default=Some("")),
-      @admiral.string("field", description="Terrain (ja): エレキ|グラス|ミスト|サイコ", default=Some("")),
-      @admiral.string("tera-type", description="Tera type (ja)", default=Some("")),
+      @admiral.string(
+        "atk-ability",
+        description="Attacker ability (ja)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "def-ability",
+        description="Defender ability (ja)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "atk-item",
+        description="Attacker held item (ja)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "def-item",
+        description="Defender held item (ja)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "weather",
+        description="Weather (ja): はれ|あめ|すなあらし|ゆき",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "field",
+        description="Terrain (ja): エレキ|グラス|ミスト|サイコ",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "tera-type",
+        description="Tera type (ja)",
+        default=Some(""),
+      ),
       @admiral.bool("critical", description="Treat the hit as a critical"),
-      @admiral.bool("double", description="Double battle (applies 0.75x to spread moves)"),
-      @admiral.int("atk-stat", description="Override attacker offensive stat (pre-rank). 用途: ボディプレス/イカサマ/カスタム実数値再現", default=Some(0)),
-      @admiral.int("def-stat", description="Override defender defensive stat (pre-rank). 用途: カスタム実数値再現", default=Some(0)),
-      @admiral.int("def-hp", description="Override defender HP", default=Some(0)),
-      @admiral.string("atk-nature", description="Attacker nature (ja), e.g. ようき. Default: 攻撃stat特化相当 (+10%)", default=Some("")),
-      @admiral.string("def-nature", description="Defender nature (ja), e.g. ずぶとい. Default: 無補正", default=Some("")),
-      @admiral.int("atk-rank", description="Attacker stat stage (-6..+6). For Body Press this is the Defense stage", default=Some(0)),
-      @admiral.int("def-rank", description="Defender stat stage (-6..+6)", default=Some(0)),
-      @admiral.int("fainted-count", description="Number of fainted allies (0-5, for Supreme Overlord/そうだいしょう)", default=Some(2)),
-      @admiral.bool("no-cache", description="Bypass the persistent damage cache (box/cache/damage_cache.sqlite)"),
+      @admiral.bool(
+        "double",
+        description="Double battle (applies 0.75x to spread moves)",
+      ),
+      @admiral.int(
+        "atk-stat",
+        description="Override attacker offensive stat (pre-rank). 用途: ボディプレス/イカサマ/カスタム実数値再現",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "def-stat",
+        description="Override defender defensive stat (pre-rank). 用途: カスタム実数値再現",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "def-hp",
+        description="Override defender HP",
+        default=Some(0),
+      ),
+      @admiral.string(
+        "atk-nature",
+        description="Attacker nature (ja), e.g. ようき. Default: 攻撃stat特化相当 (+10%)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "def-nature",
+        description="Defender nature (ja), e.g. ずぶとい. Default: 無補正",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "atk-rank",
+        description="Attacker stat stage (-6..+6). For Body Press this is the Defense stage",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "def-rank",
+        description="Defender stat stage (-6..+6)",
+        default=Some(0),
+      ),
+      @admiral.int(
+        "fainted-count",
+        description="Number of fainted allies (0-5, for Supreme Overlord/そうだいしょう)",
+        default=Some(2),
+      ),
+      @admiral.bool(
+        "no-cache",
+        description="Bypass the persistent damage cache (box/cache/damage_cache.sqlite)",
+      ),
       @admiral.string(
         "attach-team",
         description="Append this damage calc to a team meta.json (path to box/teams/<slug>.meta.json)",
@@ -1434,8 +1554,16 @@ fn cmd_damage() -> @admiral.CommandDef {
       ),
     ],
     positionals=[
-      @admiral.positional("attacker", description="Attacker Pokemon name", required=true),
-      @admiral.positional("defender", description="Defender Pokemon name", required=true),
+      @admiral.positional(
+        "attacker",
+        description="Attacker Pokemon name",
+        required=true,
+      ),
+      @admiral.positional(
+        "defender",
+        description="Defender Pokemon name",
+        required=true,
+      ),
       @admiral.positional("move", description="Move name", required=true),
     ],
     run=Some(fn(ctx) {
@@ -1561,7 +1689,11 @@ fn cmd_write() -> @admiral.CommandDef {
       description="Write a Pokemon build to box/pokemons/",
       options=[
         @admiral.string("name", description="Pokemon name", required=true),
-        @admiral.string("file", description="Output filename (no extension)", required=true),
+        @admiral.string(
+          "file",
+          description="Output filename (no extension)",
+          required=true,
+        ),
       ],
       run=Some(fn(ctx) {
         run_write_pokemon(ctx_str(ctx, "name"), ctx_str(ctx, "file"))
@@ -1569,8 +1701,8 @@ fn cmd_write() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -1591,17 +1723,41 @@ fn cmd_stat_calc() -> @admiral.CommandDef {
     name="stat-calc",
     description="Compute Lv50 stats from base + SP + nature (EV/IV for deprecated versions)",
     options=[
-      @admiral.string("ev", description="SPs as 'H,A,B,C,D,S' (EVs for deprecated versions)", default=Some("")),
-      @admiral.string("iv", description="IVs (deprecated versions only, ignored in Champions)", default=Some("")),
-      @admiral.string("nature", description="Nature name (ja)", default=Some("")),
-      @admiral.string("nature-up", description="Stat that nature boosts", default=Some("")),
-      @admiral.string("nature-down", description="Stat that nature lowers", default=Some("")),
+      @admiral.string(
+        "ev",
+        description="SPs as 'H,A,B,C,D,S' (EVs for deprecated versions)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "iv",
+        description="IVs (deprecated versions only, ignored in Champions)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "nature",
+        description="Nature name (ja)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "nature-up",
+        description="Stat that nature boosts",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "nature-down",
+        description="Stat that nature lowers",
+        default=Some(""),
+      ),
       version_option(),
       regulation_option(),
       format_option(),
     ],
     positionals=[
-      @admiral.positional("name", description="Pokemon name (ja or en)", required=true),
+      @admiral.positional(
+        "name",
+        description="Pokemon name (ja or en)",
+        required=true,
+      ),
     ],
     run=Some(fn(ctx) {
       run_stat_calc(
@@ -1624,10 +1780,26 @@ fn cmd_stat_reverse() -> @admiral.CommandDef {
     name="stat-reverse",
     description="Reverse-derive base stat (single mode) or SP/EV spread (pokemon mode)",
     options=[
-      @admiral.string("stats", description="Actual stats 'H,A,B,C,D,S' (pokemon mode)", default=Some("")),
-      @admiral.int("iv", description="IV (deprecated versions only, ignored in Champions)", default=Some(31)),
-      @admiral.int("ev", description="SP or EV (deprecated versions)", default=Some(0)),
-      @admiral.string("nature", description="Nature mod: up|down|neutral", default=Some("neutral")),
+      @admiral.string(
+        "stats",
+        description="Actual stats 'H,A,B,C,D,S' (pokemon mode)",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "iv",
+        description="IV (deprecated versions only, ignored in Champions)",
+        default=Some(31),
+      ),
+      @admiral.int(
+        "ev",
+        description="SP or EV (deprecated versions)",
+        default=Some(0),
+      ),
+      @admiral.string(
+        "nature",
+        description="Nature mod: up|down|neutral",
+        default=Some("neutral"),
+      ),
       @admiral.bool("hp", description="Treat target as HP stat (single mode)"),
       version_option(),
       regulation_option(),
@@ -1635,7 +1807,9 @@ fn cmd_stat_reverse() -> @admiral.CommandDef {
     ],
     positionals=[
       @admiral.positional(
-        "target", description="Stat value (single mode) or Pokemon name (pokemon mode)", required=true,
+        "target",
+        description="Stat value (single mode) or Pokemon name (pokemon mode)",
+        required=true,
       ),
     ],
     run=Some(fn(ctx) {
@@ -1670,8 +1844,8 @@ fn cmd_init_cache() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -1683,21 +1857,61 @@ fn cmd_hbd() -> @admiral.CommandDef {
     name="hbd",
     description="Optimize H/B/D SP spread under HBD/(p*B+s*D) objective (EV for deprecated versions)",
     options=[
-      @admiral.string("fixed-ev", description="Fixed SPs 'H,A,B,C,D,S' (_ to optimize) (EVs for deprecated versions)", default=Some("")),
-      @admiral.string("iv", description="IVs (deprecated versions only, ignored in Champions)", default=Some("")),
-      @admiral.string("nature", description="Nature name (ja)", default=Some("")),
-      @admiral.string("nature-up", description="Stat that nature boosts", default=Some("")),
-      @admiral.string("nature-down", description="Stat that nature lowers", default=Some("")),
-      @admiral.string("hp-snap", description="HP snap mode: none|leftovers|residual|sitrus|lifeorb", default=Some("none")),
-      @admiral.int("phys-weight", description="Weight applied to B term", default=Some(1)),
-      @admiral.int("spec-weight", description="Weight applied to D term", default=Some(1)),
-      @admiral.int("top", description="Number of candidates to return", default=Some(1)),
+      @admiral.string(
+        "fixed-ev",
+        description="Fixed SPs 'H,A,B,C,D,S' (_ to optimize) (EVs for deprecated versions)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "iv",
+        description="IVs (deprecated versions only, ignored in Champions)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "nature",
+        description="Nature name (ja)",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "nature-up",
+        description="Stat that nature boosts",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "nature-down",
+        description="Stat that nature lowers",
+        default=Some(""),
+      ),
+      @admiral.string(
+        "hp-snap",
+        description="HP snap mode: none|leftovers|residual|sitrus|lifeorb",
+        default=Some("none"),
+      ),
+      @admiral.int(
+        "phys-weight",
+        description="Weight applied to B term",
+        default=Some(1),
+      ),
+      @admiral.int(
+        "spec-weight",
+        description="Weight applied to D term",
+        default=Some(1),
+      ),
+      @admiral.int(
+        "top",
+        description="Number of candidates to return",
+        default=Some(1),
+      ),
       version_option(),
       regulation_option(),
       format_option(),
     ],
     positionals=[
-      @admiral.positional("name", description="Pokemon name (ja or en)", required=true),
+      @admiral.positional(
+        "name",
+        description="Pokemon name (ja or en)",
+        required=true,
+      ),
     ],
     run=Some(fn(ctx) {
       // Convert --hp-snap string to the HpSnap ADT at the CLI boundary.
@@ -1741,7 +1955,7 @@ fn cmd_hbd() -> @admiral.CommandDef {
 /// callers that should panic.
 fn[T] with_db(
   f : (@db.Db) -> T,
-  version~ : @model.GameVersion = @model.Other(""),
+  version? : @model.GameVersion = @model.Other(""),
 ) -> T {
   let db_path = match resolve_db_path() {
     Ok(p) => p
@@ -1759,7 +1973,7 @@ fn[T] with_db(
   let db = match version {
     @model.Champions => {
       let champions_path = resolve_champions_db_path_from(db_path)
-      if !(@db.file_exists(champions_path)) {
+      if !@db.file_exists(champions_path) {
         println(
           "Error: champions.db not found at " +
           champions_path +
@@ -1884,13 +2098,12 @@ fn run_search(
 ) -> Unit {
   with_db(version=game.version, fn(db) {
     match @db.search_by_type(db, type1, type2, min_speed, game.version) {
-      Ok(results) => {
+      Ok(results) =>
         // version=champions の DB はそのレギュレーションのサブセットしか
         // 含まないため、追加 filter は不要 (`is_available` は廃止済み)。
         // 他 version は --regulation を弾いているので、ここで filter を
         // 走らせる経路自体が存在しない。
         println(@cli.format_search(results, format))
-      }
       Err(e) => println("Error: " + e)
     }
   })
@@ -1905,18 +2118,18 @@ fn cmd_learners() -> @admiral.CommandDef {
       version_option(),
       regulation_option(),
       format_option(),
-      @admiral.int("limit", description="Max results (default 50)", default=Some(50)),
+      @admiral.int(
+        "limit",
+        description="Max results (default 50)",
+        default=Some(50),
+      ),
       @admiral.bool(
         "include-inactive",
         description="Include Champions confiscated moves (state=inactive)",
       ),
     ],
     positionals=[
-      @admiral.positional(
-        "move",
-        description="Move name (ja)",
-        required=true,
-      ),
+      @admiral.positional("move", description="Move name (ja)", required=true),
     ],
     run=Some(fn(ctx) {
       run_learners(
@@ -1978,6 +2191,7 @@ const DAMAGE_CACHE_ENV_VAR : String = "PKDX_DAMAGE_CACHE"
 ///      are run from the repo root or from a sibling subdirectory.
 ///   3. Fallback: CWD-relative `box/cache/damage_cache.sqlite`, matching the
 ///      historical behavior when the repo root cannot be located.
+
 ///|
 fn run_type_chart(move_type : String, def_types_csv : String) -> Unit {
   let atk = match @types.type_from_jp(move_type) {
@@ -1989,7 +2203,10 @@ fn run_type_chart(move_type : String, def_types_csv : String) -> Unit {
   }
   let parts = @cli.split_csv(def_types_csv)
   if parts.length() == 0 || parts.length() > 2 {
-    println("Error: Specify 1 or 2 defender types (comma-separated), got " + parts.length().to_string())
+    println(
+      "Error: Specify 1 or 2 defender types (comma-separated), got " +
+      parts.length().to_string(),
+    )
     return
   }
   let d1 = match @types.type_from_jp(parts[0]) {
@@ -2146,4 +2363,3 @@ fn exit_error(msg : String) -> Unit {
   pkdx_exit(1)
   panic()
 }
-

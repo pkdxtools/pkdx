@@ -17,7 +17,7 @@ pub fn run_012(db : @db.Db, repo_root : String) -> Result[String, String] {
     None => return Err(path + " not found.")
     Some(s) => s
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match @champions_schema.parse_item_entries(json) {
@@ -34,7 +34,8 @@ pub fn run_012(db : @db.Db, repo_root : String) -> Result[String, String] {
   }
   for i = 0; i < entries.length(); i = i + 1 {
     let e = entries[i]
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "INSERT OR IGNORE INTO items (name_ja, name_en, category, flavor) VALUES (?, ?, ?, ?)",
         [
@@ -49,7 +50,8 @@ pub fn run_012(db : @db.Db, repo_root : String) -> Result[String, String] {
     }
   }
   // item_effect seed (Champions 在庫と整合する 2 件のみ)
-  match @db.exec_binds(
+  match
+    @db.exec_binds(
       db,
       "INSERT INTO item_effect (item_name, effect_kind, apply_order, num, den, type_filter, pokemon_filter, is_physical, super_effective_only) VALUES (?, 'resist_berry', 0, 2048, 4096, ?, NULL, NULL, 1)",
       [@db.BindText("オッカのみ"), @db.BindText("ほのお")],
@@ -57,7 +59,8 @@ pub fn run_012(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(err) => return Err(err)
     Ok(_) => ()
   }
-  match @db.exec_binds(
+  match
+    @db.exec_binds(
       db,
       "INSERT INTO item_effect (item_name, effect_kind, apply_order, num, den, type_filter, pokemon_filter, is_physical, super_effective_only) VALUES (?, 'consume_on_hit', 4, 0, 0, NULL, NULL, NULL, 0)",
       [@db.BindText("きあいのタスキ")],
@@ -65,9 +68,5 @@ pub fn run_012(db : @db.Db, repo_root : String) -> Result[String, String] {
     Err(err) => return Err(err)
     Ok(_) => ()
   }
-  Ok(
-    "Inserted " +
-    entries.length().to_string() +
-    " items + 2 item_effect rows",
-  )
+  Ok("Inserted " + entries.length().to_string() + " items + 2 item_effect rows")
 }

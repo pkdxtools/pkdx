@@ -1,8 +1,17 @@
 ///|
 test "is_reflect_move identifies all four reflect moves" {
-  @debug.debug_inspect(is_reflect_move("カウンター"), content="Some(Counter)")
-  @debug.debug_inspect(is_reflect_move("ミラーコート"), content="Some(MirrorCoat)")
-  @debug.debug_inspect(is_reflect_move("メタルバースト"), content="Some(MetalBurst)")
+  @debug.debug_inspect(
+    is_reflect_move("カウンター"),
+    content="Some(Counter)",
+  )
+  @debug.debug_inspect(
+    is_reflect_move("ミラーコート"),
+    content="Some(MirrorCoat)",
+  )
+  @debug.debug_inspect(
+    is_reflect_move("メタルバースト"),
+    content="Some(MetalBurst)",
+  )
   @debug.debug_inspect(is_reflect_move("ほうふく"), content="Some(Revenge)")
 }
 
@@ -24,7 +33,10 @@ test "reflect_multiplier integer fractions" {
 ///|
 test "reflect_move_type returns the move's own type" {
   @debug.debug_inspect(reflect_move_type(Counter), content="\"かくとう\"")
-  @debug.debug_inspect(reflect_move_type(MirrorCoat), content="\"エスパー\"")
+  @debug.debug_inspect(
+    reflect_move_type(MirrorCoat),
+    content="\"エスパー\"",
+  )
   @debug.debug_inspect(reflect_move_type(MetalBurst), content="\"はがね\"")
   @debug.debug_inspect(reflect_move_type(Revenge), content="\"あく\"")
 }

@@ -108,7 +108,7 @@ pub fn apply_atk_ability_power(
   move_type : String,
   move_power : Int,
   weather : @model.Weather,
-  force_contact~ : Bool? = None,
+  force_contact? : Bool? = None,
 ) -> Int {
   let is_contact = match force_contact {
     Some(v) => v
@@ -261,7 +261,7 @@ pub fn get_def_ability_final(
   move_type : String,
   is_super_effective : Bool,
   is_special : Bool,
-  force_contact~ : Bool? = None,
+  force_contact? : Bool? = None,
 ) -> Int {
   let is_contact = match force_contact {
     Some(v) => v
@@ -356,18 +356,17 @@ pub fn triggers_stamina(mv : @model.Move) -> Bool {
 /// ほうし は per-hit で 11% どく / 10% まひ / 9% ねむり (合計 30%、Gen9 仕様)。
 /// 単一エントリに畳むと「どく無効の攻撃側はすべての proc を回避」という
 /// 過剰な近似になるため、3 エントリへ分けて返す。
-pub fn contact_proc_ability(
-  name : String,
-) -> Array[(@model.StatusKind, Int)] {
+pub fn contact_proc_ability(name : String) -> Array[(@model.StatusKind, Int)] {
   match name {
     "ほのおのからだ" => [(@model.BurnKind, 30)]
     "せいでんき" => [(@model.ParalyzeKind, 30)]
     "どくしゅ" => [(@model.PoisonKind, 30)]
-    "ほうし" => [
-      (@model.PoisonKind, 11),
-      (@model.ParalyzeKind, 10),
-      (@model.SleepKind, 9),
-    ]
+    "ほうし" =>
+      [
+        (@model.PoisonKind, 11),
+        (@model.ParalyzeKind, 10),
+        (@model.SleepKind, 9),
+      ]
     _ => []
   }
 }

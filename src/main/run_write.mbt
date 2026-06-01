@@ -1,10 +1,11 @@
+///|
 fn run_write_teams(
   date : String,
   axis : String,
   force : Bool,
   publish : Bool,
 ) -> Unit {
-  if !(is_safe_path_component(axis)) || !(is_safe_path_component(date)) {
+  if !is_safe_path_component(axis) || !is_safe_path_component(date) {
     exit_error("Invalid characters in --axis or --date")
     return
   }
@@ -45,7 +46,7 @@ fn run_write_teams(
       None => false
     }
   }
-  if !(skip_md) {
+  if !skip_md {
     let rc = pkdx_write_file(@db.to_c_bytes(md_path), @db.to_c_bytes(md))
     if rc != 0 {
       exit_error("Failed to write " + md_path)
@@ -71,7 +72,7 @@ fn run_write_teams(
 
 ///|
 fn run_write_pokemon(name : String, file : String) -> Unit {
-  if !(is_safe_path_component(name)) || !(is_safe_path_component(file)) {
+  if !is_safe_path_component(name) || !is_safe_path_component(file) {
     exit_error("Invalid characters in --name or --file")
     return
   }

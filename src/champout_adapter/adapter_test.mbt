@@ -33,51 +33,84 @@ fn fake_bundle() -> LabelBundle {
 test "resolve_type skips Index 9 in typename.json" {
   let b = fake_bundle()
   // type 値 11 はくさ (連続インデックス: 9 を飛ばして TYPENAME_012)
-  @debug.debug_inspect(resolve_type(b, "11"), content=(
-    #|"くさ"
-  ))
+  @debug.debug_inspect(
+    resolve_type(b, "11"),
+    content=(
+      #|"くさ"
+    ),
+  )
   // type 値 3 はどく
-  @debug.debug_inspect(resolve_type(b, "3"), content=(
-    #|"どく"
-  ))
+  @debug.debug_inspect(
+    resolve_type(b, "3"),
+    content=(
+      #|"どく"
+    ),
+  )
   // 範囲外は空文字
-  @debug.debug_inspect(resolve_type(b, "99"), content=(
-    #|""
-  ))
+  @debug.debug_inspect(
+    resolve_type(b, "99"),
+    content=(
+      #|""
+    ),
+  )
   // 不正な数値文字列は 0 扱い → ノーマル
-  @debug.debug_inspect(resolve_type(b, ""), content=(
-    #|"ノーマル"
-  ))
+  @debug.debug_inspect(
+    resolve_type(b, ""),
+    content=(
+      #|"ノーマル"
+    ),
+  )
 }
 
 ///|
 test "resolve_ability returns empty for id 0" {
   let b = fake_bundle()
-  @debug.debug_inspect(resolve_ability(b, "65"), content=(
-    #|"しんりょく"
-  ))
-  @debug.debug_inspect(resolve_ability(b, "0"), content=(
-    #|""
-  ))
-  @debug.debug_inspect(resolve_ability(b, ""), content=(
-    #|""
-  ))
+  @debug.debug_inspect(
+    resolve_ability(b, "65"),
+    content=(
+      #|"しんりょく"
+    ),
+  )
+  @debug.debug_inspect(
+    resolve_ability(b, "0"),
+    content=(
+      #|""
+    ),
+  )
+  @debug.debug_inspect(
+    resolve_ability(b, ""),
+    content=(
+      #|""
+    ),
+  )
 }
 
 ///|
 test "resolve_move_category maps 0/1/2 to physical/special/status" {
-  @debug.debug_inspect(resolve_move_category("0"), content=(
-    #|"物理"
-  ))
-  @debug.debug_inspect(resolve_move_category("1"), content=(
-    #|"特殊"
-  ))
-  @debug.debug_inspect(resolve_move_category("2"), content=(
-    #|"変化"
-  ))
-  @debug.debug_inspect(resolve_move_category("9"), content=(
-    #|""
-  ))
+  @debug.debug_inspect(
+    resolve_move_category("0"),
+    content=(
+      #|"物理"
+    ),
+  )
+  @debug.debug_inspect(
+    resolve_move_category("1"),
+    content=(
+      #|"特殊"
+    ),
+  )
+  @debug.debug_inspect(
+    resolve_move_category("2"),
+    content=(
+      #|"変化"
+    ),
+  )
+  @debug.debug_inspect(
+    resolve_move_category("9"),
+    content=(
+      #|""
+    ),
+  )
 }
 
 ///|
@@ -95,9 +128,12 @@ test "map_pokemon_entries maps Venusaur grass/poison correctly" {
     #|    "toku0": "65", "toku1": "65", "toku2": "34"
     #|  }
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -106,41 +142,71 @@ test "map_pokemon_entries maps Venusaur grass/poison correctly" {
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
       let e = entries[0]
-      @debug.debug_inspect(e.id, content=(
-        #|"0003000"
-      ))
-      @debug.debug_inspect(e.no, content=(
-        #|"0003"
-      ))
-      @debug.debug_inspect(e.globalNo, content=(
-        #|"0003"
-      ))
-      @debug.debug_inspect(e.type1, content=(
-        #|"くさ"
-      ))
-      @debug.debug_inspect(e.type2, content=(
-        #|"どく"
-      ))
-      @debug.debug_inspect(e.ability1, content=(
-        #|"しんりょく"
-      ))
+      @debug.debug_inspect(
+        e.id,
+        content=(
+          #|"0003000"
+        ),
+      )
+      @debug.debug_inspect(
+        e.no,
+        content=(
+          #|"0003"
+        ),
+      )
+      @debug.debug_inspect(
+        e.globalNo,
+        content=(
+          #|"0003"
+        ),
+      )
+      @debug.debug_inspect(
+        e.type1,
+        content=(
+          #|"くさ"
+        ),
+      )
+      @debug.debug_inspect(
+        e.type2,
+        content=(
+          #|"どく"
+        ),
+      )
+      @debug.debug_inspect(
+        e.ability1,
+        content=(
+          #|"しんりょく"
+        ),
+      )
       // ability2 は ability1 と同じ id なので空文字に正規化される
-      @debug.debug_inspect(e.ability2, content=(
-        #|""
-      ))
-      @debug.debug_inspect(e.dream_ability, content=(
-        #|"ようりょくそ"
-      ))
+      @debug.debug_inspect(
+        e.ability2,
+        content=(
+          #|""
+        ),
+      )
+      @debug.debug_inspect(
+        e.dream_ability,
+        content=(
+          #|"ようりょくそ"
+        ),
+      )
       @debug.debug_inspect(e.hp, content="80")
       @debug.debug_inspect(e.attack, content="82")
       @debug.debug_inspect(e.special_attack, content="100")
       @debug.debug_inspect(e.speed, content="80")
-      @debug.debug_inspect(e.form, content=(
-        #|""
-      ))
-      @debug.debug_inspect(e.name_jpn, content=(
-        #|"フシギバナ"
-      ))
+      @debug.debug_inspect(
+        e.form,
+        content=(
+          #|""
+        ),
+      )
+      @debug.debug_inspect(
+        e.name_jpn,
+        content=(
+          #|"フシギバナ"
+        ),
+      )
     }
   }
 }
@@ -159,9 +225,12 @@ test "map_pokemon_entries skips is_valid != 1" {
     #|    "toku0": "0", "toku1": "0", "toku2": "0"
     #|  }
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -182,9 +251,12 @@ test "map_move_entries normalizes power/accuracy zero to dash and copies direct/
     #|   "power": "0", "accuracy": "0", "pp": "20", "direct": "0",
     #|   "available": "1", "ms_lbl": "WAZANAME_014"}
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -192,39 +264,72 @@ test "map_move_entries normalizes power/accuracy zero to dash and copies direct/
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="2")
-      @debug.debug_inspect(entries[0].waza, content=(
-        #|"はたく"
-      ))
-      @debug.debug_inspect(entries[0].power, content=(
-        #|"40"
-      ))
-      @debug.debug_inspect(entries[0].category, content=(
-        #|"物理"
-      ))
-      @debug.debug_inspect(entries[0].direct, content=(
-        #|"1"
-      ))
-      @debug.debug_inspect(entries[0].target, content=(
-        #|"0"
-      ))
-      @debug.debug_inspect(entries[1].waza, content=(
-        #|"つるぎのまい"
-      ))
-      @debug.debug_inspect(entries[1].power, content=(
-        #|"-"
-      ))
-      @debug.debug_inspect(entries[1].accuracy, content=(
-        #|"-"
-      ))
-      @debug.debug_inspect(entries[1].category, content=(
-        #|"変化"
-      ))
-      @debug.debug_inspect(entries[1].direct, content=(
-        #|"0"
-      ))
-      @debug.debug_inspect(entries[1].target, content=(
-        #|"7"
-      ))
+      @debug.debug_inspect(
+        entries[0].waza,
+        content=(
+          #|"はたく"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].power,
+        content=(
+          #|"40"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].category,
+        content=(
+          #|"物理"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].direct,
+        content=(
+          #|"1"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].target,
+        content=(
+          #|"0"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].waza,
+        content=(
+          #|"つるぎのまい"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].power,
+        content=(
+          #|"-"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].accuracy,
+        content=(
+          #|"-"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].category,
+        content=(
+          #|"変化"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].direct,
+        content=(
+          #|"0"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].target,
+        content=(
+          #|"7"
+        ),
+      )
     }
   }
 }
@@ -236,9 +341,12 @@ test "map_learnset_entries filters by valid_ids" {
     #|  {"id": "0003000", "waza": "1,14"},
     #|  {"id": "9999000", "waza": "1,14"}
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -248,18 +356,30 @@ test "map_learnset_entries filters by valid_ids" {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="2")
-      @debug.debug_inspect(entries[0].id, content=(
-        #|"0003000"
-      ))
-      @debug.debug_inspect(entries[0].waza, content=(
-        #|"はたく"
-      ))
-      @debug.debug_inspect(entries[0].conditions, content=(
-        #|"基本"
-      ))
-      @debug.debug_inspect(entries[1].waza, content=(
-        #|"つるぎのまい"
-      ))
+      @debug.debug_inspect(
+        entries[0].id,
+        content=(
+          #|"0003000"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].waza,
+        content=(
+          #|"はたく"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].conditions,
+        content=(
+          #|"基本"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[1].waza,
+        content=(
+          #|"つるぎのまい"
+        ),
+      )
     }
   }
 }
@@ -271,9 +391,12 @@ test "map_item_entries resolves id to name_ja" {
     #|  {"id": "149", "category_a": "6", "category_b": "4", "category_c": "0",
     #|   "limit": "0", "ms_lbl": "ITEMNAME_149", "unlock": "0"}
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -281,12 +404,18 @@ test "map_item_entries resolves id to name_ja" {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
-      @debug.debug_inspect(entries[0].name_ja, content=(
-        #|"オボンのみ"
-      ))
-      @debug.debug_inspect(entries[0].category, content=(
-        #|"6"
-      ))
+      @debug.debug_inspect(
+        entries[0].name_ja,
+        content=(
+          #|"オボンのみ"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].category,
+        content=(
+          #|"6"
+        ),
+      )
     }
   }
 }

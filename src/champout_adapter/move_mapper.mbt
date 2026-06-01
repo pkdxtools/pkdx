@@ -36,7 +36,7 @@ pub fn map_move_entries(
       Some(String(s)) => s == "1"
       _ => false
     }
-    if !(available) {
+    if !available {
       continue
     }
     let id = match m.get("id") {
@@ -80,16 +80,7 @@ pub fn map_move_entries(
       Some(String(s)) => s
       _ => "0"
     }
-    out.push({
-      waza,
-      type_,
-      category,
-      pp,
-      power,
-      accuracy,
-      direct,
-      target,
-    })
+    out.push({ waza, type_, category, pp, power, accuracy, direct, target })
   }
   Ok(out)
 }

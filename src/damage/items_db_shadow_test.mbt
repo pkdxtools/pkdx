@@ -18,12 +18,10 @@ fn ish_open_seeded_db() -> @db.Db? {
       // keeps the test self-contained without forcing a public migrate
       // entry-point.
       let _ = @db.exec(
-        db,
-        "CREATE TABLE items (name_ja TEXT PRIMARY KEY, name_en TEXT, category TEXT, flavor TEXT)",
+        db, "CREATE TABLE items (name_ja TEXT PRIMARY KEY, name_en TEXT, category TEXT, flavor TEXT)",
       )
       let _ = @db.exec(
-        db,
-        "CREATE TABLE item_effect (item_name TEXT NOT NULL, effect_kind TEXT NOT NULL, apply_order INTEGER NOT NULL, num INTEGER, den INTEGER, type_filter TEXT, pokemon_filter TEXT, is_physical INTEGER, super_effective_only INTEGER)",
+        db, "CREATE TABLE item_effect (item_name TEXT NOT NULL, effect_kind TEXT NOT NULL, apply_order INTEGER NOT NULL, num INTEGER, den INTEGER, type_filter TEXT, pokemon_filter TEXT, is_physical INTEGER, super_effective_only INTEGER)",
       )
       let _ = @db.exec_binds(
         db,
@@ -59,11 +57,15 @@ test "shadow: こだわりハチマキ stat mod matches hardcode (physical and s
     }
   }
   // Physical: hardcoded multiplies by 3/2; DB should match.
-  let hardcode_phys = apply_atk_item_stat("こだわりハチマキ", true, "0445", 200)
+  let hardcode_phys = apply_atk_item_stat(
+    "こだわりハチマキ", true, "0445", 200,
+  )
   let db_phys = apply_atk_item_stat_db(effects, true, 200)
   assert_true(hardcode_phys == db_phys)
   // Special: hardcoded leaves stat unchanged; DB should match.
-  let hardcode_spec = apply_atk_item_stat("こだわりハチマキ", false, "0445", 200)
+  let hardcode_spec = apply_atk_item_stat(
+    "こだわりハチマキ", false, "0445", 200,
+  )
   let db_spec = apply_atk_item_stat_db(effects, false, 200)
   assert_true(hardcode_spec == db_spec)
   @db.close(db)
@@ -111,9 +113,12 @@ test "shadow: オッカのみ resist berry type matches hardcode" {
   let hardcode_type = get_resist_berry_type("オッカのみ")
   let db_type = get_resist_berry_type_db(effects)
   assert_true(hardcode_type == db_type)
-  @debug.debug_inspect(db_type, content=(
-    #|"ほのお"
-  ))
+  @debug.debug_inspect(
+    db_type,
+    content=(
+      #|"ほのお"
+    ),
+  )
   @db.close(db)
 }
 
@@ -123,7 +128,8 @@ test "shadow: unknown item returns no-op (no effects from DB)" {
     Some(d) => d
     None => return
   }
-  let effects = match @db.query_item_effects(db, "存在しないアイテム") {
+  let effects = match
+    @db.query_item_effects(db, "存在しないアイテム") {
     Ok(e) => e
     Err(_) => {
       @db.close(db)
@@ -132,11 +138,17 @@ test "shadow: unknown item returns no-op (no effects from DB)" {
   }
   // Empty effects list ⇒ all helpers return identity.
   @debug.debug_inspect(effects.length(), content="0")
-  @debug.debug_inspect(apply_atk_item_stat_db(effects, true, 100), content="100")
+  @debug.debug_inspect(
+    apply_atk_item_stat_db(effects, true, 100),
+    content="100",
+  )
   @debug.debug_inspect(get_atk_item_final_db(effects, true, true), content="0")
-  @debug.debug_inspect(get_resist_berry_type_db(effects), content=(
-    #|""
-  ))
+  @debug.debug_inspect(
+    get_resist_berry_type_db(effects),
+    content=(
+      #|""
+    ),
+  )
   @db.close(db)
 }
 
@@ -154,7 +166,13 @@ test "shadow: empty item name returns no-op" {
     }
   }
   @debug.debug_inspect(effects.length(), content="0")
-  @debug.debug_inspect(apply_atk_item_stat("", true, "0445", 100), content="100")
-  @debug.debug_inspect(apply_atk_item_stat_db(effects, true, 100), content="100")
+  @debug.debug_inspect(
+    apply_atk_item_stat("", true, "0445", 100),
+    content="100",
+  )
+  @debug.debug_inspect(
+    apply_atk_item_stat_db(effects, true, 100),
+    content="100",
+  )
   @db.close(db)
 }

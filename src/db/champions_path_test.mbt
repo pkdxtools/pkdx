@@ -11,11 +11,8 @@ fn find_champions_db() -> String? {
     None => ()
   }
   let candidates = [
-    "pokedex/champions.db",
-    "../pokedex/champions.db",
-    "../../pokedex/champions.db",
-    "../../../pokedex/champions.db",
-    "../../../../pokedex/champions.db",
+    "pokedex/champions.db", "../pokedex/champions.db", "../../pokedex/champions.db",
+    "../../../pokedex/champions.db", "../../../../pokedex/champions.db",
   ]
   for i = 0; i < candidates.length(); i = i + 1 {
     let path = candidates[i]
@@ -55,9 +52,12 @@ test "resolve_champions_db_path_from swaps pokedex.db -> champions.db sibling" {
   let prev = @sys.get_env_var("CHAMPIONS_DB")
   @sys.unset_env_var("CHAMPIONS_DB")
   let p = resolve_champions_db_path_from("/srv/data/pokedex.db")
-  @debug.debug_inspect(p, content=(
-    #|"/srv/data/champions.db"
-  ))
+  @debug.debug_inspect(
+    p,
+    content=(
+      #|"/srv/data/champions.db"
+    ),
+  )
   match prev {
     Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
     None => ()
@@ -71,9 +71,12 @@ test "resolve_champions_db_path_from puts champions.db next to a custom POKEDEX_
   // Custom POKEDEX_DB that doesn't end in `pokedex.db` must yield a
   // SIBLING `champions.db`, not `<file>.champions.db`.
   let p = resolve_champions_db_path_from("/srv/data/custom.db")
-  @debug.debug_inspect(p, content=(
-    #|"/srv/data/champions.db"
-  ))
+  @debug.debug_inspect(
+    p,
+    content=(
+      #|"/srv/data/champions.db"
+    ),
+  )
   match prev {
     Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
     None => ()
@@ -85,9 +88,12 @@ test "resolve_champions_db_path_from honors CHAMPIONS_DB env override" {
   let prev = @sys.get_env_var("CHAMPIONS_DB")
   @sys.set_env_var("CHAMPIONS_DB", "/elsewhere/override.db")
   let p = resolve_champions_db_path_from("/srv/data/pokedex.db")
-  @debug.debug_inspect(p, content=(
-    #|"/elsewhere/override.db"
-  ))
+  @debug.debug_inspect(
+    p,
+    content=(
+      #|"/elsewhere/override.db"
+    ),
+  )
   match prev {
     Some(v) => @sys.set_env_var("CHAMPIONS_DB", v)
     None => @sys.unset_env_var("CHAMPIONS_DB")
@@ -107,7 +113,7 @@ test "open_champions_rw + validate_champions_schema succeed after setup" {
     Some(p) => p
     None => return
   }
-  if !(file_exists(pokedex_path)) {
+  if !file_exists(pokedex_path) {
     return
   }
   match open_champions_rw(champions_path, pokedex_path) {
@@ -134,16 +140,19 @@ test "attach_pokedex makes pokedex.* tables visible inside a champions.db handle
     Some(p) => p
     None => return
   }
-  if !(file_exists(pokedex_path)) {
+  if !file_exists(pokedex_path) {
     return
   }
   match open_champions_rw(champions_path, pokedex_path) {
     Err(_) => return
-    Ok(db) => {
+    Ok(db) =>
       // Attached schema must expose pokedex.local_waza_language for cross-db
       // JOINs used by query_learners / query_moves.
-      match query_binds(
-          db, "SELECT count(*) FROM pokedex.local_waza_language LIMIT 1", [],
+      match
+        query_binds(
+          db,
+          "SELECT count(*) FROM pokedex.local_waza_language LIMIT 1",
+          [],
         ) {
         Err(e) => {
           close(db)
@@ -151,6 +160,5 @@ test "attach_pokedex makes pokedex.* tables visible inside a champions.db handle
         }
         Ok(_) => close(db)
       }
-    }
   }
 }

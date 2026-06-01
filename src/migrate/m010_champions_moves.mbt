@@ -8,7 +8,7 @@ pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
     None => return Err(path + " not found.")
     Some(s) => s
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match @champions_schema.parse_move_entries(json) {
@@ -25,7 +25,8 @@ pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
   }
   for i = 0; i < entries.length(); i = i + 1 {
     let e = entries[i]
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "INSERT INTO move (waza, type, category, pp, power, accuracy, direct, target) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
@@ -42,7 +43,8 @@ pub fn run_010(db : @db.Db, repo_root : String) -> Result[String, String] {
       Err(err) => return Err(err)
       Ok(_) => ()
     }
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "INSERT INTO move_name (waza, language, name, description) VALUES (?, ?, ?, NULL)",
         [@db.BindText(e.waza), @db.BindText("jpn"), @db.BindText(e.waza)],

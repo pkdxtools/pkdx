@@ -37,7 +37,7 @@ pub fn multi_hit_from_str(s : String) -> MultiHit {
           }
           n = n * 10 + (c - 0x30)
         }
-        if !(ok) {
+        if !ok {
           Auto
         } else if n < 1 {
           Fixed(1)

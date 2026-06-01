@@ -14,7 +14,7 @@
 fn mk_result(
   damages : FixedArray[Int],
   def_hp : Int,
-  is_immune~ : Bool = false,
+  is_immune? : Bool = false,
 ) -> @model.DamageCalcResult {
   let percents : FixedArray[Double] = FixedArray::make(16, 0.0)
   for i = 0; i < 16; i = i + 1 {
@@ -131,13 +131,41 @@ test "build_input_with_ranks: weather~ argument threads into DamageCalcInput.wea
   let input_default = build_input_with_ranks(c, c, mv, 0, 0)
   @debug.assert_eq(input_default.weather, @model.Weather::None)
   // Each Weather variant must reach DamageCalcInput.weather verbatim.
-  let input_sun = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Sun)
+  let input_sun = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    weather=@model.Weather::Sun,
+  )
   @debug.assert_eq(input_sun.weather, @model.Weather::Sun)
-  let input_rain = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Rain)
+  let input_rain = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    weather=@model.Weather::Rain,
+  )
   @debug.assert_eq(input_rain.weather, @model.Weather::Rain)
-  let input_sand = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Sand)
+  let input_sand = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    weather=@model.Weather::Sand,
+  )
   @debug.assert_eq(input_sand.weather, @model.Weather::Sand)
-  let input_snow = build_input_with_ranks(c, c, mv, 0, 0, weather=@model.Weather::Snow)
+  let input_snow = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    weather=@model.Weather::Snow,
+  )
   @debug.assert_eq(input_snow.weather, @model.Weather::Snow)
 }
 
@@ -203,12 +231,40 @@ test "build_input_with_ranks: field~ argument threads into DamageCalcInput.field
   // green without per-call churn.
   let input_default = build_input_with_ranks(c, c, mv, 0, 0)
   @debug.assert_eq(input_default.field, @model.Field::None)
-  let input_electric = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Electric)
+  let input_electric = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    field=@model.Field::Electric,
+  )
   @debug.assert_eq(input_electric.field, @model.Field::Electric)
-  let input_grassy = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Grassy)
+  let input_grassy = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    field=@model.Field::Grassy,
+  )
   @debug.assert_eq(input_grassy.field, @model.Field::Grassy)
-  let input_misty = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Misty)
+  let input_misty = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    field=@model.Field::Misty,
+  )
   @debug.assert_eq(input_misty.field, @model.Field::Misty)
-  let input_psychic = build_input_with_ranks(c, c, mv, 0, 0, field=@model.Field::Psychic)
+  let input_psychic = build_input_with_ranks(
+    c,
+    c,
+    mv,
+    0,
+    0,
+    field=@model.Field::Psychic,
+  )
   @debug.assert_eq(input_psychic.field, @model.Field::Psychic)
 }

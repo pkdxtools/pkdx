@@ -30,7 +30,11 @@ pub suberror NashCliError {
   /// after the primary simplex raised. Carries the original simplex error
   /// message and the observed exploitabilities so the CLI can report how
   /// close each approximate solver came.
-  NashFallbackExhausted(simplex_err~ : String, fp_expl~ : Double, mwu_expl~ : Double)
+  NashFallbackExhausted(
+    simplex_err~ : String,
+    fp_expl~ : Double,
+    mwu_expl~ : Double
+  )
 } derive(Debug)
 
 ///|
@@ -66,7 +70,8 @@ fn parse_matrix_input(
         let row = Array::make(row_json.length(), 0.0)
         for j in 0..<row_json.length() {
           row[j] = json_number(
-            row_json[j], "matrix[" + i.to_string() + "][" + j.to_string() + "]",
+            row_json[j],
+            "matrix[" + i.to_string() + "][" + j.to_string() + "]",
           )
         }
         data[i] = row
@@ -163,7 +168,7 @@ fn parse_labels(
 fn parse_nash_input(
   input_json : String,
 ) -> (@nash.FiniteMatrix, Array[String]) raise NashCliError {
-  let root = try @json.parse(input_json) catch {
+  let root = @json.parse(input_json) catch {
     err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
@@ -175,7 +180,7 @@ fn parse_nash_input(
   if has_matrix && has_chars {
     raise ConflictingInputs
   }
-  if !(has_matrix) && !(has_chars) {
+  if !has_matrix && !has_chars {
     raise MissingField("matrix or characters")
   }
   let (data, labels) = if has_matrix {
@@ -191,7 +196,7 @@ fn parse_nash_input(
     match obj.get("characters") {
       Some(Array(arr)) => {
         let chars = parse_characters_input(arr)
-        let m = try from_characters(chars) catch {
+        let m = from_characters(chars) catch {
           err => raise InnerError(@debug.to_string(err))
         }
         let labels = Array::make(chars.length(), "")
@@ -251,8 +256,7 @@ fn fmt_int_array(xs : Array[Int]) -> String {
 /// produce valid JSON.
 fn json_escape(s : String) -> String {
   let hex_digits = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e',
-    'f',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
   let mut out = ""
   for ch in s {
@@ -272,7 +276,7 @@ fn json_escape(s : String) -> String {
     } else if code == 0x0D {
       out = out + "\\r"
     } else if code < 0x20 {
-      let hi = (code / 16) % 16
+      let hi = code / 16 % 16
       let lo = code % 16
       out = out +
         "\\u00" +
@@ -346,7 +350,7 @@ fn strategy_to_array(s : @nash.MixedStrategy) -> Array[Double] {
 /// non-zero.
 pub fn run_nash_solve(input_json : String) -> String raise NashCliError {
   let (matrix, labels) = parse_nash_input(input_json)
-  let lp = try @nash.solve_zero_sum(matrix) catch {
+  let lp = @nash.solve_zero_sum(matrix) catch {
     err => raise InnerError(err.to_string())
   }
   match lp {
@@ -392,7 +396,7 @@ pub fn run_nash_graph(
   input_json : String,
   threshold : Double,
 ) -> String raise NashCliError {
-  let root = try @json.parse(input_json) catch {
+  let root = @json.parse(input_json) catch {
     err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
@@ -400,10 +404,10 @@ pub fn run_nash_graph(
     _ => raise InvalidJson("top-level must be an object")
   }
   if obj.contains("team") || obj.contains("opponent") {
-    if !(obj.contains("opponent")) {
+    if !obj.contains("opponent") {
       raise MissingField("opponent")
     }
-    if !(obj.contains("team")) {
+    if !obj.contains("team") {
       raise MissingField("team")
     }
     return run_nash_graph_team(obj, threshold)
@@ -471,8 +475,8 @@ fn run_nash_graph_team(
     Some(j) => j
     None => raise MissingField("opponent")
   }
-  let team = parse_team_array(team_json, "team", stat_system=stat_system)
-  let opp = parse_team_array(opp_json, "opponent", stat_system=stat_system)
+  let team = parse_team_array(team_json, "team", stat_system~)
+  let opp = parse_team_array(opp_json, "opponent", stat_system~)
   let turn_limit = match obj.get("turn_limit") {
     Some(Number(n, ..)) => {
       let v = n.to_int()

@@ -43,8 +43,8 @@ fn rfn_move(
   type_ : String,
   category : @model.MoveCategory,
   power : Int,
-  accuracy~ : Int = 100,
-  priority~ : Int = 0,
+  accuracy? : Int = 100,
+  priority? : Int = 0,
 ) -> @model.Move {
   {
     name,
@@ -68,7 +68,10 @@ fn rfn_move(
 }
 
 ///|
-fn rfn_combatant(pokemon : @model.Pokemon, moves : Array[@model.Move]) -> Combatant {
+fn rfn_combatant(
+  pokemon : @model.Pokemon,
+  moves : Array[@model.Move],
+) -> Combatant {
   {
     pokemon,
     moves,
@@ -126,13 +129,14 @@ test "reflect nash: MirrorCoat ignores physical, sums only special" {
     ],
   )
   let reflect_mv = mc_user.moves[0]
-  let outcomes_mixed = compute_damage_variants(
-    mc_user, mixed, reflect_mv, 0, 0,
-  )
+  let outcomes_mixed = compute_damage_variants(mc_user, mixed, reflect_mv, 0, 0)
   // Now compare against a defender that has ONLY the special move. The
   // per-candidate average must be identical because the physical entry is
   // filtered out before averaging.
-  let special_only = { ..mixed, moves: [rfn_move("ねっぷう", "ほのお", @model.Special, 95)] }
+  let special_only = {
+    ..mixed,
+    moves: [rfn_move("ねっぷう", "ほのお", @model.Special, 95)],
+  }
   let outcomes_solo = compute_damage_variants(
     mc_user, special_only, reflect_mv, 0, 0,
   )
@@ -231,13 +235,16 @@ test "reflect nash: MetalBurst same-speed → roughly half of slower-side outcom
   let mv = rfn_move("メタルバースト", "はがね", @model.Physical, 1)
   let atk_mv = rfn_move("たいあたり", "ノーマル", @model.Physical, 40)
   let slow_user = rfn_combatant(
-    rfn_pokemon("user_slow", "はがね", "", 200, 100, 100, 50, 100, 50), [mv],
+    rfn_pokemon("user_slow", "はがね", "", 200, 100, 100, 50, 100, 50),
+    [mv],
   )
   let same_user = rfn_combatant(
-    rfn_pokemon("user_same", "はがね", "", 200, 100, 100, 50, 100, 100), [mv],
+    rfn_pokemon("user_same", "はがね", "", 200, 100, 100, 50, 100, 100),
+    [mv],
   )
   let opponent = rfn_combatant(
-    rfn_pokemon("atk", "ノーマル", "", 200, 200, 100, 50, 100, 100), [atk_mv],
+    rfn_pokemon("atk", "ノーマル", "", 200, 200, 100, 50, 100, 100),
+    [atk_mv],
   )
   let slow_out = compute_damage_variants(slow_user, opponent, mv, 0, 0)
   let same_out = compute_damage_variants(same_user, opponent, mv, 0, 0)
@@ -279,11 +286,27 @@ test "reflect nash: 70% accuracy halves outcome relative to 100% (roughly 0.7x)"
   // reflect outcome ratio isolates the p_hit_i multiplier.
   let acc100 = rfn_combatant(
     rfn_pokemon("atk", "ノーマル", "", 200, 200, 100, 50, 100, 100),
-    [rfn_move("たいあたり", "ノーマル", @model.Physical, 80, accuracy=100)],
+    [
+      rfn_move(
+        "たいあたり",
+        "ノーマル",
+        @model.Physical,
+        80,
+        accuracy=100,
+      ),
+    ],
   )
   let acc70 = rfn_combatant(
     rfn_pokemon("atk", "ノーマル", "", 200, 200, 100, 50, 100, 100),
-    [rfn_move("たいあたり", "ノーマル", @model.Physical, 80, accuracy=70)],
+    [
+      rfn_move(
+        "たいあたり",
+        "ノーマル",
+        @model.Physical,
+        80,
+        accuracy=70,
+      ),
+    ],
   )
   let reflect_mv = counter_user.moves[0]
   let o100 = compute_damage_variants(counter_user, acc100, reflect_mv, 0, 0)
@@ -312,9 +335,7 @@ test "reflect nash: Counter against Ghost-type opponent → 0 (type immune)" {
     [rfn_move("シャドーパンチ", "ゴースト", @model.Physical, 60)],
   )
   let reflect_mv = counter_user.moves[0]
-  let outcomes = compute_damage_variants(
-    counter_user, ghost, reflect_mv, 0, 0,
-  )
+  let outcomes = compute_damage_variants(counter_user, ghost, reflect_mv, 0, 0)
   @debug.debug_inspect(outcomes[0].mean_damage, content="0")
 }
 
@@ -338,7 +359,11 @@ test "reflect nash: MirrorCoat Step1 reads opponent SpA from def_ranks_full" {
   // Baseline: all ranks 0. compute_damage_variants applies the rank-routing
   // fix when full arrays are present.
   let baseline = compute_damage_variants(
-    mc_user, special_atk, reflect_mv, 0, 0,
+    mc_user,
+    special_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, 0, 0, 0, 0]),
     def_ranks_full=Some([0, 0, 0, 0, 0]),
   )
@@ -346,7 +371,11 @@ test "reflect nash: MirrorCoat Step1 reads opponent SpA from def_ranks_full" {
   // attacker is the opponent, so its SpA rank scales the inbound damage,
   // which then scales the reflected output.
   let spa_boost = compute_damage_variants(
-    mc_user, special_atk, reflect_mv, 0, 0,
+    mc_user,
+    special_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, 0, 0, 0, 0]),
     def_ranks_full=Some([0, 0, 2, 0, 0]),
   )
@@ -354,7 +383,11 @@ test "reflect nash: MirrorCoat Step1 reads opponent SpA from def_ranks_full" {
   // defender is the reflect user, so a lower SpD increases the inbound
   // damage and therefore the reflected output.
   let spd_drop = compute_damage_variants(
-    mc_user, special_atk, reflect_mv, 0, 0,
+    mc_user,
+    special_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, 0, 0, -2, 0]),
     def_ranks_full=Some([0, 0, 0, 0, 0]),
   )
@@ -366,7 +399,11 @@ test "reflect nash: MirrorCoat Step1 reads opponent SpA from def_ranks_full" {
   // Boosting the opponent's Atk or our Def must NOT affect a MirrorCoat
   // reflecting a Special candidate — the rank-routing pick is per-category.
   let irrelevant = compute_damage_variants(
-    mc_user, special_atk, reflect_mv, 0, 0,
+    mc_user,
+    special_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, -2, 0, 0, 0]),
     def_ranks_full=Some([2, 0, 0, 0, 0]),
   )
@@ -397,19 +434,31 @@ test "reflect nash: MetalBurst routes Atk vs SpA per candidate category" {
   )
   let reflect_mv = mb_user.moves[0]
   let baseline = compute_damage_variants(
-    mb_user, mixed_atk, reflect_mv, 0, 0,
+    mb_user,
+    mixed_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, 0, 0, 0, 0]),
     def_ranks_full=Some([0, 0, 0, 0, 0]),
   )
   // Boost opponent's Atk only.
   let atk_boost = compute_damage_variants(
-    mb_user, mixed_atk, reflect_mv, 0, 0,
+    mb_user,
+    mixed_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, 0, 0, 0, 0]),
     def_ranks_full=Some([2, 0, 0, 0, 0]),
   )
   // Boost opponent's SpA only.
   let spa_boost = compute_damage_variants(
-    mb_user, mixed_atk, reflect_mv, 0, 0,
+    mb_user,
+    mixed_atk,
+    reflect_mv,
+    0,
+    0,
     atk_ranks_full=Some([0, 0, 0, 0, 0]),
     def_ranks_full=Some([0, 0, 2, 0, 0]),
   )

@@ -1,3 +1,4 @@
+///|
 fn resolve_damage_cache_path() -> String {
   match @sys.get_env_var(DAMAGE_CACHE_ENV_VAR) {
     Some(p) if p.length() > 0 => return p
@@ -17,6 +18,7 @@ fn resolve_damage_cache_path() -> String {
 }
 
 ///|
+
 ///|
 /// Rev2 CLI extensions bundled together so `run_damage`'s signature doesn't
 /// bloat. Each field is populated from the corresponding CLI flag in
@@ -173,9 +175,7 @@ fn run_damage(
     match @model.nature_from_ja(incoming_atk_nature_str) {
       Some(n) => Some(n)
       None => {
-        println(
-          "Error: Unknown incoming nature: " + incoming_atk_nature_str,
-        )
+        println("Error: Unknown incoming nature: " + incoming_atk_nature_str)
         return
       }
     }
@@ -191,7 +191,7 @@ fn run_damage(
   // `--attach-team` もバイパス — attach 処理は DamageCalcInput / Result が
   // 必要で、cached JSON からは復元できないため、毎回 fresh に計算する。
   let use_cache = match format {
-    @cli.Json => !(no_cache) && attach_team.length() == 0
+    @cli.Json => !no_cache && attach_team.length() == 0
     _ => false
   }
   let cache_key_opt : String? = if use_cache {
@@ -350,23 +350,21 @@ fn run_damage(
       } else {
         (2, 2)
       }
-      Some(
-        @model.IncomingOpts::{
-          attacker: ia,
-          move_: im,
-          atk_ability: incoming_atk_ability,
-          atk_item: incoming_atk_item,
-          atk_nature: incoming_atk_nature,
-          atk_rank: incoming_atk_rank,
-          atk_stat_override: incoming_atk_stat,
-          atk_status_condition: incoming_atk_status_cond,
-          atk_rank_up_count: incoming_atk_rank_up_count,
-          atk_hp_num: hp_num,
-          atk_hp_den: hp_den,
-          tera_type: incoming_tera_type,
-          critical: incoming_critical,
-        },
-      )
+      Some(@model.IncomingOpts::{
+        attacker: ia,
+        move_: im,
+        atk_ability: incoming_atk_ability,
+        atk_item: incoming_atk_item,
+        atk_nature: incoming_atk_nature,
+        atk_rank: incoming_atk_rank,
+        atk_stat_override: incoming_atk_stat,
+        atk_status_condition: incoming_atk_status_cond,
+        atk_rank_up_count: incoming_atk_rank_up_count,
+        atk_hp_num: hp_num,
+        atk_hp_den: hp_den,
+        tera_type: incoming_tera_type,
+        critical: incoming_critical,
+      })
     } else {
       None
     }
@@ -414,9 +412,7 @@ fn run_damage(
         match @damage_cache.put(cache, key, output) {
           Ok(_) => ()
           Err(e) =>
-            pkdx_eprintln(
-              @db.to_c_bytes("damage_cache: put failed: " + e),
-            )
+            pkdx_eprintln(@db.to_c_bytes("damage_cache: put failed: " + e))
         }
         @damage_cache.close(cache)
       }
@@ -425,11 +421,7 @@ fn run_damage(
     println(output)
     if attach_team.length() > 0 {
       attach_damage_calc_to_meta(
-        attach_team,
-        input,
-        result,
-        attach_title,
-        attach_note,
+        attach_team, input, result, attach_title, attach_note,
       )
     }
   })
@@ -450,7 +442,9 @@ fn attach_damage_calc_to_meta(
   match @writer.validate_attach_team_path(meta_path) {
     Ok(_) => ()
     Err(reason) => {
-      exit_error("--attach-team: invalid path '" + meta_path + "' (" + reason + ")")
+      exit_error(
+        "--attach-team: invalid path '" + meta_path + "' (" + reason + ")",
+      )
       return
     }
   }
@@ -463,7 +457,9 @@ fn attach_damage_calc_to_meta(
   }
   let meta_json = @json.parse(existing) catch {
     e => {
-      exit_error("--attach-team: JSON parse error in " + meta_path + ": " + e.to_string())
+      exit_error(
+        "--attach-team: JSON parse error in " + meta_path + ": " + e.to_string(),
+      )
       return
     }
   }
@@ -479,4 +475,3 @@ fn attach_damage_calc_to_meta(
     pkdx_eprintln(@db.to_c_bytes("Attached damage calc to " + meta_path))
   }
 }
-

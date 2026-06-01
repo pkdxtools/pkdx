@@ -39,7 +39,9 @@ test "parse_damages_from_json: non-numeric damages returns None" {
 
 ///|
 test "mean_of_damages: matches compute_mean_damage integer division" {
-  let damages : Array[Int] = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115]
+  let damages : Array[Int] = [
+    100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+  ]
   // sum = 1720, 1720 / 16 = 107
   @debug.assert_eq(mean_of_damages(damages), 107)
 }

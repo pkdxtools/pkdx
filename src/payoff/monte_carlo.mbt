@@ -41,10 +41,10 @@ pub fn seeded_rng(seed : UInt64) -> @random.Rand {
 pub fn pick_best_move(
   atk : Combatant,
   dfn : Combatant,
-  atk_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
-  def_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  atk_ranks? : Array[Int] = [0, 0, 0, 0, 0],
+  def_ranks? : Array[Int] = [0, 0, 0, 0, 0],
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> Int? {
   let mut best_idx = -1
   let mut best_avg = 0.0
@@ -110,10 +110,10 @@ pub fn rollout_pick_move(
   dfn : Combatant,
   rng : @random.Rand,
   epsilon : Double,
-  atk_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
-  def_ranks~ : Array[Int] = [0, 0, 0, 0, 0],
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  atk_ranks? : Array[Int] = [0, 0, 0, 0, 0],
+  def_ranks? : Array[Int] = [0, 0, 0, 0, 0],
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> Int? {
   let n = atk.moves.length()
   if n == 0 {
@@ -133,4 +133,3 @@ pub fn rollout_pick_move(
       Some(rng.int(limit=n))
   }
 }
-

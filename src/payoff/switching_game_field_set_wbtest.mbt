@@ -88,7 +88,11 @@ fn mk_field_state() -> SwitchingGameState {
 /// Stage E 用の field 設定技ヘルパー。`mk_heal_move` が field_set 引数を
 /// 受けないため、本ファイル内では `mk_heal_move` を呼んだ上で field_set を
 /// override した struct を返す。
-fn mk_field_move(name : String, type_ : String, fld : @model.Field) -> @model.Move {
+fn mk_field_move(
+  name : String,
+  type_ : String,
+  fld : @model.Field,
+) -> @model.Move {
   { ..mk_heal_move(name, type_, @model.Status, 0), field_set: Some(fld) }
 }
 
@@ -103,7 +107,11 @@ fn mk_field_move(name : String, type_ : String, fld : @model.Field) -> @model.Mo
 test "with_post_hit_effects: エレキフィールド sets field=Electric, turns_left=5" {
   let state = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("エレキフィールド", "でんき", @model.Field::Electric)
+  let mv = mk_field_move(
+    "エレキフィールド",
+    "でんき",
+    @model.Field::Electric,
+  )
   let new_state = with_post_hit_effects(state, true, 0, 0, team, team, mv, 0)
   @debug.assert_eq(new_state.field, @model.Field::Electric)
   @debug.assert_eq(new_state.field_turns_left, 5)
@@ -120,7 +128,11 @@ test "with_post_hit_effects: エレキフィールド sets field=Electric, turns
 test "with_post_hit_effects: グラスフィールド sets field=Grassy, turns_left=5" {
   let state = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("グラスフィールド", "くさ", @model.Field::Grassy)
+  let mv = mk_field_move(
+    "グラスフィールド",
+    "くさ",
+    @model.Field::Grassy,
+  )
   let new_state = with_post_hit_effects(state, true, 0, 0, team, team, mv, 0)
   @debug.assert_eq(new_state.field, @model.Field::Grassy)
   @debug.assert_eq(new_state.field_turns_left, 5)
@@ -131,7 +143,11 @@ test "with_post_hit_effects: グラスフィールド sets field=Grassy, turns_l
 test "with_post_hit_effects: ミストフィールド sets field=Misty, turns_left=5" {
   let state = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("ミストフィールド", "フェアリー", @model.Field::Misty)
+  let mv = mk_field_move(
+    "ミストフィールド",
+    "フェアリー",
+    @model.Field::Misty,
+  )
   let new_state = with_post_hit_effects(state, true, 0, 0, team, team, mv, 0)
   @debug.assert_eq(new_state.field, @model.Field::Misty)
   @debug.assert_eq(new_state.field_turns_left, 5)
@@ -142,7 +158,11 @@ test "with_post_hit_effects: ミストフィールド sets field=Misty, turns_le
 test "with_post_hit_effects: サイコフィールド sets field=Psychic, turns_left=5" {
   let state = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("サイコフィールド", "エスパー", @model.Field::Psychic)
+  let mv = mk_field_move(
+    "サイコフィールド",
+    "エスパー",
+    @model.Field::Psychic,
+  )
   let new_state = with_post_hit_effects(state, true, 0, 0, team, team, mv, 0)
   @debug.assert_eq(new_state.field, @model.Field::Psychic)
   @debug.assert_eq(new_state.field_turns_left, 5)
@@ -154,7 +174,11 @@ test "with_post_hit_effects: サイコフィールド sets field=Psychic, turns_
 test "with_post_hit_effects: opp 側の エレキフィールド も field を書き換える" {
   let state = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("エレキフィールド", "でんき", @model.Field::Electric)
+  let mv = mk_field_move(
+    "エレキフィールド",
+    "でんき",
+    @model.Field::Electric,
+  )
   let new_state = with_post_hit_effects(state, false, 0, 0, team, team, mv, 0)
   @debug.assert_eq(new_state.field, @model.Field::Electric)
   @debug.assert_eq(new_state.field_turns_left, 5)
@@ -185,7 +209,11 @@ test "with_post_hit_effects: 通常技は field を書き換えない" {
 test "apply_eot: field counter decrement by 1 (5 → 4, Electric keeps)" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("エレキフィールド", "でんき", @model.Field::Electric)
+  let mv = mk_field_move(
+    "エレキフィールド",
+    "でんき",
+    @model.Field::Electric,
+  )
   let state_after_set = with_post_hit_effects(
     state0, true, 0, 0, team, team, mv, 0,
   )
@@ -202,7 +230,11 @@ test "apply_eot: field counter decrement by 1 (5 → 4, Electric keeps)" {
 test "apply_eot: エレキフィールド expires after 5 EOTs (Electric → None)" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("エレキフィールド", "でんき", @model.Field::Electric)
+  let mv = mk_field_move(
+    "エレキフィールド",
+    "でんき",
+    @model.Field::Electric,
+  )
   let mut state = with_post_hit_effects(state0, true, 0, 0, team, team, mv, 0)
   // 4 EOT 経過後: turns_left=1, field=Electric (まだ持続)
   for _ in 0..<4 {
@@ -251,7 +283,11 @@ test "apply_eot: field=None / turns_left=0 is fixpoint" {
 test "with_post_hit_effects: 同じ field 技再使用で field_turns_left=5 にリセット" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("エレキフィールド", "でんき", @model.Field::Electric)
+  let mv = mk_field_move(
+    "エレキフィールド",
+    "でんき",
+    @model.Field::Electric,
+  )
   let mut state = with_post_hit_effects(state0, true, 0, 0, team, team, mv, 0)
   // 3 EOT 経過: turns_left = 5 → 4 → 3 → 2
   for _ in 0..<3 {
@@ -274,8 +310,16 @@ test "with_post_hit_effects: 同じ field 技再使用で field_turns_left=5 に
 test "with_post_hit_effects: 別 field 技で cross-field overwrite (Electric → Grassy)" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let elec_mv = mk_field_move("エレキフィールド", "でんき", @model.Field::Electric)
-  let grass_mv = mk_field_move("グラスフィールド", "くさ", @model.Field::Grassy)
+  let elec_mv = mk_field_move(
+    "エレキフィールド",
+    "でんき",
+    @model.Field::Electric,
+  )
+  let grass_mv = mk_field_move(
+    "グラスフィールド",
+    "くさ",
+    @model.Field::Grassy,
+  )
   let state_after_elec = with_post_hit_effects(
     state0, true, 0, 0, team, team, elec_mv, 0,
   )
@@ -294,7 +338,11 @@ test "with_post_hit_effects: 別 field 技で cross-field overwrite (Electric �
 test "apply_eot: グラスフィールド expires after 5 EOTs (Grassy → None)" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("グラスフィールド", "くさ", @model.Field::Grassy)
+  let mv = mk_field_move(
+    "グラスフィールド",
+    "くさ",
+    @model.Field::Grassy,
+  )
   let mut state = with_post_hit_effects(state0, true, 0, 0, team, team, mv, 0)
   for _ in 0..<5 {
     state = apply_eot(state, team, team)
@@ -308,7 +356,11 @@ test "apply_eot: グラスフィールド expires after 5 EOTs (Grassy → None)
 test "apply_eot: ミストフィールド expires after 5 EOTs (Misty → None)" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("ミストフィールド", "フェアリー", @model.Field::Misty)
+  let mv = mk_field_move(
+    "ミストフィールド",
+    "フェアリー",
+    @model.Field::Misty,
+  )
   let mut state = with_post_hit_effects(state0, true, 0, 0, team, team, mv, 0)
   for _ in 0..<5 {
     state = apply_eot(state, team, team)
@@ -322,7 +374,11 @@ test "apply_eot: ミストフィールド expires after 5 EOTs (Misty → None)"
 test "apply_eot: サイコフィールド expires after 5 EOTs (Psychic → None)" {
   let state0 = mk_field_state()
   let team = [mk_field_combatant(), mk_field_combatant()]
-  let mv = mk_field_move("サイコフィールド", "エスパー", @model.Field::Psychic)
+  let mv = mk_field_move(
+    "サイコフィールド",
+    "エスパー",
+    @model.Field::Psychic,
+  )
   let mut state = with_post_hit_effects(state0, true, 0, 0, team, team, mv, 0)
   for _ in 0..<5 {
     state = apply_eot(state, team, team)

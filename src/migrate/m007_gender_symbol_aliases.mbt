@@ -30,9 +30,9 @@
 /// Resync 安全性: 先頭で `pokedex_name.name LIKE '%（オス）' OR LIKE '% (Male)'`
 /// を一括 DELETE する。これらの suffix は本 migration 以外で使われない。
 pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
-  match @db.exec(
-      db,
-      "DELETE FROM pokedex_name WHERE name LIKE '%（オス）' OR name LIKE '% (Male)'",
+  match
+    @db.exec(
+      db, "DELETE FROM pokedex_name WHERE name LIKE '%（オス）' OR name LIKE '% (Male)'",
     ) {
     Err(e) => return Err(e)
     Ok(_) => ()
@@ -50,11 +50,11 @@ pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
     #|    WHERE pf2.language = 'jpn' AND pf2.form = ? AND pf2.globalNo = pf.globalNo
     #|  )
     #|ORDER BY pf.globalNo
-  let rows = match @db.query_binds(
-      db,
-      candidates_sql,
-      [@db.BindText(male_form_jpn), @db.BindText(female_form_jpn)],
-    ) {
+  let rows = match
+    @db.query_binds(db, candidates_sql, [
+      @db.BindText(male_form_jpn),
+      @db.BindText(female_form_jpn),
+    ]) {
     Err(e) => return Err(e)
     Ok(r) => r
   }
@@ -109,7 +109,8 @@ pub fn run_007(db : @db.Db, _repo_root : String) -> Result[String, String] {
       } else {
         (@db.BindNull, @db.text_or_null(lp_region))
       }
-      match @db.exec_binds(
+      match
+        @db.exec_binds(
           db,
           "INSERT INTO pokedex_name (id, globalNo, form, region, mega_evolution, gigantamax, language, name) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)",
           [
@@ -149,11 +150,7 @@ fn fetch_form_label(
   lang : String,
 ) -> Result[String, String] {
   let sql = "SELECT form FROM pokedex_form WHERE id = ? AND language = ? LIMIT 1"
-  match @db.query_binds(
-      db,
-      sql,
-      [@db.BindText(id), @db.BindText(lang)],
-    ) {
+  match @db.query_binds(db, sql, [@db.BindText(id), @db.BindText(lang)]) {
     Err(e) => Err(e)
     Ok(rows) =>
       if rows.length() == 0 {

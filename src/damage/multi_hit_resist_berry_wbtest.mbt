@@ -56,8 +56,8 @@ fn rb_input(
   attacker : @model.Pokemon,
   defender : @model.Pokemon,
   move_ : @model.Move,
-  atk_ability~ : String = "",
-  def_item~ : String = "",
+  atk_ability? : String = "",
+  def_item? : String = "",
 ) -> @model.DamageCalcInput {
   {
     attacker,
@@ -108,7 +108,13 @@ test "Skill Link みだれづき + オッカのみ: only hit 0 halved (5-hit ほ
   let dfn = rb_pokemon("defender", "くさ")
   let mv = rb_move("みだれづき", "ほのお")
   let with_berry = calc_damage(
-    rb_input(atk, dfn, mv, atk_ability="スキルリンク", def_item="オッカのみ"),
+    rb_input(
+      atk,
+      dfn,
+      mv,
+      atk_ability="スキルリンク",
+      def_item="オッカのみ",
+    ),
   )
   let without_berry = calc_damage(
     rb_input(atk, dfn, mv, atk_ability="スキルリンク"),
@@ -152,7 +158,9 @@ test "single hit + オッカのみ unchanged: berry still halves the only hit" {
   let atk = rb_pokemon("attacker", "ほのお")
   let dfn = rb_pokemon("defender", "くさ")
   let mv = rb_move("ひのこ", "ほのお")
-  let with_berry = calc_damage(rb_input(atk, dfn, mv, def_item="オッカのみ"))
+  let with_berry = calc_damage(
+    rb_input(atk, dfn, mv, def_item="オッカのみ"),
+  )
   let without_berry = calc_damage(rb_input(atk, dfn, mv))
   let w = with_berry.damages[8]
   let n = without_berry.damages[8]

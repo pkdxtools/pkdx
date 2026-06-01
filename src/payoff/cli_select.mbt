@@ -158,7 +158,11 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(Number(n, ..)) => {
           let v = n.to_int()
           // Guard against zero denominator upstream; treat as no-recoil.
-          if v <= 0 { 1 } else { v }
+          if v <= 0 {
+            1
+          } else {
+            v
+          }
         }
         _ => 1
       }
@@ -368,24 +372,26 @@ fn parse_stats_fields(
   ctx : String,
 ) -> (Int, Int, Int, Int, Int, Int) raise NashCliError {
   match m.get("base_stats") {
-    Some(Object(bs)) => (
-      parse_int_field_or(bs, "h", 0),
-      parse_int_field_or(bs, "a", 0),
-      parse_int_field_or(bs, "b", 0),
-      parse_int_field_or(bs, "c", 0),
-      parse_int_field_or(bs, "d", 0),
-      parse_int_field_or(bs, "s", 0),
-    )
+    Some(Object(bs)) =>
+      (
+        parse_int_field_or(bs, "h", 0),
+        parse_int_field_or(bs, "a", 0),
+        parse_int_field_or(bs, "b", 0),
+        parse_int_field_or(bs, "c", 0),
+        parse_int_field_or(bs, "d", 0),
+        parse_int_field_or(bs, "s", 0),
+      )
     _ =>
       match m.get("hp") {
-        Some(_) => (
-          parse_int_field(m, "hp", ctx),
-          parse_int_field(m, "atk", ctx),
-          parse_int_field(m, "def", ctx),
-          parse_int_field(m, "spa", ctx),
-          parse_int_field(m, "spd", ctx),
-          parse_int_field(m, "spe", ctx),
-        )
+        Some(_) =>
+          (
+            parse_int_field(m, "hp", ctx),
+            parse_int_field(m, "atk", ctx),
+            parse_int_field(m, "def", ctx),
+            parse_int_field(m, "spa", ctx),
+            parse_int_field(m, "spd", ctx),
+            parse_int_field(m, "spe", ctx),
+          )
         None =>
           raise MissingField(
             ctx + ": either 'hp/atk/def/spa/spd/spe' or 'base_stats' required",
@@ -450,7 +456,8 @@ fn parse_combatant_json(
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(
-              arr[i], ctx + ".moves[" + i.to_string() + "]",
+              arr[i],
+              ctx + ".moves[" + i.to_string() + "]",
             )
           }
           out
@@ -609,8 +616,9 @@ pub fn parse_team_array(
       let out = Array::make(arr.length(), mk_empty_combatant())
       for i in 0..<arr.length() {
         out[i] = parse_combatant_json(
-          arr[i], ctx + "[" + i.to_string() + "]",
-          stat_system=stat_system,
+          arr[i],
+          ctx + "[" + i.to_string() + "]",
+          stat_system~,
         )
       }
       out
@@ -668,9 +676,7 @@ fn parse_format(s : String) -> BattleFormat raise NashCliError {
 /// `iterations` are individually optional; missing fields fall back to
 /// `NashSolverConfig::default()`. Validates that `tol > 0` and `iterations > 0`
 /// because both feed into the iterative fallback chain.
-fn parse_nash_solver_config(
-  j : Json?,
-) -> NashSolverConfig raise NashCliError {
+fn parse_nash_solver_config(j : Json?) -> NashSolverConfig raise NashCliError {
   let default = NashSolverConfig::default()
   match j {
     None => default
@@ -722,7 +728,7 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
   }
   match s.strip_prefix("switching_game:") {
     Some(rest) => {
-      let turn_limit = try @string.parse_int(rest.to_owned()) catch {
+      let turn_limit = @string.parse_int(rest.to_owned()) catch {
         _ =>
           raise InvalidJson(
             "switching_game turn_limit must be a positive integer",
@@ -758,28 +764,35 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
         "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
-  let (seed_str, keep_top_and_maybe_tl) = match after_trials.view().split_once(":") {
+  let (seed_str, keep_top_and_maybe_tl) = match
+    after_trials.view().split_once(":") {
     Some((a, b)) => (a.to_owned(), b.to_owned())
     None =>
       raise InvalidJson(
         "screened_switching_game must be 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
-  let (keep_top_str, opt_tl_str) = match keep_top_and_maybe_tl.view().split_once(":") {
+  let (keep_top_str, opt_tl_str) = match
+    keep_top_and_maybe_tl.view().split_once(":") {
     Some((a, b)) => (a.to_owned(), Some(b.to_owned()))
     None => (keep_top_and_maybe_tl, None)
   }
-  let trials = try @string.parse_int(trials_str) catch {
+  let trials = @string.parse_int(trials_str) catch {
     _ =>
-      raise InvalidJson("screened_switching_game trials must be a positive integer")
+      raise InvalidJson(
+        "screened_switching_game trials must be a positive integer",
+      )
   }
   if trials <= 0 {
-    raise InvalidJson("screened_switching_game trials must be a positive integer")
+    raise InvalidJson(
+      "screened_switching_game trials must be a positive integer",
+    )
   }
-  let seed = try @string.parse_uint64(seed_str) catch {
-    _ => raise InvalidJson("screened_switching_game seed must be a UInt64 literal")
+  let seed = @string.parse_uint64(seed_str) catch {
+    _ =>
+      raise InvalidJson("screened_switching_game seed must be a UInt64 literal")
   }
-  let keep_top = try @string.parse_double(keep_top_str) catch {
+  let keep_top = @string.parse_double(keep_top_str) catch {
     _ =>
       raise InvalidJson(
         "screened_switching_game keep_top_quantile must be a number in (0, 1]",
@@ -792,7 +805,7 @@ fn parse_screened_spec(rest : String) -> TeamPayoffModel raise NashCliError {
   }
   let refine_tl = match opt_tl_str {
     Some(s) => {
-      let tl = try @string.parse_int(s) catch {
+      let tl = @string.parse_int(s) catch {
         _ =>
           raise InvalidJson(
             "screened_switching_game turn_limit must be a positive integer",
@@ -842,7 +855,7 @@ pub fn parallel_count_from_env_and_flag(
     let clamped = if n > cap { cap } else { n }
     return if clamped < 1 { 1 } else { clamped }
   }
-  let n = try @string.parse_int(flag) catch {
+  let n = @string.parse_int(flag) catch {
     _ =>
       raise InvalidJson(
         "--parallel must be a positive integer, \"1\", or \"auto\" (got: \"" +
@@ -851,7 +864,9 @@ pub fn parallel_count_from_env_and_flag(
       )
   }
   if n < 1 {
-    raise InvalidJson("--parallel must be a positive integer (got: " + flag + ")")
+    raise InvalidJson(
+      "--parallel must be a positive integer (got: " + flag + ")",
+    )
   }
   let cap = max_cap_fn()
   if n > cap {
@@ -894,7 +909,10 @@ fn auto_upgrade_team_model(m : TeamPayoffModel) -> TeamPayoffModel {
   match m {
     SwitchingGame(n) if n >= AUTO_SCREEN_TURN_LIMIT =>
       ScreenedSwitchingGame(
-        AUTO_SCREEN_TRIALS, AUTO_SCREEN_SEED, AUTO_SCREEN_KEEP_TOP, n,
+        AUTO_SCREEN_TRIALS,
+        AUTO_SCREEN_SEED,
+        AUTO_SCREEN_KEEP_TOP,
+        n,
       )
     _ => m
   }
@@ -947,16 +965,17 @@ pub fn compute_select_with_team_model(
   opponent : Array[Combatant],
   format : BattleFormat,
   team_model : TeamPayoffModel,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
-  parallel~ : Int = 1,
-  input_path~ : String = "",
-  child_progress_mode~ : String = "off",
-  child_progress_every~ : Int = 0,
-  nash_config~ : NashSolverConfig = NashSolverConfig::default(),
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
+  parallel? : Int = 1,
+  input_path? : String = "",
+  child_progress_mode? : String = "off",
+  child_progress_every? : Int = 0,
+  nash_config? : NashSolverConfig = NashSolverConfig::default(),
 ) -> SelectResult raise NashCliError {
-  if team.length() != REQUIRED_TEAM_SIZE || opponent.length() != REQUIRED_TEAM_SIZE {
+  if team.length() != REQUIRED_TEAM_SIZE ||
+    opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
       "team and opponent must each have exactly " +
       REQUIRED_TEAM_SIZE.to_string() +
@@ -968,55 +987,54 @@ pub fn compute_select_with_team_model(
     )
   }
   let (matrix, retained_rows, retained_cols) = match team_model {
-    ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) => {
+    ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) =>
       if parallel > 1 && input_path.length() > 0 {
         // Parallel fan-out path. `input_path` carries the raw JSON the
         // worker re-reads; the parent owns its lifetime.
-        let (m, rows, cols) = try team_payoff_matrix_screened_parallel(
-            team,
-            opponent,
-            format,
-            trials,
-            seed,
-            keep_top,
-            parallel,
-            input_path,
-            refine_turn_limit=refine_tl,
-            progress~,
-            child_progress_mode~,
-            child_progress_every~,
-          ) catch {
+        let (m, rows, cols) = team_payoff_matrix_screened_parallel(
+          team,
+          opponent,
+          format,
+          trials,
+          seed,
+          keep_top,
+          parallel,
+          input_path,
+          refine_turn_limit=refine_tl,
+          progress~,
+          child_progress_mode~,
+          child_progress_every~,
+        ) catch {
           err => raise InnerError(@debug.to_string(err))
         }
         (m, Some(rows), Some(cols))
       } else {
-        let (m, rows, cols) = try team_payoff_matrix_screened(
-            team,
-            opponent,
-            format,
-            trials,
-            seed,
-            keep_top,
-            refine_turn_limit=refine_tl,
-            disk~,
-            progress~,
-            dp_log_every~,
-          ) catch {
-          err => raise InnerError(@debug.to_string(err))
-        }
-        (m, Some(rows), Some(cols))
-      }
-    }
-    _ => {
-      let m = try team_payoff_matrix_with_team_model(
+        let (m, rows, cols) = team_payoff_matrix_screened(
           team,
           opponent,
           format,
-          team_model,
+          trials,
+          seed,
+          keep_top,
+          refine_turn_limit=refine_tl,
           disk~,
           progress~,
           dp_log_every~,
         ) catch {
+          err => raise InnerError(@debug.to_string(err))
+        }
+        (m, Some(rows), Some(cols))
+      }
+    _ => {
+      let m = team_payoff_matrix_with_team_model(
+        team,
+        opponent,
+        format,
+        team_model,
+        disk~,
+        progress~,
+        dp_log_every~,
+      ) catch {
         err => raise InnerError(@debug.to_string(err))
       }
       (m, None, None)
@@ -1024,7 +1042,12 @@ pub fn compute_select_with_team_model(
   }
   progress(PhaseStart("select-nash", 1))
   let result = build_select_result(
-    format, team, opponent, matrix, retained_rows, retained_cols,
+    format,
+    team,
+    opponent,
+    matrix,
+    retained_rows,
+    retained_cols,
     nash_config~,
   )
   progress(PhaseEnd("select-nash"))
@@ -1045,7 +1068,7 @@ fn build_select_result(
   matrix : @nash.FiniteMatrix,
   retained_rows : Array[Int]?,
   retained_cols : Array[Int]?,
-  nash_config~ : NashSolverConfig = NashSolverConfig::default(),
+  nash_config? : NashSolverConfig = NashSolverConfig::default(),
 ) -> SelectResult raise NashCliError {
   let k = match format {
     Single => 3
@@ -1150,14 +1173,14 @@ fn parse_stat_system_field(s : String) -> @model.StatSystem raise NashCliError {
 /// avoid an extra parse round-trip.
 pub fn run_select_typed(
   input_json : String,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
-  parallel~ : Int = 1,
-  child_progress_mode~ : String = "off",
-  child_progress_every~ : Int = 0,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
+  parallel? : Int = 1,
+  child_progress_mode? : String = "off",
+  child_progress_every? : Int = 0,
 ) -> SelectResult raise NashCliError {
-  let root = try @json.parse(input_json) catch {
+  let root = @json.parse(input_json) catch {
     err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
@@ -1170,11 +1193,11 @@ pub fn run_select_typed(
     None => @model.Champions
   }
   let team = match obj.get("team") {
-    Some(j) => parse_team_array(j, "team", stat_system=stat_system)
+    Some(j) => parse_team_array(j, "team", stat_system~)
     None => raise MissingField("team")
   }
   let opp = match obj.get("opponent") {
-    Some(j) => parse_team_array(j, "opponent", stat_system=stat_system)
+    Some(j) => parse_team_array(j, "opponent", stat_system~)
     None => raise MissingField("opponent")
   }
   let format = match obj.get("format") {
@@ -1206,7 +1229,7 @@ pub fn run_select_typed(
   // the in-process path rather than crash.
   let input_path = if parallel > 1 {
     match @process.mkstemp_file("pkdx_select_input") {
-      Some(p) => {
+      Some(p) =>
         match @db.write_file_str(p, input_json) {
           Ok(_) => p
           Err(_) => {
@@ -1214,27 +1237,26 @@ pub fn run_select_typed(
             ""
           }
         }
-      }
       None => ""
     }
   } else {
     ""
   }
   let effective_parallel = if input_path.length() == 0 { 1 } else { parallel }
-  let r = try compute_select_with_team_model(
-      team,
-      opp,
-      format,
-      team_model,
-      disk~,
-      progress~,
-      dp_log_every~,
-      parallel=effective_parallel,
-      input_path~,
-      child_progress_mode~,
-      child_progress_every~,
-      nash_config~,
-    ) catch {
+  let r = compute_select_with_team_model(
+    team,
+    opp,
+    format,
+    team_model,
+    disk~,
+    progress~,
+    dp_log_every~,
+    parallel=effective_parallel,
+    input_path~,
+    child_progress_mode~,
+    child_progress_every~,
+    nash_config~,
+  ) catch {
     err => {
       if input_path.length() > 0 {
         let _ = @db.unlink_file(input_path)
@@ -1274,12 +1296,12 @@ pub fn serialize_select_result(r : SelectResult) -> String {
 /// the JSON shape stay valid.
 pub fn run_select(
   input_json : String,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
-  parallel~ : Int = 1,
-  child_progress_mode~ : String = "off",
-  child_progress_every~ : Int = 0,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
+  parallel? : Int = 1,
+  child_progress_mode? : String = "off",
+  child_progress_every? : Int = 0,
 ) -> String raise NashCliError {
   let r = run_select_typed(
     input_json,
@@ -1322,7 +1344,7 @@ fn parse_int_csv(s : String) -> Array[Int] raise NashCliError {
     if token.length() == 0 {
       continue
     }
-    let n = try @string.parse_int(token) catch {
+    let n = @string.parse_int(token) catch {
       _ =>
         raise InvalidJson(
           "expected an integer in CSV but got \"" + token + "\"",
@@ -1353,16 +1375,16 @@ pub fn run_select_shard(
   row_end : Int,
   row_keep_csv : String,
   col_keep_csv : String,
-  mc_turn_limit_override~ : Int? = None,
-  refine_turn_limit_override~ : Int? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  mc_turn_limit_override? : Int? = None,
+  refine_turn_limit_override? : Int? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> Unit raise NashCliError {
   let input_json = match @db.read_file(input_path) {
     Some(s) => s
     None => raise InvalidJson("could not read --input file: " + input_path)
   }
-  let root = try @json.parse(input_json) catch {
+  let root = @json.parse(input_json) catch {
     err => raise InvalidJson(@debug.to_string(err))
   }
   let obj = match root {
@@ -1375,11 +1397,11 @@ pub fn run_select_shard(
     None => @model.Champions
   }
   let team = match obj.get("team") {
-    Some(j) => parse_team_array(j, "team", stat_system=stat_system)
+    Some(j) => parse_team_array(j, "team", stat_system~)
     None => raise MissingField("team")
   }
   let opp = match obj.get("opponent") {
-    Some(j) => parse_team_array(j, "opponent", stat_system=stat_system)
+    Some(j) => parse_team_array(j, "opponent", stat_system~)
     None => raise MissingField("opponent")
   }
   let format = match obj.get("format") {
@@ -1527,7 +1549,9 @@ pub fn run_select_shard(
   match @db.write_file_str(output_path, out) {
     Ok(_) => ()
     Err(e) =>
-      raise InnerError("failed to write --output file " + output_path + ": " + e)
+      raise InnerError(
+        "failed to write --output file " + output_path + ": " + e,
+      )
   }
 }
 

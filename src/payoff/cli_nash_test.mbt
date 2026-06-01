@@ -117,6 +117,7 @@ test "nash_solve_nonzero_exit_on_infeasible" {
 }
 
 ///|
+
 ///|
 /// Count non-overlapping " -> " occurrences in `s`.
 fn count_arrows(s : String) -> Int {
@@ -228,7 +229,11 @@ test "nash_graph_team_rejects_conflict_with_characters" {
 
 ///|
 test "nash_graph_team_rejects_user_provided_labels" {
-  let bad = build_team_graph_json([100, 100], [100, 100], ",\"labels\":[\"A\",\"B\",\"C\",\"D\"]")
+  let bad = build_team_graph_json(
+    [100, 100],
+    [100, 100],
+    ",\"labels\":[\"A\",\"B\",\"C\",\"D\"]",
+  )
   let err = try? run_nash_graph(bad, 0.0)
   assert_true(err is Err(InvalidJson(_)))
 }
@@ -305,8 +310,16 @@ test "nash_graph_team_accepts_asymmetric_sizes" {
 
 ///|
 test "nash_graph_team_respects_stat_system_override" {
-  let champions = build_team_graph_json([100], [100], ",\"stat_system\":\"champions\"")
-  let standard = build_team_graph_json([100], [100], ",\"stat_system\":\"standard\"")
+  let champions = build_team_graph_json(
+    [100],
+    [100],
+    ",\"stat_system\":\"champions\"",
+  )
+  let standard = build_team_graph_json(
+    [100],
+    [100],
+    ",\"stat_system\":\"standard\"",
+  )
   // Both must produce valid DOT without raising.
   let _ = run_nash_graph(champions, 0.0)
   let _ = run_nash_graph(standard, 0.0)
@@ -349,8 +362,7 @@ test "nash_solve_rejects_team_input_as_unsupported" {
 ///|
 test "nash_graph_escapes_control_chars_in_labels" {
   // Label contains a literal newline, tab, and carriage return.
-  let with_ctrl =
-    "{\"matrix\":[[0,1,-1],[-1,0,1],[1,-1,0]],\"labels\":[\"A\\nX\",\"B\\tY\",\"C\\rZ\"]}"
+  let with_ctrl = "{\"matrix\":[[0,1,-1],[-1,0,1],[1,-1,0]],\"labels\":[\"A\\nX\",\"B\\tY\",\"C\\rZ\"]}"
   let out = run_nash_graph(with_ctrl, 0.5)
   // Must emit escaped sequences, never raw control chars inside quoted ids.
   assert_true(out.contains("\"A\\nX\""))

@@ -26,7 +26,8 @@ pub fn ability_blocks_status(
   match (ability, kind) {
     ("ふみん", SleepKind) | ("ふみん", DrowsyKind) => true
     ("やるき", SleepKind) | ("やるき", DrowsyKind) => true
-    ("スイートベール", SleepKind) | ("スイートベール", DrowsyKind) => true
+    ("スイートベール", SleepKind)
+    | ("スイートベール", DrowsyKind) => true
     _ => false
   }
 }

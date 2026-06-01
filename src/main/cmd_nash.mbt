@@ -25,8 +25,8 @@ fn cmd_nash() -> @admiral.CommandDef {
     ),
   ]
   @admiral.command(
-    name=name,
-    description=description,
+    name~,
+    description~,
     subcommands=subs,
     run=Some(parent_help_run(name, description, subs)),
   )
@@ -44,7 +44,7 @@ fn read_stdin_json() -> String {
 ///|
 fn run_nash_solve_cmd() -> Unit {
   let raw = read_stdin_json()
-  let out = try @payoff.run_nash_solve(raw) catch {
+  let out = @payoff.run_nash_solve(raw) catch {
     err => {
       exit_error(nash_cli_error_message(err))
       return
@@ -78,14 +78,14 @@ fn parse_double(s : String, default : Double) -> Double {
         result = result * 10.0 + d
       }
       has_digit = true
-    } else if c == 0x2E && !(in_frac) {
+    } else if c == 0x2E && !in_frac {
       in_frac = true
     } else {
       break
     }
     i = i + 1
   }
-  if !(has_digit) {
+  if !has_digit {
     return default
   }
   if negative {
@@ -99,7 +99,7 @@ fn parse_double(s : String, default : Double) -> Double {
 fn run_nash_graph_cmd(threshold_str : String) -> Unit {
   let raw = read_stdin_json()
   let threshold = parse_double(threshold_str, 0.0)
-  let out = try @payoff.run_nash_graph(raw, threshold) catch {
+  let out = @payoff.run_nash_graph(raw, threshold) catch {
     err => {
       exit_error(nash_cli_error_message(err))
       return
@@ -276,7 +276,10 @@ fn json_escape_string(s : String) -> String {
       let hex = "0123456789abcdef"
       let hi = (code >> 4) & 0xF
       let lo = code & 0xF
-      out = out + "\\u00" + hex[hi:hi + 1].to_owned() + hex[lo:lo + 1].to_owned()
+      out = out +
+        "\\u00" +
+        hex[hi:hi + 1].to_owned() +
+        hex[lo:lo + 1].to_owned()
     } else {
       out = out + ch.to_string()
     }
@@ -301,7 +304,11 @@ fn format_progress_json(
   t_ms~ : Int64,
   pid~ : Int,
 ) -> String {
-  let head = "\"t_ms\":" + t_ms.to_string() + ",\"pid\":" + pid.to_string() + ","
+  let head = "\"t_ms\":" +
+    t_ms.to_string() +
+    ",\"pid\":" +
+    pid.to_string() +
+    ","
   match event {
     PhaseStart(name, total) =>
       "{" +
@@ -432,8 +439,16 @@ fn format_string_array_json(names : Array[String]) -> String {
 fn format_summary_stderr(r : @payoff.SelectResult) -> String {
   let my_i = argmax_double(r.row_strategy)
   let opp_i = argmax_double(r.col_strategy)
-  let my_p = if r.row_strategy.length() == 0 { 0.0 } else { r.row_strategy[my_i] }
-  let opp_p = if r.col_strategy.length() == 0 { 0.0 } else { r.col_strategy[opp_i] }
+  let my_p = if r.row_strategy.length() == 0 {
+    0.0
+  } else {
+    r.row_strategy[my_i]
+  }
+  let opp_p = if r.col_strategy.length() == 0 {
+    0.0
+  } else {
+    r.col_strategy[opp_i]
+  }
   let my_names = if r.selection_names.length() == 0 {
     ([] : Array[String])
   } else {
@@ -467,8 +482,16 @@ fn format_summary_stderr(r : @payoff.SelectResult) -> String {
 fn format_summary_json(r : @payoff.SelectResult) -> String {
   let my_i = argmax_double(r.row_strategy)
   let opp_i = argmax_double(r.col_strategy)
-  let my_p = if r.row_strategy.length() == 0 { 0.0 } else { r.row_strategy[my_i] }
-  let opp_p = if r.col_strategy.length() == 0 { 0.0 } else { r.col_strategy[opp_i] }
+  let my_p = if r.row_strategy.length() == 0 {
+    0.0
+  } else {
+    r.row_strategy[my_i]
+  }
+  let opp_p = if r.col_strategy.length() == 0 {
+    0.0
+  } else {
+    r.col_strategy[opp_i]
+  }
   let my_indices = if r.selections.length() == 0 {
     ([] : Array[Int])
   } else {
@@ -526,10 +549,14 @@ fn cmd_select_shard_internal() -> @admiral.CommandDef {
         required=true,
       ),
       @admiral.string(
-        "input", description="Path to team JSON input file", required=true,
+        "input",
+        description="Path to team JSON input file",
+        required=true,
       ),
       @admiral.string(
-        "output", description="Path to write result JSON to", required=true,
+        "output",
+        description="Path to write result JSON to",
+        required=true,
       ),
       @admiral.int(
         "row-start",
@@ -599,7 +626,11 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
   let mc_tl_raw = ctx_int(ctx, "mc-turn-limit")
   let refine_tl_raw = ctx_int(ctx, "refine-turn-limit")
   let mc_override = if mc_tl_raw > 0 { Some(mc_tl_raw) } else { None }
-  let refine_override = if refine_tl_raw > 0 { Some(refine_tl_raw) } else { None }
+  let refine_override = if refine_tl_raw > 0 {
+    Some(refine_tl_raw)
+  } else {
+    None
+  }
   let mode = ctx_str(ctx, "progress")
   // Capture this child's start moment + pid so each emit can stamp the event
   // with elapsed ms and process id. Trace analysers correlate cell_start /
@@ -608,13 +639,13 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
   let pid = pkdx_pid()
   let progress : (@payoff.ProgressEvent) -> Unit = match mode {
     "off" => fn(_e) { () }
-    "stderr" => fn(e) {
+    "stderr" =>
+      fn(e) {
         let t_ms = (pkdx_monotonic_ns() - start_ns) / 1_000_000L
-        pkdx_eprintln(
-          @db.to_c_bytes(format_progress_stderr(e, t_ms~, pid~)),
-        )
+        pkdx_eprintln(@db.to_c_bytes(format_progress_stderr(e, t_ms~, pid~)))
       }
-    "json" => fn(e) {
+    "json" =>
+      fn(e) {
         let t_ms = (pkdx_monotonic_ns() - start_ns) / 1_000_000L
         pkdx_eprintln(@db.to_c_bytes(format_progress_json(e, t_ms~, pid~)))
       }
@@ -626,7 +657,7 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
     }
   }
   let progress_every = ctx_int(ctx, "progress-every")
-  try @payoff.run_select_shard(
+  @payoff.run_select_shard(
     input_path,
     output_path,
     phase,
@@ -651,7 +682,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   let mode = ctx_str(ctx, "progress")
   let log_every = ctx_int(ctx, "progress-every")
   let parallel_flag = ctx_str(ctx, "parallel")
-  let parallel = try @payoff.resolve_parallel(parallel_flag) catch {
+  let parallel = @payoff.resolve_parallel(parallel_flag) catch {
     err => {
       exit_error(nash_cli_error_message(err))
       return
@@ -663,15 +694,14 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   // trace analysis joins on `pid` to keep streams separated.
   let start_ns = pkdx_monotonic_ns()
   let pid = pkdx_pid()
-  let (progress, dp_log_every) : ((@payoff.ProgressEvent) -> Unit, Int) = match mode {
+  let (progress, dp_log_every) : ((@payoff.ProgressEvent) -> Unit, Int) = match
+    mode {
     "off" => (fn(_e) { () }, 0)
     "stderr" =>
       (
         fn(e) {
           let t_ms = (pkdx_monotonic_ns() - start_ns) / 1_000_000L
-          pkdx_eprintln(
-            @db.to_c_bytes(format_progress_stderr(e, t_ms~, pid~)),
-          )
+          pkdx_eprintln(@db.to_c_bytes(format_progress_stderr(e, t_ms~, pid~)))
         },
         log_every,
       )
@@ -684,7 +714,9 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
         log_every,
       )
     _ => {
-      exit_error("unknown --progress mode: " + mode + " (expected off|stderr|json)")
+      exit_error(
+        "unknown --progress mode: " + mode + " (expected off|stderr|json)",
+      )
       return
     }
   }
@@ -708,15 +740,15 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   // is dropped for the parallel path so SQLite write contention does
   // not happen. (The shard worker passes disk=None internally.)
   let parent_disk = if parallel > 1 { None } else { disk }
-  let result = try @payoff.run_select_typed(
-      raw,
-      disk=parent_disk,
-      progress~,
-      dp_log_every~,
-      parallel~,
-      child_progress_mode=mode,
-      child_progress_every=dp_log_every,
-    ) catch {
+  let result = @payoff.run_select_typed(
+    raw,
+    disk=parent_disk,
+    progress~,
+    dp_log_every~,
+    parallel~,
+    child_progress_mode=mode,
+    child_progress_every=dp_log_every,
+  ) catch {
     err => {
       match disk {
         Some(c) => @damage_cache.close(c)
@@ -735,8 +767,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   // value / best-selection at the end of the live viz stream. `off`
   // suppresses summary too — same gate as per-cell progress.
   match mode {
-    "stderr" =>
-      pkdx_eprintln(@db.to_c_bytes(format_summary_stderr(result)))
+    "stderr" => pkdx_eprintln(@db.to_c_bytes(format_summary_stderr(result)))
     "json" => pkdx_eprintln(@db.to_c_bytes(format_summary_json(result)))
     _ => ()
   }
@@ -762,17 +793,14 @@ fn meta_cli_error_message(err : @payoff.MetaCliError) -> String {
     UsageNotNormalised(total) =>
       "usage does not sum to 1 (got " + total.to_string() + ")"
     ShapeMismatch(n, m) =>
-      "matrix / usage shape mismatch: " +
-      n.to_string() +
-      " vs " +
-      m.to_string()
+      "matrix / usage shape mismatch: " + n.to_string() + " vs " + m.to_string()
   }
 }
 
 ///|
 fn run_meta_divergence_cmd() -> Unit {
   let raw = read_stdin_json()
-  let out = try @payoff.run_meta_divergence(raw) catch {
+  let out = @payoff.run_meta_divergence(raw) catch {
     err => {
       exit_error(meta_cli_error_message(err))
       return

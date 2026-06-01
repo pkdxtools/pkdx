@@ -65,7 +65,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   //   加える (skin 解決後の最終 type)。
   if mv.category != @model.MoveCategory::Status &&
     tera_type.length() == 0 &&
-    !(input.protean_consumed) &&
+    !input.protean_consumed &&
     (atk_ability == "へんげんじざい" || atk_ability == "リベロ") {
     stab_types.push(move_type)
   }
@@ -77,8 +77,10 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // PR で精度向上する。既存テストは shell side arm を含まないため挙動不変。
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=atk.atk, atk_spa=atk.spa,
-    def_def=dfn.def_, def_spd=dfn.spd,
+    atk_atk=atk.atk,
+    atk_spa=atk.spa,
+    def_def=dfn.def_,
+    def_spd=dfn.spd,
     atk_ability~,
     def_ability~,
     critical=input.critical,
@@ -87,7 +89,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 下流の ability / item / wall / weather / ruin 分岐は必ず sr.effective_physical
   // 由来のこのフラグを参照すること (mv.category を直接参照してはならない)。
   let is_physical = sr.effective_physical
-  let is_special = !(sr.effective_physical)
+  let is_special = !sr.effective_physical
   // ボディプレスは攻撃側のDefenseを攻撃値として使う物理技。
   // Attack系の補正（ちからもち・はりきり・ハチマキ等）は適用されず、
   // Defense系の補正（ファーコート・しんかのきせき等）が適用される。
@@ -144,7 +146,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // ダメ計ツール (Showdown, PokeVision 等) と結果が乖離するため。
   let def_hp = if input.stat_system == @model.Champions {
     calc_def_stat_champions(
-      def_base_hp, is_hp=true, custom=input.def_hp_override,
+      def_base_hp,
+      is_hp=true,
+      custom=input.def_hp_override,
     )
   } else {
     calc_def_stat(def_base_hp, is_hp=true, custom=input.def_hp_override)
@@ -197,10 +201,16 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 2b-2-atk. Atk-side ruin (defender's ability lowers attacker's stat).
   // ボディプレスは攻撃値として自分の Defense を使うため、わざわいのおふだ
   // / うつわ の影響を受けない。
-  if !(is_body_press) {
+  if !is_body_press {
     match def_ability {
-      "わざわいのおふだ" => if is_physical { atk_stat = atk_stat * 3 / 4 }
-      "わざわいのうつわ" => if !is_physical { atk_stat = atk_stat * 3 / 4 }
+      "わざわいのおふだ" =>
+        if is_physical {
+          atk_stat = atk_stat * 3 / 4
+        }
+      "わざわいのうつわ" =>
+        if !is_physical {
+          atk_stat = atk_stat * 3 / 4
+        }
       _ => ()
     }
   }
@@ -289,7 +299,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     let mut p = base
     if atk_ability.length() > 0 {
       p = apply_atk_ability_power(
-        atk_ability, move_name, move_type, p, weather,
+        atk_ability,
+        move_name,
+        move_type,
+        p,
+        weather,
         force_contact=sr.force_contact,
       )
     }
@@ -420,11 +434,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
           item=def_item,
         )
         let f_mod = get_field_damage_mod(
-          field,
-          move_name,
-          move_type,
-          atk_grounded,
-          def_grounded,
+          field, move_name, move_type, atk_grounded, def_grounded,
         )
         if f_mod > 0 {
           dmg = round5(dmg, f_mod)
@@ -451,7 +461,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       // Defender ability final
       if def_ability.length() > 0 {
         let d_mod = get_def_ability_final(
-          def_ability, move_name, move_type, is_super_effective, is_special,
+          def_ability,
+          move_name,
+          move_type,
+          is_super_effective,
+          is_special,
           force_contact=sr.force_contact,
         )
         if d_mod > 0 {
@@ -461,7 +475,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
       // Attacker ability final
       if atk_ability.length() > 0 {
-        let a_mod = get_atk_ability_final(atk_ability, move_type, input.fainted_count)
+        let a_mod = get_atk_ability_final(
+          atk_ability,
+          move_type,
+          input.fainted_count,
+        )
         if a_mod > 0 {
           dmg = round5(dmg, a_mod)
         }
@@ -473,9 +491,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       // and mold-breaker-family abilities each skip the multiplier
       // independently.
       let wall_ok = wall_applies(input.wall, is_physical) &&
-        !(input.critical) &&
-        !(input.screen_pierce) &&
-        !(is_wall_bypass_ability(atk_ability))
+        !input.critical &&
+        !input.screen_pierce &&
+        !is_wall_bypass_ability(atk_ability)
       if wall_ok {
         let wall_mod = if input.is_double { 2732 } else { 2048 }
         dmg = round5(dmg, wall_mod)
@@ -488,7 +506,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
 
       // Attacker item final
       if atk_item.length() > 0 {
-        let i_mod = get_atk_item_final(atk_item, is_physical, is_super_effective)
+        let i_mod = get_atk_item_final(
+          atk_item, is_physical, is_super_effective,
+        )
         if i_mod > 0 {
           dmg = round5(dmg, i_mod)
         }
@@ -521,7 +541,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   // 補正値。disguise_active=false なら 0 で、通常ダメージそのままを返す。
   // 「ばけのかわ消費時のダメージ + 実ダメージ」を 1 つの数として出すための
   // 単純化。hits_dealt や variants は move 視点の hit 数を保持する。
-  let disguise_chip_active = def_ability == "ばけのかわ" && input.disguise_active
+  let disguise_chip_active = def_ability == "ばけのかわ" &&
+    input.disguise_active
   let disguise_chip = if disguise_chip_active { def_hp / 8 } else { 0 }
 
   // Multi-hit post-processing. Parental Bond's 2nd hit re-runs the full
@@ -605,7 +626,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       }
       let after_stage = if stamina_active {
         let next = def_stage + h + 1
-        if next > 6 { 6 } else { next }
+        if next > 6 {
+          6
+        } else {
+          next
+        }
       } else {
         def_stage
       }
@@ -696,7 +721,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   let final_damages = chosen.total_damages
   let final_percents : FixedArray[Double] = FixedArray::make(16, 0.0)
   for i = 0; i < 16; i = i + 1 {
-    final_percents[i] = final_damages[i].to_double() / def_hp.to_double() *
+    final_percents[i] = final_damages[i].to_double() /
+      def_hp.to_double() *
       100.0
   }
   @model.DamageCalcResult::{

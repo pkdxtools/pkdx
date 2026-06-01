@@ -23,6 +23,7 @@ supported_targets = "native"
 // this file before invoking moon (CI does so via
 // scripts/configure_native_link_flags.sh). `moon test` additionally requires
 // real BLAS symbols. See nash/moon.pkg for the full rationale.
+
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
 )

@@ -1,4 +1,5 @@
-///| Empty span/trivia placeholders used by every constructor below. Generated
+///|
+/// Empty span/trivia placeholders used by every constructor below. Generated
 /// AST nodes are always serialized from scratch (no source location is carried
 /// through), so an empty span/trivia is the canonical "no extra trivia" value
 /// for every node this package emits.

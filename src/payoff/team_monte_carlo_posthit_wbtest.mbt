@@ -107,17 +107,32 @@ test "team_apply_post_hit applies self-target stat drops on damaging moves" {
   let ctx = mk_post_hit_ctx()
   // オーバーヒート analogue: damaging special move, self SpA -2 after hit.
   let overheat = mk_move(
-    "オーバーヒート", "ほのお", @model.Special, 130,
+    "オーバーヒート",
+    "ほのお",
+    @model.Special,
+    130,
     stat_effects=[{ stat: 2, delta: -2, target: 0 }],
   )
   team_apply_post_hit(
-    attacker_hps, 0, attacker_ranks, attacker_must_recharge,
-    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
-    defender_hps, 0, defender_ranks,
-    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
-    ctx.weather_state, ctx.weather_turns_state,
-    ctx.field_state, ctx.field_turns_state,
-    overheat, 50,
+    attacker_hps,
+    0,
+    attacker_ranks,
+    attacker_must_recharge,
+    ctx.attacker_status,
+    ctx.attacker_wish_turns,
+    ctx.attacker_team,
+    defender_hps,
+    0,
+    defender_ranks,
+    ctx.defender_leech_seeded,
+    ctx.defender_team,
+    ctx.defender_megaed,
+    ctx.weather_state,
+    ctx.weather_turns_state,
+    ctx.field_state,
+    ctx.field_turns_state,
+    overheat,
+    50,
   )
   @debug.assert_eq(attacker_ranks[2], -2)
   // Defender ranks are untouched (no opp-target effect on this move).
@@ -136,18 +151,29 @@ test "team_apply_post_hit skips opp-target stat drops when defender faints" {
   let defender_hps = [0]
   let defender_ranks = [0, 0, 0, 0, 0]
   let ctx = mk_post_hit_ctx()
-  let mv = mk_move(
-    "アイアンテール", "はがね", @model.Physical, 100,
-    stat_effects=[{ stat: 1, delta: -1, target: 1 }],
-  )
+  let mv = mk_move("アイアンテール", "はがね", @model.Physical, 100, stat_effects=[
+    { stat: 1, delta: -1, target: 1 },
+  ])
   team_apply_post_hit(
-    attacker_hps, 0, attacker_ranks, attacker_must_recharge,
-    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
-    defender_hps, 0, defender_ranks,
-    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
-    ctx.weather_state, ctx.weather_turns_state,
-    ctx.field_state, ctx.field_turns_state,
-    mv, 120,
+    attacker_hps,
+    0,
+    attacker_ranks,
+    attacker_must_recharge,
+    ctx.attacker_status,
+    ctx.attacker_wish_turns,
+    ctx.attacker_team,
+    defender_hps,
+    0,
+    defender_ranks,
+    ctx.defender_leech_seeded,
+    ctx.defender_team,
+    ctx.defender_megaed,
+    ctx.weather_state,
+    ctx.weather_turns_state,
+    ctx.field_state,
+    ctx.field_turns_state,
+    mv,
+    120,
   )
   // Opp-target drop is gated out: defender ranks unchanged.
   @debug.assert_eq(defender_ranks[1], 0)
@@ -161,18 +187,29 @@ test "team_apply_post_hit applies opp-target stat drops when defender survives" 
   let defender_hps = [40]
   let defender_ranks = [0, 0, 0, 0, 0]
   let ctx = mk_post_hit_ctx()
-  let mv = mk_move(
-    "アイアンテール", "はがね", @model.Physical, 100,
-    stat_effects=[{ stat: 1, delta: -1, target: 1 }],
-  )
+  let mv = mk_move("アイアンテール", "はがね", @model.Physical, 100, stat_effects=[
+    { stat: 1, delta: -1, target: 1 },
+  ])
   team_apply_post_hit(
-    attacker_hps, 0, attacker_ranks, attacker_must_recharge,
-    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
-    defender_hps, 0, defender_ranks,
-    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
-    ctx.weather_state, ctx.weather_turns_state,
-    ctx.field_state, ctx.field_turns_state,
-    mv, 60,
+    attacker_hps,
+    0,
+    attacker_ranks,
+    attacker_must_recharge,
+    ctx.attacker_status,
+    ctx.attacker_wish_turns,
+    ctx.attacker_team,
+    defender_hps,
+    0,
+    defender_ranks,
+    ctx.defender_leech_seeded,
+    ctx.defender_team,
+    ctx.defender_megaed,
+    ctx.weather_state,
+    ctx.weather_turns_state,
+    ctx.field_state,
+    ctx.field_turns_state,
+    mv,
+    60,
   )
   @debug.assert_eq(defender_ranks[1], -1)
 }
@@ -217,16 +254,32 @@ test "team_apply_post_hit sets recharge flag after damaging recharge-move hit" {
   let defender_ranks = [0, 0, 0, 0, 0]
   let ctx = mk_post_hit_ctx()
   let hyper_beam = mk_move(
-    "はかいこうせん", "ノーマル", @model.Physical, 150, recharge=true,
+    "はかいこうせん",
+    "ノーマル",
+    @model.Physical,
+    150,
+    recharge=true,
   )
   team_apply_post_hit(
-    attacker_hps, 0, attacker_ranks, attacker_must_recharge,
-    ctx.attacker_status, ctx.attacker_wish_turns, ctx.attacker_team,
-    defender_hps, 0, defender_ranks,
-    ctx.defender_leech_seeded, ctx.defender_team, ctx.defender_megaed,
-    ctx.weather_state, ctx.weather_turns_state,
-    ctx.field_state, ctx.field_turns_state,
-    hyper_beam, 180,
+    attacker_hps,
+    0,
+    attacker_ranks,
+    attacker_must_recharge,
+    ctx.attacker_status,
+    ctx.attacker_wish_turns,
+    ctx.attacker_team,
+    defender_hps,
+    0,
+    defender_ranks,
+    ctx.defender_leech_seeded,
+    ctx.defender_team,
+    ctx.defender_megaed,
+    ctx.weather_state,
+    ctx.weather_turns_state,
+    ctx.field_state,
+    ctx.field_turns_state,
+    hyper_beam,
+    180,
   )
   @debug.assert_eq(attacker_must_recharge[0], true)
 }

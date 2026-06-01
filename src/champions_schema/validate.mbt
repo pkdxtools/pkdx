@@ -192,16 +192,7 @@ pub fn parse_move_entries(json : Json) -> Result[Array[MoveEntry], String] {
     // を壊さない)。
     let direct = obj_str_with_default(m, "direct", "0")
     let target = obj_str_with_default(m, "target", "0")
-    out.push({
-      waza,
-      type_: ty,
-      category,
-      pp,
-      power,
-      accuracy,
-      direct,
-      target,
-    })
+    out.push({ waza, type_: ty, category, pp, power, accuracy, direct, target })
   }
   Ok(out)
 }

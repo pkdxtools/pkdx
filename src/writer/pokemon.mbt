@@ -95,7 +95,11 @@ fn format_damage_calcs(json : Json) -> Array[@markdown.Block] {
     let direction = json_string(calc, "direction")
     let opponent = json_string(calc, "opponent")
     let move_name = json_string(calc, "move")
-    let dir_label = if direction == "attack" { "攻撃側" } else { "防御側" }
+    let dir_label = if direction == "attack" {
+      "攻撃側"
+    } else {
+      "防御側"
+    }
     blocks.push(heading(3, "\{dir_label} vs \{opponent} / \{move_name}"))
     let damages = json_array(calc, "damages")
     let percents = json_array(calc, "percents")

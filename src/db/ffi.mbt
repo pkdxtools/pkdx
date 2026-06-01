@@ -24,19 +24,13 @@ extern "C" fn pkdx_db_open(path : Bytes, out : FixedArray[Db]) -> Int = "pkdx_db
 /// Open a SQLite database in read-write mode. The file must exist —
 /// migrations assume pokedex submodule has already created it.
 #borrow(path, out)
-extern "C" fn pkdx_db_open_rw(
-  path : Bytes,
-  out : FixedArray[Db],
-) -> Int = "pkdx_db_open_rw"
+extern "C" fn pkdx_db_open_rw(path : Bytes, out : FixedArray[Db]) -> Int = "pkdx_db_open_rw"
 
 ///|
 /// Open (or create) a SQLite database in read-write mode. Used by the
 /// damage cache, which is lazily created on first access.
 #borrow(path, out)
-extern "C" fn pkdx_db_open_rwc(
-  path : Bytes,
-  out : FixedArray[Db],
-) -> Int = "pkdx_db_open_rwc"
+extern "C" fn pkdx_db_open_rwc(path : Bytes, out : FixedArray[Db]) -> Int = "pkdx_db_open_rwc"
 
 ///|
 /// Remove a file. Returns 0 on success, 0 when the file does not exist,
@@ -87,11 +81,7 @@ extern "C" fn pkdx_exec_query_typed(
 ///|
 /// Whether cell (row, col) was NULL in the source row (1 = NULL, 0 = not).
 #borrow(rs)
-extern "C" fn pkdx_result_is_null(
-  rs : ResultSet,
-  row : Int,
-  col : Int,
-) -> Int = "pkdx_result_is_null"
+extern "C" fn pkdx_result_is_null(rs : ResultSet, row : Int, col : Int) -> Int = "pkdx_result_is_null"
 
 ///|
 /// Create a null/placeholder ResultSet for FixedArray init.

@@ -140,9 +140,7 @@ pub fn get_resist_berry_type(item : String) -> String {
 /// とびだすハバネロ / とびだすなかみ are 100% triggers per Showdown
 /// spec, so the chance node always produces a single Burn / Paralyze
 /// outcome with probability 1.0.
-pub fn contact_proc_item(
-  name : String,
-) -> Array[(@model.StatusKind, Int)] {
+pub fn contact_proc_item(name : String) -> Array[(@model.StatusKind, Int)] {
   match name {
     "とびだすハバネロ" => [(@model.BurnKind, 100)]
     "とびだすなかみ" => [(@model.ParalyzeKind, 100)]

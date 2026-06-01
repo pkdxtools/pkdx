@@ -28,12 +28,7 @@ pub(all) struct HbdResult {
 
 ///|
 /// Bulk index objective: f = H · B · D / (s·B + p·D).
-pub fn score_hbd(
-  h : Int,
-  b : Int,
-  d : Int,
-  weights : HbdWeights,
-) -> Double {
+pub fn score_hbd(h : Int, b : Int, d : Int, weights : HbdWeights) -> Double {
   let denom = (weights.spec * b + weights.phys * d).to_double()
   if denom <= 0.0 {
     return 0.0
@@ -74,11 +69,19 @@ fn compare_hbd_candidates(a : HbdCandidate, b : HbdCandidate) -> Int {
   }
   let max_a = {
     let m1 = if a.evs[0] > a.evs[2] { a.evs[0] } else { a.evs[2] }
-    if m1 > a.evs[4] { m1 } else { a.evs[4] }
+    if m1 > a.evs[4] {
+      m1
+    } else {
+      a.evs[4]
+    }
   }
   let max_b = {
     let m1 = if b.evs[0] > b.evs[2] { b.evs[0] } else { b.evs[2] }
-    if m1 > b.evs[4] { m1 } else { b.evs[4] }
+    if m1 > b.evs[4] {
+      m1
+    } else {
+      b.evs[4]
+    }
   }
   if max_a != max_b {
     return max_a - max_b
@@ -123,9 +126,9 @@ pub fn optimize_hbd_impl(
     points[i] = if fixed_points[i] >= 0 { fixed_points[i] } else { 0 }
   }
   // Snap pre-adjustment — guarantee greedy loop starts from a feasible state.
-  if !(h_fixed) && snap != @model.HpSnap::NoSnap {
+  if !h_fixed && snap != @model.HpSnap::NoSnap {
     let h0 = model.calc_hp(pokemon.hp, points[0])
-    if !(@model.matches_snap(h0, snap)) {
+    if !@model.matches_snap(h0, snap) {
       let target = next_snap_hp(h0 - 1, snap)
       let needed = model.point_for_hp(pokemon.hp, target)
       let mut fixed_used = 0
@@ -177,20 +180,28 @@ pub fn optimize_hbd_impl(
     }
     let next_h_pt = model.point_for_hp(pokemon.hp, target_h)
     let next_b_pt = model.point_for_other(
-      2, pokemon.def_, cur_b + 1, nb_num, nb_den,
+      2,
+      pokemon.def_,
+      cur_b + 1,
+      nb_num,
+      nb_den,
     )
     let next_d_pt = model.point_for_other(
-      4, pokemon.spd, cur_d + 1, nd_num, nd_den,
+      4,
+      pokemon.spd,
+      cur_d + 1,
+      nd_num,
+      nd_den,
     )
-    let valid_h = !(h_fixed) &&
+    let valid_h = !h_fixed &&
       next_h_pt > points[0] &&
       next_h_pt <= max_per &&
       next_h_pt - points[0] <= free
-    let valid_b = !(b_fixed) &&
+    let valid_b = !b_fixed &&
       next_b_pt > points[2] &&
       next_b_pt <= max_per &&
       next_b_pt - points[2] <= free
-    let valid_d = !(d_fixed) &&
+    let valid_d = !d_fixed &&
       next_d_pt > points[4] &&
       next_d_pt <= max_per &&
       next_d_pt - points[4] <= free
@@ -225,7 +236,7 @@ pub fn optimize_hbd_impl(
   let final_b = model.calc_other(2, pokemon.def_, points[2], nb_num, nb_den)
   let final_d = model.calc_other(4, pokemon.spd, points[4], nd_num, nd_den)
   let warning = if snap != @model.HpSnap::NoSnap &&
-    !(@model.matches_snap(final_h, snap)) {
+    !@model.matches_snap(final_h, snap) {
     Some("hp-snap unreachable; constraint ignored")
   } else {
     None
@@ -317,7 +328,13 @@ pub fn optimize_hbd_topn_impl(
   // Fallback: if no candidate (e.g. snap unreachable), retry with NoSnap and mark warning.
   let warning = if candidates.length() == 0 && snap != @model.HpSnap::NoSnap {
     let relaxed = optimize_hbd_topn_impl(
-      model, pokemon, fixed_points, nature, @model.HpSnap::NoSnap, weights, n,
+      model,
+      pokemon,
+      fixed_points,
+      nature,
+      @model.HpSnap::NoSnap,
+      weights,
+      n,
     )
     candidates = relaxed.candidates
     Some("hp-snap unreachable; constraint ignored")
@@ -346,9 +363,7 @@ pub fn optimize_hbd(
   snap : @model.HpSnap,
   weights : HbdWeights,
 ) -> HbdResult {
-  optimize_hbd_impl(
-    Standard(ivs~), pokemon, fixed_evs, nature, snap, weights,
-  )
+  optimize_hbd_impl(Standard(ivs~), pokemon, fixed_evs, nature, snap, weights)
 }
 
 ///|
@@ -362,7 +377,13 @@ pub fn optimize_hbd_topn(
   n : Int,
 ) -> HbdResult {
   optimize_hbd_topn_impl(
-    Standard(ivs~), pokemon, fixed_evs, nature, snap, weights, n,
+    Standard(ivs~),
+    pokemon,
+    fixed_evs,
+    nature,
+    snap,
+    weights,
+    n,
   )
 }
 
@@ -386,5 +407,13 @@ pub fn optimize_hbd_topn_champions(
   weights : HbdWeights,
   n : Int,
 ) -> HbdResult {
-  optimize_hbd_topn_impl(Champions, pokemon, fixed_sps, nature, snap, weights, n)
+  optimize_hbd_topn_impl(
+    Champions,
+    pokemon,
+    fixed_sps,
+    nature,
+    snap,
+    weights,
+    n,
+  )
 }

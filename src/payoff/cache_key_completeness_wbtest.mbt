@@ -62,7 +62,10 @@ fn ck_move(name : String) -> @model.Move {
 }
 
 ///|
-fn ck_combatant(pokemon : @model.Pokemon, moves : Array[@model.Move]) -> Combatant {
+fn ck_combatant(
+  pokemon : @model.Pokemon,
+  moves : Array[@model.Move],
+) -> Combatant {
   {
     pokemon,
     moves,
@@ -110,12 +113,17 @@ fn key_of(
   atk : Combatant,
   dfn : Combatant,
   mv : @model.Move,
-  atk_rank~ : Int = 0,
-  def_rank~ : Int = 0,
-  weather~ : @model.Weather = @model.Weather::None,
+  atk_rank? : Int = 0,
+  def_rank? : Int = 0,
+  weather? : @model.Weather = @model.Weather::None,
 ) -> String raise {
   let input = combatant_to_cache_key_input(
-    atk, dfn, mv, atk_rank, def_rank, weather~,
+    atk,
+    dfn,
+    mv,
+    atk_rank,
+    def_rank,
+    weather~,
   )
   guard @damage_cache.build_cache_key(input) is Ok(k) else {
     fail("build_cache_key failed")
@@ -492,10 +500,6 @@ test "state cache key: weather + field both differ distinguishes the key" {
     weather: @model.Weather::Sun,
     field: @model.Field::Electric,
   }
-  let b = {
-    ..base,
-    weather: @model.Weather::Rain,
-    field: @model.Field::Grassy,
-  }
+  let b = { ..base, weather: @model.Weather::Rain, field: @model.Field::Grassy }
   assert_distinct_state_keys(a, b)
 }

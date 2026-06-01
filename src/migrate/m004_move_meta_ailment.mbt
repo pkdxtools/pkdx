@@ -3,13 +3,17 @@
 /// 追加し、data.json のエントリで埋める。
 /// 冪等性: 既存カラムは PRAGMA table_info で検出してスキップ。
 pub fn run_004(db : @db.Db, repo_root : String) -> Result[String, String] {
-  match ensure_column(db, "move_meta", "ailment_ja",
-      "ALTER TABLE move_meta ADD COLUMN ailment_ja TEXT NOT NULL DEFAULT ''") {
+  match
+    ensure_column(
+      db, "move_meta", "ailment_ja", "ALTER TABLE move_meta ADD COLUMN ailment_ja TEXT NOT NULL DEFAULT ''",
+    ) {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
-  match ensure_column(db, "move_meta", "ailment_chance",
-      "ALTER TABLE move_meta ADD COLUMN ailment_chance INTEGER NOT NULL DEFAULT 100") {
+  match
+    ensure_column(
+      db, "move_meta", "ailment_chance", "ALTER TABLE move_meta ADD COLUMN ailment_chance INTEGER NOT NULL DEFAULT 100",
+    ) {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
@@ -18,7 +22,7 @@ pub fn run_004(db : @db.Db, repo_root : String) -> Result[String, String] {
     Some(s) => s
     None => return Err(path + " not found.")
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match expect_array(json) {
@@ -35,16 +39,16 @@ pub fn run_004(db : @db.Db, repo_root : String) -> Result[String, String] {
     let name = str_field(entry, "name")
     let ailment_ja = str_field(entry, "ailment_ja")
     let ailment_chance = int_field(entry, "ailment_chance", 100)
-    let rows = match @db.query_binds(
-        db,
-        "SELECT 1 FROM move_meta WHERE name_ja = ? LIMIT 1",
-        [@db.BindText(name)],
-      ) {
+    let rows = match
+      @db.query_binds(db, "SELECT 1 FROM move_meta WHERE name_ja = ? LIMIT 1", [
+        @db.BindText(name),
+      ]) {
       Err(e) => return Err(e)
       Ok(r) => r
     }
     if rows.length() > 0 {
-      match @db.exec_binds(
+      match
+        @db.exec_binds(
           db,
           "UPDATE move_meta SET ailment_ja = ?, ailment_chance = ? WHERE name_ja = ?",
           [
@@ -58,7 +62,8 @@ pub fn run_004(db : @db.Db, repo_root : String) -> Result[String, String] {
       }
       updated = updated + 1
     } else {
-      match @db.exec_binds(
+      match
+        @db.exec_binds(
           db,
           "INSERT INTO move_meta (name_ja, priority, stat_effects_json, ailment_ja, ailment_chance) VALUES (?, 0, '[]', ?, ?)",
           [
@@ -92,20 +97,13 @@ pub fn ensure_column(
   column : String,
   alter_sql : String,
 ) -> Result[Unit, String] {
-  let rows = match @db.query_binds(
-      db,
-      "PRAGMA table_info(" + table + ")",
-      [],
-    ) {
+  let rows = match @db.query_binds(db, "PRAGMA table_info(" + table + ")", []) {
     Err(e) => return Err(e)
     Ok(r) => r
   }
   for row in rows {
     match row.get(1) {
-      Some(Some(name)) =>
-        if name == column {
-          return Ok(())
-        }
+      Some(Some(name)) => if name == column { return Ok(()) }
       _ => ()
     }
   }

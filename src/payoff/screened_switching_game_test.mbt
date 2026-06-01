@@ -6,10 +6,13 @@
 ///|
 fn build_screen_team(label : String) -> Array[Combatant] {
   let mv = mk_move("のしかかり", "ノーマル", @model.Physical, 85)
-  let team = Array::make(4, mk_combatant(
-    mk_pokemon("dummy", "ノーマル", "", 100, 100, 80, 80, 80, 100),
-    [mv],
-  ))
+  let team = Array::make(
+    4,
+    mk_combatant(
+      mk_pokemon("dummy", "ノーマル", "", 100, 100, 80, 80, 80, 100),
+      [mv],
+    ),
+  )
   for i in 0..<4 {
     team[i] = mk_combatant(
       mk_pokemon(
@@ -36,10 +39,20 @@ test "team_payoff_matrix_screened_bit_exact_when_keep_top_one" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (screened, rows, cols) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 42UL, 1.0, refine_turn_limit=1, mc_turn_limit=1,
+    team,
+    opp,
+    Single,
+    10,
+    42UL,
+    1.0,
+    refine_turn_limit=1,
+    mc_turn_limit=1,
   )
   let oracle = team_payoff_matrix_with_team_model(
-    team, opp, Single, SwitchingGame(1),
+    team,
+    opp,
+    Single,
+    SwitchingGame(1),
   )
   @debug.assert_eq(screened.rows(), oracle.rows())
   @debug.assert_eq(screened.cols(), oracle.cols())
@@ -66,7 +79,14 @@ test "team_payoff_matrix_screened_retained_count_matches_ceil_of_quantile" {
   // 4 × C(3, 2) = 12 lead-aware selections on each side. keep_top = 0.5 →
   // ceil(12 * 0.5) = 6.
   let (_, rows, cols) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
+    team,
+    opp,
+    Single,
+    10,
+    11UL,
+    0.5,
+    refine_turn_limit=1,
+    mc_turn_limit=1,
   )
   @debug.assert_eq(rows.length(), 6)
   @debug.assert_eq(cols.length(), 6)
@@ -77,7 +97,14 @@ test "team_payoff_matrix_screened_retained_indices_are_sorted_ascending" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (_, rows, cols) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
+    team,
+    opp,
+    Single,
+    10,
+    11UL,
+    0.5,
+    refine_turn_limit=1,
+    mc_turn_limit=1,
   )
   for i in 1..<rows.length() {
     assert_true(rows[i - 1] < rows[i])
@@ -92,10 +119,24 @@ test "team_payoff_matrix_screened_retained_count_is_monotonic_in_keep_top" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (_, rows_low, _) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 11UL, 0.3, refine_turn_limit=1, mc_turn_limit=1,
+    team,
+    opp,
+    Single,
+    10,
+    11UL,
+    0.3,
+    refine_turn_limit=1,
+    mc_turn_limit=1,
   )
   let (_, rows_high, _) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 11UL, 0.8, refine_turn_limit=1, mc_turn_limit=1,
+    team,
+    opp,
+    Single,
+    10,
+    11UL,
+    0.8,
+    refine_turn_limit=1,
+    mc_turn_limit=1,
   )
   assert_true(rows_low.length() < rows_high.length())
 }
@@ -105,7 +146,14 @@ test "team_payoff_matrix_screened_keeps_nash_weighted_rows" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
   let (_, retained_rows, _) = team_payoff_matrix_screened(
-    team, opp, Single, 10, 11UL, 0.5, refine_turn_limit=1, mc_turn_limit=1,
+    team,
+    opp,
+    Single,
+    10,
+    11UL,
+    0.5,
+    refine_turn_limit=1,
+    mc_turn_limit=1,
   )
   @debug.assert_eq(retained_rows.length(), 6)
 }
@@ -116,11 +164,7 @@ test "screen_nash_scores_preserves_support_that_mean_would_drop" {
   // support. Mean-based keep_top=2/3 would drop r0 (mean ≈ 0.033, lowest).
   // Nash-weighted scoring assigns equal scores to all support rows (= game
   // value), so all 3 survive any quantile ≥ 1/3.
-  let screen = [
-    [0.9, -0.4, -0.4],
-    [-0.2, 0.6, 0.0],
-    [-0.2, 0.0, 0.6],
-  ]
+  let screen = [[0.9, -0.4, -0.4], [-0.2, 0.6, 0.0], [-0.2, 0.0, 0.6]]
   let (row_scores, _) = screen_nash_scores(screen, 3, 3)
   let tol = 1.0e-4
   // All Nash-support rows must have equal score (= game value).

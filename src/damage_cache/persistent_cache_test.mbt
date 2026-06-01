@@ -10,7 +10,6 @@ fn test_path(name : String) -> String {
 /// ignored so the first-ever run (where the file didn't exist) succeeds.
 fn cleanup(path : String) -> Unit {
   let _ = @db.unlink_file(path)
-
 }
 
 ///|
@@ -217,7 +216,4 @@ fn write_raw_file(path : String, content : String) -> Int {
 
 ///|
 #borrow(path, content)
-extern "C" fn pkdx_write_file_extern(
-  path : Bytes,
-  content : Bytes,
-) -> Int = "pkdx_write_file"
+extern "C" fn pkdx_write_file_extern(path : Bytes, content : Bytes) -> Int = "pkdx_write_file"

@@ -29,7 +29,10 @@ fn mh_move(name : String) -> @model.Move {
 
 ///|
 test "resolve_auto_hits: single-hit move returns SingleHit" {
-  @debug.debug_inspect(resolve_auto_hits("たいあたり"), content="SingleHit")
+  @debug.debug_inspect(
+    resolve_auto_hits("たいあたり"),
+    content="SingleHit",
+  )
 }
 
 ///|
@@ -39,17 +42,26 @@ test "resolve_auto_hits: にどげり returns FixedHit(2)" {
 
 ///|
 test "resolve_auto_hits: トリプルキック returns FixedHit(3)" {
-  @debug.debug_inspect(resolve_auto_hits("トリプルキック"), content="FixedHit(3)")
+  @debug.debug_inspect(
+    resolve_auto_hits("トリプルキック"),
+    content="FixedHit(3)",
+  )
 }
 
 ///|
 test "resolve_auto_hits: みずしゅりけん returns Random2to5" {
-  @debug.debug_inspect(resolve_auto_hits("みずしゅりけん"), content="Random2to5")
+  @debug.debug_inspect(
+    resolve_auto_hits("みずしゅりけん"),
+    content="Random2to5",
+  )
 }
 
 ///|
 test "resolve_auto_hits: ロックブラスト returns Random2to5" {
-  @debug.debug_inspect(resolve_auto_hits("ロックブラスト"), content="Random2to5")
+  @debug.debug_inspect(
+    resolve_auto_hits("ロックブラスト"),
+    content="Random2to5",
+  )
 }
 
 ///|
@@ -59,30 +71,45 @@ test "resolve_auto_hits: つっぱり returns Random2to5" {
 
 ///|
 test "resolve_auto_hits: スケイルショット returns Random2to5" {
-  @debug.debug_inspect(resolve_auto_hits("スケイルショット"), content="Random2to5")
+  @debug.debug_inspect(
+    resolve_auto_hits("スケイルショット"),
+    content="Random2to5",
+  )
 }
 
 ///|
 test "resolve_auto_hits: ドラゴンアロー returns FixedHit(2)" {
-  @debug.debug_inspect(resolve_auto_hits("ドラゴンアロー"), content="FixedHit(2)")
+  @debug.debug_inspect(
+    resolve_auto_hits("ドラゴンアロー"),
+    content="FixedHit(2)",
+  )
 }
 
 ///|
 test "resolve_auto_hits: トリプルアクセル returns FixedHit(3)" {
-  @debug.debug_inspect(resolve_auto_hits("トリプルアクセル"), content="FixedHit(3)")
+  @debug.debug_inspect(
+    resolve_auto_hits("トリプルアクセル"),
+    content="FixedHit(3)",
+  )
 }
 
 ///|
 test "resolve_auto_hits: れんぞくぎり is SingleHit (not multi-hit)" {
   // れんぞくぎり (Fury Cutter) は 1-hit で連続使用時に威力が倍増する技。
   // 以前のテーブルに誤って含まれていた false positive の regression 防止。
-  @debug.debug_inspect(resolve_auto_hits("れんぞくぎり"), content="SingleHit")
+  @debug.debug_inspect(
+    resolve_auto_hits("れんぞくぎり"),
+    content="SingleHit",
+  )
 }
 
 ///|
 test "resolve_auto_hits: ゴッドバード is SingleHit (2-turn charge)" {
   // ゴッドバード (Sky Attack) は 2 ターン溜め 1-hit の技。
-  @debug.debug_inspect(resolve_auto_hits("ゴッドバード"), content="SingleHit")
+  @debug.debug_inspect(
+    resolve_auto_hits("ゴッドバード"),
+    content="SingleHit",
+  )
 }
 
 // ---- resolve_hit_plan ----

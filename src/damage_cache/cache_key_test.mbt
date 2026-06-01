@@ -154,8 +154,16 @@ test "build_cache_key: swap attacker/defender ability yields distinct key" {
 /// Adjacent empty disambiguation: `(attacker="", defender="x")` and
 /// `(attacker="x", defender="")` must not collapse to the same key.
 test "build_cache_key: adjacent empty fields are disambiguated" {
-  let a : CacheKeyInput = { ..baseline(), attacker: "", defender: "カイリュー" }
-  let b : CacheKeyInput = { ..baseline(), attacker: "カイリュー", defender: "" }
+  let a : CacheKeyInput = {
+    ..baseline(),
+    attacker: "",
+    defender: "カイリュー",
+  }
+  let b : CacheKeyInput = {
+    ..baseline(),
+    attacker: "カイリュー",
+    defender: "",
+  }
   guard build_cache_key(a) is Ok(k1) else { fail("unexpected Err") }
   guard build_cache_key(b) is Ok(k2) else { fail("unexpected Err") }
   assert_true(k1 != k2)
@@ -213,7 +221,10 @@ test "build_cache_key: v5 schema prefix" {
 ///|
 /// Reflect inputs participate in validation: pipe characters are rejected.
 test "build_cache_key: rejects pipe character in incoming_attacker" {
-  let input : CacheKeyInput = { ..baseline(), incoming_attacker: "カイ|リュー" }
+  let input : CacheKeyInput = {
+    ..baseline(),
+    incoming_attacker: "カイ|リュー",
+  }
   match build_cache_key(input) {
     Ok(_) => fail("expected Err for pipe in incoming_attacker")
     Err(_) => ()

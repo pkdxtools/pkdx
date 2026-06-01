@@ -33,7 +33,7 @@ fn st_pokemon(name : String) -> @model.Pokemon {
 ///|
 fn st_move(
   name : String,
-  category~ : @model.MoveCategory = @model.Physical,
+  category? : @model.MoveCategory = @model.Physical,
 ) -> @model.Move {
   {
     name,
@@ -61,10 +61,10 @@ fn st_input(
   attacker : @model.Pokemon,
   defender : @model.Pokemon,
   move_ : @model.Move,
-  atk_ability~ : String = "",
-  def_ability~ : String = "",
-  def_rank~ : Int = 0,
-  def_item~ : String = "",
+  atk_ability? : String = "",
+  def_ability? : String = "",
+  def_rank? : Int = 0,
+  def_item? : String = "",
 ) -> @model.DamageCalcInput {
   {
     attacker,
@@ -111,9 +111,9 @@ test "is_stamina_ability: recognises じきゅうりょく" {
 
 ///|
 test "is_stamina_ability: rejects unrelated abilities" {
-  assert_true(!(is_stamina_ability("もふもふ")))
-  assert_true(!(is_stamina_ability("いかく")))
-  assert_true(!(is_stamina_ability("")))
+  assert_true(!is_stamina_ability("もふもふ"))
+  assert_true(!is_stamina_ability("いかく"))
+  assert_true(!is_stamina_ability(""))
 }
 
 ///|
@@ -122,7 +122,13 @@ test "stamina + Skill Link rock blast: def_stage_after ramps 1..5" {
   let dfn = st_pokemon("defender")
   let mv = st_move("ロックブラスト")
   let r = @damage.calc_damage(
-    st_input(atk, dfn, mv, atk_ability="スキルリンク", def_ability="じきゅうりょく"),
+    st_input(
+      atk,
+      dfn,
+      mv,
+      atk_ability="スキルリンク",
+      def_ability="じきゅうりょく",
+    ),
   )
   // Skill Link → 1 variant with 5 hits.
   @debug.debug_inspect(r.variants.length(), content="1")
@@ -142,7 +148,11 @@ test "stamina + entry def_rank=+3 + 5 hit: clamps at +6 from hit 4 onward" {
   let mv = st_move("ロックブラスト")
   let r = @damage.calc_damage(
     st_input(
-      atk, dfn, mv, atk_ability="スキルリンク", def_ability="じきゅうりょく",
+      atk,
+      dfn,
+      mv,
+      atk_ability="スキルリンク",
+      def_ability="じきゅうりょく",
       def_rank=3,
     ),
   )
@@ -178,7 +188,13 @@ test "stamina + ParentalBond + tackle: 2nd hit sees +1 def stage" {
   let dfn = st_pokemon("defender")
   let mv = st_move("たいあたり")
   let r = @damage.calc_damage(
-    st_input(atk, dfn, mv, atk_ability="おやこあい", def_ability="じきゅうりょく"),
+    st_input(
+      atk,
+      dfn,
+      mv,
+      atk_ability="おやこあい",
+      def_ability="じきゅうりょく",
+    ),
   )
   @debug.debug_inspect(r.variants.length(), content="1")
   let v = r.variants[0]
@@ -210,7 +226,13 @@ test "stamina hit damage scales with prior def_stage rises" {
   let dfn = st_pokemon("defender")
   let mv = st_move("ロックブラスト")
   let r = @damage.calc_damage(
-    st_input(atk, dfn, mv, atk_ability="スキルリンク", def_ability="じきゅうりょく"),
+    st_input(
+      atk,
+      dfn,
+      mv,
+      atk_ability="スキルリンク",
+      def_ability="じきゅうりょく",
+    ),
   )
   let v = r.variants[0]
   let h0 = v.hits[0].damage_per_roll[7]
@@ -236,8 +258,11 @@ test "stamina + Eviolite recomputes def stat per-hit (no ratio scaling)" {
   let mv = st_move("ロックブラスト")
   let r_with_ev = @damage.calc_damage(
     st_input(
-      atk, dfn, mv,
-      atk_ability="スキルリンク", def_ability="じきゅうりょく",
+      atk,
+      dfn,
+      mv,
+      atk_ability="スキルリンク",
+      def_ability="じきゅうりょく",
       def_item="しんかのきせき",
     ),
   )
@@ -247,8 +272,11 @@ test "stamina + Eviolite recomputes def stat per-hit (no ratio scaling)" {
   // setup, the same ratio should hold.
   let r_no_item = @damage.calc_damage(
     st_input(
-      atk, dfn, mv,
-      atk_ability="スキルリンク", def_ability="じきゅうりょく",
+      atk,
+      dfn,
+      mv,
+      atk_ability="スキルリンク",
+      def_ability="じきゅうりょく",
     ),
   )
   let v_ev = r_with_ev.variants[0]

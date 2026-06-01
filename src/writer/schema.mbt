@@ -42,8 +42,8 @@ fn stats_schema_short(b : @jsonschema.Builder) -> @jsonschema.JsonSchema {
 /// (required shape for breed / pokemon-build caches).
 fn move_schema(
   b : @jsonschema.Builder,
-  strict~ : Bool = true,
-  with_accuracy~ : Bool = false,
+  strict? : Bool = true,
+  with_accuracy? : Bool = false,
 ) -> @jsonschema.JsonSchema {
   let props : Map[String, @jsonschema.JsonSchema] = {
     "name": strict_string(b, strict~),
@@ -60,7 +60,7 @@ fn move_schema(
 ///|
 fn pokemon_move_schema(
   b : @jsonschema.Builder,
-  strict~ : Bool = true,
+  strict? : Bool = true,
 ) -> @jsonschema.JsonSchema {
   move_schema(b, strict~, with_accuracy=true)
 }
@@ -68,7 +68,7 @@ fn pokemon_move_schema(
 ///|
 fn member_schema(
   b : @jsonschema.Builder,
-  strict~ : Bool = true,
+  strict? : Bool = true,
 ) -> @jsonschema.JsonSchema {
   // 技は 1 〜 4 で受け付ける。とっておき型 (Mega Kangaskhan 等) のように
   // 意図的に 2 技構成で運用するケースがあるため、4 固定にすると validate で
@@ -97,16 +97,14 @@ fn member_schema(
       // 保持するために必要。Champions は IV 廃止のため無視される。
       "ivs": nullable(b, stats_schema_short(b)),
     },
-    required=[
-      "name", "types", "base_stats", "ability", "item", "role", "moves",
-    ],
+    required=["name", "types", "base_stats", "ability", "item", "role", "moves"],
   )
 }
 
 ///|
 pub fn team_schema(
   b : @jsonschema.Builder,
-  strict~ : Bool = true,
+  strict? : Bool = true,
 ) -> @jsonschema.JsonSchema {
   let members_min = if strict { 1 } else { 0 }
   let battle_format = if strict {
@@ -147,8 +145,7 @@ pub fn team_schema(
       "updated_at": b.string(),
     },
     required=[
-      "battle_format", "mechanics", "version", "members", "coverage",
-      "defense_matrix",
+      "battle_format", "mechanics", "version", "members", "coverage", "defense_matrix",
     ],
   )
 }
@@ -156,7 +153,7 @@ pub fn team_schema(
 ///|
 pub fn pokemon_schema(
   b : @jsonschema.Builder,
-  strict~ : Bool = true,
+  strict? : Bool = true,
 ) -> @jsonschema.JsonSchema {
   let arr_min = if strict { 1 } else { 0 }
   let pokemon_info = b.object(

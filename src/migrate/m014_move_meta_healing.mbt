@@ -24,40 +24,31 @@
 pub fn run_014(db : @db.Db, repo_root : String) -> Result[String, String] {
   let alters = [
     (
-      "heal_kind",
-      "ALTER TABLE move_meta ADD COLUMN heal_kind TEXT NOT NULL DEFAULT ''",
+      "heal_kind", "ALTER TABLE move_meta ADD COLUMN heal_kind TEXT NOT NULL DEFAULT ''",
     ),
     (
-      "heal_num",
-      "ALTER TABLE move_meta ADD COLUMN heal_num INTEGER NOT NULL DEFAULT 0",
+      "heal_num", "ALTER TABLE move_meta ADD COLUMN heal_num INTEGER NOT NULL DEFAULT 0",
     ),
     (
-      "heal_den",
-      "ALTER TABLE move_meta ADD COLUMN heal_den INTEGER NOT NULL DEFAULT 1",
+      "heal_den", "ALTER TABLE move_meta ADD COLUMN heal_den INTEGER NOT NULL DEFAULT 1",
     ),
     (
-      "heal_sunny_num",
-      "ALTER TABLE move_meta ADD COLUMN heal_sunny_num INTEGER NOT NULL DEFAULT 0",
+      "heal_sunny_num", "ALTER TABLE move_meta ADD COLUMN heal_sunny_num INTEGER NOT NULL DEFAULT 0",
     ),
     (
-      "heal_sunny_den",
-      "ALTER TABLE move_meta ADD COLUMN heal_sunny_den INTEGER NOT NULL DEFAULT 1",
+      "heal_sunny_den", "ALTER TABLE move_meta ADD COLUMN heal_sunny_den INTEGER NOT NULL DEFAULT 1",
     ),
     (
-      "heal_harsh_num",
-      "ALTER TABLE move_meta ADD COLUMN heal_harsh_num INTEGER NOT NULL DEFAULT 0",
+      "heal_harsh_num", "ALTER TABLE move_meta ADD COLUMN heal_harsh_num INTEGER NOT NULL DEFAULT 0",
     ),
     (
-      "heal_harsh_den",
-      "ALTER TABLE move_meta ADD COLUMN heal_harsh_den INTEGER NOT NULL DEFAULT 1",
+      "heal_harsh_den", "ALTER TABLE move_meta ADD COLUMN heal_harsh_den INTEGER NOT NULL DEFAULT 1",
     ),
     (
-      "weather_set",
-      "ALTER TABLE move_meta ADD COLUMN weather_set TEXT NOT NULL DEFAULT ''",
+      "weather_set", "ALTER TABLE move_meta ADD COLUMN weather_set TEXT NOT NULL DEFAULT ''",
     ),
     (
-      "weather_turns",
-      "ALTER TABLE move_meta ADD COLUMN weather_turns INTEGER NOT NULL DEFAULT 0",
+      "weather_turns", "ALTER TABLE move_meta ADD COLUMN weather_turns INTEGER NOT NULL DEFAULT 0",
     ),
   ]
   for col in alters {
@@ -72,8 +63,7 @@ pub fn run_014(db : @db.Db, repo_root : String) -> Result[String, String] {
   // upsert する。
   match
     @db.exec(
-      db,
-      "UPDATE move_meta SET heal_kind='', heal_num=0, heal_den=1, heal_sunny_num=0, heal_sunny_den=1, heal_harsh_num=0, heal_harsh_den=1, weather_set='', weather_turns=0",
+      db, "UPDATE move_meta SET heal_kind='', heal_num=0, heal_den=1, heal_sunny_num=0, heal_sunny_den=1, heal_harsh_num=0, heal_harsh_den=1, weather_set='', weather_turns=0",
     ) {
     Err(e) => return Err(e)
     Ok(_) => ()
@@ -83,7 +73,7 @@ pub fn run_014(db : @db.Db, repo_root : String) -> Result[String, String] {
     Some(s) => s
     None => return Err(path + " not found.")
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match expect_array(json) {
@@ -119,11 +109,9 @@ pub fn run_014(db : @db.Db, repo_root : String) -> Result[String, String] {
     let weather_set = str_field(entry, "weather_set")
     let weather_turns = int_field(entry, "weather_turns", 0)
     let rows = match
-      @db.query_binds(
-        db,
-        "SELECT 1 FROM move_meta WHERE name_ja = ? LIMIT 1",
-        [@db.BindText(name)],
-      ) {
+      @db.query_binds(db, "SELECT 1 FROM move_meta WHERE name_ja = ? LIMIT 1", [
+        @db.BindText(name),
+      ]) {
       Err(e) => return Err(e)
       Ok(r) => r
     }

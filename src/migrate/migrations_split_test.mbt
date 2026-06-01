@@ -42,12 +42,8 @@ test "migrations_champions hosts the champions.db lineup" {
   let cmp = migrations_champions()
   @debug.debug_inspect(cmp.length(), content="6")
   let expected = [
-    "008_champions_init_schema",
-    "009_champions_pokemon",
-    "010_champions_moves",
-    "011_champions_learnset",
-    "012_champions_items",
-    "013_champions_form_aliases",
+    "008_champions_init_schema", "009_champions_pokemon", "010_champions_moves",
+    "011_champions_learnset", "012_champions_items", "013_champions_form_aliases",
   ]
   for i = 0; i < expected.length(); i = i + 1 {
     let mut found = false
@@ -64,9 +60,8 @@ test "migrations_champions hosts the champions.db lineup" {
 test "migrations_pokedex hosts the live pokedex-side entries" {
   let pdx = migrations_pokedex()
   let expected = [
-    "001_mega_legendsza", "002_move_meta", "003_mega_forms",
-    "004_move_meta_ailment", "005_move_meta_posthit",
-    "006_form_name_aliases", "007_gender_symbol_aliases",
+    "001_mega_legendsza", "002_move_meta", "003_mega_forms", "004_move_meta_ailment",
+    "005_move_meta_posthit", "006_form_name_aliases", "007_gender_symbol_aliases",
     "014_move_meta_healing", "015_move_meta_field",
   ]
   assert_true(pdx.length() == expected.length())

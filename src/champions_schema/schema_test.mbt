@@ -60,9 +60,12 @@ test "parse_pokemon_entries accepts a minimal valid record" {
     #|    "dream_ability": "わるいてぐせ"
     #|  }
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -70,16 +73,25 @@ test "parse_pokemon_entries accepts a minimal valid record" {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
-      @debug.debug_inspect(entries[0].id, content=(
-        #|"0959000"
-      ))
+      @debug.debug_inspect(
+        entries[0].id,
+        content=(
+          #|"0959000"
+        ),
+      )
       @debug.debug_inspect(entries[0].hp, content="85")
-      @debug.debug_inspect(entries[0].type1, content=(
-        #|"フェアリー"
-      ))
-      @debug.debug_inspect(entries[0].form, content=(
-        #|""
-      ))
+      @debug.debug_inspect(
+        entries[0].type1,
+        content=(
+          #|"フェアリー"
+        ),
+      )
+      @debug.debug_inspect(
+        entries[0].form,
+        content=(
+          #|""
+        ),
+      )
     }
   }
 }
@@ -98,14 +110,18 @@ test "parse_pokemon_entries rejects missing required string field" {
     #|    "special_attack": 1, "special_defense": 1, "speed": 1
     #|  }
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
   match parse_pokemon_entries(json) {
-    Ok(_) => @debug.debug_inspect("expected err", content="missing type1 should fail")
+    Ok(_) =>
+      @debug.debug_inspect("expected err", content="missing type1 should fail")
     Err(e) => assert_true(e.contains("type1"))
   }
 }
@@ -117,9 +133,12 @@ test "parse_move_entries accepts power as a non-numeric token" {
     #|  {"waza": "がむしゃら", "type": "ノーマル", "category": "物理",
     #|   "pp": "8", "power": "-", "accuracy": "100"}
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -127,9 +146,12 @@ test "parse_move_entries accepts power as a non-numeric token" {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
-      @debug.debug_inspect(entries[0].power, content=(
-        #|"-"
-      ))
+      @debug.debug_inspect(
+        entries[0].power,
+        content=(
+          #|"-"
+        ),
+      )
     }
   }
 }
@@ -140,9 +162,12 @@ test "parse_learnset_entries minimal record" {
     #|[
     #|  {"id": "0959000", "conditions": "基本", "waza": "ねこだまし"}
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -150,9 +175,12 @@ test "parse_learnset_entries minimal record" {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
-      @debug.debug_inspect(entries[0].waza, content=(
-        #|"ねこだまし"
-      ))
+      @debug.debug_inspect(
+        entries[0].waza,
+        content=(
+          #|"ねこだまし"
+        ),
+      )
     }
   }
 }
@@ -164,9 +192,12 @@ test "parse_item_entries minimal record" {
     #|  {"name_ja": "こだわりハチマキ", "name_en": "Choice Band",
     #|   "category": "choice", "flavor": ""}
     #|]
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => {
-      @debug.debug_inspect("json parse failed: " + e.to_string(), content="parse ok")
+      @debug.debug_inspect(
+        "json parse failed: " + e.to_string(),
+        content="parse ok",
+      )
       return
     }
   }
@@ -174,9 +205,12 @@ test "parse_item_entries minimal record" {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
-      @debug.debug_inspect(entries[0].name_ja, content=(
-        #|"こだわりハチマキ"
-      ))
+      @debug.debug_inspect(
+        entries[0].name_ja,
+        content=(
+          #|"こだわりハチマキ"
+        ),
+      )
     }
   }
 }

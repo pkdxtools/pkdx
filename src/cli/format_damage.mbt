@@ -406,7 +406,14 @@ fn damage_to_table(
   let dfn = input.defender
   let mv = input.move_
   let double_tag = if input.is_double { " [ダブル]" } else { "" }
-  let mut s = atk.name_ja + " → " + dfn.name_ja + " (" + mv.name + ")" + double_tag + "\n"
+  let mut s = atk.name_ja +
+    " → " +
+    dfn.name_ja +
+    " (" +
+    mv.name +
+    ")" +
+    double_tag +
+    "\n"
   s = s + "─".to_string().repeat(50) + "\n"
   // Damage range
   s = s +

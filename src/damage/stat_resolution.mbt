@@ -91,8 +91,8 @@ pub fn resolve_stat_resolution(
   // would be swapped, so this override would need to flip to SpD. pkdx's
   // single-battle scope treats the raw stat kind as the source of truth.
   if name == "サイコショック" ||
-     name == "サイコブレイク" ||
-     name == "しんぴのつるぎ" {
+    name == "サイコブレイク" ||
+    name == "しんぴのつるぎ" {
     def_stat_kind = @model.StatIndex::Def
   }
 

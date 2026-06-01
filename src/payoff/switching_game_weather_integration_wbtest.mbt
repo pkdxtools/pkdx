@@ -78,30 +78,34 @@ test "switching_game: state.weather=Sun boosts a fire attacker's DP value vs Non
   // limited offensive output so the DP horizon (turn_limit) actually
   // explores multiple plies instead of bouncing off ±1 immediately.
   let fire_p = mk_pokemon("Fire", "ほのお", "", 120, 80, 80, 110, 80, 100)
-  let fire_atk = mk_combatant(
-    fire_p,
-    [mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)],
-  )
+  let fire_atk = mk_combatant(fire_p, [
+    mk_move("かえんほうしゃ", "ほのお", @model.Special, 90),
+  ])
   let dfn_p = mk_pokemon("Dfn", "ノーマル", "", 250, 80, 130, 80, 150, 70)
-  let dfn = mk_combatant(
-    dfn_p,
-    [mk_move("たいあたり", "ノーマル", @model.Physical, 40)],
-  )
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [fire_atk]
   let opp_team = [dfn]
   let turn_limit = 6
 
-  let state_none = b4_state_from_weather(@model.Weather::None, my_team, opp_team)
+  let state_none = b4_state_from_weather(
+    @model.Weather::None,
+    my_team,
+    opp_team,
+  )
   let state_sun = b4_state_from_weather(@model.Weather::Sun, my_team, opp_team)
 
-  let cache_none : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let cache_none : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([],
+  )
   let stats_none = new_stats_with_progress(noop_progress, 0)
   let dmg_none = new_damage_cache()
   let v_none = value(
     state_none, my_team, opp_team, turn_limit, cache_none, stats_none, dmg_none,
   )
 
-  let cache_sun : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let cache_sun : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([],
+  )
   let stats_sun = new_stats_with_progress(noop_progress, 0)
   let dmg_sun = new_damage_cache()
   let v_sun = value(
@@ -125,15 +129,13 @@ test "switching_game: DP / MC parity holds under Sun weather (B-4)" {
   // direction (sign-agreement budget is the same as the existing
   // recover-team parity test). MC uses a fixed seed for determinism.
   let fire_p = mk_pokemon("Fire", "ほのお", "", 150, 100, 90, 140, 90, 110)
-  let fire_atk = mk_combatant(
-    fire_p,
-    [mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)],
-  )
+  let fire_atk = mk_combatant(fire_p, [
+    mk_move("かえんほうしゃ", "ほのお", @model.Special, 90),
+  ])
   let dfn_p = mk_pokemon("Dfn", "みず", "", 160, 80, 110, 90, 110, 80)
-  let dfn = mk_combatant(
-    dfn_p,
-    [mk_move("たいあたり", "ノーマル", @model.Physical, 40)],
-  )
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [fire_atk]
   let opp_team = [dfn]
   let turn_limit = 6
@@ -195,7 +197,9 @@ test "W-D-8: same-ply Sunny Day BOOSTS the slower-side fire move (implementation
   // 先手 (= my side, Speed 200): Sunny Day を撃つ。Status カテゴリで HP 不変。
   // SpD を高く設定して同 ply の後手 fire 技が None では大ダメージにならず、
   // Sun の 1.5x で差が観測可能になるようにする。
-  let fast_user_p = mk_pokemon("Setter", "ノーマル", "", 250, 80, 120, 80, 200, 200)
+  let fast_user_p = mk_pokemon(
+    "Setter", "ノーマル", "", 250, 80, 120, 80, 200, 200,
+  )
   let sunny_day : @model.Move = {
     ..mk_move("にほんばれ", "ほのお", @model.Status, 0),
     weather_set: Some(@model.Weather::Sun),
@@ -204,11 +208,12 @@ test "W-D-8: same-ply Sunny Day BOOSTS the slower-side fire move (implementation
   // 後手 (= opp side, Speed 50): 炎技 (Special) を撃つ。同 ply で先手の
   // Sunny Day 解決後にダメが入る。Speed 差を大きく取って order を確定。
   // 出力を抑えめにして None でも Sun でも HP > 0 で残るようにする。
-  let slow_fire_p = mk_pokemon("FireSlow", "ほのお", "", 100, 80, 80, 110, 80, 50)
-  let slow_fire = mk_combatant(
-    slow_fire_p,
-    [mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)],
+  let slow_fire_p = mk_pokemon(
+    "FireSlow", "ほのお", "", 100, 80, 80, 110, 80, 50,
   )
+  let slow_fire = mk_combatant(slow_fire_p, [
+    mk_move("かえんほうしゃ", "ほのお", @model.Special, 90),
+  ])
 
   // 共通の baseline state — weather は None で開始。
   let my_team = [fast_user]
@@ -237,10 +242,19 @@ test "W-D-8: same-ply Sunny Day BOOSTS the slower-side fire move (implementation
   // Control: 先手側を「Sunny Day を撃たない」ダミー status 技に差し替えて
   // 同 ply の damage を比較。差し替え技は weather_set=None なので state.
   // weather は None のまま → 後手 fire ダメは無補正で入る。
-  let dummy_status : @model.Move = mk_move("こころのめ", "ノーマル", @model.Status, 0)
+  let dummy_status : @model.Move = mk_move(
+    "こころのめ",
+    "ノーマル",
+    @model.Status,
+    0,
+  )
   let fast_user_ctrl = mk_combatant(fast_user_p, [dummy_status])
   let my_team_ctrl = [fast_user_ctrl]
-  let state_ctrl = b4_state_from_weather(@model.Weather::None, my_team_ctrl, opp_team)
+  let state_ctrl = b4_state_from_weather(
+    @model.Weather::None,
+    my_team_ctrl,
+    opp_team,
+  )
   let dmg_cache_ctrl = new_damage_cache()
   let branches_ctrl = resolve_moves(
     state_ctrl, 0, 0, true, false, false, my_team_ctrl, opp_team, dmg_cache_ctrl,

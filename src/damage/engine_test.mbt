@@ -20,9 +20,12 @@ test "calc_damage: baseline (no rank)" {
     fixture_earthquake(),
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|117
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|117
+    ),
+  )
 }
 
 ///|
@@ -34,9 +37,12 @@ test "calc_damage: atk_rank +2 doubles damage" {
     atk_rank=2,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|232
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|232
+    ),
+  )
 }
 
 ///|
@@ -48,9 +54,12 @@ test "calc_damage: def_rank +2 halves damage" {
     def_rank=2,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|60
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|60
+    ),
+  )
 }
 
 ///|
@@ -215,10 +224,11 @@ test "calc_damage: mega-gyarados waterfall vs kingambit rank+1 regression" {
 /// 物理技で Atk+ 性格 (いじっぱり) は Atk 中立 (まじめ) より damage が高い。
 /// 旧挙動は nature 無視で両者が +10% default になり等しくなる。
 test "calc_damage: atk_nature adamant > serious on physical" {
-  match (
-    @model.nature_from_ja("いじっぱり"),
-    @model.nature_from_ja("まじめ"),
-  ) {
+  match
+    (
+      @model.nature_from_ja("いじっぱり"),
+      @model.nature_from_ja("まじめ"),
+    ) {
     (Some(adamant), Some(serious)) => {
       let with_adamant = mk_damage_input(
         fixture_garchomp(),
@@ -249,10 +259,8 @@ test "calc_damage: atk_nature modest > serious on special" {
   let vaporeon = mk_pokemon_typed(
     "シャワーズ", "みず", "", 130, 65, 60, 110, 95, 65,
   )
-  match (
-    @model.nature_from_ja("ひかえめ"),
-    @model.nature_from_ja("まじめ"),
-  ) {
+  match
+    (@model.nature_from_ja("ひかえめ"), @model.nature_from_ja("まじめ")) {
     (Some(modest), Some(serious)) => {
       let with_modest = mk_damage_input(
         vaporeon,
@@ -280,7 +288,8 @@ test "calc_damage: atk_nature modest > serious on special" {
 /// ようき (Spe+/SpA-, Atk 中立) を物理技に適用しても Atk 無補正。
 /// まじめ (全中立) と同等の damage になる。
 test "calc_damage: atk_nature jolly equals serious on physical (both neutral for Atk)" {
-  match (@model.nature_from_ja("ようき"), @model.nature_from_ja("まじめ")) {
+  match
+    (@model.nature_from_ja("ようき"), @model.nature_from_ja("まじめ")) {
     (Some(jolly), Some(serious)) => {
       let with_jolly = mk_damage_input(
         fixture_garchomp(),
@@ -308,15 +317,18 @@ test "calc_damage: atk_nature jolly equals serious on physical (both neutral for
 /// ボディプレスは攻撃側の Def を攻撃値として使う物理技。
 /// ずぶとい (Def+/Atk-) は body press の攻撃値を押し上げるので damage が上がる。
 test "calc_damage: atk_nature bold boosts body press (Def+ applies)" {
-  let body_press = mk_move("ボディプレス", "かくとう", @model.Physical, 80)
+  let body_press = mk_move(
+    "ボディプレス",
+    "かくとう",
+    @model.Physical,
+    80,
+  )
   // 防御型ポケモン (A低, B高) を用意して body press の効果を確認
   let skeledirge = mk_pokemon_typed(
     "ラウドボーン", "ほのお", "ゴースト", 104, 75, 100, 110, 75, 66,
   )
-  match (
-    @model.nature_from_ja("ずぶとい"),
-    @model.nature_from_ja("まじめ"),
-  ) {
+  match
+    (@model.nature_from_ja("ずぶとい"), @model.nature_from_ja("まじめ")) {
     (Some(bold), Some(serious)) => {
       let with_bold = mk_damage_input(
         skeledirge,
@@ -343,10 +355,8 @@ test "calc_damage: atk_nature bold boosts body press (Def+ applies)" {
 ///|
 /// def_nature で Def+ 性格 (ずぶとい) を物理技の防御側に当てると damage が減る。
 test "calc_damage: def_nature bold reduces physical damage" {
-  match (
-    @model.nature_from_ja("ずぶとい"),
-    @model.nature_from_ja("まじめ"),
-  ) {
+  match
+    (@model.nature_from_ja("ずぶとい"), @model.nature_from_ja("まじめ")) {
     (Some(bold), Some(serious)) => {
       let with_bold = mk_damage_input(
         fixture_garchomp(),
@@ -372,10 +382,7 @@ test "calc_damage: def_nature bold reduces physical damage" {
 
 ///|
 test "calc_damage: rank order matters with ability (ちからもち + rank +1)" {
-  let atk = {
-    ..fixture_garchomp(),
-    ability1: "ちからもち",
-  }
+  let atk = { ..fixture_garchomp(), ability1: "ちからもち" }
   let input = mk_damage_input(
     atk,
     fixture_garchomp(),
@@ -384,9 +391,12 @@ test "calc_damage: rank order matters with ability (ちからもち + rank +1)" 
     atk_ability="ちからもち",
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|346
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|346
+    ),
+  )
 }
 
 ///|
@@ -395,10 +405,7 @@ test "calc_damage: rank order matters with ability (ちからもち + rank +1)" 
 /// rank+1 と ちからもち が両方掛かることで計算順序を保護。
 /// golden value で snapshot し、どの変数がズレても検知できるようにする。
 test "calc_damage: nature + rank + ability 3-way interaction (golden)" {
-  let atk = {
-    ..fixture_garchomp(),
-    ability1: "ちからもち",
-  }
+  let atk = { ..fixture_garchomp(), ability1: "ちからもち" }
   match @model.nature_from_ja("まじめ") {
     Some(serious) => {
       let input = mk_damage_input(
@@ -411,9 +418,12 @@ test "calc_damage: nature + rank + ability 3-way interaction (golden)" {
         stat_system=@model.Champions,
       )
       let result = calc_damage(input)
-      @debug.debug_inspect(result.max_damage, content=(
-        #|315
-      ))
+      @debug.debug_inspect(
+        result.max_damage,
+        content=(
+          #|315
+        ),
+      )
     }
     None => fail("nature not found")
   }
@@ -423,10 +433,11 @@ test "calc_damage: nature + rank + ability 3-way interaction (golden)" {
 /// Standard (scarlet_violet 等) モードでも nature が適用されることの確認。
 /// Champions 系テストと同じ枠組みが Standard 分岐でも通る。
 test "calc_damage: atk_nature applies in Standard mode" {
-  match (
-    @model.nature_from_ja("いじっぱり"),
-    @model.nature_from_ja("まじめ"),
-  ) {
+  match
+    (
+      @model.nature_from_ja("いじっぱり"),
+      @model.nature_from_ja("まじめ"),
+    ) {
     (Some(adamant), Some(serious)) => {
       let with_adamant = mk_damage_input(
         fixture_garchomp(),
@@ -453,10 +464,8 @@ test "calc_damage: atk_nature applies in Standard mode" {
 ///|
 /// Standard モードで def_nature も効くこと。
 test "calc_damage: def_nature applies in Standard mode" {
-  match (
-    @model.nature_from_ja("ずぶとい"),
-    @model.nature_from_ja("まじめ"),
-  ) {
+  match
+    (@model.nature_from_ja("ずぶとい"), @model.nature_from_ja("まじめ")) {
     (Some(bold), Some(serious)) => {
       let with_bold = mk_damage_input(
         fixture_garchomp(),
@@ -542,9 +551,12 @@ test "calc_damage: そうだいしょう no boost (fainted_count=0)" {
     fainted_count=0,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|117
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|117
+    ),
+  )
 }
 
 ///|
@@ -558,9 +570,12 @@ test "calc_damage: そうだいしょう fainted_count=1 (x1.1)" {
   )
   let result = calc_damage(input)
   // round5(84, 4506) = (84*4506+2047)/4096 = 92
-  @debug.debug_inspect(result.max_damage, content=(
-    #|129
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|129
+    ),
+  )
 }
 
 ///|
@@ -574,9 +589,12 @@ test "calc_damage: そうだいしょう fainted_count=2 (x1.2)" {
   )
   let result = calc_damage(input)
   // round5(84, 4915) = (84*4915+2047)/4096 = 101
-  @debug.debug_inspect(result.max_damage, content=(
-    #|140
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|140
+    ),
+  )
 }
 
 ///|
@@ -589,9 +607,12 @@ test "calc_damage: そうだいしょう fainted_count=3 (x1.3)" {
     fainted_count=3,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|152
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|152
+    ),
+  )
 }
 
 ///|
@@ -604,9 +625,12 @@ test "calc_damage: そうだいしょう fainted_count=4 (x1.4)" {
     fainted_count=4,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|164
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|164
+    ),
+  )
 }
 
 ///|
@@ -620,9 +644,12 @@ test "calc_damage: そうだいしょう fainted_count=5 (x1.5)" {
   )
   let result = calc_damage(input)
   // round5(84, 6144) = (84*6144+2047)/4096 = 126
-  @debug.debug_inspect(result.max_damage, content=(
-    #|175
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|175
+    ),
+  )
 }
 
 ///|
@@ -683,9 +710,12 @@ test "calc_damage: おはかまいり base (fainted_count=0, power=50)" {
     fainted_count=0,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|40
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|40
+    ),
+  )
 }
 
 ///|
@@ -697,9 +727,12 @@ test "calc_damage: おはかまいり fainted_count=1 (power=100)" {
     fainted_count=1,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|78
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|78
+    ),
+  )
 }
 
 ///|
@@ -711,9 +744,12 @@ test "calc_damage: おはかまいり fainted_count=2 (power=150)" {
     fainted_count=2,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|116
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|116
+    ),
+  )
 }
 
 ///|
@@ -725,9 +761,12 @@ test "calc_damage: おはかまいり fainted_count=5 (power=300)" {
     fainted_count=5,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|231
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|231
+    ),
+  )
 }
 
 ///|
@@ -762,9 +801,12 @@ test "calc_damage: spread move in double applies 0.75x" {
   )
   let result = calc_damage(input)
   // baseline max_damage=84, round5(base, 3072) で 0.75倍
-  @debug.debug_inspect(result.max_damage, content=(
-    #|87
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|87
+    ),
+  )
 }
 
 ///|
@@ -795,9 +837,12 @@ test "calc_damage: spread move in single has no penalty" {
     is_double=false,
   )
   let result = calc_damage(input)
-  @debug.debug_inspect(result.max_damage, content=(
-    #|117
-  ))
+  @debug.debug_inspect(
+    result.max_damage,
+    content=(
+      #|117
+    ),
+  )
 }
 
 ///|
@@ -868,9 +913,12 @@ test "calc_damage: champions mode dispatches correctly" {
   )
   let r_champ = calc_damage(input_champ)
   let r_standard = calc_damage(input_standard)
-  @debug.debug_inspect(r_champ.max_damage, content=(
-    #|117
-  ))
+  @debug.debug_inspect(
+    r_champ.max_damage,
+    content=(
+      #|117
+    ),
+  )
   assert_true(r_champ.max_damage == r_standard.max_damage)
 }
 

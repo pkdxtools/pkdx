@@ -66,7 +66,9 @@ pub fn get_field_damage_mod(
 /// じめん技のうち Grassy field で 0.5x を受ける Gen 9 spec ground moves。
 /// あなをほる / じわれ / 10まんばりき などは対象外 (公式仕様)。
 fn is_grassy_weakened_move(move_name : String) -> Bool {
-  move_name == "じしん" || move_name == "マグニチュード" || move_name == "じならし"
+  move_name == "じしん" ||
+  move_name == "マグニチュード" ||
+  move_name == "じならし"
 }
 
 ///|

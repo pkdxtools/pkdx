@@ -36,8 +36,8 @@ test "build_team_document: deterministic markdown output" {
   assert_true(md.contains("## 推奨技構成"))
   assert_true(md.contains("### ガブリアス"))
   assert_true(md.contains("| じしん |"))
-  assert_true(!(md.contains("## 構築の強み")))
-  assert_true(!(md.contains("## 構築の弱み・注意点")))
+  assert_true(!md.contains("## 構築の強み"))
+  assert_true(!md.contains("## 構築の弱み・注意点"))
 }
 
 ///|
@@ -409,7 +409,9 @@ test "build_team_document: emits YAML frontmatter with core fields" {
   assert_true(md.contains("mechanics: \"テラスタル\""))
   assert_true(md.contains("version: sv"))
   assert_true(md.contains("regulation: \"H\""))
-  assert_true(md.contains("members: [\"ガブリアス\", \"カイリュー\"]"))
+  assert_true(
+    md.contains("members: [\"ガブリアス\", \"カイリュー\"]"),
+  )
   assert_true(md.contains("edited: false"))
   // Default: 未公開扱い (published: false)。ユーザーが Phase 8 で明示的に
   // 「構築ブログで公開する」を選ばない限り誰からも見えない。
@@ -433,7 +435,12 @@ test "build_team_document: publish=true flips published to true" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-20", publish=true)
+  let doc = build_team_document(
+    json,
+    "ガブリアス",
+    "2026-04-20",
+    publish=true,
+  )
   let md = @markdown.serialize(doc)
   assert_true(md.contains("published: true"))
   assert_false(md.contains("published: false"))

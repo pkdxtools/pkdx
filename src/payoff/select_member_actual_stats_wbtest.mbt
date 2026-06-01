@@ -494,11 +494,19 @@ test "run_select: accepts team-builder member with actual_stats" {
     #|  ]
     #|}
   let with_stats = header +
-    with_stats_team + team_padding + team_to_opp +
-    shared_opp + opp_padding + opp_close
+    with_stats_team +
+    team_padding +
+    team_to_opp +
+    shared_opp +
+    opp_padding +
+    opp_close
   let without_stats = header +
-    without_stats_team + team_padding + team_to_opp +
-    shared_opp + opp_padding + opp_close
+    without_stats_team +
+    team_padding +
+    team_to_opp +
+    shared_opp +
+    opp_padding +
+    opp_close
   let out_with = run_select(with_stats)
   let out_without = run_select(without_stats)
   // どちらも JSON としてはパース可能であり、既知のフィールドを含む。
@@ -769,7 +777,8 @@ test "compute_mean_damage via effective_combatant: mega uses stat_points-derived
     #|}
   let invested = effective_combatant(parse_single_combatant(invested_src), true)
   let uninvested = effective_combatant(
-    parse_single_combatant(uninvested_src), true,
+    parse_single_combatant(uninvested_src),
+    true,
   )
   let dfn = parse_single_combatant(dfn_src)
   let mv : @model.Move = {
@@ -907,9 +916,7 @@ test "effective_combatant: mega honors non-31 Standard IVs in post-mega recomput
     None => fail("post-mega actual_stats must be recomputed")
   }
   match post.ivs {
-    Some(arr) => {
-      @debug.assert_eq(arr[1], 0)
-    }
+    Some(arr) => @debug.assert_eq(arr[1], 0)
     None => fail("ivs must be preserved through effective_combatant")
   }
 }
@@ -940,10 +947,9 @@ test "effective_combatant: mega defaults IVs to 31 when ivs is missing (Standard
   let pre = parse_combatant_json(j, "test", stat_system=@model.Standard)
   let post = effective_combatant(pre, true)
   match post.actual_stats {
-    Some(arr) => {
+    Some(arr) =>
       // IV 31 デフォルト + 0.9 nature の post-mega Atk = 111。
       @debug.assert_eq(arr[1], 111)
-    }
     None => fail("post-mega actual_stats must be recomputed")
   }
 }

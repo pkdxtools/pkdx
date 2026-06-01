@@ -12,9 +12,9 @@
 ///|
 fn bc_pokemon(
   name : String,
-  type1~ : String = "ノーマル",
-  spe~ : Int = 100,
-  hp~ : Int = 200,
+  type1? : String = "ノーマル",
+  spe? : Int = 100,
+  hp? : Int = 200,
 ) -> @model.Pokemon {
   {
     global_no: "0000",
@@ -40,11 +40,11 @@ fn bc_pokemon(
 ///|
 fn bc_move(
   name : String,
-  power~ : Int = 25,
-  accuracy~ : Int = 100,
-  status_effect~ : (@model.StatusKind, Int)? = None,
-  type_~ : String = "ノーマル",
-  category~ : @model.MoveCategory = @model.Physical,
+  power? : Int = 25,
+  accuracy? : Int = 100,
+  status_effect? : (@model.StatusKind, Int)? = None,
+  type_? : String = "ノーマル",
+  category? : @model.MoveCategory = @model.Physical,
 ) -> @model.Move {
   {
     name,
@@ -71,8 +71,8 @@ fn bc_move(
 fn bc_combatant(
   pokemon : @model.Pokemon,
   moves : Array[@model.Move],
-  ability~ : String = "",
-  item~ : String = "",
+  ability? : String = "",
+  item? : String = "",
 ) -> Combatant {
   {
     pokemon,
@@ -93,7 +93,12 @@ fn bc_combatant(
 test "Phase 3-C-1: Triple Axel 1v1 turn=4 — cached_states ≤ 800" {
   // multi-hit variants (3 outcomes) × 2 sides × 4 turns。memoize の状態空間
   // が指数的に膨らんでいないことを確認。baseline 実測: 478 (2026-05 時点)。
-  let mv = bc_move("トリプルアクセル", power=20, accuracy=90, type_="こおり")
+  let mv = bc_move(
+    "トリプルアクセル",
+    power=20,
+    accuracy=90,
+    type_="こおり",
+  )
   let cmb = bc_combatant(bc_pokemon("axel", spe=100, hp=300), [mv])
   let (_v, stats, _cache) = switching_game_winrate_stats([cmb], [cmb], 4)
   assert_true(stats.cached_states <= 800)
@@ -132,7 +137,9 @@ test "Phase 3-C-3: PopulationBomb + ほのおのからだ + paralyze secondary +
     ability="ほのおのからだ",
   )
   let (_v, stats, _cache) = switching_game_winrate_stats(
-    [attacker], [defender], 4,
+    [attacker],
+    [defender],
+    4,
   )
   // baseline 実測: 564 (2026-05 時点)。
   assert_true(stats.cached_states <= 1000)

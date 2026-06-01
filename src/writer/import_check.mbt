@@ -118,10 +118,7 @@ pub(all) struct TeamMemberTuple {
 
 ///|
 /// Pokemon タプル差分を検出。一致なら空配列、差分あればフィールド名列挙
-fn diff_pokemon_tuple(
-  a : PokemonTuple,
-  b : PokemonTuple,
-) -> Array[String] {
+fn diff_pokemon_tuple(a : PokemonTuple, b : PokemonTuple) -> Array[String] {
   let d : Array[String] = []
   if a.species != b.species {
     d.push("species")
@@ -214,13 +211,12 @@ pub fn check_team_import(
   cache : Json,
   existing : Array[(String, Json)],
 ) -> ImportCheckResult {
-  check_import_generic(
-    cache,
-    existing,
-    extract_team_tuple,
-    diff_team_tuple,
-    fn(_, _) { true },
-  )
+  check_import_generic(cache, existing, extract_team_tuple, diff_team_tuple, fn(
+    _,
+    _,
+  ) {
+    true
+  })
 }
 
 ///|

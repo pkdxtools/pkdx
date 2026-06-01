@@ -56,7 +56,7 @@ pub fn map_pokemon_entries(
       Some(String(s)) => s == "1"
       _ => false
     }
-    if !(is_valid) {
+    if !is_valid {
       continue
     }
     let ctx = "personal[" + i.to_string() + "]"
@@ -197,7 +197,7 @@ fn obj_int_field(
 ) -> Result[Int, String] {
   match obj.get(key) {
     Some(String(s)) =>
-      try Ok(@string.parse_int(s)) catch {
+      Ok(@string.parse_int(s)) catch {
         _ => Err(ctx + ": field '" + key + "' is not an integer string: " + s)
       }
     Some(_) => Err(ctx + ": field '" + key + "' has non-string value")

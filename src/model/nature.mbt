@@ -26,7 +26,12 @@ pub fn all_natures() -> Array[Nature] {
     { name_ja: "きまぐれ", name_en: "Quirky", up: None, down: None },
     { name_ja: "まじめ", name_en: "Serious", up: None, down: None },
     // Atk+ (4)
-    { name_ja: "さみしがり", name_en: "Lonely", up: Some(Atk), down: Some(Def) },
+    {
+      name_ja: "さみしがり",
+      name_en: "Lonely",
+      up: Some(Atk),
+      down: Some(Def),
+    },
     {
       name_ja: "いじっぱり",
       name_en: "Adamant",
@@ -39,7 +44,12 @@ pub fn all_natures() -> Array[Nature] {
       up: Some(Atk),
       down: Some(SpD),
     },
-    { name_ja: "ゆうかん", name_en: "Brave", up: Some(Atk), down: Some(Spe) },
+    {
+      name_ja: "ゆうかん",
+      name_en: "Brave",
+      up: Some(Atk),
+      down: Some(Spe),
+    },
     // Def+ (4)
     { name_ja: "ずぶとい", name_en: "Bold", up: Some(Def), down: Some(Atk) },
     {
@@ -48,13 +58,13 @@ pub fn all_natures() -> Array[Nature] {
       up: Some(Def),
       down: Some(SpA),
     },
-    { name_ja: "のうてんき", name_en: "Lax", up: Some(Def), down: Some(SpD) },
     {
-      name_ja: "のんき",
-      name_en: "Relaxed",
+      name_ja: "のうてんき",
+      name_en: "Lax",
       up: Some(Def),
-      down: Some(Spe),
+      down: Some(SpD),
     },
+    { name_ja: "のんき", name_en: "Relaxed", up: Some(Def), down: Some(Spe) },
     // SpA+ (4)
     {
       name_ja: "ひかえめ",
@@ -63,8 +73,18 @@ pub fn all_natures() -> Array[Nature] {
       down: Some(Atk),
     },
     { name_ja: "おっとり", name_en: "Mild", up: Some(SpA), down: Some(Def) },
-    { name_ja: "うっかりや", name_en: "Rash", up: Some(SpA), down: Some(SpD) },
-    { name_ja: "れいせい", name_en: "Quiet", up: Some(SpA), down: Some(Spe) },
+    {
+      name_ja: "うっかりや",
+      name_en: "Rash",
+      up: Some(SpA),
+      down: Some(SpD),
+    },
+    {
+      name_ja: "れいせい",
+      name_en: "Quiet",
+      up: Some(SpA),
+      down: Some(Spe),
+    },
     // SpD+ (4)
     { name_ja: "おだやか", name_en: "Calm", up: Some(SpD), down: Some(Atk) },
     {
@@ -79,7 +99,12 @@ pub fn all_natures() -> Array[Nature] {
       up: Some(SpD),
       down: Some(SpA),
     },
-    { name_ja: "なまいき", name_en: "Sassy", up: Some(SpD), down: Some(Spe) },
+    {
+      name_ja: "なまいき",
+      name_en: "Sassy",
+      up: Some(SpD),
+      down: Some(Spe),
+    },
     // Spe+ (4)
     {
       name_ja: "おくびょう",
@@ -87,9 +112,19 @@ pub fn all_natures() -> Array[Nature] {
       up: Some(Spe),
       down: Some(Atk),
     },
-    { name_ja: "せっかち", name_en: "Hasty", up: Some(Spe), down: Some(Def) },
+    {
+      name_ja: "せっかち",
+      name_en: "Hasty",
+      up: Some(Spe),
+      down: Some(Def),
+    },
     { name_ja: "ようき", name_en: "Jolly", up: Some(Spe), down: Some(SpA) },
-    { name_ja: "むじゃき", name_en: "Naive", up: Some(Spe), down: Some(SpD) },
+    {
+      name_ja: "むじゃき",
+      name_en: "Naive",
+      up: Some(Spe),
+      down: Some(SpD),
+    },
   ]
 }
 

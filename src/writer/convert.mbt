@@ -198,6 +198,8 @@ pub fn migrate_meta_v011(input : Json) -> Result[Json, String] {
     Pokemon => migrate_pokemon_meta_v011(input)
     Team => migrate_team_meta_v011(input)
     Unknown =>
-      Err("migrate_meta_v011: unrecognized meta JSON (missing pokemon/build or members)")
+      Err(
+        "migrate_meta_v011: unrecognized meta JSON (missing pokemon/build or members)",
+      )
   }
 }

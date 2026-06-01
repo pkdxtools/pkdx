@@ -1,3 +1,4 @@
+///|
 fn resolve_nature(
   nature_name : String,
   nature_up : String,
@@ -7,9 +8,8 @@ fn resolve_nature(
   if nature_name.length() > 0 {
     match @model.nature_from_ja(nature_name) {
       Some(n) => return n
-      None => {
+      None =>
         println("Warning: Unknown nature '" + nature_name + "', using neutral")
-      }
     }
   }
   // Priority 2: up/down stat specification
@@ -74,7 +74,13 @@ fn run_stat_calc(
             let stats = @damage.calc_all_stats_champions(pokemon, sps, nature)
             println(
               @cli.format_stat_calc(
-                pokemon, stats, nature, sps, sps, format, is_champions=true,
+                pokemon,
+                stats,
+                nature,
+                sps,
+                sps,
+                format,
+                is_champions=true,
               ),
             )
           }
@@ -125,7 +131,11 @@ fn run_stat_reverse(
               )
               println(
                 @cli.format_stat_reverse_pokemon(
-                  pokemon, actual_stats, results, format, is_champions=true,
+                  pokemon,
+                  actual_stats,
+                  results,
+                  format,
+                  is_champions=true,
                 ),
               )
             }
@@ -164,7 +174,14 @@ fn run_stat_reverse(
         )
         println(
           @cli.format_stat_reverse_single(
-            actual, base, 0, ev, is_hp, nature_mod, format, is_champions=true,
+            actual,
+            base,
+            0,
+            ev,
+            is_hp,
+            nature_mod,
+            format,
+            is_champions=true,
           ),
         )
       }
@@ -264,7 +281,13 @@ fn run_hbd(
             }
             println(
               @cli.format_hbd(
-                pokemon, nature, snap, weights, result, format, is_champions=true,
+                pokemon,
+                nature,
+                snap,
+                weights,
+                result,
+                format,
+                is_champions=true,
               ),
             )
           }

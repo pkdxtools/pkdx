@@ -6,8 +6,7 @@
 test "switching_game_winrate: L2 disk cache survives across DamageCache instances" {
   let path = "pkdx_sw_l2_test.sqlite"
   let _ = @db.unlink_file(path)
-  guard
-    @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
     fail("open_or_init failed")
   }
 
@@ -28,7 +27,10 @@ test "switching_game_winrate: L2 disk cache survives across DamageCache instance
 
   // First run: L1 + L2 both empty → every miss populates both layers.
   let (_v1, _, dmg1) = switching_game_winrate_stats(
-    team_a, team_b, 3, disk=Some(disk),
+    team_a,
+    team_b,
+    3,
+    disk=Some(disk),
   )
   assert_true(dmg1.disk_misses > 0)
   @debug.assert_eq(dmg1.disk_hits, 0)
@@ -36,11 +38,13 @@ test "switching_game_winrate: L2 disk cache survives across DamageCache instance
   // Second run: fresh L1 but L2 persists in the SQLite file → disk
   // lookups hit for the same matchups.
   let (_v2, _, dmg2) = switching_game_winrate_stats(
-    team_a, team_b, 3, disk=Some(disk),
+    team_a,
+    team_b,
+    3,
+    disk=Some(disk),
   )
   assert_true(dmg2.disk_hits > 0)
 
   @damage_cache.close(disk)
   let _ = @db.unlink_file(path)
-
 }

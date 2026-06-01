@@ -21,7 +21,11 @@ test "query_move: じこさいせい has FixedFraction(1, 2) healing (m014 smoke
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "じこさいせい", @model.Other("scarlet_violet"))
+  let result = query_move(
+    db,
+    "じこさいせい",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
     Ok(mv) => {
@@ -30,8 +34,14 @@ test "query_move: じこさいせい has FixedFraction(1, 2) healing (m014 smoke
           @debug.debug_inspect(n, content="1")
           @debug.debug_inspect(d, content="2")
         }
-        Some(_) => fail("じこさいせい healing expected FixedFraction(1,2), got different variant")
-        None => fail("じこさいせい healing should be Some(FixedFraction(1,2)) but was None")
+        Some(_) =>
+          fail(
+            "じこさいせい healing expected FixedFraction(1,2), got different variant",
+          )
+        None =>
+          fail(
+            "じこさいせい healing should be Some(FixedFraction(1,2)) but was None",
+          )
       }
       @debug.debug_inspect(mv.weather_set, content="None")
     }
@@ -83,8 +93,12 @@ test "query_move: にほんばれ has weather_set=Sun (m014 smoke)" {
     Ok(mv) => {
       match mv.weather_set {
         Some(Sun) => ()
-        Some(_) => fail("にほんばれ weather_set expected Sun, got different variant")
-        None => fail("にほんばれ weather_set should be Some(Sun) but was None")
+        Some(_) =>
+          fail(
+            "にほんばれ weather_set expected Sun, got different variant",
+          )
+        None =>
+          fail("にほんばれ weather_set should be Some(Sun) but was None")
       }
       @debug.debug_inspect(mv.healing, content="None")
     }
@@ -154,10 +168,7 @@ test "query_move: gracefully handles legacy DB without heal columns (Issue #3)" 
     #|INSERT INTO local_waza (waza, version, type, category, power, accuracy, pp)
     #|VALUES ('tackle', 'Scarlet_Violet', 'ノーマル', '物理', 40, 100, 35)
   let create_sqls = [
-    ddl_move_meta,
-    ddl_local_waza,
-    ddl_local_waza_language,
-    ins_local_waza_language,
+    ddl_move_meta, ddl_local_waza, ddl_local_waza_language, ins_local_waza_language,
     ins_local_waza,
   ]
   for sql in create_sqls {
@@ -251,10 +262,7 @@ test "query_move: gracefully handles partial m014 schema (heal_kind only)" {
     #|INSERT INTO local_waza (waza, version, type, category, power, accuracy, pp)
     #|VALUES ('tackle', 'Scarlet_Violet', 'ノーマル', '物理', 40, 100, 35)
   let create_sqls = [
-    ddl_move_meta,
-    ddl_local_waza,
-    ddl_local_waza_language,
-    ins_local_waza_language,
+    ddl_move_meta, ddl_local_waza, ddl_local_waza_language, ins_local_waza_language,
     ins_local_waza,
   ]
   for sql in create_sqls {
@@ -295,10 +303,14 @@ test "query_move: つきのひかり has WeatherDependent (default/sunny/harsh)"
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "つきのひかり", @model.Other("scarlet_violet"))
+  let result = query_move(
+    db,
+    "つきのひかり",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
-    Ok(mv) => {
+    Ok(mv) =>
       match mv.healing {
         Some(WeatherDependent(dn, dd, sn, sd, hn, hd)) => {
           @debug.debug_inspect(dn, content="1")
@@ -312,9 +324,11 @@ test "query_move: つきのひかり has WeatherDependent (default/sunny/harsh)"
           fail(
             "つきのひかり healing expected WeatherDependent, got different variant",
           )
-        None => fail("つきのひかり healing should be Some(WeatherDependent(...))")
+        None =>
+          fail(
+            "つきのひかり healing should be Some(WeatherDependent(...))",
+          )
       }
-    }
     Err(e) => fail("query_move つきのひかり failed: " + e)
   }
 }

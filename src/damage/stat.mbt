@@ -381,11 +381,20 @@ pub fn calc_all_stats_with_model(
   nature : @model.Nature,
 ) -> FixedArray[Int] {
   let bases : FixedArray[Int] = [
-    pokemon.hp, pokemon.atk, pokemon.def_, pokemon.spa, pokemon.spd,
+    pokemon.hp,
+    pokemon.atk,
+    pokemon.def_,
+    pokemon.spa,
+    pokemon.spd,
     pokemon.spe,
   ]
   let stat_indices : FixedArray[@model.StatIndex] = [
-    HP, Atk, Def, SpA, SpD, Spe,
+    HP,
+    Atk,
+    Def,
+    SpA,
+    SpD,
+    Spe,
   ]
   let result : FixedArray[Int] = FixedArray::make(6, 0)
   for i = 0; i < 6; i = i + 1 {
@@ -508,11 +517,20 @@ pub fn reverse_spread_with_model(
   actual_stats : FixedArray[Int],
 ) -> Array[(@model.Nature, FixedArray[Int])] {
   let bases : FixedArray[Int] = [
-    pokemon.hp, pokemon.atk, pokemon.def_, pokemon.spa, pokemon.spd,
+    pokemon.hp,
+    pokemon.atk,
+    pokemon.def_,
+    pokemon.spa,
+    pokemon.spd,
     pokemon.spe,
   ]
   let stat_indices : FixedArray[@model.StatIndex] = [
-    HP, Atk, Def, SpA, SpD, Spe,
+    HP,
+    Atk,
+    Def,
+    SpA,
+    SpD,
+    Spe,
   ]
   let natures = @model.all_natures()
   let results : Array[(@model.Nature, FixedArray[Int])] = []
@@ -525,7 +543,7 @@ pub fn reverse_spread_with_model(
     let points : FixedArray[Int] = FixedArray::make(6, -1)
     let mut valid = true
     for si = 0; si < 6; si = si + 1 {
-      if !(valid) {
+      if !valid {
         break
       }
       let actual = actual_stats[si]

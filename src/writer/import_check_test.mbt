@@ -37,7 +37,9 @@ fn parse_move(s : String) -> Json raise {
 ///|
 test "idempotency: identical_cache_returns_skip" {
   let cache = mammu_cache()
-  let existing = [("box/pokemons/マンムー/スカーフ型.meta.json", cache)]
+  let existing = [
+    ("box/pokemons/マンムー/スカーフ型.meta.json", cache),
+  ]
   let result = check_pokemon_import(cache, existing)
   @debug.debug_inspect(
     result,
@@ -53,20 +55,26 @@ test "idempotency: differs_only_in_item_returns_diff" {
   let b = @json.parse(a.stringify())
   // item を変更 (こだわりスカーフ → いのちのたま)
   guard b is Object(root) else { fail("unexpected json shape") }
-  guard root.get("build") is Some(Object(build)) else {
-    fail("missing build")
-  }
+  guard root.get("build") is Some(Object(build)) else { fail("missing build") }
   build.set("item", "いのちのたま".to_json())
-  let existing = [("box/pokemons/マンムー/いのちのたま型.meta.json", b)]
+  let existing = [
+    ("box/pokemons/マンムー/いのちのたま型.meta.json", b),
+  ]
   let result = check_pokemon_import(a, existing)
   match result {
     Diff(path, fields) => {
-      @debug.debug_inspect(path, content=(
-        #|"box/pokemons/マンムー/いのちのたま型.meta.json"
-      ))
-      @debug.debug_inspect(fields, content=(
-        #|["item"]
-      ))
+      @debug.debug_inspect(
+        path,
+        content=(
+          #|"box/pokemons/マンムー/いのちのたま型.meta.json"
+        ),
+      )
+      @debug.debug_inspect(
+        fields,
+        content=(
+          #|["item"]
+        ),
+      )
     }
     _ => fail("Expected Diff, got \{to_repr(result)}")
   }
@@ -78,9 +86,7 @@ test "idempotency: move_order_difference_is_normalized" {
   let b = @json.parse(a.stringify())
   // 技順を変更: じしんを末尾へ
   guard b is Object(root) else { fail("unexpected json shape") }
-  guard root.get("build") is Some(Object(build)) else {
-    fail("missing build")
-  }
+  guard root.get("build") is Some(Object(build)) else { fail("missing build") }
   let m1 =
     #|{"name":"つららおとし","type":"こおり","category":"物理","power":85,"accuracy":90}
   let m2 =

@@ -17,11 +17,11 @@
 /// パラメータで受け取り、grounded 否定条件 (ふゆう / ひこう / ふうせん) を
 /// テスト側で構築できるようにする。
 fn mk_field_eff_combatant(
-  type1~ : String = "ノーマル",
-  type2~ : String = "",
-  ability~ : String = "",
-  item~ : String = "",
-  moves~ : Array[@model.Move] = [],
+  type1? : String = "ノーマル",
+  type2? : String = "",
+  ability? : String = "",
+  item? : String = "",
+  moves? : Array[@model.Move] = [],
 ) -> Combatant {
   let p : @model.Pokemon = {
     global_no: "0001",
@@ -106,11 +106,7 @@ fn mk_field_eff_state() -> SwitchingGameState {
 /// EOT で HP += max/16 = 6 (50 → 56)。
 test "apply_eot: Grassy field grounded active heals max/16 (50 → 56)" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Grassy,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Grassy, field_turns_left: 5 }
   let team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let new_state = apply_eot(state, team, team)
   // max_hp=100, max/16=6 → 50+6=56
@@ -133,11 +129,7 @@ test "apply_eot: Field=None disables Grassy heal" {
 /// Case G-1-C: Grassy + ふゆう active は grounded=false なので heal なし。
 test "apply_eot: Grassy field ふゆう active skips heal" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Grassy,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Grassy, field_turns_left: 5 }
   let my_team = [
     mk_field_eff_combatant(ability="ふゆう"),
     mk_field_eff_combatant(),
@@ -153,11 +145,7 @@ test "apply_eot: Grassy field ふゆう active skips heal" {
 /// Case G-1-D: Grassy + ひこうタイプ active は grounded=false なので heal なし。
 test "apply_eot: Grassy field ひこう active skips heal" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Grassy,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Grassy, field_turns_left: 5 }
   let my_team = [
     mk_field_eff_combatant(type1="ひこう"),
     mk_field_eff_combatant(),
@@ -172,11 +160,7 @@ test "apply_eot: Grassy field ひこう active skips heal" {
 /// Case G-1-D-extra: type2 のひこうも同様に heal をブロック。
 test "apply_eot: Grassy field type2=ひこう active skips heal" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Grassy,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Grassy, field_turns_left: 5 }
   let my_team = [
     mk_field_eff_combatant(type1="ノーマル", type2="ひこう"),
     mk_field_eff_combatant(),
@@ -191,11 +175,7 @@ test "apply_eot: Grassy field type2=ひこう active skips heal" {
 /// Case G-1-E: Grassy + ふうせん持ち active は grounded=false なので heal なし。
 test "apply_eot: Grassy field ふうせん active skips heal" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Grassy,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Grassy, field_turns_left: 5 }
   let my_team = [
     mk_field_eff_combatant(item="ふうせん"),
     mk_field_eff_combatant(),
@@ -250,11 +230,7 @@ test "apply_eot: Grassy field heal skips fainted slot" {
 /// (+max/16=6) で合計 +12 回復する (50 → 62)。
 test "apply_eot: Grassy heal runs after leftovers (stacked +12)" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Grassy,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Grassy, field_turns_left: 5 }
   let my_team = [
     mk_field_eff_combatant(item="たべのこし"),
     mk_field_eff_combatant(),
@@ -294,11 +270,7 @@ fn mk_status_move(
 /// でんじは (100% paralyze) を撃っても status 付与なし (state は変化なし)。
 test "maybe_apply_status_fanout: Misty field blocks status on grounded defender" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Misty,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Misty, field_turns_left: 5 }
   // target_team[target_slot] は defender 本体。target_is_me=false なので
   // defender は opp 側、opp_active=0 → opp_team[0] が defender。
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
@@ -331,11 +303,7 @@ test "maybe_apply_status_fanout: Field=None lets status fanout proceed" {
 /// 受けず、通常通り paralyze 付与。
 test "maybe_apply_status_fanout: Misty field ふゆう defender takes status" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Misty,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Misty, field_turns_left: 5 }
   let opp_team = [
     mk_field_eff_combatant(ability="ふゆう"),
     mk_field_eff_combatant(),
@@ -354,11 +322,7 @@ test "maybe_apply_status_fanout: Misty field ふゆう defender takes status" {
 /// block さえなければ paralyze が付与される。
 test "maybe_apply_status_fanout: Misty field ひこう defender takes status" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Misty,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Misty, field_turns_left: 5 }
   let opp_team = [
     mk_field_eff_combatant(type1="ノーマル", type2="ひこう"),
     mk_field_eff_combatant(),
@@ -375,11 +339,7 @@ test "maybe_apply_status_fanout: Misty field ひこう defender takes status" {
 /// paralyze 付与。
 test "maybe_apply_status_fanout: Misty field ふうせん defender takes status" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Misty,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Misty, field_turns_left: 5 }
   let opp_team = [
     mk_field_eff_combatant(item="ふうせん"),
     mk_field_eff_combatant(),
@@ -396,11 +356,7 @@ test "maybe_apply_status_fanout: Misty field ふうせん defender takes status"
 /// block される (1 leaf, no status)。確率分岐 (1-p, p) で 2 leaf 出さない。
 test "maybe_apply_status_fanout: Misty field blocks 30% burn (no fanout branch)" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Misty,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Misty, field_turns_left: 5 }
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let mv = mk_status_move("ひのこ", "ほのお", @model.BurnKind, 30)
   let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
@@ -416,11 +372,7 @@ test "maybe_apply_status_fanout: Misty field blocks 30% burn (no fanout branch)"
 /// (まひ/やけど/どく/ねむり 全部 block の SSoT pin)。
 test "maybe_apply_status_fanout: Misty field blocks Sleep" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Misty,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Misty, field_turns_left: 5 }
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let mv = mk_status_move("ねむりごな", "くさ", @model.SleepKind, 75)
   let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
@@ -445,11 +397,7 @@ test "maybe_apply_status_fanout: Misty field blocks Sleep" {
 /// 阻止される (1 leaf, no status — 確率分岐も出ない)。
 test "maybe_apply_status_fanout: Electric field blocks Sleep on grounded defender" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Electric,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Electric, field_turns_left: 5 }
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let mv = mk_status_move("ねむりごな", "くさ", @model.SleepKind, 75)
   let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
@@ -464,11 +412,7 @@ test "maybe_apply_status_fanout: Electric field blocks Sleep on grounded defende
 /// も阻止される (Yawn は grounded を眠らせる予告なので Electric 下で fizzle)。
 test "maybe_apply_status_fanout: Electric field blocks Drowsy (Yawn) on grounded defender" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Electric,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Electric, field_turns_left: 5 }
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let mv = mk_status_move("あくび", "ノーマル", @model.DrowsyKind, 100)
   let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
@@ -484,11 +428,7 @@ test "maybe_apply_status_fanout: Electric field blocks Drowsy (Yawn) on grounded
 /// Misty (全状態阻止) との決定的な差分。
 test "maybe_apply_status_fanout: Electric field does NOT block Paralyze on grounded defender" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Electric,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Electric, field_turns_left: 5 }
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let mv = mk_status_move("でんじは", "でんき", @model.ParalyzeKind, 100)
   let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
@@ -503,16 +443,17 @@ test "maybe_apply_status_fanout: Electric field does NOT block Paralyze on groun
 /// Sleep(2) が付与される。
 test "maybe_apply_status_fanout: Electric field does NOT block Sleep on airborne defender" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Electric,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Electric, field_turns_left: 5 }
   let opp_team = [
     mk_field_eff_combatant(type1="ノーマル", type2="ひこう"),
     mk_field_eff_combatant(),
   ]
-  let mv = mk_status_move("ねむらせる", "エスパー", @model.SleepKind, 100)
+  let mv = mk_status_move(
+    "ねむらせる",
+    "エスパー",
+    @model.SleepKind,
+    100,
+  )
   let leaves = maybe_apply_status_fanout(state, false, 0, opp_team, mv)
   @debug.assert_eq(leaves.length(), 1)
   let (_, s) = leaves[0]
@@ -556,7 +497,7 @@ fn mk_recover_move() -> @model.Move {
       @model.Status,
       0,
       healing=Some(@model.FixedFraction(1, 2)),
-    ),
+    )
   }
 }
 
@@ -564,9 +505,7 @@ fn mk_recover_move() -> @model.Move {
 /// outcomes から (total_prob, expected opp_hps[0]) を集約。priority block の
 /// 観測は「opp_hps[0] の期待値 ≥ 99.9」と「全 leaf で opp_status[0] == None」を
 /// 同時に pin する形にする。
-fn agg_outs(
-  outs : Array[(Double, SwitchingGameState)],
-) -> (Double, Double) {
+fn agg_outs(outs : Array[(Double, SwitchingGameState)]) -> (Double, Double) {
   let mut tp = 0.0
   let mut th = 0.0
   for b in outs {
@@ -591,11 +530,7 @@ fn agg_outs(
 /// 入りうるが、本 test は Psychic field なので Grassy heal は発火しない。
 test "transition_with_cache: Psychic field blocks priority>0 attack (no damage / no status)" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Psychic,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
   let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
   let recover_mv = mk_recover_move()
   let my_team = [
@@ -607,7 +542,12 @@ test "transition_with_cache: Psychic field blocks priority>0 attack (no damage /
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   // 全 leaf で opp_status[0] == None (priority block により status 付与なし)。
   for b in outs {
@@ -636,7 +576,12 @@ test "transition_with_cache: Field=None lets priority>0 attack proceed" {
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let (tp, th) = agg_outs(outs)
   assert_true(tp > 0.999 && tp < 1.001)
@@ -649,11 +594,7 @@ test "transition_with_cache: Field=None lets priority>0 attack proceed" {
 /// 不発、しんそく は通常 damage を与える。
 test "transition_with_cache: Psychic field ふゆう defender takes priority>0 attack" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Psychic,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
   let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
   let recover_mv = mk_recover_move()
   let my_team = [
@@ -665,7 +606,12 @@ test "transition_with_cache: Psychic field ふゆう defender takes priority>0 a
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let (tp, th) = agg_outs(outs)
   assert_true(tp > 0.999 && tp < 1.001)
@@ -677,11 +623,7 @@ test "transition_with_cache: Psychic field ふゆう defender takes priority>0 a
 /// は block されず通常 damage。
 test "transition_with_cache: Psychic field priority=0 move proceeds normally" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Psychic,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
   let normal_mv = mk_priority_move("たいあたり", "ノーマル", 0, 40)
   let recover_mv = mk_recover_move()
   let my_team = [
@@ -693,7 +635,12 @@ test "transition_with_cache: Psychic field priority=0 move proceeds normally" {
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let (tp, th) = agg_outs(outs)
   assert_true(tp > 0.999 && tp < 1.001)
@@ -706,11 +653,7 @@ test "transition_with_cache: Psychic field priority=0 move proceeds normally" {
 /// 不発。ノーマル → ひこう は immune ではないので damage 入る。
 test "transition_with_cache: Psychic field ひこう defender takes priority>0 attack" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Psychic,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
   let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
   let recover_mv = mk_recover_move()
   let my_team = [
@@ -718,11 +661,18 @@ test "transition_with_cache: Psychic field ひこう defender takes priority>0 a
     mk_field_eff_combatant(),
   ]
   let opp_team = [
-    mk_field_eff_combatant(type1="ノーマル", type2="ひこう", moves=[recover_mv]),
+    mk_field_eff_combatant(type1="ノーマル", type2="ひこう", moves=[
+      recover_mv,
+    ]),
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let (tp, th) = agg_outs(outs)
   assert_true(tp > 0.999 && tp < 1.001)
@@ -734,11 +684,7 @@ test "transition_with_cache: Psychic field ひこう defender takes priority>0 a
 /// 不発、damage 入る。
 test "transition_with_cache: Psychic field ふうせん defender takes priority>0 attack" {
   let state0 = mk_field_eff_state()
-  let state = {
-    ..state0,
-    field: @model.Field::Psychic,
-    field_turns_left: 5,
-  }
+  let state = { ..state0, field: @model.Field::Psychic, field_turns_left: 5 }
   let priority_mv = mk_priority_move("しんそく", "ノーマル", 2, 80)
   let recover_mv = mk_recover_move()
   let my_team = [
@@ -750,7 +696,12 @@ test "transition_with_cache: Psychic field ふうせん defender takes priority>
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let (tp, th) = agg_outs(outs)
   assert_true(tp > 0.999 && tp < 1.001)
@@ -772,7 +723,12 @@ test "transition_with_cache: Psychic blocks opp priority>0 vs my grounded switch
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    Switch(1),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let mut tp = 0.0
   for b in outs {
@@ -796,7 +752,12 @@ test "transition_with_cache: Field=None lets opp priority>0 hit my switch-in" {
     mk_field_eff_combatant(),
   ]
   let outs = transition_with_cache(
-    state, Switch(1), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    Switch(1),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let mut tp = 0.0
   let mut th = 0.0
@@ -823,7 +784,12 @@ test "transition_with_cache: Psychic blocks my priority>0 vs opp grounded switch
   ]
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let outs = transition_with_cache(
-    state, UseMove(0), Switch(1), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    Switch(1),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let mut tp = 0.0
   for b in outs {
@@ -846,7 +812,12 @@ test "transition_with_cache: Field=None lets my priority>0 hit opp switch-in" {
   ]
   let opp_team = [mk_field_eff_combatant(), mk_field_eff_combatant()]
   let outs = transition_with_cache(
-    state, UseMove(0), Switch(1), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    Switch(1),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let mut tp = 0.0
   let mut th = 0.0
@@ -882,7 +853,12 @@ test "attempt_turn_with_cache: Psychic blocks my priority>0 vs sleeping grounded
     mk_field_eff_combatant(),
   ]
   let outs = attempt_turn_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let mut tp = 0.0
   for b in outs {
@@ -909,7 +885,12 @@ test "attempt_turn_with_cache: Field=None lets my priority>0 hit sleeping opp (p
     mk_field_eff_combatant(),
   ]
   let outs = attempt_turn_with_cache(
-    state, UseMove(0), UseMove(0), my_team, opp_team, new_damage_cache(),
+    state,
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   let mut tp = 0.0
   let mut th = 0.0

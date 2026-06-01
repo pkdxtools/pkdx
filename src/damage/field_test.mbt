@@ -184,16 +184,12 @@ test "field F-1: Electric + non-electric move → 0" {
 
 ///|
 test "field F-1: is_grounded — plain normal type → true" {
-  assert_true(
-    is_grounded(type1="ノーマル", type2="", ability="", item=""),
-  )
+  assert_true(is_grounded(type1="ノーマル", type2="", ability="", item=""))
 }
 
 ///|
 test "field F-1: is_grounded — Flying type1 → false" {
-  assert_false(
-    is_grounded(type1="ひこう", type2="", ability="", item=""),
-  )
+  assert_false(is_grounded(type1="ひこう", type2="", ability="", item=""))
 }
 
 ///|

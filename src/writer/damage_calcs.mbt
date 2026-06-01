@@ -51,7 +51,11 @@ fn parse_guaranteed_hits(ko_text : String) -> Int? {
       break
     }
   }
-  if seen { Some(n) } else { None }
+  if seen {
+    Some(n)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -63,7 +67,11 @@ fn nature_to_jp_opt(n : @model.Nature?) -> String {
 }
 
 ///|
-fn set_optional_string(m : Map[String, Json], key : String, value : String) -> Unit {
+fn set_optional_string(
+  m : Map[String, Json],
+  key : String,
+  value : String,
+) -> Unit {
   if value.length() > 0 {
     m[key] = value.to_json()
   }
@@ -165,10 +173,10 @@ pub fn validate_attach_team_path(path : String) -> Result[Unit, String] {
   }
   let under_box = path.has_prefix("box/teams/") ||
     path.has_prefix("./box/teams/")
-  if !(under_box) {
+  if !under_box {
     return Err("path must be under box/teams/")
   }
-  if !(path.has_suffix(".meta.json")) {
+  if !path.has_suffix(".meta.json") {
     return Err("path must end in .meta.json")
   }
   Ok(())

@@ -7,7 +7,7 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
     Some(s) => s
     None => return Err(path + " not found. Run 'git submodule update --init'.")
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let pokedex : Map[String, Json] = match json {
@@ -27,7 +27,8 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
   for mega in megas {
     let id = str_field(mega, "id")
     let mega_name = str_field(mega, "mega_evolution")
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "UPDATE local_pokedex SET mega_evolution = ? WHERE id = ? AND version = ?",
         [@db.BindText(mega_name), @db.BindText(id), @db.BindText(version)],
@@ -35,7 +36,8 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
       Err(e) => return Err(e)
       Ok(_) => ()
     }
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "UPDATE local_pokedex_status SET mega_evolution = ?, hp = ?, attack = ?, defense = ?, special_attack = ?, special_defense = ?, speed = ? WHERE id = ? AND version = ?",
         [
@@ -54,7 +56,8 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
       Ok(_) => ()
     }
     let type2 = bind_text_opt(str_opt(mega, "type2"))
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "UPDATE local_pokedex_type SET mega_evolution = ?, type1 = ?, type2 = ? WHERE id = ? AND version = ?",
         [
@@ -70,7 +73,8 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
     }
     let ability2 = bind_text_opt(str_opt(mega, "ability2"))
     let dream = bind_text_opt(str_opt(mega, "dream_ability"))
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "UPDATE local_pokedex_ability SET mega_evolution = ?, ability1 = ?, ability2 = ?, dream_ability = ? WHERE id = ? AND version = ?",
         [
@@ -91,7 +95,8 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
     }
     match names.get("jpn") {
       Some(String(n)) =>
-        match @db.exec_binds(
+        match
+          @db.exec_binds(
             db,
             "UPDATE pokedex_name SET mega_evolution = ?, name = ? WHERE id = ? AND language = ?",
             [
@@ -108,7 +113,8 @@ pub fn run_001(db : @db.Db, repo_root : String) -> Result[String, String] {
     }
     match names.get("eng") {
       Some(String(n)) =>
-        match @db.exec_binds(
+        match
+          @db.exec_binds(
             db,
             "UPDATE pokedex_name SET mega_evolution = ?, name = ? WHERE id = ? AND language = ?",
             [

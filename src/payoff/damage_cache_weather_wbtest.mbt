@@ -20,13 +20,19 @@
 
 ///|
 fn dcw_atk() -> Combatant {
-  let p = mk_pokemon("リザードン", "ほのお", "ひこう", 100, 100, 100, 200, 100, 100)
-  mk_combatant(p, [mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)])
+  let p = mk_pokemon(
+    "リザードン", "ほのお", "ひこう", 100, 100, 100, 200, 100, 100,
+  )
+  mk_combatant(p, [
+    mk_move("かえんほうしゃ", "ほのお", @model.Special, 90),
+  ])
 }
 
 ///|
 fn dcw_dfn() -> Combatant {
-  let p = mk_pokemon("ガブリアス", "ドラゴン", "じめん", 200, 100, 100, 100, 100, 100)
+  let p = mk_pokemon(
+    "ガブリアス", "ドラゴン", "じめん", 200, 100, 100, 100, 100, 100,
+  )
   mk_combatant(p, [mk_move("じしん", "じめん", @model.Physical, 100)])
 }
 
@@ -41,7 +47,15 @@ test "mean_damage_cached: weather~ argument propagates Sun multiplier to fire mo
   // Baseline: Weather::None — engine sees flat 1.0× weather modifier.
   let cache_none = new_damage_cache()
   let d_none = mean_damage_cached(
-    cache_none, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache_none,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::None,
   )
   assert_true(d_none > 0)
@@ -49,7 +63,15 @@ test "mean_damage_cached: weather~ argument propagates Sun multiplier to fire mo
   // Sun: fire moves are boosted by ×1.5 in @damage.calc_damage.
   let cache_sun = new_damage_cache()
   let d_sun = mean_damage_cached(
-    cache_sun, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache_sun,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::Sun,
   )
   // Wiring contract: Sun must strictly exceed None for a fire move,
@@ -75,12 +97,28 @@ test "damage_variants_cached: weather~ argument propagates Sun multiplier (B-2)"
   let zero = [0, 0, 0, 0, 0]
   let cache_none = new_damage_cache()
   let vs_none = damage_variants_cached(
-    cache_none, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache_none,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::None,
   )
   let cache_sun = new_damage_cache()
   let vs_sun = damage_variants_cached(
-    cache_sun, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache_sun,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::Sun,
   )
   // Single-variant fire move — compare the means directly.
@@ -109,12 +147,28 @@ test "mean_damage_cached: weather differentiates L1 cache key (B-3)" {
   let zero = [0, 0, 0, 0, 0]
   let cache = new_damage_cache()
   let d_none = mean_damage_cached(
-    cache, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::None,
   )
   let misses_after_first = cache.misses
   let d_sun = mean_damage_cached(
-    cache, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::Sun,
   )
   // Different weather → distinct cached entries, so Sun lookup must be a
@@ -128,7 +182,15 @@ test "mean_damage_cached: weather differentiates L1 cache key (B-3)" {
   // proves the encode-then-lookup path is consistent within one weather.
   let hits_before = cache.hits
   let d_sun_again = mean_damage_cached(
-    cache, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     weather=@model.Weather::Sun,
   )
   @debug.assert_eq(d_sun_again, d_sun)
@@ -151,26 +213,46 @@ test "mean_damage_cached: field~ argument propagates Electric boost to でんき
   // vs Garchomp-like ground/dragon defender (grounded for damage purposes:
   // 4x electric immunity is via type chart, but we use a non-immune
   // defender so the boost actually shows).
-  let atk_p = mk_pokemon("Test-E", "でんき", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("10まんボルト", "でんき", @model.Special, 90)],
+  let atk_p = mk_pokemon(
+    "Test-E", "でんき", "", 100, 100, 100, 200, 100, 100,
   )
+  let atk = mk_combatant(atk_p, [
+    mk_move("10まんボルト", "でんき", @model.Special, 90),
+  ])
   let dfn_p = mk_pokemon("Test-W", "みず", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let zero = [0, 0, 0, 0, 0]
   //
   let cache_none = new_damage_cache()
   let d_none = mean_damage_cached(
-    cache_none, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache_none,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     field=@model.Field::None,
   )
   assert_true(d_none > 0)
   //
   let cache_electric = new_damage_cache()
   let d_electric = mean_damage_cached(
-    cache_electric, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache_electric,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     field=@model.Field::Electric,
   )
   // Wiring contract: Electric must strictly exceed None for a grounded
@@ -196,23 +278,43 @@ test "mean_damage_cached: field~ argument propagates Electric boost to でんき
 /// against the same cache. Expectation post-F-4 is exactly two misses (one
 /// per field) plus zero hits.
 test "mean_damage_cached: field differentiates L1 cache key (F-4)" {
-  let atk_p = mk_pokemon("Test-E", "でんき", "", 100, 100, 100, 200, 100, 100)
-  let atk = mk_combatant(
-    atk_p, [mk_move("10まんボルト", "でんき", @model.Special, 90)],
+  let atk_p = mk_pokemon(
+    "Test-E", "でんき", "", 100, 100, 100, 200, 100, 100,
   )
+  let atk = mk_combatant(atk_p, [
+    mk_move("10まんボルト", "でんき", @model.Special, 90),
+  ])
   let dfn_p = mk_pokemon("Test-W", "みず", "", 200, 100, 100, 100, 100, 100)
-  let dfn = mk_combatant(dfn_p, [mk_move("たいあたり", "ノーマル", @model.Physical, 40)])
+  let dfn = mk_combatant(dfn_p, [
+    mk_move("たいあたり", "ノーマル", @model.Physical, 40),
+  ])
   let my_team = [atk]
   let opp_team = [dfn]
   let zero = [0, 0, 0, 0, 0]
   let cache = new_damage_cache()
   let d_none = mean_damage_cached(
-    cache, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     field=@model.Field::None,
   )
   let misses_after_first = cache.misses
   let d_electric = mean_damage_cached(
-    cache, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     field=@model.Field::Electric,
   )
   // Different field → distinct cached entries, so Electric lookup must be
@@ -224,7 +326,15 @@ test "mean_damage_cached: field differentiates L1 cache key (F-4)" {
   // Repeating the same field should now be a hit, not another miss.
   let hits_before = cache.hits
   let d_electric_again = mean_damage_cached(
-    cache, true, 0, zero, 0, zero, 0, my_team, opp_team,
+    cache,
+    true,
+    0,
+    zero,
+    0,
+    zero,
+    0,
+    my_team,
+    opp_team,
     field=@model.Field::Electric,
   )
   @debug.assert_eq(d_electric_again, d_electric)

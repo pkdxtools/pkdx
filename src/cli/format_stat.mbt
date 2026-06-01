@@ -24,11 +24,7 @@ fn stat_calc_to_json(
   _evs : FixedArray[Int],
   is_champions : Bool,
 ) -> String {
-  let sys = if is_champions {
-    ",\"stat_system\":\"champions\""
-  } else {
-    ""
-  }
+  let sys = if is_champions { ",\"stat_system\":\"champions\"" } else { "" }
   "{\"name\":\"" +
   pokemon.name_ja +
   "\",\"nature\":\"" +
@@ -68,7 +64,11 @@ fn stat_calc_to_table(
   s = s + "─".to_string().repeat(50) + "\n"
   let labels = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"]
   let bases = [
-    pokemon.hp, pokemon.atk, pokemon.def_, pokemon.spa, pokemon.spd,
+    pokemon.hp,
+    pokemon.atk,
+    pokemon.def_,
+    pokemon.spa,
+    pokemon.spd,
     pokemon.spe,
   ]
   // Header
@@ -204,8 +204,7 @@ pub fn format_stat_reverse_pokemon(
     return "No valid " + label + " combination found."
   }
   match fmt {
-    Json =>
-      stat_reverse_pokemon_to_json(pokemon, results, is_champions)
+    Json => stat_reverse_pokemon_to_json(pokemon, results, is_champions)
     Table =>
       stat_reverse_pokemon_to_table(
         pokemon, actual_stats, results, is_champions,
@@ -283,12 +282,7 @@ fn stat_reverse_pokemon_to_table(
     for j = 0; j < 6; j = j + 1 {
       total = total + vals[j]
     }
-    s = s +
-      "候補" +
-      (i + 1).to_string() +
-      ": " +
-      nature_label(nature) +
-      "\n"
+    s = s + "候補" + (i + 1).to_string() + ": " + nature_label(nature) + "\n"
     s = s +
       "  " +
       label +

@@ -8,10 +8,11 @@ pub fn query_learners(
   db : Db,
   move_name : String,
   version : @model.GameVersion,
-  include_inactive~ : Bool = false,
+  include_inactive? : Bool = false,
 ) -> Result[Array[SearchResult], String] {
   match version {
-    @model.Champions => query_learners_champions(db, move_name, include_inactive)
+    @model.Champions =>
+      query_learners_champions(db, move_name, include_inactive)
     @model.Other(v) => query_learners_legacy(db, move_name, v)
   }
 }
@@ -78,8 +79,8 @@ fn query_learners_legacy(
     #|GROUP BY l.globalNo
     #|ORDER BY bst DESC
   let binds = [
-    waza_ver, move_name, waza_ver, waza_ver, waza_ver, move_name, waza_ver,
-    version, version,
+    waza_ver, move_name, waza_ver, waza_ver, waza_ver, move_name, waza_ver, version,
+    version,
   ]
   collect_learners_rows(db, sql, binds)
 }

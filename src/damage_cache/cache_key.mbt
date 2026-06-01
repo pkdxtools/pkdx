@@ -81,14 +81,10 @@ fn validate_field(name : String, value : String) -> Result[Unit, String] {
     return Ok(())
   }
   if value.unsafe_get(0) == SPACE_CODE {
-    return Err(
-      "field '" + name + "' has leading whitespace: '" + value + "'",
-    )
+    return Err("field '" + name + "' has leading whitespace: '" + value + "'")
   }
   if value.unsafe_get(len - 1) == SPACE_CODE {
-    return Err(
-      "field '" + name + "' has trailing whitespace: '" + value + "'",
-    )
+    return Err("field '" + name + "' has trailing whitespace: '" + value + "'")
   }
   for i = 0; i < len; i = i + 1 {
     if value.unsafe_get(i) == PIPE_CODE {

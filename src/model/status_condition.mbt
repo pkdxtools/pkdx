@@ -85,7 +85,8 @@ pub fn status_condition_from_cli_str(s : String) -> StatusCondition {
     "paralyze" | "paralysis" | "paralysed" | "まひ" => Paralyze
     "burn" | "burned" | "やけど" => Burn
     "poison" | "poisoned" | "どく" => Poison
-    "badpoison" | "bad-poison" | "badly-poisoned" | "もうどく" => BadPoison(0)
+    "badpoison" | "bad-poison" | "badly-poisoned" | "もうどく" =>
+      BadPoison(0)
     "sleep" | "asleep" | "ねむり" => Sleep(2)
     "drowsy" | "あくび" => Drowsy(1)
     _ => None
@@ -93,12 +94,19 @@ pub fn status_condition_from_cli_str(s : String) -> StatusCondition {
 }
 
 ///|
-pub fn immune_to_status(kind : StatusKind, type1 : String, type2 : String) -> Bool {
+pub fn immune_to_status(
+  kind : StatusKind,
+  type1 : String,
+  type2 : String,
+) -> Bool {
   match kind {
     ParalyzeKind => type1 == "でんき" || type2 == "でんき"
     BurnKind => type1 == "ほのお" || type2 == "ほのお"
     PoisonKind | BadPoisonKind =>
-      type1 == "はがね" || type2 == "はがね" || type1 == "どく" || type2 == "どく"
+      type1 == "はがね" ||
+      type2 == "はがね" ||
+      type1 == "どく" ||
+      type2 == "どく"
     SleepKind => false
     // あくびはタイプ免疫なし。ねむり粉系 (ねむりごな等) と異なり草タイプにも
     // 効く。特性免疫 (ふみん/やるき/スイートベール) は別タスクで対応。

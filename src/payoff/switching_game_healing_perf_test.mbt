@@ -60,7 +60,7 @@ test "perf baseline (healing): 2v2 with Recover cached_states ≤ 2 × baseline"
   println(
     "perf 2v2 healing tl=5: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses} (baseline=\{BASELINE_2V2})",
   )
-  assert_true(!(v.is_nan()))
+  assert_true(!v.is_nan())
   assert_true(v >= -1.0 && v <= 1.0)
   assert_true(stats.cached_states > 0)
   // 退行検知: ベースラインの 2 倍を超えたら state explosion なので fail。
@@ -104,7 +104,7 @@ test "perf baseline (healing): 3v3 with Recover cached_states ≤ 2 × baseline"
   println(
     "perf 3v3 healing tl=3: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses} (baseline=\{BASELINE_3V3})",
   )
-  assert_true(!(v.is_nan()))
+  assert_true(!v.is_nan())
   assert_true(v >= -1.0 && v <= 1.0)
   assert_true(stats.cached_states > 0)
   assert_true(stats.cached_states <= BASELINE_3V3 * 2)

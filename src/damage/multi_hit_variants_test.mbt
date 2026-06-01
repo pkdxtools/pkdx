@@ -55,7 +55,7 @@ fn mhv_input(
   attacker : @model.Pokemon,
   defender : @model.Pokemon,
   move_ : @model.Move,
-  atk_ability~ : String = "",
+  atk_ability? : String = "",
 ) -> @model.DamageCalcInput {
   {
     attacker,

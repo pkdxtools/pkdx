@@ -34,9 +34,9 @@ fn ic_pokemon(name : String, type1 : String, type2 : String) -> @model.Pokemon {
 ///|
 fn ic_combatant(
   pokemon : @model.Pokemon,
-  ability~ : String = "",
-  item~ : String = "",
-  mega_form~ : @model.MegaForm? = None,
+  ability? : String = "",
+  item? : String = "",
+  mega_form? : @model.MegaForm? = None,
 ) -> Combatant {
   {
     pokemon,
@@ -55,8 +55,8 @@ fn ic_combatant(
 
 ///|
 fn ic_state(
-  my_hps~ : Array[Int] = [200, 200, 200],
-  opp_hps~ : Array[Int] = [200, 200, 200],
+  my_hps? : Array[Int] = [200, 200, 200],
+  opp_hps? : Array[Int] = [200, 200, 200],
 ) -> SwitchingGameState {
   {
     my_active: 0,
@@ -121,7 +121,10 @@ test "resist_berry: オッカのみ vs ほのお SE → consume (HP unchanged)" 
   // reflects the post-halving HP. The fanout's job is only to flip
   // opp_item_consumed[0] = true so a follow-up hit doesn't get halved a
   // second time (engine wiring lives in T7 follow-up).
-  let defender = ic_combatant(ic_pokemon("d", "くさ", ""), item="オッカのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "くさ", ""),
+    item="オッカのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ほのお", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -142,7 +145,10 @@ test "resist_berry: オッカのみ vs ほのお SE → consume (HP unchanged)" 
 ///|
 test "resist_berry: オッカのみ vs ほのお non-SE (くさ resists) → no trigger" {
   // ノーマル type defender takes ほのお neutral hit; berry only triggers on SE.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オッカのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="オッカのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ほのお", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -154,12 +160,15 @@ test "resist_berry: オッカのみ vs ほのお non-SE (くさ resists) → no 
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="100")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
 test "resist_berry: オッカのみ already consumed → no refund" {
-  let defender = ic_combatant(ic_pokemon("d", "くさ", ""), item="オッカのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "くさ", ""),
+    item="オッカのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ほのお", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -196,7 +205,10 @@ test "resist_berry: defender holds no resist berry → no trigger" {
 test "focus_sash: full HP → KO 級 → HP=1 + consume" {
   // Defender at full HP 200. OHKO-level hit reduces HP to 0.
   // Sash should kick in: HP=1, consumed.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -215,7 +227,10 @@ test "focus_sash: full HP → KO 級 → HP=1 + consume" {
 ///|
 test "focus_sash: not at full HP → no trigger (still KO)" {
   // Defender at 150/200. KO hit: no sash because pre_hit wasn't full.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -228,12 +243,15 @@ test "focus_sash: not at full HP → no trigger (still KO)" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="0")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
 test "focus_sash: already consumed → no trigger" {
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -254,7 +272,10 @@ test "focus_sash: already consumed → no trigger" {
 test "fila_berry: post HP <= max/2 → +max/3 heal + consume" {
   // Defender max=200, pre=120 → post=80 (which is <= 100 = max/2).
   // Heal: 80 + 200/3 = 80 + 66 = 146.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="フィラのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -273,7 +294,10 @@ test "fila_berry: post HP <= max/2 → +max/3 heal + consume" {
 ///|
 test "fila_berry: post HP > max/2 → no trigger" {
   // Defender max=200, post=120 (above 100 threshold). No heal.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="フィラのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -285,13 +309,16 @@ test "fila_berry: post HP > max/2 → no trigger" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="120")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
 test "fila_berry: KO hit (HP=0) → no trigger" {
   // Healing berries don't revive. HP reaches 0 first → no heal.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="フィラのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -303,7 +330,7 @@ test "fila_berry: KO hit (HP=0) → no trigger" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="0")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
@@ -311,7 +338,10 @@ test "fila_berry: zero-damage hit on already-low HP → no trigger" {
   // Holder is already at 80/200 (< max/2 = 100). An immune / 0-damage hit
   // leaves HP unchanged at 80. The berry must NOT heal+consume — without a
   // pre_dmg_hp threshold check the post-only condition would fire incorrectly.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="フィラのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -324,7 +354,7 @@ test "fila_berry: zero-damage hit on already-low HP → no trigger" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="80")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
@@ -332,7 +362,10 @@ test "fila_berry: damage that does not cross threshold → no trigger" {
   // Holder at 90/200 (already < max/2). A small 10-damage hit drops HP to 80.
   // Both pre and post are below the threshold, so the berry must not fire —
   // a real activation would have happened on the earlier crossing event.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="フィラのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="フィラのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -345,7 +378,7 @@ test "fila_berry: damage that does not cross threshold → no trigger" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="80")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 // ─── hp_threshold: オボンのみ ──────────────────────────────────────────────
@@ -354,7 +387,10 @@ test "fila_berry: damage that does not cross threshold → no trigger" {
 test "sitrus_berry: post HP <= max/2 → +max/4 heal + consume" {
   // Defender max=200, pre=120 → post=80 (≤ 100 = max/2).
   // Sitrus heals max/4 = 50 → 80 + 50 = 130.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オボンのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="オボンのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -372,7 +408,10 @@ test "sitrus_berry: post HP <= max/2 → +max/4 heal + consume" {
 
 ///|
 test "sitrus_berry: KO hit (HP=0) → no trigger" {
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オボンのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="オボンのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -384,12 +423,15 @@ test "sitrus_berry: KO hit (HP=0) → no trigger" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="0")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
 test "sitrus_berry: damage that does not cross threshold → no trigger" {
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="オボンのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="オボンのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -403,7 +445,7 @@ test "sitrus_berry: damage that does not cross threshold → no trigger" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="80")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 // ─── probability mass conservation ─────────────────────────────────────────
@@ -412,7 +454,10 @@ test "sitrus_berry: damage that does not cross threshold → no trigger" {
 test "probability mass: pre + post fanouts both sum to 1.0" {
   // Both helpers must always return Σp ≈ 1.0 (currently single-leaf, but the
   // invariant must hold under future probabilistic extensions).
-  let defender = ic_combatant(ic_pokemon("d", "くさ", ""), item="オッカのみ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "くさ", ""),
+    item="オッカのみ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ほのお", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -446,7 +491,10 @@ test "focus_sash: multi-hit KO does not save the defender" {
   // though Sash should only block the first hit. The fanout must not flip
   // HP to 1 here — this would be mechanically wrong because the second hit
   // in real play would still KO the 1-HP defender.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
+  )
   let attacker = ic_combatant(ic_pokemon("a", "ノーマル", ""))
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -458,7 +506,7 @@ test "focus_sash: multi-hit KO does not save the defender" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="0")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
@@ -466,7 +514,10 @@ test "focus_sash: ParentalBond multi-hit KO does not save the defender" {
   // たいあたり + おやこあい becomes a 2-hit move. Same reasoning as the
   // にどげり case: the engine returns aggregate damage that can KO at full
   // HP, but Sash should only block the first hit.
-  let defender = ic_combatant(ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ")
+  let defender = ic_combatant(
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
+  )
   let attacker = ic_combatant(
     ic_pokemon("a", "ノーマル", ""),
     ability="おやこあい",
@@ -481,7 +532,7 @@ test "focus_sash: ParentalBond multi-hit KO does not save the defender" {
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
   @debug.debug_inspect(s.opp_hps[0], content="0")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
@@ -560,7 +611,8 @@ test "resist_berry: mega-form フェアリースキン rewrites Normal → consu
     mega_form=Some(mega_form),
   )
   let defender = ic_combatant(
-    ic_pokemon("d", "かくとう", ""), item="ロゼルのみ",
+    ic_pokemon("d", "かくとう", ""),
+    item="ロゼルのみ",
   )
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -596,7 +648,8 @@ test "resist_berry: non-mega attacker w/ pre-mega Skin ability → no consume" {
     mega_form=Some(mega_form),
   )
   let defender = ic_combatant(
-    ic_pokemon("d", "かくとう", ""), item="ロゼルのみ",
+    ic_pokemon("d", "かくとう", ""),
+    item="ロゼルのみ",
   )
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -607,7 +660,7 @@ test "resist_berry: non-mega attacker w/ pre-mega Skin ability → no consume" {
   )
   @debug.debug_inspect(outcomes.length(), content="1")
   let (_, s) = outcomes[0]
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
@@ -633,7 +686,8 @@ test "focus_sash: mega-form おやこあい → no rescue on aggregate KO" {
     mega_form=Some(mega_form),
   )
   let defender = ic_combatant(
-    ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ",
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
   )
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]
@@ -647,7 +701,7 @@ test "focus_sash: mega-form おやこあい → no rescue on aggregate KO" {
   let (_, s) = outcomes[0]
   // multi-hit と判定され Sash が gating されるので HP=0 のまま、consumed=false。
   @debug.debug_inspect(s.opp_hps[0], content="0")
-  assert_true(!(s.opp_item_consumed[0]))
+  assert_true(!s.opp_item_consumed[0])
 }
 
 ///|
@@ -671,7 +725,8 @@ test "focus_sash: non-mega base ability single move → Sash rescues to 1 HP" {
     mega_form=Some(mega_form),
   )
   let defender = ic_combatant(
-    ic_pokemon("d", "ノーマル", ""), item="きあいのタスキ",
+    ic_pokemon("d", "ノーマル", ""),
+    item="きあいのタスキ",
   )
   let attacker_team = [attacker, attacker, attacker]
   let defender_team = [defender, defender, defender]

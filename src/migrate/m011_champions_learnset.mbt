@@ -8,7 +8,7 @@ pub fn run_011(db : @db.Db, repo_root : String) -> Result[String, String] {
     None => return Err(path + " not found.")
     Some(s) => s
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match @champions_schema.parse_learnset_entries(json) {
@@ -21,14 +21,11 @@ pub fn run_011(db : @db.Db, repo_root : String) -> Result[String, String] {
   }
   for i = 0; i < entries.length(); i = i + 1 {
     let e = entries[i]
-    match @db.exec_binds(
+    match
+      @db.exec_binds(
         db,
         "INSERT OR IGNORE INTO learnset (id, waza, conditions) VALUES (?, ?, ?)",
-        [
-          @db.BindText(e.id),
-          @db.BindText(e.waza),
-          @db.BindText(e.conditions),
-        ],
+        [@db.BindText(e.id), @db.BindText(e.waza), @db.BindText(e.conditions)],
       ) {
       Err(err) => return Err(err)
       Ok(_) => ()

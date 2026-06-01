@@ -80,7 +80,7 @@ pub(all) struct DamageCache {
 /// graph`) should; tests and short-lived paths leave it defaulted to
 /// `None` and the disk is never touched.
 pub fn new_damage_cache(
-  disk~ : @damage_cache.DamageDiskCache? = None,
+  disk? : @damage_cache.DamageDiskCache? = None,
 ) -> DamageCache {
   {
     data: @hashmap.HashMap([]),
@@ -142,11 +142,17 @@ fn combatant_to_cache_key_input(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> @damage_cache.CacheKeyInput {
   let input = build_input_with_ranks(
-    atk, dfn, mv, atk_rank, def_rank, weather~, field~,
+    atk,
+    dfn,
+    mv,
+    atk_rank,
+    def_rank,
+    weather~,
+    field~,
   )
   let version_str = match atk.stat_system {
     @model.Champions => "champions"
@@ -258,11 +264,11 @@ fn mean_damage_via_disk(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
-  atk_burn~ : Bool = false,
-  atk_ranks_full~ : Array[Int]? = None,
-  def_ranks_full~ : Array[Int]? = None,
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  atk_burn? : Bool = false,
+  atk_ranks_full? : Array[Int]? = None,
+  def_ranks_full? : Array[Int]? = None,
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> Int {
   // 反射技は L2 disk を経由しない。@damage.calc_damage に incoming=None で
   // 渡すと反射 fallback が走り 0 ダメージの JSON が書き込まれてしまうため、
@@ -271,8 +277,12 @@ fn mean_damage_via_disk(
   // outcomes に到達し、フル rank 配列を使って Step1 を正しく評価する。
   if @damage.is_reflect_move(mv.name) is Some(_) {
     return compute_mean_damage(
-      attacker, defender, mv, atk_rank, def_rank,
-      atk_burn=atk_burn,
+      attacker,
+      defender,
+      mv,
+      atk_rank,
+      def_rank,
+      atk_burn~,
       atk_ranks_full~,
       def_ranks_full~,
       weather~,
@@ -283,19 +293,35 @@ fn mean_damage_via_disk(
     Some(d) => d
     None =>
       return compute_mean_damage(
-        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+        attacker,
+        defender,
+        mv,
+        atk_rank,
+        def_rank,
+        atk_burn~,
         weather~,
         field~,
       )
   }
   let key_input = combatant_to_cache_key_input(
-    attacker, defender, mv, atk_rank, def_rank, weather~, field~,
+    attacker,
+    defender,
+    mv,
+    atk_rank,
+    def_rank,
+    weather~,
+    field~,
   )
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
     Err(_) =>
       return compute_mean_damage(
-        attacker, defender, mv, atk_rank, def_rank, atk_burn=atk_burn,
+        attacker,
+        defender,
+        mv,
+        atk_rank,
+        def_rank,
+        atk_burn~,
         weather~,
         field~,
       )
@@ -314,8 +340,14 @@ fn mean_damage_via_disk(
           // or malformed JSON) → recompute and overwrite with v3 payload.
           cache.disk_misses = cache.disk_misses + 1
           compute_and_populate_disk(
-            disk, key, attacker, defender, mv, atk_rank, def_rank,
-            atk_burn=atk_burn,
+            disk,
+            key,
+            attacker,
+            defender,
+            mv,
+            atk_rank,
+            def_rank,
+            atk_burn~,
             weather~,
             field~,
           )
@@ -324,8 +356,14 @@ fn mean_damage_via_disk(
     None => {
       cache.disk_misses = cache.disk_misses + 1
       compute_and_populate_disk(
-        disk, key, attacker, defender, mv, atk_rank, def_rank,
-        atk_burn=atk_burn,
+        disk,
+        key,
+        attacker,
+        defender,
+        mv,
+        atk_rank,
+        def_rank,
+        atk_burn~,
         weather~,
         field~,
       )
@@ -351,12 +389,18 @@ fn compute_and_populate_disk(
   mv : @model.Move,
   atk_rank : Int,
   def_rank : Int,
-  atk_burn~ : Bool = false,
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  atk_burn? : Bool = false,
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> Int {
   let input = build_input_with_ranks(
-    attacker, defender, mv, atk_rank, def_rank, weather~, field~,
+    attacker,
+    defender,
+    mv,
+    atk_rank,
+    def_rank,
+    weather~,
+    field~,
   )
   let r = @damage.calc_damage(input)
   let json_format = @cli.parse_output_format("json")
@@ -486,29 +530,17 @@ pub fn mean_damage_cached(
   mv_idx : Int,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
-  atk_mega~ : Bool = false,
-  def_mega~ : Bool = false,
-  atk_burn~ : Bool = false,
-  atk_item_consumed~ : Bool = false,
-  def_item_consumed~ : Bool = false,
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  atk_mega? : Bool = false,
+  def_mega? : Bool = false,
+  atk_burn? : Bool = false,
+  atk_item_consumed? : Bool = false,
+  def_item_consumed? : Bool = false,
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> Int {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
-    my_attacker,
-    atk_idx,
-    atk_ranks,
-    def_idx,
-    def_ranks,
-    mv_idx,
-    my_team,
-    opp_team,
-    atk_mega,
-    def_mega,
-    atk_burn,
-    atk_item_consumed,
-    def_item_consumed,
-    weather,
+    my_attacker, atk_idx, atk_ranks, def_idx, def_ranks, mv_idx, my_team, opp_team,
+    atk_mega, def_mega, atk_burn, atk_item_consumed, def_item_consumed, weather,
     field,
   )
   if early {
@@ -535,7 +567,7 @@ pub fn mean_damage_cached(
             mv,
             key.atk_rank,
             key.def_rank,
-            atk_burn=atk_burn,
+            atk_burn~,
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
             weather~,
@@ -548,7 +580,7 @@ pub fn mean_damage_cached(
             mv,
             key.atk_rank,
             key.def_rank,
-            atk_burn=atk_burn,
+            atk_burn~,
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
             weather~,
@@ -585,29 +617,17 @@ fn damage_variants_cached(
   mv_idx : Int,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
-  atk_mega~ : Bool = false,
-  def_mega~ : Bool = false,
-  atk_burn~ : Bool = false,
-  atk_item_consumed~ : Bool = false,
-  def_item_consumed~ : Bool = false,
-  weather~ : @model.Weather = @model.Weather::None,
-  field~ : @model.Field = @model.Field::None,
+  atk_mega? : Bool = false,
+  def_mega? : Bool = false,
+  atk_burn? : Bool = false,
+  atk_item_consumed? : Bool = false,
+  def_item_consumed? : Bool = false,
+  weather? : @model.Weather = @model.Weather::None,
+  field? : @model.Field = @model.Field::None,
 ) -> Array[@model.DamageOutcome] {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
-    my_attacker,
-    atk_idx,
-    atk_ranks,
-    def_idx,
-    def_ranks,
-    mv_idx,
-    my_team,
-    opp_team,
-    atk_mega,
-    def_mega,
-    atk_burn,
-    atk_item_consumed,
-    def_item_consumed,
-    weather,
+    my_attacker, atk_idx, atk_ranks, def_idx, def_ranks, mv_idx, my_team, opp_team,
+    atk_mega, def_mega, atk_burn, atk_item_consumed, def_item_consumed, weather,
     field,
   )
   if early {
@@ -628,7 +648,7 @@ fn damage_variants_cached(
         mv,
         key.atk_rank,
         key.def_rank,
-        atk_burn=atk_burn,
+        atk_burn~,
         atk_ranks_full=Some(atk_ranks),
         def_ranks_full=Some(def_ranks),
         weather~,
@@ -651,7 +671,7 @@ fn damage_variants_cached(
             mv,
             key.atk_rank,
             key.def_rank,
-            atk_burn=atk_burn,
+            atk_burn~,
             atk_ranks_full=Some(atk_ranks),
             def_ranks_full=Some(def_ranks),
             weather~,

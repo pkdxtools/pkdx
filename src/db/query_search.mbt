@@ -26,7 +26,8 @@ pub fn search_by_type(
   version : @model.GameVersion,
 ) -> Result[Array[SearchResult], String] {
   let version = match version {
-    @model.Champions => return search_by_type_champions(db, type1, type2, min_speed)
+    @model.Champions =>
+      return search_by_type_champions(db, type1, type2, min_speed)
     @model.Other(v) => v
   }
   let type_cond = if type2.length() > 0 {

@@ -79,10 +79,7 @@ test "compose_fanouts: deterministic step (prob=1.0) preserves leaf count" {
 ///|
 test "normalize_probabilities: clamps drift back to 1.0" {
   // Hand-craft a slightly-drifted distribution (sum ≈ 1.000001).
-  let drifted : Array[(Double, Int)] = [
-    (0.500001, 0),
-    (0.5, 1),
-  ]
+  let drifted : Array[(Double, Int)] = [(0.500001, 0), (0.5, 1)]
   let normalized = normalize_probabilities(drifted)
   let s = sum_probs(normalized)
   let drift = if s > 1.0 { s - 1.0 } else { 1.0 - s }

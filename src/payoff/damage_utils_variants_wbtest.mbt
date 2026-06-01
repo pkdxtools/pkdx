@@ -56,7 +56,7 @@ fn dvt_input(
   attacker : @model.Pokemon,
   defender : @model.Pokemon,
   move_ : @model.Move,
-  atk_ability~ : String = "",
+  atk_ability? : String = "",
 ) -> @model.DamageCalcInput {
   {
     attacker,
@@ -175,7 +175,9 @@ test "expected_damage: Skill Link + 2-5 hit collapses to single variant" {
   let atk = dvt_pokemon("attacker")
   let dfn = dvt_pokemon("defender")
   let mv = dvt_move("みだれづき")
-  let r = @damage.calc_damage(dvt_input(atk, dfn, mv, atk_ability="スキルリンク"))
+  let r = @damage.calc_damage(
+    dvt_input(atk, dfn, mv, atk_ability="スキルリンク"),
+  )
   let pairs = expected_damage_variants(r)
   @debug.debug_inspect(pairs.length(), content="1")
   let drift = if pairs[0].0 > 1.0 { pairs[0].0 - 1.0 } else { 1.0 - pairs[0].0 }

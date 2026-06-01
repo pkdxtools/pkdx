@@ -12,7 +12,10 @@
 /// 副作用を含むので、HP / 状態の確率分布を per-variant でフィルタして検証する。
 
 ///|
-fn advf_pokemon(name : String, type1~ : String = "ノーマル") -> @model.Pokemon {
+fn advf_pokemon(
+  name : String,
+  type1? : String = "ノーマル",
+) -> @model.Pokemon {
   {
     global_no: "0000",
     name_ja: name,
@@ -37,10 +40,10 @@ fn advf_pokemon(name : String, type1~ : String = "ノーマル") -> @model.Pokem
 ///|
 fn advf_move(
   name : String,
-  power~ : Int = 25,
-  accuracy~ : Int = 100,
-  status_effect~ : (@model.StatusKind, Int)? = None,
-  type_~ : String = "ノーマル",
+  power? : Int = 25,
+  accuracy? : Int = 100,
+  status_effect? : (@model.StatusKind, Int)? = None,
+  type_? : String = "ノーマル",
 ) -> @model.Move {
   {
     name,
@@ -67,7 +70,7 @@ fn advf_move(
 fn advf_combatant(
   name : String,
   mv : @model.Move,
-  ability~ : String = "",
+  ability? : String = "",
 ) -> Combatant {
   {
     pokemon: advf_pokemon(name),
@@ -290,12 +293,20 @@ test "Phase 2-D-5: post-hit fanout 副作用が variant 間で独立 (per-hit se
     // dummy: probe 用、test 内で hits=1 leaf の HP を取得
     let probe = leaves[0].1.opp_hps[0]
     let probe2 = leaves[1].1.opp_hps[0]
-    if probe > probe2 { probe } else { probe2 }
+    if probe > probe2 {
+      probe
+    } else {
+      probe2
+    }
   }
   let hp_hits3 = {
     let probe = leaves[4].1.opp_hps[0]
     let probe2 = leaves[5].1.opp_hps[0]
-    if probe < probe2 { probe } else { probe2 }
+    if probe < probe2 {
+      probe
+    } else {
+      probe2
+    }
   }
   let mut p_para_hits1_total = 0.0
   let mut p_var_hits1_total = 0.0

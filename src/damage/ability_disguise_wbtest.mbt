@@ -60,8 +60,8 @@ fn dg_input(
   atk : @model.Pokemon,
   dfn : @model.Pokemon,
   mv : @model.Move,
-  def_ability~ : String = "",
-  disguise_active~ : Bool = false,
+  def_ability? : String = "",
+  disguise_active? : Bool = false,
 ) -> @model.DamageCalcInput {
   {
     attacker: atk,
@@ -110,11 +110,19 @@ test "disguise active + ばけのかわ → damages include 1/8 chip + base dama
   let dfn = dg_pokemon("mimikyu-normal", "ノーマル")
   let mv = dg_move("たいあたり", "ノーマル", @model.Physical, 40)
   let inp_active = dg_input(
-    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=true,
+    atk,
+    dfn,
+    mv,
+    def_ability="ばけのかわ",
+    disguise_active=true,
   )
   let r_active = calc_damage(inp_active)
   let inp_inactive = dg_input(
-    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false,
+    atk,
+    dfn,
+    mv,
+    def_ability="ばけのかわ",
+    disguise_active=false,
   )
   let r_inactive = calc_damage(inp_inactive)
   let chip = r_inactive.defender_hp / 8
@@ -127,7 +135,7 @@ test "disguise active + ばけのかわ → damages include 1/8 chip + base dama
   assert_true(r_active.min_damage == r_inactive.min_damage + chip)
   assert_true(r_active.max_damage == r_inactive.max_damage + chip)
   // is_immune stays false — disguise is a state transition, not type immunity.
-  assert_true(!(r_active.is_immune))
+  assert_true(!r_active.is_immune)
 }
 
 ///|
@@ -137,9 +145,15 @@ test "disguise inactive + ばけのかわ → damage as usual" {
   // Ghost immunity confusing the damage assertion.
   let dfn = dg_pokemon("mimikyu-normal", "ノーマル")
   let mv = dg_move("たいあたり", "ノーマル", @model.Physical, 40)
-  let inp = dg_input(atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false)
+  let inp = dg_input(
+    atk,
+    dfn,
+    mv,
+    def_ability="ばけのかわ",
+    disguise_active=false,
+  )
   let r = calc_damage(inp)
-  assert_true(!(r.disguise_blocked))
+  assert_true(!r.disguise_blocked)
   @debug.debug_inspect(r.disguise_chip, content="0")
   assert_true(r.max_damage > 0)
 }
@@ -149,9 +163,15 @@ test "disguise active + other ability → damage as usual (no spurious block)" {
   let atk = dg_pokemon("attacker", "ノーマル")
   let dfn = dg_pokemon("defender", "ノーマル")
   let mv = dg_move("たいあたり", "ノーマル", @model.Physical, 40)
-  let inp = dg_input(atk, dfn, mv, def_ability="いかく", disguise_active=true)
+  let inp = dg_input(
+    atk,
+    dfn,
+    mv,
+    def_ability="いかく",
+    disguise_active=true,
+  )
   let r = calc_damage(inp)
   // disguise_active alone shouldn't trigger the block — only ばけのかわ does.
-  assert_true(!(r.disguise_blocked))
+  assert_true(!r.disguise_blocked)
   assert_true(r.max_damage > 0)
 }

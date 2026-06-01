@@ -72,11 +72,7 @@ fn hbd_to_json(
     Some(msg) => "\"" + msg + "\""
     None => "null"
   }
-  let sys = if is_champions {
-    ",\"stat_system\":\"champions\""
-  } else {
-    ""
-  }
+  let sys = if is_champions { ",\"stat_system\":\"champions\"" } else { "" }
   "{\"pokemon\":\"" +
   pokemon.name_ja +
   "\",\"nature\":\"" +

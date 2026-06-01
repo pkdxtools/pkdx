@@ -65,7 +65,8 @@ fn count_m015_rows(db : @db.Db) -> Int {
 ///|
 /// field_set != '' の行数 (= 投入された field 行の総数)。
 fn count_field_rows(db : @db.Db) -> Int {
-  let rows = match @db.query_binds(
+  let rows = match
+    @db.query_binds(
       db,
       "SELECT COUNT(*) FROM move_meta WHERE field_set != ''",
       [],
@@ -126,7 +127,8 @@ test "m015 idempotent: first run inserts all 4 entries" {
     }
   }
   @debug.debug_inspect(
-    msg, content="\"field columns added; 0 updated, 4 inserted\"",
+    msg,
+    content="\"field columns added; 0 updated, 4 inserted\"",
   )
   @debug.assert_eq(count_m015_rows(db), 4)
   @debug.assert_eq(count_field_rows(db), 4)
@@ -164,7 +166,8 @@ test "m015 idempotent: second run re-applies as UPDATE, row count stable" {
     }
   }
   @debug.debug_inspect(
-    msg2, content="\"field columns added; 4 updated, 0 inserted\"",
+    msg2,
+    content="\"field columns added; 4 updated, 0 inserted\"",
   )
   @debug.assert_eq(count_m015_rows(db), rows_after_first)
   @debug.assert_eq(count_field_rows(db), field_after_first)
@@ -209,7 +212,8 @@ test "m015 idempotent: third run is identical to second (steady state)" {
     }
   }
   @debug.debug_inspect(
-    msg3, content="\"field columns added; 4 updated, 0 inserted\"",
+    msg3,
+    content="\"field columns added; 4 updated, 0 inserted\"",
   )
   @debug.assert_eq(count_m015_rows(db), 4)
   @debug.assert_eq(count_field_rows(db), 4)

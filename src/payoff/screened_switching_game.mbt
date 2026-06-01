@@ -26,11 +26,11 @@ pub fn team_payoff_matrix_screened(
   mc_trials : Int,
   mc_seed : UInt64,
   keep_top_quantile : Double,
-  refine_turn_limit~ : Int = DP_TURN_LIMIT,
-  mc_turn_limit~ : Int = MC_TURN_LIMIT,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  refine_turn_limit? : Int = DP_TURN_LIMIT,
+  mc_turn_limit? : Int = MC_TURN_LIMIT,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -91,7 +91,10 @@ pub fn team_payoff_matrix_screened(
       let picked_a = pick_combatants(team_a, sel_a[i])
       let picked_b = pick_combatants(team_b, sel_b[j])
       row[j] = team_monte_carlo_value(
-        picked_a, picked_b, mc_trials, mc_seed ^ cell_idx,
+        picked_a,
+        picked_b,
+        mc_trials,
+        mc_seed ^ cell_idx,
         turn_limit=mc_turn_limit,
       )
       progress(CellDone(sel_a[i], sel_b[j], i, j, "screening"))
@@ -121,7 +124,10 @@ pub fn team_payoff_matrix_screened(
     for j in 0..<col_keep.length() {
       progress(
         CellStart(
-          sel_a[row_keep[i]], sel_b[col_keep[j]], row_keep[i], col_keep[j],
+          sel_a[row_keep[i]],
+          sel_b[col_keep[j]],
+          row_keep[i],
+          col_keep[j],
           "dp-refine",
         ),
       )
@@ -137,14 +143,15 @@ pub fn team_payoff_matrix_screened(
       )
       progress(
         CellDone(
-          sel_a[row_keep[i]], sel_b[col_keep[j]], row_keep[i], col_keep[j],
+          sel_a[row_keep[i]],
+          sel_b[col_keep[j]],
+          row_keep[i],
+          col_keep[j],
           "dp-refine",
         ),
       )
       progress(
-        PhaseProgress(
-          "dp-refine", i * col_keep.length() + j + 1, phase_c_total,
-        ),
+        PhaseProgress("dp-refine", i * col_keep.length() + j + 1, phase_c_total),
       )
     }
     data[i] = row
@@ -176,7 +183,7 @@ pub fn screen_phase_rows(
   mc_seed : UInt64,
   row_start : Int,
   row_end : Int,
-  mc_turn_limit~ : Int = MC_TURN_LIMIT,
+  mc_turn_limit? : Int = MC_TURN_LIMIT,
 ) -> Array[Array[Double]] raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -309,13 +316,17 @@ pub fn refine_one_cell(
   sel_a_row : Array[Int],
   sel_b_col : Array[Int],
   refine_turn_limit : Int,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> Double {
   let picked_a = pick_combatants(team_a, sel_a_row)
   let picked_b = pick_combatants(team_b, sel_b_col)
   switching_game_winrate(
-    picked_a, picked_b, refine_turn_limit, progress~, dp_log_every~,
+    picked_a,
+    picked_b,
+    refine_turn_limit,
+    progress~,
+    dp_log_every~,
   )
 }
 
@@ -333,7 +344,7 @@ pub fn screen_nash_scores(
     Ok(m) => m
     Err(_) => raise EmptyCombatants
   }
-  let screen_lp = try @nash.solve_zero_sum(screen_matrix) catch {
+  let screen_lp = @nash.solve_zero_sum(screen_matrix) catch {
     _ => raise EmptyCombatants
   }
   let (row_nash, col_nash) = match screen_lp {
@@ -370,13 +381,7 @@ fn retain_top_indices(scores : Array[Double], quantile : Double) -> Array[Int] {
     return []
   }
   let raw = (n.to_double() * quantile).ceil().to_int()
-  let keep = if raw < 1 {
-    1
-  } else if raw > n {
-    n
-  } else {
-    raw
-  }
+  let keep = if raw < 1 { 1 } else if raw > n { n } else { raw }
   // Simple selection: pick top-`keep` by score via an O(n^2) pass — n ≤ 60
   // in practice (6 × C(5,2) lead-aware enumeration), so this stays well under
   // a millisecond.
@@ -436,9 +441,7 @@ fn shard_row_ranges(total : Int, n_shards : Int) -> Array[(Int, Int)] {
 fn parse_shard_output(
   json_text : String,
 ) -> (Int, Int, Array[Array[Double]]) raise PayoffError {
-  let root = try @json.parse(json_text) catch {
-    _ => raise EmptyCombatants
-  }
+  let root = @json.parse(json_text) catch { _ => raise EmptyCombatants }
   let obj = match root {
     Object(m) => m
     _ => raise EmptyCombatants
@@ -493,8 +496,8 @@ pub fn build_shard_argv(
   col_keep_csv : String,
   mc_turn_limit : Int,
   refine_turn_limit : Int,
-  progress_mode~ : String = "off",
-  progress_every~ : Int = 0,
+  progress_mode? : String = "off",
+  progress_every? : Int = 0,
 ) -> Array[String] {
   let argv = [
     exe_path,
@@ -591,14 +594,16 @@ fn run_shards_collect(
   timeout_ms : Int,
   mc_turn_limit : Int,
   refine_turn_limit : Int,
-  progress_mode~ : String = "off",
-  progress_every~ : Int = 0,
+  progress_mode? : String = "off",
+  progress_every? : Int = 0,
 ) -> Array[Array[Double]] raise PayoffError {
   let n_shards = row_ranges.length()
   // Per-shard output files. Created up front so we can clean up reliably.
   let output_paths = Array::make(n_shards, "")
   for i in 0..<n_shards {
-    let p = @process.mkstemp_file("pkdx_shard_" + phase + "_out_" + i.to_string())
+    let p = @process.mkstemp_file(
+      "pkdx_shard_" + phase + "_out_" + i.to_string(),
+    )
     output_paths[i] = match p {
       Some(s) => s
       None =>
@@ -622,11 +627,11 @@ fn run_shards_collect(
       col_keep_csv,
       mc_turn_limit,
       refine_turn_limit,
-      progress_mode=progress_mode,
-      progress_every=progress_every,
+      progress_mode~,
+      progress_every~,
     )
   }
-  let results = try @process.run_parallel_shards(argvs, timeout_ms~) catch {
+  let results = @process.run_parallel_shards(argvs, timeout_ms~) catch {
     e => raise ShardError("run_parallel_shards failed: " + @debug.to_string(e))
   }
   // Stitch.
@@ -661,10 +666,7 @@ fn run_shards_collect(
       }
       Exit(code) =>
         shard_err = Some(
-          "shard " +
-          i.to_string() +
-          " exited with code " +
-          code.to_string(),
+          "shard " + i.to_string() + " exited with code " + code.to_string(),
         )
       Failed =>
         shard_err = Some(
@@ -705,12 +707,12 @@ pub fn team_payoff_matrix_screened_parallel(
   keep_top_quantile : Double,
   parallel : Int,
   input_path : String,
-  refine_turn_limit~ : Int = DP_TURN_LIMIT,
-  mc_turn_limit~ : Int = MC_TURN_LIMIT,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  child_progress_mode~ : String = "off",
-  child_progress_every~ : Int = 0,
-  shard_timeout_ms~ : Int = 7_200_000,
+  refine_turn_limit? : Int = DP_TURN_LIMIT,
+  mc_turn_limit? : Int = MC_TURN_LIMIT,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  child_progress_mode? : String = "off",
+  child_progress_every? : Int = 0,
+  shard_timeout_ms? : Int = 7_200_000,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()

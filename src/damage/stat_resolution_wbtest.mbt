@@ -41,14 +41,19 @@ test "stat_resolution: default physical picks Atk vs Def" {
   let mv = sr_move("たいあたり", @model.Physical, 40)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=120, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=120,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
   assert_true(sr.effective_physical)
-  assert_true(!(sr.atk_rank_mask))
-  assert_true(!(sr.def_rank_mask))
+  assert_true(!sr.atk_rank_mask)
+  assert_true(!sr.def_rank_mask)
 }
 
 ///|
@@ -56,12 +61,17 @@ test "stat_resolution: default special picks SpA vs SpD" {
   let mv = sr_move("ねんりき", @model.Special, 50)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=120, def_def=100, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=120,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
   @debug.debug_inspect(sr.def_stat_kind, content="SpD")
-  assert_true(!(sr.effective_physical))
+  assert_true(!sr.effective_physical)
 }
 
 ///|
@@ -69,8 +79,13 @@ test "stat_resolution: Body Press uses Def as attack stat" {
   let mv = sr_move("ボディプレス", @model.Physical, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=150,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Def")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
@@ -82,12 +97,17 @@ test "stat_resolution: Psyshock is special but hits physical Def" {
   let mv = sr_move("サイコショック", @model.Special, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=120, def_def=80, def_spd=120,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=120,
+    def_def=80,
+    def_spd=120,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
-  assert_true(!(sr.effective_physical))
+  assert_true(!sr.effective_physical)
 }
 
 ///|
@@ -95,8 +115,13 @@ test "stat_resolution: Psystrike same family as Psyshock" {
   let mv = sr_move("サイコブレイク", @model.Special, 100)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=140, def_def=80, def_spd=140,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=140,
+    def_def=80,
+    def_spd=140,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
@@ -107,8 +132,13 @@ test "stat_resolution: Mystical Sword same family as Psyshock" {
   let mv = sr_move("しんぴのつるぎ", @model.Special, 85)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=130, def_def=80, def_spd=130,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=130,
+    def_def=80,
+    def_spd=130,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
 }
@@ -118,8 +148,13 @@ test "stat_resolution: Secret Sword ignores defender +rank only" {
   let mv = sr_move("せいなるつるぎ", @model.Physical, 85)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=120, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=120,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   // Physical category preserved.
   @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
@@ -127,8 +162,8 @@ test "stat_resolution: Secret Sword ignores defender +rank only" {
   assert_true(sr.effective_physical)
   // Defender positive rank mask set; negative rank still applies.
   assert_true(sr.def_rank_positive_mask)
-  assert_true(!(sr.def_rank_negative_mask))
-  assert_true(!(sr.def_rank_mask))
+  assert_true(!sr.def_rank_negative_mask)
+  assert_true(!sr.def_rank_mask)
 }
 
 ///|
@@ -139,8 +174,13 @@ test "stat_resolution: Shell Side Arm strict > chooses physical" {
   let mv = sr_move("シェルアームズ", @model.Special, 90)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=120, atk_spa=100, def_def=100, def_spd=120,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=120,
+    atk_spa=100,
+    def_def=100,
+    def_spd=120,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
@@ -155,12 +195,17 @@ test "stat_resolution: Shell Side Arm tie falls to special" {
   let mv = sr_move("シェルアームズ", @model.Special, 90)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
   @debug.debug_inspect(sr.def_stat_kind, content="SpD")
-  assert_true(!(sr.effective_physical))
+  assert_true(!sr.effective_physical)
 }
 
 ///|
@@ -171,12 +216,17 @@ test "stat_resolution: Shell Side Arm < chooses special" {
   let mv = sr_move("シェルアームズ", @model.Special, 90)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=120, def_def=120, def_spd=120,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=120,
+    def_def=120,
+    def_spd=120,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
   @debug.debug_inspect(sr.def_stat_kind, content="SpD")
-  assert_true(!(sr.effective_physical))
+  assert_true(!sr.effective_physical)
 }
 
 ///|
@@ -184,12 +234,17 @@ test "stat_resolution: Unaware on defender masks attacker's stages fully" {
   let mv = sr_move("たいあたり", @model.Physical, 40)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="てんねん", critical=false,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="てんねん",
+    critical=false,
   )
   assert_true(sr.atk_rank_mask)
   // Defender's own ranks still apply (Unaware is one-sided).
-  assert_true(!(sr.def_rank_mask))
+  assert_true(!sr.def_rank_mask)
 }
 
 ///|
@@ -197,11 +252,16 @@ test "stat_resolution: Unaware on attacker masks defender's stages fully" {
   let mv = sr_move("たいあたり", @model.Physical, 40)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="てんねん", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="てんねん",
+    def_ability="",
+    critical=false,
   )
   assert_true(sr.def_rank_mask)
-  assert_true(!(sr.atk_rank_mask))
+  assert_true(!sr.atk_rank_mask)
 }
 
 ///|
@@ -209,15 +269,20 @@ test "stat_resolution: critical hit masks only harmful stages" {
   let mv = sr_move("たいあたり", @model.Physical, 40)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="", critical=true,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=true,
   )
   // Critical: attacker's negative stages ignored, defender's positive stages
   // ignored. The other direction still applies.
   assert_true(sr.atk_rank_negative_mask)
-  assert_true(!(sr.atk_rank_positive_mask))
+  assert_true(!sr.atk_rank_positive_mask)
   assert_true(sr.def_rank_positive_mask)
-  assert_true(!(sr.def_rank_negative_mask))
+  assert_true(!sr.def_rank_negative_mask)
 }
 
 ///|
@@ -225,8 +290,13 @@ test "stat_resolution: critical × Unaware composes orthogonally" {
   let mv = sr_move("たいあたり", @model.Physical, 40)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="てんねん", critical=true,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="てんねん",
+    critical=true,
   )
   // Unaware pulls atk_rank_mask all the way up.
   assert_true(sr.atk_rank_mask)
@@ -240,8 +310,13 @@ test "stat_resolution: Shell Side Arm × Unaware composes" {
   let mv = sr_move("シェルアームズ", @model.Special, 90)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=150, atk_spa=100, def_def=80, def_spd=120,
-    atk_ability="てんねん", def_ability="", critical=false,
+    atk_atk=150,
+    atk_spa=100,
+    def_def=80,
+    def_spd=120,
+    atk_ability="てんねん",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Atk")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
@@ -261,8 +336,13 @@ test "stat_resolution: Body Press keeps defender stat on default Def" {
   let mv = sr_move("ボディプレス", @model.Physical, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=60, atk_spa=60, def_def=70, def_spd=200,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=60,
+    atk_spa=60,
+    def_def=70,
+    def_spd=200,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Def")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
@@ -276,12 +356,17 @@ test "stat_resolution: Psyshock keeps attacker stat on default SpA" {
   let mv = sr_move("サイコショック", @model.Special, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=200, atk_spa=100, def_def=80, def_spd=200,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=200,
+    atk_spa=100,
+    def_def=80,
+    def_spd=200,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="SpA")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
-  assert_true(!(sr.effective_physical))
+  assert_true(!sr.effective_physical)
 }
 
 ///|
@@ -291,12 +376,17 @@ test "stat_resolution: Psyshock × Unaware fully masks attacker stages" {
   let mv = sr_move("サイコブレイク", @model.Special, 100)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=140, def_def=80, def_spd=140,
-    atk_ability="", def_ability="てんねん", critical=false,
+    atk_atk=100,
+    atk_spa=140,
+    def_def=80,
+    def_spd=140,
+    atk_ability="",
+    def_ability="てんねん",
+    critical=false,
   )
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
   assert_true(sr.atk_rank_mask)
-  assert_true(!(sr.def_rank_mask))
+  assert_true(!sr.def_rank_mask)
 }
 
 ///|
@@ -307,8 +397,13 @@ test "stat_resolution: Body Press × critical keeps Def-as-attack and sets masks
   let mv = sr_move("ボディプレス", @model.Physical, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=80, atk_spa=60, def_def=150, def_spd=100,
-    atk_ability="", def_ability="", critical=true,
+    atk_atk=80,
+    atk_spa=60,
+    def_def=150,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=true,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Def")
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
@@ -323,12 +418,17 @@ test "stat_resolution: Body Press × Unaware on attacker masks defender ranks" {
   let mv = sr_move("ボディプレス", @model.Physical, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=80, atk_spa=60, def_def=150, def_spd=100,
-    atk_ability="てんねん", def_ability="", critical=false,
+    atk_atk=80,
+    atk_spa=60,
+    def_def=150,
+    def_spd=100,
+    atk_ability="てんねん",
+    def_ability="",
+    critical=false,
   )
   @debug.debug_inspect(sr.atk_stat_kind, content="Def")
   assert_true(sr.def_rank_mask)
-  assert_true(!(sr.atk_rank_mask))
+  assert_true(!sr.atk_rank_mask)
 }
 
 ///|
@@ -339,8 +439,13 @@ test "stat_resolution: Psyshock × critical composes def_positive_mask" {
   let mv = sr_move("しんぴのつるぎ", @model.Special, 85)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=130, def_def=80, def_spd=130,
-    atk_ability="", def_ability="", critical=true,
+    atk_atk=100,
+    atk_spa=130,
+    def_def=80,
+    def_spd=130,
+    atk_ability="",
+    def_ability="",
+    critical=true,
   )
   @debug.debug_inspect(sr.def_stat_kind, content="Def")
   assert_true(sr.def_rank_positive_mask)
@@ -354,8 +459,13 @@ test "stat_resolution: Shell Side Arm physical mode forces contact=true" {
   let mv = sr_move("シェルアームズ", @model.Special, 90)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=120, atk_spa=100, def_def=100, def_spd=120,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=120,
+    atk_spa=100,
+    def_def=100,
+    def_spd=120,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   assert_true(sr.force_contact == Some(true))
 }
@@ -367,8 +477,13 @@ test "stat_resolution: Shell Side Arm special mode forces contact=false" {
   let mv = sr_move("シェルアームズ", @model.Special, 90)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=120, def_def=120, def_spd=120,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=120,
+    def_def=120,
+    def_spd=120,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   assert_true(sr.force_contact == Some(false))
 }
@@ -380,8 +495,13 @@ test "stat_resolution: non-Shell-Side-Arm keeps force_contact None" {
   let mv = sr_move("ボディプレス", @model.Physical, 80)
   let sr = resolve_stat_resolution(
     mv,
-    atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=150,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   assert_true(sr.force_contact == None)
 }
@@ -395,16 +515,26 @@ test "stat_resolution: Secret Sword × Body Press does not apply (mutually exclu
   let body_press = sr_move("ボディプレス", @model.Physical, 80)
   let sr_bp = resolve_stat_resolution(
     body_press,
-    atk_atk=100, atk_spa=100, def_def=150, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=100,
+    atk_spa=100,
+    def_def=150,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   // Body Press does NOT set def_rank_positive_mask.
-  assert_true(!(sr_bp.def_rank_positive_mask))
+  assert_true(!sr_bp.def_rank_positive_mask)
   let secret_sword = sr_move("せいなるつるぎ", @model.Physical, 85)
   let sr_ss = resolve_stat_resolution(
     secret_sword,
-    atk_atk=120, atk_spa=100, def_def=100, def_spd=100,
-    atk_ability="", def_ability="", critical=false,
+    atk_atk=120,
+    atk_spa=100,
+    def_def=100,
+    def_spd=100,
+    atk_ability="",
+    def_ability="",
+    critical=false,
   )
   // Secret Sword does NOT remap atk_stat_kind.
   @debug.debug_inspect(sr_ss.atk_stat_kind, content="Atk")

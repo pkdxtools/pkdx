@@ -23,12 +23,10 @@
 pub fn run_015(db : @db.Db, repo_root : String) -> Result[String, String] {
   let alters = [
     (
-      "field_set",
-      "ALTER TABLE move_meta ADD COLUMN field_set TEXT NOT NULL DEFAULT ''",
+      "field_set", "ALTER TABLE move_meta ADD COLUMN field_set TEXT NOT NULL DEFAULT ''",
     ),
     (
-      "field_turns",
-      "ALTER TABLE move_meta ADD COLUMN field_turns INTEGER NOT NULL DEFAULT 0",
+      "field_turns", "ALTER TABLE move_meta ADD COLUMN field_turns INTEGER NOT NULL DEFAULT 0",
     ),
   ]
   for col in alters {
@@ -41,8 +39,7 @@ pub fn run_015(db : @db.Db, repo_root : String) -> Result[String, String] {
   // Authoritative reset: 過去の m015 run で投入された行を data.json から
   // 削除した場合にも DB を収束させるため、全行を neutral に戻してから
   // upsert する。
-  match
-    @db.exec(db, "UPDATE move_meta SET field_set='', field_turns=0") {
+  match @db.exec(db, "UPDATE move_meta SET field_set='', field_turns=0") {
     Err(e) => return Err(e)
     Ok(_) => ()
   }
@@ -51,7 +48,7 @@ pub fn run_015(db : @db.Db, repo_root : String) -> Result[String, String] {
     Some(s) => s
     None => return Err(path + " not found.")
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse: " + e.to_string())
   }
   let entries = match expect_array(json) {
@@ -69,11 +66,9 @@ pub fn run_015(db : @db.Db, repo_root : String) -> Result[String, String] {
     let field_set = str_field(entry, "field_set")
     let field_turns = int_field(entry, "field_turns", 0)
     let rows = match
-      @db.query_binds(
-        db,
-        "SELECT 1 FROM move_meta WHERE name_ja = ? LIMIT 1",
-        [@db.BindText(name)],
-      ) {
+      @db.query_binds(db, "SELECT 1 FROM move_meta WHERE name_ja = ? LIMIT 1", [
+        @db.BindText(name),
+      ]) {
       Err(e) => return Err(e)
       Ok(r) => r
     }

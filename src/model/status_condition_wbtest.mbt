@@ -21,11 +21,26 @@ test "StatusCondition equality: Sleep counter distinguishes variants" {
 
 ///|
 test "StatusKind round trip via from_jp" {
-  @debug.debug_inspect(status_kind_from_jp("まひ"), content="Some(ParalyzeKind)")
-  @debug.debug_inspect(status_kind_from_jp("やけど"), content="Some(BurnKind)")
-  @debug.debug_inspect(status_kind_from_jp("どく"), content="Some(PoisonKind)")
-  @debug.debug_inspect(status_kind_from_jp("もうどく"), content="Some(BadPoisonKind)")
-  @debug.debug_inspect(status_kind_from_jp("ねむり"), content="Some(SleepKind)")
+  @debug.debug_inspect(
+    status_kind_from_jp("まひ"),
+    content="Some(ParalyzeKind)",
+  )
+  @debug.debug_inspect(
+    status_kind_from_jp("やけど"),
+    content="Some(BurnKind)",
+  )
+  @debug.debug_inspect(
+    status_kind_from_jp("どく"),
+    content="Some(PoisonKind)",
+  )
+  @debug.debug_inspect(
+    status_kind_from_jp("もうどく"),
+    content="Some(BadPoisonKind)",
+  )
+  @debug.debug_inspect(
+    status_kind_from_jp("ねむり"),
+    content="Some(SleepKind)",
+  )
   assert_true(status_kind_from_jp("unknown") == None)
 }
 
@@ -33,14 +48,14 @@ test "StatusKind round trip via from_jp" {
 test "immune_to_status: electric is immune to paralyze" {
   assert_true(immune_to_status(ParalyzeKind, "でんき", ""))
   assert_true(immune_to_status(ParalyzeKind, "ノーマル", "でんき"))
-  assert_true(!(immune_to_status(ParalyzeKind, "ノーマル", "")))
+  assert_true(!immune_to_status(ParalyzeKind, "ノーマル", ""))
 }
 
 ///|
 test "immune_to_status: fire is immune to burn" {
   assert_true(immune_to_status(BurnKind, "ほのお", ""))
   assert_true(immune_to_status(BurnKind, "ノーマル", "ほのお"))
-  assert_true(!(immune_to_status(BurnKind, "みず", "")))
+  assert_true(!immune_to_status(BurnKind, "みず", ""))
 }
 
 ///|
@@ -49,14 +64,14 @@ test "immune_to_status: steel and poison are immune to poison and badpoison" {
   assert_true(immune_to_status(PoisonKind, "どく", ""))
   assert_true(immune_to_status(BadPoisonKind, "はがね", ""))
   assert_true(immune_to_status(BadPoisonKind, "どく", ""))
-  assert_true(!(immune_to_status(PoisonKind, "ノーマル", "")))
-  assert_true(!(immune_to_status(BadPoisonKind, "ノーマル", "")))
+  assert_true(!immune_to_status(PoisonKind, "ノーマル", ""))
+  assert_true(!immune_to_status(BadPoisonKind, "ノーマル", ""))
 }
 
 ///|
 test "immune_to_status: sleep has no type immunity in MVP (abilities handled separately)" {
-  assert_true(!(immune_to_status(SleepKind, "くさ", "")))
-  assert_true(!(immune_to_status(SleepKind, "ノーマル", "")))
+  assert_true(!immune_to_status(SleepKind, "くさ", ""))
+  assert_true(!immune_to_status(SleepKind, "ノーマル", ""))
 }
 
 ///|
@@ -71,12 +86,15 @@ test "inflict_status: maps StatusKind to initial StatusCondition" {
 
 ///|
 test "status_kind_from_jp: あくび maps to DrowsyKind" {
-  @debug.debug_inspect(status_kind_from_jp("あくび"), content="Some(DrowsyKind)")
+  @debug.debug_inspect(
+    status_kind_from_jp("あくび"),
+    content="Some(DrowsyKind)",
+  )
 }
 
 ///|
 test "immune_to_status: drowsy ignores type (MVP behaviour)" {
-  assert_true(!(immune_to_status(DrowsyKind, "くさ", "")))
-  assert_true(!(immune_to_status(DrowsyKind, "でんき", "")))
-  assert_true(!(immune_to_status(DrowsyKind, "ノーマル", "")))
+  assert_true(!immune_to_status(DrowsyKind, "くさ", ""))
+  assert_true(!immune_to_status(DrowsyKind, "でんき", ""))
+  assert_true(!immune_to_status(DrowsyKind, "ノーマル", ""))
 }

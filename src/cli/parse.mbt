@@ -213,7 +213,7 @@ pub fn parse_fixed_ev(s : String) -> Result[FixedArray[Int], String] {
           all_digits = false
         }
       }
-      if !(all_digits) {
+      if !all_digits {
         return Err("invalid --fixed-ev token: " + tok)
       }
       out[i] = parse_int_str(tok, 0)

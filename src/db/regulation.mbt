@@ -43,5 +43,9 @@ fn eq_ascii_case_insensitive(a : String, b : String) -> Bool {
 
 ///|
 fn ascii_to_upper(c : Int) -> Int {
-  if c >= 0x61 && c <= 0x7A { c - 0x20 } else { c }
+  if c >= 0x61 && c <= 0x7A {
+    c - 0x20
+  } else {
+    c
+  }
 }

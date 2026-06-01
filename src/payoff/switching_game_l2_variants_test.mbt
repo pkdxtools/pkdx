@@ -29,8 +29,7 @@ fn l2v_mean(
 test "mean_damage_cached: L2 hit on Triple Axel returns the variants-weighted mean (#91)" {
   let path = "pkdx_sw_l2_variants_triple_test.sqlite"
   let _ = @db.unlink_file(path)
-  guard
-    @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
     fail("open_or_init failed")
   }
 
@@ -79,15 +78,13 @@ test "mean_damage_cached: L2 hit on Triple Axel returns the variants-weighted me
 
   @damage_cache.close(disk)
   let _ = @db.unlink_file(path)
-
 }
 
 ///|
 test "mean_damage_cached: L2 hit on Random2to5 returns the variants-weighted mean (#91)" {
   let path = "pkdx_sw_l2_variants_random_test.sqlite"
   let _ = @db.unlink_file(path)
-  guard
-    @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
     fail("open_or_init failed")
   }
 
@@ -120,7 +117,6 @@ test "mean_damage_cached: L2 hit on Random2to5 returns the variants-weighted mea
 
   @damage_cache.close(disk)
   let _ = @db.unlink_file(path)
-
 }
 
 ///|
@@ -133,8 +129,7 @@ test "mean_damage_cached: L2 hit on Random2to5 returns the variants-weighted mea
 test "mean_damage_cached: reflect move does not poison L2 disk with zero" {
   let path = "pkdx_sw_l2_reflect_test.sqlite"
   let _ = @db.unlink_file(path)
-  guard
-    @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(disk) else {
     fail("open_or_init failed")
   }
 

@@ -21,18 +21,25 @@ test "query_move: エレキフィールド has field_set=Electric (m015 smoke)" 
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "エレキフィールド", @model.Other("scarlet_violet"))
+  let result = query_move(
+    db,
+    "エレキフィールド",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
-    Ok(mv) => {
+    Ok(mv) =>
       match mv.field_set {
         Some(Electric) => ()
         Some(_) =>
-          fail("エレキフィールド field_set expected Electric, got different variant")
+          fail(
+            "エレキフィールド field_set expected Electric, got different variant",
+          )
         None =>
-          fail("エレキフィールド field_set should be Some(Electric) but was None")
+          fail(
+            "エレキフィールド field_set should be Some(Electric) but was None",
+          )
       }
-    }
     Err(e) => fail("query_move エレキフィールド failed: " + e)
   }
 }
@@ -48,16 +55,25 @@ test "query_move: グラスフィールド has field_set=Grassy (m015 smoke)" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "グラスフィールド", @model.Other("scarlet_violet"))
+  let result = query_move(
+    db,
+    "グラスフィールド",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
-    Ok(mv) => {
+    Ok(mv) =>
       match mv.field_set {
         Some(Grassy) => ()
-        Some(_) => fail("グラスフィールド field_set expected Grassy, got different variant")
-        None => fail("グラスフィールド field_set should be Some(Grassy) but was None")
+        Some(_) =>
+          fail(
+            "グラスフィールド field_set expected Grassy, got different variant",
+          )
+        None =>
+          fail(
+            "グラスフィールド field_set should be Some(Grassy) but was None",
+          )
       }
-    }
     Err(e) => fail("query_move グラスフィールド failed: " + e)
   }
 }
@@ -73,16 +89,25 @@ test "query_move: ミストフィールド has field_set=Misty (m015 smoke)" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "ミストフィールド", @model.Other("scarlet_violet"))
+  let result = query_move(
+    db,
+    "ミストフィールド",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
-    Ok(mv) => {
+    Ok(mv) =>
       match mv.field_set {
         Some(Misty) => ()
-        Some(_) => fail("ミストフィールド field_set expected Misty, got different variant")
-        None => fail("ミストフィールド field_set should be Some(Misty) but was None")
+        Some(_) =>
+          fail(
+            "ミストフィールド field_set expected Misty, got different variant",
+          )
+        None =>
+          fail(
+            "ミストフィールド field_set should be Some(Misty) but was None",
+          )
       }
-    }
     Err(e) => fail("query_move ミストフィールド failed: " + e)
   }
 }
@@ -98,16 +123,25 @@ test "query_move: サイコフィールド has field_set=Psychic (m015 smoke)" {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "サイコフィールド", @model.Other("scarlet_violet"))
+  let result = query_move(
+    db,
+    "サイコフィールド",
+    @model.Other("scarlet_violet"),
+  )
   close(db)
   match result {
-    Ok(mv) => {
+    Ok(mv) =>
       match mv.field_set {
         Some(Psychic) => ()
-        Some(_) => fail("サイコフィールド field_set expected Psychic, got different variant")
-        None => fail("サイコフィールド field_set should be Some(Psychic) but was None")
+        Some(_) =>
+          fail(
+            "サイコフィールド field_set expected Psychic, got different variant",
+          )
+        None =>
+          fail(
+            "サイコフィールド field_set should be Some(Psychic) but was None",
+          )
       }
-    }
     Err(e) => fail("query_move サイコフィールド failed: " + e)
   }
 }
@@ -221,10 +255,7 @@ test "query_move: gracefully handles legacy DB without field columns (m015 compa
     #|INSERT INTO local_waza (waza, version, type, category, power, accuracy, pp)
     #|VALUES ('tackle', 'Scarlet_Violet', 'ノーマル', '物理', 40, 100, 35)
   let create_sqls = [
-    ddl_move_meta,
-    ddl_local_waza,
-    ddl_local_waza_language,
-    ins_local_waza_language,
+    ddl_move_meta, ddl_local_waza, ddl_local_waza_language, ins_local_waza_language,
     ins_local_waza,
   ]
   for sql in create_sqls {
@@ -243,7 +274,9 @@ test "query_move: gracefully handles legacy DB without field columns (m015 compa
   match result {
     Ok(mv) => @debug.debug_inspect(mv.field_set, content="None")
     Err(e) =>
-      fail("query_move on m015-未適用 schema should not error — but got: " + e)
+      fail(
+        "query_move on m015-未適用 schema should not error — but got: " + e,
+      )
   }
 }
 

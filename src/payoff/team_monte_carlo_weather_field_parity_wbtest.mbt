@@ -83,16 +83,31 @@ fn h1_state_from_weather_field(
 /// strict numeric parity は MC の単一 trial 確率性で破れるため、sign-bucket
 /// 一致 (DP > 0 → MC > -0.5) で十分。
 test "MC/DP parity under (Sun, Electric Terrain): sign agreement" {
-  let own_p = mk_pokemon("FireZap", "ほのお", "でんき", 200, 120, 80, 120, 80, 100)
+  let own_p = mk_pokemon(
+    "FireZap", "ほのお", "でんき", 200, 120, 80, 120, 80, 100,
+  )
   let opp_p = mk_pokemon("Dfn", "ノーマル", "", 250, 80, 100, 80, 100, 70)
-  let flamethrower = mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)
-  let thunderbolt = mk_move("10まんボルト", "でんき", @model.Special, 90)
+  let flamethrower = mk_move(
+    "かえんほうしゃ",
+    "ほのお",
+    @model.Special,
+    90,
+  )
+  let thunderbolt = mk_move(
+    "10まんボルト",
+    "でんき",
+    @model.Special,
+    90,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let own = [mk_combatant(own_p, [flamethrower, thunderbolt])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let turn_limit = 5
   let state = h1_state_from_weather_field(
-    @model.Weather::Sun, @model.Field::Electric, own, opp,
+    @model.Weather::Sun,
+    @model.Field::Electric,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
@@ -102,7 +117,10 @@ test "MC/DP parity under (Sun, Electric Terrain): sign agreement" {
   // 平均化)。weather+field が MC layer の damage 経路を抜けていれば、own 側
   // 1.5x × 1.3x boost で DP と MC は同符号 (own 有利) になる。
   let mc_value = team_monte_carlo_value(
-    own, opp, 4, 42UL,
+    own,
+    opp,
+    4,
+    42UL,
     turn_limit~,
     weather=@model.Weather::Sun,
     field=@model.Field::Electric,
@@ -121,23 +139,36 @@ test "MC/DP parity under (Sun, Electric Terrain): sign agreement" {
 /// くさ攻撃 (Grassy Terrain 1.3x for grounded attacker) の組合せ。defender が
 /// 地震系を撃たない設計なので Grassy の 0.5x defender mod は影響しない。
 test "MC/DP parity under (Rain, Grassy Terrain): sign agreement" {
-  let own_p = mk_pokemon("WaterGrass", "みず", "くさ", 200, 100, 100, 120, 100, 100)
+  let own_p = mk_pokemon(
+    "WaterGrass", "みず", "くさ", 200, 100, 100, 120, 100, 100,
+  )
   let opp_p = mk_pokemon("Dfn", "ノーマル", "", 250, 80, 110, 80, 110, 70)
   let surf = mk_move("なみのり", "みず", @model.Special, 90)
-  let leafblade = mk_move("リーフブレード", "くさ", @model.Physical, 90)
+  let leafblade = mk_move(
+    "リーフブレード",
+    "くさ",
+    @model.Physical,
+    90,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let own = [mk_combatant(own_p, [surf, leafblade])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let turn_limit = 5
   let state = h1_state_from_weather_field(
-    @model.Weather::Rain, @model.Field::Grassy, own, opp,
+    @model.Weather::Rain,
+    @model.Field::Grassy,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
   let dmg = new_damage_cache()
   let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
   let mc_value = team_monte_carlo_value(
-    own, opp, 4, 42UL,
+    own,
+    opp,
+    4,
+    42UL,
     turn_limit~,
     weather=@model.Weather::Rain,
     field=@model.Field::Grassy,
@@ -157,22 +188,35 @@ test "MC/DP parity under (Rain, Grassy Terrain): sign agreement" {
 /// fixture は own = はがね/ひこう (Sand 免疫) で chip を片側だけにする。これで
 /// Sand 環境下の win-rate boost が own 側に出る (DP / MC で同方向)。
 test "MC/DP parity under (Sand, Misty Terrain): sign agreement, own Sand-immune" {
-  let own_p = mk_pokemon("SteelFly", "はがね", "ひこう", 200, 110, 110, 80, 90, 100)
+  let own_p = mk_pokemon(
+    "SteelFly", "はがね", "ひこう", 200, 110, 110, 80, 90, 100,
+  )
   let opp_p = mk_pokemon("Dfn", "ノーマル", "", 250, 80, 100, 80, 100, 70)
-  let ironhead = mk_move("アイアンヘッド", "はがね", @model.Physical, 80)
+  let ironhead = mk_move(
+    "アイアンヘッド",
+    "はがね",
+    @model.Physical,
+    80,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let own = [mk_combatant(own_p, [ironhead])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let turn_limit = 5
   let state = h1_state_from_weather_field(
-    @model.Weather::Sand, @model.Field::Misty, own, opp,
+    @model.Weather::Sand,
+    @model.Field::Misty,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
   let dmg = new_damage_cache()
   let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
   let mc_value = team_monte_carlo_value(
-    own, opp, 4, 42UL,
+    own,
+    opp,
+    4,
+    42UL,
     turn_limit~,
     weather=@model.Weather::Sand,
     field=@model.Field::Misty,
@@ -188,22 +232,35 @@ test "MC/DP parity under (Sand, Misty Terrain): sign agreement, own Sand-immune"
 /// priority 技を撃たないので priority block 自体は damage parity に影響せず、
 /// state を共有していれば DP / MC は同方向に出る。
 test "MC/DP parity under (Snow, Psychic Terrain): sign agreement" {
-  let own_p = mk_pokemon("PsyAtk", "エスパー", "", 200, 100, 100, 130, 100, 110)
+  let own_p = mk_pokemon(
+    "PsyAtk", "エスパー", "", 200, 100, 100, 130, 100, 110,
+  )
   let opp_p = mk_pokemon("Dfn", "ノーマル", "", 250, 80, 110, 80, 110, 70)
-  let psychic_mv = mk_move("サイコキネシス", "エスパー", @model.Special, 90)
+  let psychic_mv = mk_move(
+    "サイコキネシス",
+    "エスパー",
+    @model.Special,
+    90,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let own = [mk_combatant(own_p, [psychic_mv])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let turn_limit = 5
   let state = h1_state_from_weather_field(
-    @model.Weather::Snow, @model.Field::Psychic, own, opp,
+    @model.Weather::Snow,
+    @model.Field::Psychic,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
   let dmg = new_damage_cache()
   let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
   let mc_value = team_monte_carlo_value(
-    own, opp, 4, 42UL,
+    own,
+    opp,
+    4,
+    42UL,
     turn_limit~,
     weather=@model.Weather::Snow,
     field=@model.Field::Psychic,
@@ -226,7 +283,10 @@ test "MC parity: default (None, None) and explicit seed are bit-exact" {
   let opp = [mk_combatant(opp_p, [tackle])]
   let v_default = team_monte_carlo_value(own, opp, 4, 123UL, turn_limit=5)
   let v_explicit = team_monte_carlo_value(
-    own, opp, 4, 123UL,
+    own,
+    opp,
+    4,
+    123UL,
     turn_limit=5,
     weather=@model.Weather::None,
     field=@model.Field::None,
@@ -246,6 +306,7 @@ test "MC parity: default (None, None) and explicit seed are bit-exact" {
 /// fixture: own = でんき 攻撃 (Electric Terrain 1.3x for grounded attacker)。
 /// own grounded + field=Electric で damage 1.3x boost → opp 側 KO までの
 /// turn が縮まり MC value が異なる。
+
 ///|
 /// **Case H-2A (Grassy heal — DP/MC value tol parity, field-active fixture)**:
 /// AI Rally 指摘 #2 (MC EOT が Grassy heal をスキップしていた) の回帰防止用 tol
@@ -259,7 +320,9 @@ test "MC parity: default (None, None) and explicit seed are bit-exact" {
 /// だが、damage 計算 + EOT residual の符号付き寄与が DP / MC で一致するかを直接
 /// 観測する。trial=64 で law-of-large-numbers を効かせ tol 0.15 に収める。
 test "MC/DP value parity under Grassy Terrain heal (field-active fixture)" {
-  let own_p = mk_pokemon("OwnG", "ノーマル", "", 240, 100, 100, 80, 100, 100)
+  let own_p = mk_pokemon(
+    "OwnG", "ノーマル", "", 240, 100, 100, 80, 100, 100,
+  )
   let opp_p = mk_pokemon("OppG", "ノーマル", "", 240, 100, 100, 80, 100, 90)
   let tackle_o = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
   let tackle_p = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
@@ -267,14 +330,20 @@ test "MC/DP value parity under Grassy Terrain heal (field-active fixture)" {
   let opp = [mk_combatant(opp_p, [tackle_p])]
   let turn_limit = 4
   let state = h1_state_from_weather_field(
-    @model.Weather::None, @model.Field::Grassy, own, opp,
+    @model.Weather::None,
+    @model.Field::Grassy,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
   let dmg = new_damage_cache()
   let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
   let mc_value = team_monte_carlo_value(
-    own, opp, 64, 4242UL,
+    own,
+    opp,
+    64,
+    4242UL,
     turn_limit~,
     weather=@model.Weather::None,
     field=@model.Field::Grassy,
@@ -300,9 +369,14 @@ test "MC/DP value parity under Grassy Terrain heal (field-active fixture)" {
 /// は `|dp - mc| < 0.15` で一致する。
 test "MC/DP value parity under Misty Terrain status block (field-active fixture)" {
   let own_p = mk_pokemon("OwnM", "ノーマル", "", 220, 110, 95, 80, 95, 110)
-  let opp_p = mk_pokemon("GroundedM", "ノーマル", "", 220, 100, 100, 80, 100, 90)
+  let opp_p = mk_pokemon(
+    "GroundedM", "ノーマル", "", 220, 100, 100, 80, 100, 90,
+  )
   let thunderwave = mk_move(
-    "でんじは", "でんき", @model.Status, 0,
+    "でんじは",
+    "でんき",
+    @model.Status,
+    0,
     status_effect=Some((@model.ParalyzeKind, 100)),
   )
   let tackle_o = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
@@ -311,14 +385,20 @@ test "MC/DP value parity under Misty Terrain status block (field-active fixture)
   let opp = [mk_combatant(opp_p, [tackle_p])]
   let turn_limit = 4
   let state = h1_state_from_weather_field(
-    @model.Weather::None, @model.Field::Misty, own, opp,
+    @model.Weather::None,
+    @model.Field::Misty,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
   let dmg = new_damage_cache()
   let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
   let mc_value = team_monte_carlo_value(
-    own, opp, 64, 5151UL,
+    own,
+    opp,
+    64,
+    5151UL,
     turn_limit~,
     weather=@model.Weather::None,
     field=@model.Field::Misty,
@@ -340,22 +420,36 @@ test "MC/DP value parity under Misty Terrain status block (field-active fixture)
 /// 通常 priority 攻撃にフォールバックし、value は `|dp - mc| < 0.15` で一致。
 test "MC/DP value parity under Psychic Terrain priority block (field-active fixture)" {
   let own_p = mk_pokemon("OwnP", "ノーマル", "", 220, 110, 95, 80, 95, 100)
-  let opp_p = mk_pokemon("GroundedP", "ノーマル", "", 220, 100, 100, 80, 100, 90)
-  let extreme_speed = mk_move("しんそく", "ノーマル", @model.Physical, 80, priority=2)
+  let opp_p = mk_pokemon(
+    "GroundedP", "ノーマル", "", 220, 100, 100, 80, 100, 90,
+  )
+  let extreme_speed = mk_move(
+    "しんそく",
+    "ノーマル",
+    @model.Physical,
+    80,
+    priority=2,
+  )
   let tackle_o = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
   let tackle_p = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
   let own = [mk_combatant(own_p, [extreme_speed, tackle_o])]
   let opp = [mk_combatant(opp_p, [tackle_p])]
   let turn_limit = 4
   let state = h1_state_from_weather_field(
-    @model.Weather::None, @model.Field::Psychic, own, opp,
+    @model.Weather::None,
+    @model.Field::Psychic,
+    own,
+    opp,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(noop_progress, 0)
   let dmg = new_damage_cache()
   let dp_value = value(state, own, opp, turn_limit, cache, stats, dmg)
   let mc_value = team_monte_carlo_value(
-    own, opp, 64, 6363UL,
+    own,
+    opp,
+    64,
+    6363UL,
     turn_limit~,
     weather=@model.Weather::None,
     field=@model.Field::Psychic,
@@ -364,6 +458,7 @@ test "MC/DP value parity under Psychic Terrain priority block (field-active fixt
   assert_true(diff < 0.15)
 }
 
+///|
 test "MC field threading: Electric Terrain shifts MC value vs Field::None" {
   // own = でんき 攻撃 (Electric Terrain で 1.3x boost、grounded 必要)。
   // 充分に bulky な opp を組んで turn_limit 内で簡単に KO されないようにし、
@@ -373,18 +468,29 @@ test "MC field threading: Electric Terrain shifts MC value vs Field::None" {
   // 1.3x boost で優位に立ち、value が strict に高くなる。
   let own_p = mk_pokemon("Zap", "でんき", "", 250, 90, 90, 110, 90, 90)
   let opp_p = mk_pokemon("Dfn", "ノーマル", "", 280, 100, 110, 90, 110, 80)
-  let thunderbolt = mk_move("10まんボルト", "でんき", @model.Special, 80)
+  let thunderbolt = mk_move(
+    "10まんボルト",
+    "でんき",
+    @model.Special,
+    80,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
   let own = [mk_combatant(own_p, [thunderbolt])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let v_no_field = team_monte_carlo_value(
-    own, opp, 4, 99UL,
+    own,
+    opp,
+    4,
+    99UL,
     turn_limit=4,
     weather=@model.Weather::None,
     field=@model.Field::None,
   )
   let v_electric = team_monte_carlo_value(
-    own, opp, 4, 99UL,
+    own,
+    opp,
+    4,
+    99UL,
     turn_limit=4,
     weather=@model.Weather::None,
     field=@model.Field::Electric,

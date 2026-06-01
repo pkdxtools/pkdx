@@ -1,7 +1,5 @@
 ///|
-fn format_errors(
-  errors : Array[@jsonschema.ValidationError],
-) -> Array[String] {
+fn format_errors(errors : Array[@jsonschema.ValidationError]) -> Array[String] {
   let result : Array[String] = []
   for e in errors {
     result.push("\{e.json_path}: \{e.message}")
@@ -152,7 +150,7 @@ pub fn validate_team_json(json : Json) -> Result[Unit, Array[String]] {
   match json {
     Object(root) => {
       let legacy = detect_legacy_team(root)
-      if !(legacy.is_empty()) {
+      if !legacy.is_empty() {
         return Err(legacy)
       }
     }
@@ -160,9 +158,7 @@ pub fn validate_team_json(json : Json) -> Result[Unit, Array[String]] {
   }
   let b = @jsonschema.Builder::new()
   let schema = team_schema(b, strict=true)
-  let resolver = try @jsonschema.build_resolver(
-      ({} : Map[String, Json]).to_json(),
-    ) catch {
+  let resolver = @jsonschema.build_resolver(({} : Map[String, Json]).to_json()) catch {
     _ => return Err(["internal: failed to build schema resolver"])
   }
   let errors = @jsonschema.Validatable::validate(
@@ -185,7 +181,7 @@ pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
   match json {
     Object(root) => {
       let legacy = detect_legacy_pokemon(root)
-      if !(legacy.is_empty()) {
+      if !legacy.is_empty() {
         return Err(legacy)
       }
     }
@@ -193,9 +189,7 @@ pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
   }
   let b = @jsonschema.Builder::new()
   let schema = pokemon_schema(b, strict=true)
-  let resolver = try @jsonschema.build_resolver(
-      ({} : Map[String, Json]).to_json(),
-    ) catch {
+  let resolver = @jsonschema.build_resolver(({} : Map[String, Json]).to_json()) catch {
     _ => return Err(["internal: failed to build schema resolver"])
   }
   let errors = @jsonschema.Validatable::validate(

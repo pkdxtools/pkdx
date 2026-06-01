@@ -58,7 +58,7 @@ pub fn load_label_index(path : String) -> Result[Map[String, String], String] {
     None => return Err("file not found: " + path)
     Some(s) => s
   }
-  let json = try @json.parse(raw) catch {
+  let json = @json.parse(raw) catch {
     e => return Err("JSON parse failed at " + path + ": " + e.to_string())
   }
   Ok(build_label_index(json))
@@ -69,12 +69,12 @@ pub fn load_label_index(path : String) -> Result[Map[String, String], String] {
 /// 受け取り、ID → 表示名解決を行う。`base_dir` には `<repo_root>/champout`
 /// 相当のパスが入る想定。
 pub(all) struct LabelBundle {
-  type_name : Map[String, String]      // TYPENAME_xxx -> "ほのお" 等
-  tokusei : Map[String, String]        // TOKUSEI_xxx -> "もらいび" 等
-  monsname : Map[String, String]       // MONSNAME_xxx -> "リザードン" 等
-  wazaname : Map[String, String]       // WAZANAME_xxx -> "かえんほうしゃ" 等
-  itemname : Map[String, String]       // ITEMNAME_xxx -> "こだわりハチマキ" 等
-  zkn_form : Map[String, String]       // ZKN_FORM_xxx_yyy -> "メガリザードンX" 等
+  type_name : Map[String, String] // TYPENAME_xxx -> "ほのお" 等
+  tokusei : Map[String, String] // TOKUSEI_xxx -> "もらいび" 等
+  monsname : Map[String, String] // MONSNAME_xxx -> "リザードン" 等
+  wazaname : Map[String, String] // WAZANAME_xxx -> "かえんほうしゃ" 等
+  itemname : Map[String, String] // ITEMNAME_xxx -> "こだわりハチマキ" 等
+  zkn_form : Map[String, String] // ZKN_FORM_xxx_yyy -> "メガリザードンX" 等
 }
 
 ///|

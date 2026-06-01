@@ -3,9 +3,7 @@ fn validate_with_schema(
   schema : @jsonschema.JsonSchema,
   json : Json,
 ) -> Array[@jsonschema.ValidationError] raise {
-  let resolver = @jsonschema.build_resolver(
-    ({} : Map[String, Json]).to_json(),
-  )
+  let resolver = @jsonschema.build_resolver(({} : Map[String, Json]).to_json())
   @jsonschema.Validatable::validate(
     schema,
     json,
@@ -30,7 +28,7 @@ test "generate_pokemon_placeholder: strict schema rejects" {
   let schema = pokemon_schema(b, strict=true)
   let placeholder = generate_pokemon_placeholder()
   let errors = validate_with_schema(schema, placeholder)
-  assert_true(!(errors.is_empty()))
+  assert_true(!errors.is_empty())
 }
 
 ///|
@@ -48,7 +46,7 @@ test "generate_team_placeholder: strict schema rejects" {
   let schema = team_schema(b, strict=true)
   let placeholder = generate_team_placeholder()
   let errors = validate_with_schema(schema, placeholder)
-  assert_true(!(errors.is_empty()))
+  assert_true(!errors.is_empty())
 }
 
 ///|

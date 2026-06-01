@@ -68,8 +68,7 @@ fn format_stats_with_default(
           let sp = get("s")
           "\{h}/\{a}/\{b}/\{c}/\{d}/\{sp}"
         }
-        _ =>
-          "\{default}/\{default}/\{default}/\{default}/\{default}/\{default}"
+        _ => "\{default}/\{default}/\{default}/\{default}/\{default}/\{default}"
       }
     _ => "\{default}/\{default}/\{default}/\{default}/\{default}/\{default}"
   }
@@ -349,7 +348,7 @@ pub fn build_team_document(
   json : Json,
   axis : String,
   date : String,
-  publish~ : Bool = false,
+  publish? : Bool = false,
 ) -> @markdown.Document {
   let blocks : Array[@markdown.Block] = []
   let battle_format = json_string(json, "battle_format")
@@ -414,9 +413,7 @@ pub fn build_team_document(
     _ => empty_obj
   }
   let primary_blocks = build_selection_plan_block(primary_sel, "表選出")
-  let alternate_blocks = build_selection_plan_block(
-    alternate_sel, "裏選出",
-  )
+  let alternate_blocks = build_selection_plan_block(alternate_sel, "裏選出")
   if primary_blocks.length() > 0 || alternate_blocks.length() > 0 {
     blocks.push(heading(2, "選出パターン"))
     blocks.push_iter(primary_blocks.iter())
@@ -426,7 +423,7 @@ pub fn build_team_document(
   // 「vs 相手」カードを emit (既存 meta.json 取り込み向け)。
   let plans = json_array(json, "matchup_plans")
   let has_new = primary_blocks.length() > 0 || alternate_blocks.length() > 0
-  if !(has_new) && plans.length() > 0 {
+  if !has_new && plans.length() > 0 {
     blocks.push(heading(2, "選出パターン"))
     blocks.push_iter(build_matchup_plans(plans, battle_format).iter())
   }
@@ -447,7 +444,7 @@ pub fn build_team_frontmatter(
   json : Json,
   axis : String,
   date : String,
-  publish~ : Bool = false,
+  publish? : Bool = false,
 ) -> @markdown.Frontmatter {
   let battle_format = json_string(json, "battle_format")
   let mechanics = json_string(json, "mechanics")
@@ -544,7 +541,7 @@ fn yaml_string_array(items : Array[String]) -> String {
   buf.write_char('[')
   let mut first = true
   for item in items {
-    if !(first) {
+    if !first {
       buf.write_string(", ")
     }
     first = false

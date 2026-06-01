@@ -27,7 +27,12 @@ fn move_turn_sign(
   let eff_me = if me_para { base_me / 2 } else { base_me }
   let eff_opp = if opp_para { base_opp / 2 } else { base_opp }
   turn_order_sign(
-    me_eff, mv_me.priority, eff_me, opp_eff, mv_opp.priority, eff_opp,
+    me_eff,
+    mv_me.priority,
+    eff_me,
+    opp_eff,
+    mv_opp.priority,
+    eff_opp,
   )
 }
 
@@ -151,7 +156,11 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_wish_turns: ws.opp_wish_turns,
     field: ws.field,
     field_turns_left: ws.field_turns_left,
-    turn: if bump_turn { ws.turn + 1 } else { ws.turn },
+    turn: if bump_turn {
+      ws.turn + 1
+    } else {
+      ws.turn
+    },
   }
 }
 
@@ -218,13 +227,29 @@ fn resolve_attacker_leg(
   // apply_damage_variants_fanout に統合され、variant ごとに chance-node leaf
   // を生成する。workspace は damage 適用前の状態で state にスナップショット
   // する (apply_damage_variants_fanout が per-variant に HP/recoil を扱う)。
-  let attacker_active = if attacker_is_me { ws.my_active } else { ws.opp_active }
-  let defender_active = if attacker_is_me { ws.opp_active } else { ws.my_active }
+  let attacker_active = if attacker_is_me {
+    ws.my_active
+  } else {
+    ws.opp_active
+  }
+  let defender_active = if attacker_is_me {
+    ws.opp_active
+  } else {
+    ws.my_active
+  }
   let attacker_ranks = if attacker_is_me { ws.my_ranks } else { ws.opp_ranks }
   let defender_ranks = if attacker_is_me { ws.opp_ranks } else { ws.my_ranks }
   let defender_hps = if attacker_is_me { ws.opp_hps } else { ws.my_hps }
-  let atk_consumed_arr = if attacker_is_me { ws.my_item_consumed } else { ws.opp_item_consumed }
-  let def_consumed_arr = if attacker_is_me { ws.opp_item_consumed } else { ws.my_item_consumed }
+  let atk_consumed_arr = if attacker_is_me {
+    ws.my_item_consumed
+  } else {
+    ws.opp_item_consumed
+  }
+  let def_consumed_arr = if attacker_is_me {
+    ws.opp_item_consumed
+  } else {
+    ws.my_item_consumed
+  }
   let atk_consumed = if attacker_active < atk_consumed_arr.length() {
     atk_consumed_arr[attacker_active]
   } else {
@@ -276,13 +301,13 @@ fn resolve_attacker_leg(
   apply_damage_variants_fanout(
     pre_damage_state,
     outcomes,
-    attacker_is_me=attacker_is_me,
-    attacker_active=attacker_active,
-    defender_active=defender_active,
-    attacker_move=attacker_move,
-    attacker_team=attacker_team,
+    attacker_is_me~,
+    attacker_active~,
+    defender_active~,
+    attacker_move~,
+    attacker_team~,
     defender_team=defender_team_eff,
-    pre_dmg_defender_hp=pre_dmg_defender_hp,
+    pre_dmg_defender_hp~,
   )
 }
 
@@ -343,31 +368,13 @@ fn resolve_moves(
     second_def_mega_now,
   ) = if my_first {
     (
-      true,
-      mv_me,
-      mi,
-      pre_my_burn,
-      my_mega_now,
-      opp_mega_now,
-      false,
-      mv_opp,
-      mj,
-      opp_mega_now,
-      my_mega_now,
+      true, mv_me, mi, pre_my_burn, my_mega_now, opp_mega_now, false, mv_opp, mj,
+      opp_mega_now, my_mega_now,
     )
   } else {
     (
-      false,
-      mv_opp,
-      mj,
-      pre_opp_burn,
-      opp_mega_now,
-      my_mega_now,
-      true,
-      mv_me,
-      mi,
-      my_mega_now,
-      opp_mega_now,
+      false, mv_opp, mj, pre_opp_burn, opp_mega_now, my_mega_now, true, mv_me, mi,
+      my_mega_now, opp_mega_now,
     )
   }
   let second_pre_status = if second_is_me {
@@ -378,16 +385,8 @@ fn resolve_moves(
   // Step 1: first attacker acts. Damage + stat boost applied, then the
   // attacker's status move (if any) fans out onto the second actor.
   let after_first = resolve_attacker_leg(
-    ws,
-    first_is_me,
-    first_move,
-    first_mv_idx,
-    first_mega_now,
-    first_def_mega_now,
-    first_pre_burn,
-    my_team,
-    opp_team,
-    dmg_cache,
+    ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
+    first_pre_burn, my_team, opp_team, dmg_cache,
   )
   // Step 2: for each branch, resolve the second attacker with the potentially
   // updated status (fresh burn halves their physical damage; fresh sleep
@@ -419,16 +418,8 @@ fn resolve_moves(
     let second_burn = is_burned(second_now_status)
     let ws2 = ws_from_state(s1)
     let after_second = resolve_attacker_leg(
-      ws2,
-      second_is_me,
-      second_move,
-      second_mv_idx,
-      second_mega_now,
-      second_def_mega_now,
-      second_burn,
-      my_team,
-      opp_team,
-      dmg_cache,
+      ws2, second_is_me, second_move, second_mv_idx, second_mega_now, second_def_mega_now,
+      second_burn, my_team, opp_team, dmg_cache,
     )
     for x in after_second {
       let (p2, s2) = x
@@ -481,7 +472,11 @@ fn clone_state(
 ///|
 /// Convenience: pick the active slot on the side indicated by `is_me`.
 pub fn target_active(state : SwitchingGameState, is_me : Bool) -> Int {
-  if is_me { state.my_active } else { state.opp_active }
+  if is_me {
+    state.my_active
+  } else {
+    state.opp_active
+  }
 }
 
 ///|
@@ -630,8 +625,8 @@ pub fn transition_with_cache(
       let my_para = is_paralyzed(state.my_status[state.my_active])
       let opp_para = is_paralyzed(state.opp_status[state.opp_active])
       let s = move_turn_sign(
-        me, my_ranks_new, mv_me, my_mega_now, my_para,
-        opp, opp_ranks_new, mv_opp, opp_mega_now, opp_para,
+        me, my_ranks_new, mv_me, my_mega_now, my_para, opp, opp_ranks_new, mv_opp,
+        opp_mega_now, opp_para,
       )
       // Last Resort 解禁判定用に両サイドの move を「使用済み」として記録。
       // resolve_moves は state を ws に変換して回すので、state を新しい mask で
@@ -639,31 +634,37 @@ pub fn transition_with_cache(
       let state_marked : SwitchingGameState = {
         ..state,
         my_moves_used: mark_move_used(state.my_moves_used, state.my_active, mi),
-        opp_moves_used: mark_move_used(state.opp_moves_used, state.opp_active, mj),
+        opp_moves_used: mark_move_used(
+          state.opp_moves_used,
+          state.opp_active,
+          mj,
+        ),
       }
       if s == 0 {
         // Speed tie: return two outcomes so the caller averages successor
         // *values* (not states). resolve_moves recomputes the second hit's
         // damage after the first actor's stat boosts.
         let outs : Array[(Double, SwitchingGameState)] = []
-        for half in resolve_moves(
-          state_marked, mi, mj, true, my_mega_now, opp_mega_now,
-          my_team, opp_team, dmg_cache,
-        ) {
+        for
+          half in resolve_moves(
+            state_marked, mi, mj, true, my_mega_now, opp_mega_now, my_team, opp_team,
+            dmg_cache,
+          ) {
           outs.push((0.5 * half.0, half.1))
         }
-        for half in resolve_moves(
-          state_marked, mi, mj, false, my_mega_now, opp_mega_now,
-          my_team, opp_team, dmg_cache,
-        ) {
+        for
+          half in resolve_moves(
+            state_marked, mi, mj, false, my_mega_now, opp_mega_now, my_team, opp_team,
+            dmg_cache,
+          ) {
           outs.push((0.5 * half.0, half.1))
         }
         return outs
       } else {
         let my_first = s > 0
         return resolve_moves(
-          state_marked, mi, mj, my_first, my_mega_now, opp_mega_now,
-          my_team, opp_team, dmg_cache,
+          state_marked, mi, mj, my_first, my_mega_now, opp_mega_now, my_team, opp_team,
+          dmg_cache,
         )
       }
     }
@@ -717,7 +718,11 @@ pub fn transition_with_cache(
       }
       let attacker_team = if attacker_is_me { my_team } else { opp_team }
       let defender_team_eff = if attacker_is_me { opp_team } else { my_team }
-      let attacker_mega = if attacker_is_me { my_mega_now } else { opp_mega_now }
+      let attacker_mega = if attacker_is_me {
+        my_mega_now
+      } else {
+        opp_mega_now
+      }
       let defender_mega = if attacker_is_me {
         base_state.opp_megaed[target_slot]
       } else {
@@ -728,7 +733,9 @@ pub fn transition_with_cache(
       // Psychic 下の grounded な switch-in に当たってしまう。base_state は
       // 既に turn を advance 済みなので blocked leaf は base_state をそのまま返す。
       if psychic_blocks_priority(
-          base_state.field, used_move.priority, defender_team_eff[target_slot],
+          base_state.field,
+          used_move.priority,
+          defender_team_eff[target_slot],
           defender_mega,
         ) {
         return [(1.0, base_state)]
@@ -767,21 +774,21 @@ pub fn transition_with_cache(
         atk_mega=attacker_mega,
         def_mega=defender_mega,
         atk_burn=attacker_burn,
-        atk_item_consumed=atk_item_consumed,
-        def_item_consumed=def_item_consumed,
+        atk_item_consumed~,
+        def_item_consumed~,
         weather=base_state.weather,
         field=base_state.field,
       )
       apply_damage_variants_fanout(
         base_state,
         outcomes,
-        attacker_is_me=attacker_is_me,
+        attacker_is_me~,
         attacker_active=attacker_slot,
         defender_active=target_slot,
         attacker_move=used_move,
-        attacker_team=attacker_team,
+        attacker_team~,
         defender_team=defender_team_eff,
-        pre_dmg_defender_hp=pre_dmg_defender_hp,
+        pre_dmg_defender_hp~,
       )
     }
   }
@@ -812,7 +819,12 @@ pub fn transition(
   opp_team : Array[Combatant],
 ) -> SwitchingGameState {
   let outcomes = transition_with_cache(
-    state, my_action, opp_action, my_team, opp_team, new_damage_cache(),
+    state,
+    my_action,
+    opp_action,
+    my_team,
+    opp_team,
+    new_damage_cache(),
   )
   outcomes[0].1
 }
@@ -856,10 +868,14 @@ fn pass_turn_state(
   opp_post_status : @model.StatusCondition,
 ) -> SwitchingGameState {
   let my_status = override_active_status(
-    state.my_status, state.my_active, my_post_status,
+    state.my_status,
+    state.my_active,
+    my_post_status,
   )
   let opp_status = override_active_status(
-    state.opp_status, state.opp_active, opp_post_status,
+    state.opp_status,
+    state.opp_active,
+    opp_post_status,
   )
   {
     my_active: state.my_active,
@@ -957,10 +973,14 @@ pub fn attempt_turn_with_cache(
         my_megaed: state.my_megaed,
         opp_megaed: state.opp_megaed,
         my_status: override_active_status(
-          state.my_status, state.my_active, ma.post_status,
+          state.my_status,
+          state.my_active,
+          ma.post_status,
         ),
         opp_status: override_active_status(
-          state.opp_status, state.opp_active, oa.post_status,
+          state.opp_status,
+          state.opp_active,
+          oa.post_status,
         ),
         my_must_recharge: state.my_must_recharge,
         opp_must_recharge: state.opp_must_recharge,
@@ -978,20 +998,34 @@ pub fn attempt_turn_with_cache(
         field_turns_left: state.field_turns_left,
         turn: state.turn,
       }
-      let branch_outs : Array[(Double, SwitchingGameState)] = match (
-        ma.acts, oa.acts,
-      ) {
+      let branch_outs : Array[(Double, SwitchingGameState)] = match
+        (ma.acts, oa.acts) {
         (true, true) =>
           transition_with_cache(
-            pre_state, ma.action, oa.action, my_team, opp_team, dmg_cache,
+            pre_state,
+            ma.action,
+            oa.action,
+            my_team,
+            opp_team,
+            dmg_cache,
           )
         (true, false) =>
           partial_act_outcomes(
-            pre_state, ma.action, true, my_team, opp_team, dmg_cache,
+            pre_state,
+            ma.action,
+            true,
+            my_team,
+            opp_team,
+            dmg_cache,
           )
         (false, true) =>
           partial_act_outcomes(
-            pre_state, oa.action, false, my_team, opp_team, dmg_cache,
+            pre_state,
+            oa.action,
+            false,
+            my_team,
+            opp_team,
+            dmg_cache,
           )
         (false, false) =>
           [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
@@ -1164,7 +1198,9 @@ fn partial_act_outcomes(
       // priority 技は Psychic 下の grounded defender に当たってはならない。
       // resolve_attacker_leg / Switch-vs-UseMove path と同じ guard を funnel する。
       if psychic_blocks_priority(
-          base_state.field, used_move.priority, defender_team_eff[target_slot],
+          base_state.field,
+          used_move.priority,
+          defender_team_eff[target_slot],
           defender_mega,
         ) {
         return [(1.0, base_state)]
@@ -1203,21 +1239,21 @@ fn partial_act_outcomes(
         atk_mega=attacker_mega,
         def_mega=defender_mega,
         atk_burn=attacker_burn,
-        atk_item_consumed=atk_item_consumed,
-        def_item_consumed=def_item_consumed,
+        atk_item_consumed~,
+        def_item_consumed~,
         weather=base_state.weather,
         field=base_state.field,
       )
       apply_damage_variants_fanout(
         base_state,
         outcomes,
-        attacker_is_me=attacker_is_me,
+        attacker_is_me~,
         attacker_active=attacker_slot,
         defender_active=target_slot,
         attacker_move=used_move,
-        attacker_team=attacker_team,
+        attacker_team~,
         defender_team=defender_team_eff,
-        pre_dmg_defender_hp=pre_dmg_defender_hp,
+        pre_dmg_defender_hp~,
       )
     }
   }
@@ -1309,9 +1345,9 @@ pub fn value(
   cache : @hashmap.HashMap[SwitchingGameState, Double],
   stats : ValueStats,
   dmg_cache : DamageCache,
-  alpha~ : Double = -1.0,
-  beta~ : Double = 1.0,
-  depth~ : Int = 0,
+  alpha? : Double = -1.0,
+  beta? : Double = 1.0,
+  depth? : Int = 0,
 ) -> Double {
   match terminal_value(state, my_team, opp_team, turn_limit) {
     Some(v) => return v
@@ -1362,22 +1398,28 @@ pub fn value(
     let mut row_min = 2.0 // sentinel: any actual cell ∈ [-1, +1] will dominate
     for j in 0..<cols {
       let outcomes = attempt_turn_with_cache(
-        state, actions_me[i], actions_opp[j], my_team, opp_team, dmg_cache,
+        state,
+        actions_me[i],
+        actions_opp[j],
+        my_team,
+        opp_team,
+        dmg_cache,
       )
       total_outcomes = total_outcomes + outcomes.length()
       let mut ev = 0.0
       for outcome in outcomes {
         let (prob, next) = outcome
-        ev += prob * value(
-          next,
-          my_team,
-          opp_team,
-          turn_limit,
-          cache,
-          stats,
-          dmg_cache,
-          depth=depth + 1,
-        )
+        ev += prob *
+          value(
+            next,
+            my_team,
+            opp_team,
+            turn_limit,
+            cache,
+            stats,
+            dmg_cache,
+            depth=depth + 1,
+          )
       }
       data[i][j] = ev
       if ev < row_min {
@@ -1436,7 +1478,7 @@ pub fn value(
     Ok(x) => x
     Err(_) => return 0.0
   }
-  let lp = try @nash.solve_zero_sum(m) catch {
+  let lp = @nash.solve_zero_sum(m) catch {
     _ => {
       silent_dp_fallback_count.val = silent_dp_fallback_count.val + 1
       return 0.0
@@ -1464,8 +1506,7 @@ fn maybe_emit_dp_node(
   outcomes : Int,
   classification : String,
 ) -> Unit {
-  if stats.log_every > 0 &&
-    stats.misses - stats.last_logged >= stats.log_every {
+  if stats.log_every > 0 && stats.misses - stats.last_logged >= stats.log_every {
     stats.last_logged = stats.misses
     (stats.progress)(
       DpNode(
@@ -1492,12 +1533,17 @@ pub fn switching_game_winrate(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> Double {
   let (v, _, _) = switching_game_winrate_stats(
-    my_team, opp_team, turn_limit, disk~, progress~, dp_log_every~,
+    my_team,
+    opp_team,
+    turn_limit,
+    disk~,
+    progress~,
+    dp_log_every~,
   )
   v
 }
@@ -1511,9 +1557,9 @@ pub fn switching_game_winrate_stats(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   turn_limit : Int,
-  disk~ : @damage_cache.DamageDiskCache? = None,
-  progress~ : (ProgressEvent) -> Unit = noop_progress,
-  dp_log_every~ : Int = 0,
+  disk? : @damage_cache.DamageDiskCache? = None,
+  progress? : (ProgressEvent) -> Unit = noop_progress,
+  dp_log_every? : Int = 0,
 ) -> (Double, ValueStats, DamageCache) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
@@ -1582,8 +1628,8 @@ pub fn alive_actions(
   hps : Array[Int],
   team : Array[Combatant],
   mega_used : Bool,
-  must_recharge~ : Bool = false,
-  moves_used~ : Array[Int] = [],
+  must_recharge? : Bool = false,
+  moves_used? : Array[Int] = [],
 ) -> Array[ActionKind] {
   let active_alive = hps[active] > 0
   if must_recharge && active_alive {

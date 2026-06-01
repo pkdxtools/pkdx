@@ -40,9 +40,8 @@ test "primary simplex on rock-paper-scissors returns Simplex path + expl=0" {
 /// reuse the same matrix here so that the regression guard is exactly the
 /// case the fallback chain must handle.
 fn load_degenerate_fixture_60x60() -> @nash.FiniteMatrix {
-  let raw = match @db.read_file(
-      "tests/fixtures/nash_simplex_failure_60x60.json",
-    ) {
+  let raw = match
+    @db.read_file("tests/fixtures/nash_simplex_failure_60x60.json") {
     Some(s) => s
     None => abort("missing tests/fixtures/nash_simplex_failure_60x60.json")
   }

@@ -29,8 +29,8 @@ fn move_meta_has_heal_columns(db : Db, qualifier : String) -> Bool {
     Err(_) => return false
   }
   let required = [
-    "heal_kind", "heal_num", "heal_den", "heal_sunny_num", "heal_sunny_den",
-    "heal_harsh_num", "heal_harsh_den", "weather_set",
+    "heal_kind", "heal_num", "heal_den", "heal_sunny_num", "heal_sunny_den", "heal_harsh_num",
+    "heal_harsh_den", "weather_set",
   ]
   let found : Array[Bool] = Array::make(required.length(), false)
   for row in rows {
@@ -99,7 +99,7 @@ pub fn query_moves(
   db : Db,
   global_no : String,
   version : @model.GameVersion,
-  include_inactive~ : Bool = false,
+  include_inactive? : Bool = false,
 ) -> Result[Array[@model.Move], String] {
   match version {
     @model.Champions => query_moves_champions(db, global_no, include_inactive)
@@ -148,8 +148,7 @@ fn query_moves_legacy(
   // LEFT JOIN move_meta per both UNION branches so priority / stat_effects
   // ride along on the returned Move. COALESCE defaults preserve the legacy
   // "no metadata" behaviour for moves not in the seed table.
-  let sql =
-    "SELECT DISTINCT wl.name AS move_name, w.type, w.category,\n" +
+  let sql = "SELECT DISTINCT wl.name AS move_name, w.type, w.category,\n" +
     "       w.power, w.accuracy, w.pp, pw.conditions AS learn_method,\n" +
     "       COALESCE(mm.priority, 0) AS priority,\n" +
     "       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,\n" +
@@ -192,7 +191,13 @@ fn query_moves_legacy(
   let binds = [
     waza_ver, waza_ver, gno, waza_ver, waza_ver, waza_ver, waza_ver, gno, waza_ver,
   ]
-  collect_moves_rows(db, sql, binds, has_heal=heal_cols != "", has_field=field_cols != "")
+  collect_moves_rows(
+    db,
+    sql,
+    binds,
+    has_heal=heal_cols != "",
+    has_field=field_cols != "",
+  )
 }
 
 ///|
@@ -232,8 +237,8 @@ fn collect_moves_rows(
   db : Db,
   sql : String,
   binds : Array[String],
-  has_heal~ : Bool = true,
-  has_field~ : Bool = true,
+  has_heal? : Bool = true,
+  has_field? : Bool = true,
 ) -> Result[Array[@model.Move], String] {
   let rows = match query(db, sql, binds) {
     Ok(r) => r
@@ -311,7 +316,11 @@ fn collect_moves_rows(
       None
     }
     let field_set = if has_field {
-      let field_set_str = if r.length() > field_base { r[field_base] } else { "" }
+      let field_set_str = if r.length() > field_base {
+        r[field_base]
+      } else {
+        ""
+      }
       parse_field_set(field_set_str)
     } else {
       None
@@ -421,9 +430,7 @@ pub fn parse_field_set(field_set : String) -> @model.Field? {
 /// malformed DB row cannot break a whole moveset query.
 fn parse_stat_effects_json(raw : String) -> Array[@model.StatEffect] {
   let out : Array[@model.StatEffect] = []
-  let json = try @json.parse(raw) catch {
-    _ => return out
-  }
+  let json = @json.parse(raw) catch { _ => return out }
   match json {
     Array(arr) =>
       for item in arr {
@@ -481,13 +488,7 @@ fn parse_status_effect(
     None => None
     Some(kind) => {
       let raw = parse_int(chance_str)
-      let chance = if raw <= 0 {
-        100
-      } else if raw > 100 {
-        100
-      } else {
-        raw
-      }
+      let chance = if raw <= 0 { 100 } else if raw > 100 { 100 } else { raw }
       Some((kind, chance))
     }
   }
@@ -523,8 +524,7 @@ pub fn query_move(
   }
   let has_heal = heal_cols != ""
   let has_field = field_cols != ""
-  let sql =
-    "SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,\n" +
+  let sql = "SELECT wl.name, w.type, w.category, w.power, w.accuracy, w.pp,\n" +
     "       COALESCE(mm.priority, 0) AS priority,\n" +
     "       COALESCE(mm.stat_effects_json, '[]') AS stat_effects_json,\n" +
     "       COALESCE(mm.ailment_ja, '') AS ailment_ja,\n" +

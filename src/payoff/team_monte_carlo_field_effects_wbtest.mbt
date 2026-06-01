@@ -25,9 +25,14 @@
 /// なので `rand_bool` は rng を消費せず確定 true を返し、roll の確率性に依存
 /// しない deterministic な観測になる。
 test "mc_try_apply_status: Misty Terrain blocks status on grounded defender" {
-  let grounded = mk_pokemon("Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let grounded = mk_pokemon(
+    "Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let thunderwave = mk_move(
-    "でんじは", "でんき", @model.Status, 0,
+    "でんじは",
+    "でんき",
+    @model.Status,
+    0,
     status_effect=Some((@model.ParalyzeKind, 100)),
   )
   let def_team = [mk_combatant(grounded, [thunderwave])]
@@ -36,13 +41,25 @@ test "mc_try_apply_status: Misty Terrain blocks status on grounded defender" {
   // Misty + grounded → 阻止 (status は None のまま)。
   let st_misty : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, thunderwave, def_team, hps, st_misty, 0, field=@model.Field::Misty,
+    rng,
+    thunderwave,
+    def_team,
+    hps,
+    st_misty,
+    0,
+    field=@model.Field::Misty,
   )
   @debug.assert_eq(st_misty[0], @model.None)
   // None field → 付与される (Paralyze)。
   let st_none : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, thunderwave, def_team, hps, st_none, 0, field=@model.Field::None,
+    rng,
+    thunderwave,
+    def_team,
+    hps,
+    st_none,
+    0,
+    field=@model.Field::None,
   )
   @debug.assert_eq(st_none[0], @model.Paralyze)
 }
@@ -55,7 +72,10 @@ test "mc_try_apply_status: Misty Terrain blocks status on grounded defender" {
 test "mc_try_apply_status: Misty Terrain does not block airborne defender" {
   let flyer = mk_pokemon("Flyer", "ひこう", "", 200, 100, 100, 100, 100, 100)
   let thunderwave = mk_move(
-    "でんじは", "でんき", @model.Status, 0,
+    "でんじは",
+    "でんき",
+    @model.Status,
+    0,
     status_effect=Some((@model.ParalyzeKind, 100)),
   )
   let def_team = [mk_combatant(flyer, [thunderwave])]
@@ -63,7 +83,13 @@ test "mc_try_apply_status: Misty Terrain does not block airborne defender" {
   let rng = seeded_rng(1UL)
   let st : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, thunderwave, def_team, hps, st, 0, field=@model.Field::Misty,
+    rng,
+    thunderwave,
+    def_team,
+    hps,
+    st,
+    0,
+    field=@model.Field::Misty,
   )
   @debug.assert_eq(st[0], @model.Paralyze)
 }
@@ -75,9 +101,14 @@ test "mc_try_apply_status: Misty Terrain does not block airborne defender" {
 /// が付与される。DP `maybe_apply_status_fanout` の Electric sleep block (Case
 /// G-2-H-A) と一致する MC 側 pin。
 test "mc_try_apply_status: Electric Terrain blocks sleep on grounded defender" {
-  let grounded = mk_pokemon("Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let grounded = mk_pokemon(
+    "Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let spore = mk_move(
-    "ねむらせる", "エスパー", @model.Status, 0,
+    "ねむらせる",
+    "エスパー",
+    @model.Status,
+    0,
     status_effect=Some((@model.SleepKind, 100)),
   )
   let def_team = [mk_combatant(grounded, [spore])]
@@ -86,13 +117,25 @@ test "mc_try_apply_status: Electric Terrain blocks sleep on grounded defender" {
   // Electric + grounded + sleep → 阻止 (None のまま)。
   let st_electric : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, spore, def_team, hps, st_electric, 0, field=@model.Field::Electric,
+    rng,
+    spore,
+    def_team,
+    hps,
+    st_electric,
+    0,
+    field=@model.Field::Electric,
   )
   @debug.assert_eq(st_electric[0], @model.None)
   // None field → Sleep(2) が付与される。
   let st_none : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, spore, def_team, hps, st_none, 0, field=@model.Field::None,
+    rng,
+    spore,
+    def_team,
+    hps,
+    st_none,
+    0,
+    field=@model.Field::None,
   )
   @debug.assert_eq(st_none[0], @model.Sleep(2))
 }
@@ -102,9 +145,14 @@ test "mc_try_apply_status: Electric Terrain blocks sleep on grounded defender" {
 /// sleep 限定の阻止なので、grounded defender への 100% paralyze は通常通り入る。
 /// Misty (全状態阻止) との決定的差分を MC でも pin。DP Case G-2-H-C と一致。
 test "mc_try_apply_status: Electric Terrain does not block paralyze on grounded defender" {
-  let grounded = mk_pokemon("Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let grounded = mk_pokemon(
+    "Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let thunderwave = mk_move(
-    "でんじは", "でんき", @model.Status, 0,
+    "でんじは",
+    "でんき",
+    @model.Status,
+    0,
     status_effect=Some((@model.ParalyzeKind, 100)),
   )
   let def_team = [mk_combatant(grounded, [thunderwave])]
@@ -112,7 +160,13 @@ test "mc_try_apply_status: Electric Terrain does not block paralyze on grounded 
   let rng = seeded_rng(1UL)
   let st : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, thunderwave, def_team, hps, st, 0, field=@model.Field::Electric,
+    rng,
+    thunderwave,
+    def_team,
+    hps,
+    st,
+    0,
+    field=@model.Field::Electric,
   )
   @debug.assert_eq(st[0], @model.Paralyze)
 }
@@ -124,7 +178,10 @@ test "mc_try_apply_status: Electric Terrain does not block paralyze on grounded 
 test "mc_try_apply_status: Electric Terrain does not block sleep on airborne defender" {
   let flyer = mk_pokemon("Flyer", "ひこう", "", 200, 100, 100, 100, 100, 100)
   let spore = mk_move(
-    "ねむらせる", "エスパー", @model.Status, 0,
+    "ねむらせる",
+    "エスパー",
+    @model.Status,
+    0,
     status_effect=Some((@model.SleepKind, 100)),
   )
   let def_team = [mk_combatant(flyer, [spore])]
@@ -132,7 +189,13 @@ test "mc_try_apply_status: Electric Terrain does not block sleep on airborne def
   let rng = seeded_rng(1UL)
   let st : Array[@model.StatusCondition] = [@model.None]
   mc_try_apply_status(
-    rng, spore, def_team, hps, st, 0, field=@model.Field::Electric,
+    rng,
+    spore,
+    def_team,
+    hps,
+    st,
+    0,
+    field=@model.Field::Electric,
   )
   @debug.assert_eq(st[0], @model.Sleep(2))
 }
@@ -143,9 +206,17 @@ test "mc_try_apply_status: Electric Terrain does not block sleep on airborne def
 /// Field != Psychic / 非 grounded defender の各境界では false を返す。DP
 /// resolve 側 Stage G-3 (switching_game_turn.mbt) の判定と完全一致。
 test "mc_psychic_priority_blocked: priority>0 negated vs grounded under Psychic" {
-  let grounded = mk_pokemon("Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100)
+  let grounded = mk_pokemon(
+    "Grounded", "ノーマル", "", 200, 100, 100, 100, 100, 100,
+  )
   let flyer = mk_pokemon("Flyer", "ひこう", "", 200, 100, 100, 100, 100, 100)
-  let quick_attack = mk_move("でんこうせっか", "ノーマル", @model.Physical, 40, priority=1)
+  let quick_attack = mk_move(
+    "でんこうせっか",
+    "ノーマル",
+    @model.Physical,
+    40,
+    priority=1,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let grounded_c = mk_combatant(grounded, [tackle])
   let flyer_c = mk_combatant(flyer, [tackle])
@@ -176,7 +247,9 @@ test "mc_psychic_priority_blocked: priority>0 negated vs grounded under Psychic"
 /// 両 value は一致して fail する (= MC が `apply_grassy_heal_active` を EOT で
 /// 呼んでいることの観測証拠)。
 test "team_rollout: Grassy Terrain EOT heal raises grounded own value vs Field::None" {
-  let own_p = mk_pokemon("Grounded", "ノーマル", "", 300, 90, 100, 90, 100, 100)
+  let own_p = mk_pokemon(
+    "Grounded", "ノーマル", "", 300, 90, 100, 90, 100, 100,
+  )
   let opp_p = mk_pokemon("Flyer", "ひこう", "", 300, 90, 100, 90, 100, 90)
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
   // かぜおこし は ひこう 技 — Grassy の grass-move boost 対象外。じめん 技も
@@ -185,10 +258,20 @@ test "team_rollout: Grassy Terrain EOT heal raises grounded own value vs Field::
   let own = [mk_combatant(own_p, [tackle])]
   let opp = [mk_combatant(opp_p, [gust])]
   let v_none = team_monte_carlo_value(
-    own, opp, 4, 55UL, turn_limit=6, field=@model.Field::None,
+    own,
+    opp,
+    4,
+    55UL,
+    turn_limit=6,
+    field=@model.Field::None,
   )
   let v_grassy = team_monte_carlo_value(
-    own, opp, 4, 55UL, turn_limit=6, field=@model.Field::Grassy,
+    own,
+    opp,
+    4,
+    55UL,
+    turn_limit=6,
+    field=@model.Field::Grassy,
   )
   assert_true(v_grassy > v_none)
 }
@@ -205,17 +288,37 @@ test "team_rollout: Psychic Terrain priority block lowers priority-only own valu
   // own の moveset を priority 技だけにすることで、greedy が必ず priority 技を
   // 選び、Psychic 下では毎ターン no-effect になる。opp は grounded ノーマルで
   // 非 priority 技 (block の影響なし)。
-  let own_p = mk_pokemon("Prior1", "ノーマル", "", 250, 110, 90, 90, 90, 120)
-  let opp_p = mk_pokemon("Grounded", "ノーマル", "", 250, 100, 100, 100, 100, 80)
-  let quick_attack = mk_move("でんこうせっか", "ノーマル", @model.Physical, 60, priority=1)
+  let own_p = mk_pokemon(
+    "Prior1", "ノーマル", "", 250, 110, 90, 90, 90, 120,
+  )
+  let opp_p = mk_pokemon(
+    "Grounded", "ノーマル", "", 250, 100, 100, 100, 100, 80,
+  )
+  let quick_attack = mk_move(
+    "でんこうせっか",
+    "ノーマル",
+    @model.Physical,
+    60,
+    priority=1,
+  )
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 60)
   let own = [mk_combatant(own_p, [quick_attack])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let v_none = team_monte_carlo_value(
-    own, opp, 4, 88UL, turn_limit=8, field=@model.Field::None,
+    own,
+    opp,
+    4,
+    88UL,
+    turn_limit=8,
+    field=@model.Field::None,
   )
   let v_psychic = team_monte_carlo_value(
-    own, opp, 4, 88UL, turn_limit=8, field=@model.Field::Psychic,
+    own,
+    opp,
+    4,
+    88UL,
+    turn_limit=8,
+    field=@model.Field::Psychic,
   )
   assert_true(v_psychic < v_none)
 }

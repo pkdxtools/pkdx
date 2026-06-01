@@ -7,10 +7,13 @@
 /// Build a deterministic 6-member test team keyed by the given speeds.
 fn build_6_team(label_prefix : String, speeds : Array[Int]) -> Array[Combatant] {
   let mv = mk_move("のしかかり", "ノーマル", @model.Physical, 85)
-  let team = Array::make(6, mk_combatant(
-    mk_pokemon("dummy", "ノーマル", "", 100, 100, 80, 80, 80, 100),
-    [mv],
-  ))
+  let team = Array::make(
+    6,
+    mk_combatant(
+      mk_pokemon("dummy", "ノーマル", "", 100, 100, 80, 80, 80, 100),
+      [mv],
+    ),
+  )
   for i in 0..<6 {
     team[i] = mk_combatant(
       mk_pokemon(
@@ -35,13 +38,16 @@ test "end_to_end_select_with_switching_game_model_returns_valid_distribution" {
   let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
   let opp = build_6_team("O", [100, 100, 100, 100, 100, 100])
   let team_m = team_payoff_matrix_with_team_model(
-    team, opp, Single, SwitchingGame(1),
+    team,
+    opp,
+    Single,
+    SwitchingGame(1),
   )
   assert_true(team_m.rows() == 60 && team_m.cols() == 60)
   let lp = @nash.solve_zero_sum(team_m)
   match lp {
     Optimal(row_strategy~, value~, ..) => {
-      assert_true(!(value.is_nan()))
+      assert_true(!value.is_nan())
       let arr = row_strategy.to_array()
       assert_true(arr.length() == 60)
       let mut total = 0.0
@@ -63,22 +69,23 @@ test "end_to_end_recoil_move_lowers_switching_game_winrate_vs_non_recoil" {
   let base_poke = mk_pokemon("A", "ほのお", "", 180, 160, 100, 100, 100, 120)
   let opp_poke = mk_pokemon("B", "くさ", "", 180, 100, 100, 100, 100, 100)
   let recoil_team = [
-    mk_combatant(
-      base_poke,
-      [
-        mk_move(
-          "flare", "ほのお", @model.Physical, 120, recoil_num=1, recoil_den=3,
-        ),
-      ],
-    ),
+    mk_combatant(base_poke, [
+      mk_move(
+        "flare",
+        "ほのお",
+        @model.Physical,
+        120,
+        recoil_num=1,
+        recoil_den=3,
+      ),
+    ]),
   ]
   let non_recoil_team = [
-    mk_combatant(
-      base_poke,
-      [mk_move("flame", "ほのお", @model.Special, 90)],
-    ),
+    mk_combatant(base_poke, [mk_move("flame", "ほのお", @model.Special, 90)]),
   ]
-  let opp_team = [mk_combatant(opp_poke, [mk_move("x", "くさ", @model.Physical, 50)])]
+  let opp_team = [
+    mk_combatant(opp_poke, [mk_move("x", "くさ", @model.Physical, 50)]),
+  ]
   let v_recoil = switching_game_winrate(recoil_team, opp_team, 6)
   let v_non_recoil = switching_game_winrate(non_recoil_team, opp_team, 6)
   // Base power 120 vs 90 is balanced by recoil wear-down; the strict
@@ -98,10 +105,9 @@ test "end_to_end_amaeru_worth_more_vs_physical_than_vs_special_opp" {
   let user = mk_combatant(
     mk_pokemon("U", "フェアリー", "", 200, 100, 120, 120, 120, 100),
     [
-      mk_move(
-        "amaeru", "フェアリー", @model.Status, 0,
-        stat_effects=[@model.StatEffect::{ stat: 0, delta: -2, target: 1 }],
-      ),
+      mk_move("amaeru", "フェアリー", @model.Status, 0, stat_effects=[
+        @model.StatEffect::{ stat: 0, delta: -2, target: 1 },
+      ]),
       mk_move("tackle", "ノーマル", @model.Physical, 40),
     ],
   )
@@ -138,23 +144,29 @@ test "end_to_end_lead_aware_switching_game_value_changes_with_lead" {
   // input array directly mirrors permuting the lead column emitted by
   // combinations_with_lead.
   let t0 = mk_combatant(
-    mk_pokemon("T0", "ノーマル", "", 110, 70, 60, 70, 60, 200), [mv],
+    mk_pokemon("T0", "ノーマル", "", 110, 70, 60, 70, 60, 200),
+    [mv],
   )
   let t1 = mk_combatant(
-    mk_pokemon("T1", "ノーマル", "", 200, 160, 140, 70, 140, 50), [mv],
+    mk_pokemon("T1", "ノーマル", "", 200, 160, 140, 70, 140, 50),
+    [mv],
   )
   let t2 = mk_combatant(
-    mk_pokemon("T2", "ノーマル", "", 130, 100, 100, 80, 100, 100), [mv],
+    mk_pokemon("T2", "ノーマル", "", 130, 100, 100, 80, 100, 100),
+    [mv],
   )
   let opp = [
     mk_combatant(
-      mk_pokemon("O0", "ノーマル", "", 140, 110, 100, 80, 100, 110), [mv],
+      mk_pokemon("O0", "ノーマル", "", 140, 110, 100, 80, 100, 110),
+      [mv],
     ),
     mk_combatant(
-      mk_pokemon("O1", "ノーマル", "", 140, 110, 100, 80, 100, 110), [mv],
+      mk_pokemon("O1", "ノーマル", "", 140, 110, 100, 80, 100, 110),
+      [mv],
     ),
     mk_combatant(
-      mk_pokemon("O2", "ノーマル", "", 140, 110, 100, 80, 100, 110), [mv],
+      mk_pokemon("O2", "ノーマル", "", 140, 110, 100, 80, 100, 110),
+      [mv],
     ),
   ]
   let v_t0_lead = switching_game_winrate([t0, t1, t2], opp, 4)
@@ -167,10 +179,16 @@ test "end_to_end_switching_game_reproducibility_same_inputs" {
   let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
   let opp = build_6_team("O", [102, 101, 100, 99, 98, 97])
   let m1 = team_payoff_matrix_with_team_model(
-    team, opp, Single, SwitchingGame(1),
+    team,
+    opp,
+    Single,
+    SwitchingGame(1),
   )
   let m2 = team_payoff_matrix_with_team_model(
-    team, opp, Single, SwitchingGame(1),
+    team,
+    opp,
+    Single,
+    SwitchingGame(1),
   )
   for i in 0..<20 {
     for j in 0..<20 {

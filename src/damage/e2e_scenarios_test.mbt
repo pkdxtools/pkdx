@@ -47,20 +47,28 @@ test "e2e: weather ball in sun becomes fire type power 100" {
   let mv = mk_move("ウェザーボール", "ノーマル", @model.Special, 50)
   let inp = mk_damage_input(atk, dfn, mv, weather=@model.Weather::Sun)
   let r = calc_damage(inp)
-  assert_true(!(r.is_immune))
+  assert_true(!r.is_immune)
   @debug.debug_inspect(r.hits_dealt, content="1")
   @debug.debug_inspect(r.min_damage, content="114")
   @debug.debug_inspect(r.max_damage, content="135")
-  @debug.debug_inspect(r.ko_text, content=(
-    #|"確定2発"
-  ))
+  @debug.debug_inspect(
+    r.ko_text,
+    content=(
+      #|"確定2発"
+    ),
+  )
 }
 
 ///|
 test "e2e: reflect halves physical damage" {
   let atk = e2e_pokemon("refl-atk", "ノーマル", 100, 130, 80, 80, 80, 80)
   let dfn = e2e_pokemon("refl-dfn", "ノーマル", 100, 80, 100, 80, 100, 80)
-  let mv = mk_move("すてみタックル", "ノーマル", @model.Physical, 120)
+  let mv = mk_move(
+    "すてみタックル",
+    "ノーマル",
+    @model.Physical,
+    120,
+  )
   let inp_no = mk_damage_input(atk, dfn, mv)
   let inp_wall = mk_damage_input(atk, dfn, mv, wall=@model.Wall::Reflect)
   let r_no = calc_damage(inp_no)
@@ -75,10 +83,19 @@ test "e2e: reflect halves physical damage" {
 test "e2e: reflect is bypassed by critical hits" {
   let atk = e2e_pokemon("refl-atk", "ノーマル", 100, 130, 80, 80, 80, 80)
   let dfn = e2e_pokemon("refl-dfn", "ノーマル", 100, 80, 100, 80, 100, 80)
-  let mv = mk_move("すてみタックル", "ノーマル", @model.Physical, 120)
+  let mv = mk_move(
+    "すてみタックル",
+    "ノーマル",
+    @model.Physical,
+    120,
+  )
   let inp_wall = mk_damage_input(atk, dfn, mv, wall=@model.Wall::Reflect)
   let inp_wall_crit = mk_damage_input(
-    atk, dfn, mv, wall=@model.Wall::Reflect, critical=true,
+    atk,
+    dfn,
+    mv,
+    wall=@model.Wall::Reflect,
+    critical=true,
   )
   let r_wall = calc_damage(inp_wall)
   let r_crit = calc_damage(inp_wall_crit)
@@ -125,10 +142,18 @@ test "e2e: disguise active adds 1/8 chip on top of normal damage" {
   let dfn = e2e_pokemon("mimikyu", "ノーマル", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let inp_active = mk_damage_input(
-    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=true,
+    atk,
+    dfn,
+    mv,
+    def_ability="ばけのかわ",
+    disguise_active=true,
   )
   let inp_inactive = mk_damage_input(
-    atk, dfn, mv, def_ability="ばけのかわ", disguise_active=false,
+    atk,
+    dfn,
+    mv,
+    def_ability="ばけのかわ",
+    disguise_active=false,
   )
   let r_active = calc_damage(inp_active)
   let r_inactive = calc_damage(inp_inactive)
@@ -139,7 +164,7 @@ test "e2e: disguise active adds 1/8 chip on top of normal damage" {
   assert_true(r_active.min_damage == r_inactive.min_damage + chip)
   // hits_dealt は move 視点の hit 数 (chip は ability proc で hit ではない)
   assert_true(r_active.hits_dealt == r_inactive.hits_dealt)
-  assert_true(!(r_active.is_immune))
+  assert_true(!r_active.is_immune)
 }
 
 ///|
@@ -153,9 +178,7 @@ test "e2e: shell side arm physical mode is blocked by Reflect (not LightScreen)"
   let dfn = e2e_pokemon("ssa-dfn", "ノーマル", 100, 100, 120, 100, 120, 100)
   let mv = mk_move("シェルアームズ", "どく", @model.Special, 90)
   let inp_reflect = mk_damage_input(atk, dfn, mv, wall=@model.Wall::Reflect)
-  let inp_light = mk_damage_input(
-    atk, dfn, mv, wall=@model.Wall::LightScreen,
-  )
+  let inp_light = mk_damage_input(atk, dfn, mv, wall=@model.Wall::LightScreen)
   let inp_base = mk_damage_input(atk, dfn, mv)
   let r_base = calc_damage(inp_base)
   let r_reflect = calc_damage(inp_reflect)
@@ -187,9 +210,7 @@ test "e2e: hex doubles on statused defender" {
   let dfn = e2e_pokemon("hex-dfn", "ノーマル", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("たたりめ", "ゴースト", @model.Special, 65)
   let inp_none = mk_damage_input(atk, dfn, mv)
-  let inp_burn = mk_damage_input(
-    atk, dfn, mv, def_status_condition=Burn,
-  )
+  let inp_burn = mk_damage_input(atk, dfn, mv, def_status_condition=Burn)
   let r_none = calc_damage(inp_none)
   let r_burn = calc_damage(inp_burn)
   // ゴースト vs ノーマル = 0x damage → the engine hits the immune fast path

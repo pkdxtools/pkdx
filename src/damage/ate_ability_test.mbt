@@ -10,11 +10,17 @@ test "ate skin: フェアリースキン on ハイパーボイス matches Showdo
   // ニンフィア (C=158 pre-rank, no nature) → ガブリアス (HP=183, D=105).
   // ハイパーボイス double battle (spread 0.75x).
   // Showdown reference: 138-164, 確定2発.
-  let atk = mk_pokemon_typed("ニンフィア", "フェアリー", "", 95, 65, 65, 110, 130, 60)
-  let dfn = mk_pokemon_typed("ガブリアス", "ドラゴン", "じめん", 108, 130, 95, 80, 85, 102)
+  let atk = mk_pokemon_typed(
+    "ニンフィア", "フェアリー", "", 95, 65, 65, 110, 130, 60,
+  )
+  let dfn = mk_pokemon_typed(
+    "ガブリアス", "ドラゴン", "じめん", 108, 130, 95, 80, 85, 102,
+  )
   let mv = mk_move("ハイパーボイス", "ノーマル", @model.Special, 90)
   let inp = mk_damage_input(
-    atk, dfn, mv,
+    atk,
+    dfn,
+    mv,
     atk_ability="フェアリースキン",
     atk_stat_override=158,
     def_stat_override=105,
@@ -24,22 +30,31 @@ test "ate skin: フェアリースキン on ハイパーボイス matches Showdo
     is_double=true,
   )
   let r = calc_damage(inp)
-  assert_true(!(r.is_immune))
+  assert_true(!r.is_immune)
   @debug.debug_inspect(r.min_damage, content="138")
   @debug.debug_inspect(r.max_damage, content="164")
-  @debug.debug_inspect(r.ko_text, content=(
-    #|"確定2発"
-  ))
+  @debug.debug_inspect(
+    r.ko_text,
+    content=(
+      #|"確定2発"
+    ),
+  )
 }
 
 ///|
 test "ate skin: フェアリースキン crit on ハイパーボイス matches Showdown rolls" {
   // Same matchup, critical hit. Showdown: 206-246, 確定1発.
-  let atk = mk_pokemon_typed("ニンフィア", "フェアリー", "", 95, 65, 65, 110, 130, 60)
-  let dfn = mk_pokemon_typed("ガブリアス", "ドラゴン", "じめん", 108, 130, 95, 80, 85, 102)
+  let atk = mk_pokemon_typed(
+    "ニンフィア", "フェアリー", "", 95, 65, 65, 110, 130, 60,
+  )
+  let dfn = mk_pokemon_typed(
+    "ガブリアス", "ドラゴン", "じめん", 108, 130, 95, 80, 85, 102,
+  )
   let mv = mk_move("ハイパーボイス", "ノーマル", @model.Special, 90)
   let inp = mk_damage_input(
-    atk, dfn, mv,
+    atk,
+    dfn,
+    mv,
     atk_ability="フェアリースキン",
     atk_stat_override=158,
     def_stat_override=105,
@@ -52,9 +67,12 @@ test "ate skin: フェアリースキン crit on ハイパーボイス matches S
   let r = calc_damage(inp)
   @debug.debug_inspect(r.min_damage, content="206")
   @debug.debug_inspect(r.max_damage, content="246")
-  @debug.debug_inspect(r.ko_text, content=(
-    #|"確定1発"
-  ))
+  @debug.debug_inspect(
+    r.ko_text,
+    content=(
+      #|"確定1発"
+    ),
+  )
 }
 
 ///|
@@ -62,17 +80,25 @@ test "ate skin: type override drops Normal STAB but adds new-type STAB if matche
   // フェアリースキン on a Fairy attacker → STAB applies through the new type.
   // Without skin (= without ability), Normal STAB would NOT apply because
   // attacker is pure Fairy. Pinning the difference confirms type rewriting.
-  let atk = mk_pokemon_typed("ニンフィア", "フェアリー", "", 95, 65, 65, 110, 130, 60)
-  let dfn = mk_pokemon_typed("dummy", "ノーマル", "", 100, 80, 80, 80, 80, 80)
+  let atk = mk_pokemon_typed(
+    "ニンフィア", "フェアリー", "", 95, 65, 65, 110, 130, 60,
+  )
+  let dfn = mk_pokemon_typed(
+    "dummy", "ノーマル", "", 100, 80, 80, 80, 80, 80,
+  )
   let mv = mk_move("ハイパーボイス", "ノーマル", @model.Special, 90)
   let inp_skin = mk_damage_input(
-    atk, dfn, mv,
+    atk,
+    dfn,
+    mv,
     atk_ability="フェアリースキン",
     atk_nature=Some(neutral_nature()),
     def_nature=Some(neutral_nature()),
   )
   let inp_no_skin = mk_damage_input(
-    atk, dfn, mv,
+    atk,
+    dfn,
+    mv,
     atk_nature=Some(neutral_nature()),
     def_nature=Some(neutral_nature()),
   )

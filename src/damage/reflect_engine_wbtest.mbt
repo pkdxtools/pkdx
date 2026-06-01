@@ -109,23 +109,21 @@ fn rf_input(
     multi_hit_mode: @model.MultiHit::Auto,
     disguise_active: false,
     protean_consumed: false,
-    incoming: Some(
-      @model.IncomingOpts::{
-        attacker: incoming_attacker,
-        move_: incoming_move,
-        atk_ability: "",
-        atk_item: "",
-        atk_nature: None,
-        atk_rank: 0,
-        atk_stat_override: 0,
-        atk_status_condition: @model.StatusCondition::None,
-        atk_rank_up_count: 0,
-        atk_hp_num: 2,
-        atk_hp_den: 2,
-        tera_type: "",
-        critical: false,
-      },
-    ),
+    incoming: Some(@model.IncomingOpts::{
+      attacker: incoming_attacker,
+      move_: incoming_move,
+      atk_ability: "",
+      atk_item: "",
+      atk_nature: None,
+      atk_rank: 0,
+      atk_stat_override: 0,
+      atk_status_condition: @model.StatusCondition::None,
+      atk_rank_up_count: 0,
+      atk_hp_num: 2,
+      atk_hp_den: 2,
+      tera_type: "",
+      critical: false,
+    }),
   }
 }
 
@@ -139,8 +137,18 @@ test "reflect: Counter doubles Step1 damage at every roll" {
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
-  let incoming_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
+  let incoming_mv = rf_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   let r = calc_damage(input)
   // Per-roll: reflect = 2 × step1 (integer division floors but ×2 has no
@@ -154,10 +162,7 @@ test "reflect: Counter doubles Step1 damage at every roll" {
   }
   let step1 = calc_damage(step1_input)
   for i = 0; i < 16; i = i + 1 {
-    @debug.debug_inspect(
-      r.damages[i] == step1.damages[i] * 2,
-      content="true",
-    )
+    @debug.debug_inspect(r.damages[i] == step1.damages[i] * 2, content="true")
   }
   // defender_hp is the reflected target's actual HP via calc_def_stat:
   //   (base*2 + IV31 + EV0) * 50 / 100 + 60 = (200*2+31)*50/100 + 60 = 275
@@ -173,7 +178,12 @@ test "reflect: MirrorCoat doubles special Step1 damage" {
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 50, 100, 200, 100, 100,
   )
-  let reflect_mv = rf_move("ミラーコート", "エスパー", @model.Special, 1)
+  let reflect_mv = rf_move(
+    "ミラーコート",
+    "エスパー",
+    @model.Special,
+    1,
+  )
   let incoming_mv = rf_move("ねっぷう", "ほのお", @model.Special, 95)
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   let r = calc_damage(input)
@@ -186,10 +196,7 @@ test "reflect: MirrorCoat doubles special Step1 damage" {
   }
   let step1 = calc_damage(step1_input)
   for i = 0; i < 16; i = i + 1 {
-    @debug.debug_inspect(
-      r.damages[i] == step1.damages[i] * 2,
-      content="true",
-    )
+    @debug.debug_inspect(r.damages[i] == step1.damages[i] * 2, content="true")
   }
 }
 
@@ -201,8 +208,18 @@ test "reflect: MetalBurst multiplies physical Step1 by 1.5 (floor)" {
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("メタルバースト", "はがね", @model.Physical, 1)
-  let incoming_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let reflect_mv = rf_move(
+    "メタルバースト",
+    "はがね",
+    @model.Physical,
+    1,
+  )
+  let incoming_mv = rf_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   let r = calc_damage(input)
   let step1_input = {
@@ -223,7 +240,9 @@ test "reflect: MetalBurst multiplies physical Step1 by 1.5 (floor)" {
 
 ///|
 test "reflect: Revenge multiplies special Step1 by 1.5 (floor)" {
-  let reflect_user = rf_pokemon("user", "あく", "", 200, 50, 100, 50, 100, 100)
+  let reflect_user = rf_pokemon(
+    "user", "あく", "", 200, 50, 100, 50, 100, 100,
+  )
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 50, 100, 200, 100, 100,
   )
@@ -256,9 +275,19 @@ test "reflect: Counter against Ghost-type incoming attacker → 0 (type immune)"
   let incoming = rf_pokemon(
     "incoming", "ゴースト", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
   // The incoming move itself must hit (Normal vs Normal works fine).
-  let incoming_mv = rf_move("シャドーパンチ", "ゴースト", @model.Physical, 60)
+  let incoming_mv = rf_move(
+    "シャドーパンチ",
+    "ゴースト",
+    @model.Physical,
+    60,
+  )
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   let r = calc_damage(input)
   for i = 0; i < 16; i = i + 1 {
@@ -275,7 +304,12 @@ test "reflect: MirrorCoat against Dark-type incoming attacker → 0 (type immune
   let incoming = rf_pokemon(
     "incoming", "あく", "", 200, 50, 100, 200, 100, 100,
   )
-  let reflect_mv = rf_move("ミラーコート", "エスパー", @model.Special, 1)
+  let reflect_mv = rf_move(
+    "ミラーコート",
+    "エスパー",
+    @model.Special,
+    1,
+  )
   let incoming_mv = rf_move("あくのはどう", "あく", @model.Special, 80)
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   let r = calc_damage(input)
@@ -292,7 +326,12 @@ test "reflect: category mismatch → 0 (Counter vs special incoming)" {
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 50, 100, 200, 100, 100,
   )
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
   // Special move → Counter rejects it.
   let incoming_mv = rf_move("ねっぷう", "ほのお", @model.Special, 95)
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
@@ -310,9 +349,19 @@ test "reflect: category mismatch → 0 (MirrorCoat vs physical incoming)" {
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("ミラーコート", "エスパー", @model.Special, 1)
+  let reflect_mv = rf_move(
+    "ミラーコート",
+    "エスパー",
+    @model.Special,
+    1,
+  )
   // Physical move → MirrorCoat rejects it.
-  let incoming_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let incoming_mv = rf_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   let r = calc_damage(input)
   for i = 0; i < 16; i = i + 1 {
@@ -326,7 +375,12 @@ test "reflect: incoming unset → 0 (engine safe fallback)" {
     "user", "ノーマル", "", 200, 50, 100, 50, 100, 100,
   )
   let any = rf_pokemon("any", "ノーマル", "", 200, 50, 100, 50, 100, 100)
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
   let any_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
   let mut input = rf_input(reflect_user, reflect_mv, any, any_mv)
   // Drop incoming_* to simulate the CLI-layer-bypassed misuse.
@@ -352,7 +406,12 @@ test "reflect: outer atk_ability ふゆう blocks じしん incoming" {
   let incoming = rf_pokemon(
     "incoming", "じめん", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
   let incoming_mv = rf_move("じしん", "じめん", @model.Physical, 100)
   let mut input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   input = { ..input, atk_ability: "ふゆう" }
@@ -376,7 +435,12 @@ test "reflect: outer def_ability does not grant Step1 immunity to reflect user" 
   let incoming = rf_pokemon(
     "incoming", "じめん", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
   let incoming_mv = rf_move("じしん", "じめん", @model.Physical, 100)
   let mut input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   input = { ..input, def_ability: "ふゆう" }
@@ -399,8 +463,18 @@ test "reflect: def_hp_override drives reflect-target percent denominator" {
   let incoming = rf_pokemon(
     "incoming", "ノーマル", "", 200, 200, 100, 50, 100, 100,
   )
-  let reflect_mv = rf_move("カウンター", "かくとう", @model.Physical, 1)
-  let incoming_mv = rf_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let reflect_mv = rf_move(
+    "カウンター",
+    "かくとう",
+    @model.Physical,
+    1,
+  )
+  let incoming_mv = rf_move(
+    "たいあたり",
+    "ノーマル",
+    @model.Physical,
+    40,
+  )
   let mut input = rf_input(reflect_user, reflect_mv, incoming, incoming_mv)
   // Override the reflect target's HP to a fixed value.
   input = { ..input, def_hp_override: 100 }

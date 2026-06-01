@@ -52,8 +52,8 @@ pub fn mkstemp_file(prefix : String) -> String? {
 /// TerminateProcess on timeout.
 pub(all) enum ShardResult {
   Ok
-  Exit(Int)     // non-zero exit code
-  Failed       // spawn / signal / timeout
+  Exit(Int) // non-zero exit code
+  Failed // spawn / signal / timeout
 } derive(Debug, Eq)
 
 ///|
@@ -76,7 +76,7 @@ pub suberror RunShardsError {
 /// then SIGKILLs.
 pub fn run_parallel_shards(
   argvs : Array[Array[String]],
-  timeout_ms~ : Int = 600_000,
+  timeout_ms? : Int = 600_000,
 ) -> Array[ShardResult] raise RunShardsError {
   let n_shards = argvs.length()
   if n_shards <= 0 {
@@ -99,7 +99,9 @@ pub fn run_parallel_shards(
   for i in 0..<n_shards {
     let args = argvs[i]
     if args.length() <= 0 {
-      raise InvalidInput("shard " + i.to_string() + " has no argv (need at least argv[0])")
+      raise InvalidInput(
+        "shard " + i.to_string() + " has no argv (need at least argv[0])",
+      )
     }
     shard_argc[i] = args.length()
     for arg in args {
@@ -111,24 +113,13 @@ pub fn run_parallel_shards(
 
   let exit_codes = FixedArray::make(n_shards, -1)
   let _ = pkdx_run_parallel_shards(
-    exe_bytes,
-    flat_bytes,
-    shard_argc,
-    n_shards,
-    timeout_ms,
-    exit_codes,
+    exe_bytes, flat_bytes, shard_argc, n_shards, timeout_ms, exit_codes,
   )
 
   let out = Array::make(n_shards, Ok)
   for i in 0..<n_shards {
     let code = exit_codes[i]
-    out[i] = if code == 0 {
-      Ok
-    } else if code < 0 {
-      Failed
-    } else {
-      Exit(code)
-    }
+    out[i] = if code == 0 { Ok } else if code < 0 { Failed } else { Exit(code) }
   }
   out
 }

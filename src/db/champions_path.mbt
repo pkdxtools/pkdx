@@ -55,8 +55,7 @@ pub fn resolve_champions_db_path_from(pokedex_path : String) -> String {
   if len >= suffix_len {
     let mut tail_match = true
     for i = 0; i < suffix_len; i = i + 1 {
-      if pokedex_path.unsafe_get(len - suffix_len + i) !=
-        suffix.unsafe_get(i) {
+      if pokedex_path.unsafe_get(len - suffix_len + i) != suffix.unsafe_get(i) {
         tail_match = false
       }
     }
@@ -178,7 +177,7 @@ pub fn open_for(
   match version {
     @model.Champions => {
       let champions_path = resolve_champions_db_path_from(pokedex_path)
-      if !(file_exists(champions_path)) {
+      if !file_exists(champions_path) {
         // champions.db 未生成 (setup.sh 未実行 / 旧 install): pokedex.db
         // のみ open。Champions レギュレーションのクエリは空結果になる。
         open(pokedex_path)
@@ -215,7 +214,7 @@ pub fn validate_champions_schema(db : Db) -> Result[Unit, String] {
   let required : Array[String] = []
   let missing : Array[String] = []
   for i = 0; i < required.length(); i = i + 1 {
-    if !(table_exists(db, required[i])) {
+    if !table_exists(db, required[i]) {
       missing.push(required[i])
     }
   }

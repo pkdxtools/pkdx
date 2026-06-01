@@ -55,7 +55,7 @@ fn hsp_input(
   attacker : @model.Pokemon,
   defender : @model.Pokemon,
   move_ : @model.Move,
-  atk_ability~ : String = "",
+  atk_ability? : String = "",
 ) -> @model.DamageCalcInput {
   {
     attacker,
@@ -167,7 +167,9 @@ test "Random2to5 and TripleVariant are mutually exclusive on resolve_auto_hits" 
     let spec = resolve_auto_hits(triple_set[i])
     @debug.debug_inspect(spec, content="FixedHit(3)")
   }
-  let random_2_5 = ["みだれづき", "ロックブラスト", "みずしゅりけん"]
+  let random_2_5 = [
+    "みだれづき", "ロックブラスト", "みずしゅりけん",
+  ]
   for i = 0; i < random_2_5.length(); i = i + 1 {
     let spec = resolve_auto_hits(random_2_5[i])
     @debug.debug_inspect(spec, content="Random2to5")

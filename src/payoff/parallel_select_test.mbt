@@ -9,7 +9,10 @@
 /// reason about (otherwise every cell would tie at 0.5 and parity
 /// checks become uninteresting).
 fn build_parity_team(prefix : String, hp_base : Int) -> Array[Combatant] {
-  let out = Array::make(6, mk_combatant(mk_pokemon("placeholder", "", "", 1, 1, 1, 1, 1, 1), []))
+  let out = Array::make(
+    6,
+    mk_combatant(mk_pokemon("placeholder", "", "", 1, 1, 1, 1, 1, 1), []),
+  )
   for i in 0..<6 {
     let hp = hp_base + i * 5
     let atk = 95 + i * 3
@@ -18,7 +21,17 @@ fn build_parity_team(prefix : String, hp_base : Int) -> Array[Combatant] {
     let spd = 75
     let spe = 110 - i * 5
     out[i] = mk_combatant(
-      mk_pokemon(prefix + i.to_string(), "ノーマル", "", hp, atk, def_, spa, spd, spe),
+      mk_pokemon(
+        prefix + i.to_string(),
+        "ノーマル",
+        "",
+        hp,
+        atk,
+        def_,
+        spa,
+        spd,
+        spe,
+      ),
       [mk_move("のしかかり", "ノーマル", @model.Physical, 85)],
     )
   }
@@ -35,7 +48,16 @@ test "screen_phase_rows: full range matches in-process Phase A reconstruction" {
   let mc_seed : UInt64 = 7UL
   let size_a = combinations_with_lead(6, 3).length()
   let size_b = combinations_with_lead(6, 3).length()
-  let full = screen_phase_rows(team_a, team_b, Single, mc_trials, mc_seed, 0, size_a, mc_turn_limit=3)
+  let full = screen_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    mc_trials,
+    mc_seed,
+    0,
+    size_a,
+    mc_turn_limit=3,
+  )
   @debug.assert_eq(full.length(), size_a)
   for i in 0..<size_a {
     @debug.assert_eq(full[i].length(), size_b)
@@ -56,7 +78,11 @@ test "screen_phase_rows: full range matches in-process Phase A reconstruction" {
         picked_b[p] = team_b[sel_b[j][p]]
       }
       let expected = team_monte_carlo_value(
-        picked_a, picked_b, mc_trials, mc_seed ^ cell_idx, turn_limit=3,
+        picked_a,
+        picked_b,
+        mc_trials,
+        mc_seed ^ cell_idx,
+        turn_limit=3,
       )
       @debug.assert_eq(full[i][j], expected)
     }
@@ -70,13 +96,40 @@ test "screen_phase_rows: shard concatenation reproduces full matrix bit-exact" {
   let mc_trials = 64
   let mc_seed : UInt64 = 11UL
   let size_a = combinations_with_lead(6, 3).length()
-  let full = screen_phase_rows(team_a, team_b, Single, mc_trials, mc_seed, 0, size_a, mc_turn_limit=3)
+  let full = screen_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    mc_trials,
+    mc_seed,
+    0,
+    size_a,
+    mc_turn_limit=3,
+  )
 
   // Walk a handful of (k_split) values and confirm the concatenation of
   // [0, k) and [k, size_a) lines up with the full matrix exactly.
   for split in [1, size_a / 2, size_a / 2 + 1, size_a - 1] {
-    let head = screen_phase_rows(team_a, team_b, Single, mc_trials, mc_seed, 0, split, mc_turn_limit=3)
-    let tail = screen_phase_rows(team_a, team_b, Single, mc_trials, mc_seed, split, size_a, mc_turn_limit=3)
+    let head = screen_phase_rows(
+      team_a,
+      team_b,
+      Single,
+      mc_trials,
+      mc_seed,
+      0,
+      split,
+      mc_turn_limit=3,
+    )
+    let tail = screen_phase_rows(
+      team_a,
+      team_b,
+      Single,
+      mc_trials,
+      mc_seed,
+      split,
+      size_a,
+      mc_turn_limit=3,
+    )
     @debug.assert_eq(head.length() + tail.length(), full.length())
     for i in 0..<head.length() {
       for j in 0..<head[i].length() {
@@ -98,8 +151,26 @@ test "screen_phase_rows: shard count > row count yields empty trailing slices" {
   let team_a = build_parity_team("A", 100)
   let team_b = build_parity_team("B", 105)
   let size_a = combinations_with_lead(6, 3).length()
-  let empty1 = screen_phase_rows(team_a, team_b, Single, 16, 1UL, size_a, size_a, mc_turn_limit=3)
-  let empty2 = screen_phase_rows(team_a, team_b, Single, 16, 1UL, 5, 5, mc_turn_limit=3)
+  let empty1 = screen_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    16,
+    1UL,
+    size_a,
+    size_a,
+    mc_turn_limit=3,
+  )
+  let empty2 = screen_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    16,
+    1UL,
+    5,
+    5,
+    mc_turn_limit=3,
+  )
   @debug.assert_eq(empty1.length(), 0)
   @debug.assert_eq(empty2.length(), 0)
 }
@@ -112,10 +183,29 @@ test "screen_phase_rows: mc_seed UInt64::MAX xor cell_idx stays stable across ru
   // many rows we slice at a time.
   let team_a = build_parity_team("A", 100)
   let team_b = build_parity_team("B", 105)
-  let max_seed : UInt64 = (0UL).reinterpret_as_int64().reinterpret_as_uint64() - 1UL
+  let max_seed : UInt64 = 0UL.reinterpret_as_int64().reinterpret_as_uint64() -
+    1UL
   let size_a = combinations_with_lead(6, 3).length()
-  let r1 = screen_phase_rows(team_a, team_b, Single, 16, max_seed, 0, size_a, mc_turn_limit=3)
-  let r2 = screen_phase_rows(team_a, team_b, Single, 16, max_seed, 0, size_a, mc_turn_limit=3)
+  let r1 = screen_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    16,
+    max_seed,
+    0,
+    size_a,
+    mc_turn_limit=3,
+  )
+  let r2 = screen_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    16,
+    max_seed,
+    0,
+    size_a,
+    mc_turn_limit=3,
+  )
   for i in 0..<size_a {
     for j in 0..<r1[i].length() {
       @debug.assert_eq(r1[i][j], r2[i][j])
@@ -133,7 +223,16 @@ test "refine_phase_rows: full retained range matches per-cell switching_game_win
   let row_keep = [0, 5, 13]
   let col_keep = [1, 2]
   let refine_tl = 2
-  let full = refine_phase_rows(team_a, team_b, Single, refine_tl, row_keep, col_keep, 0, row_keep.length())
+  let full = refine_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    refine_tl,
+    row_keep,
+    col_keep,
+    0,
+    row_keep.length(),
+  )
   @debug.assert_eq(full.length(), row_keep.length())
   for i in 0..<row_keep.length() {
     @debug.assert_eq(full[i].length(), col_keep.length())
@@ -159,10 +258,37 @@ test "refine_phase_rows: shard concatenation reproduces full retained matrix" {
   let row_keep = [0, 3, 7, 12, 19, 25]
   let col_keep = [2, 4]
   let refine_tl = 2
-  let full = refine_phase_rows(team_a, team_b, Single, refine_tl, row_keep, col_keep, 0, row_keep.length())
+  let full = refine_phase_rows(
+    team_a,
+    team_b,
+    Single,
+    refine_tl,
+    row_keep,
+    col_keep,
+    0,
+    row_keep.length(),
+  )
   for split in [1, 3, row_keep.length() - 1] {
-    let head = refine_phase_rows(team_a, team_b, Single, refine_tl, row_keep, col_keep, 0, split)
-    let tail = refine_phase_rows(team_a, team_b, Single, refine_tl, row_keep, col_keep, split, row_keep.length())
+    let head = refine_phase_rows(
+      team_a,
+      team_b,
+      Single,
+      refine_tl,
+      row_keep,
+      col_keep,
+      0,
+      split,
+    )
+    let tail = refine_phase_rows(
+      team_a,
+      team_b,
+      Single,
+      refine_tl,
+      row_keep,
+      col_keep,
+      split,
+      row_keep.length(),
+    )
     @debug.assert_eq(head.length() + tail.length(), full.length())
     for i in 0..<head.length() {
       for j in 0..<head[i].length() {
@@ -198,10 +324,9 @@ test "switching_game_winrate: disk=None vs disk=Some are bit-exact" {
       mk_pokemon("X", "ノーマル", "", 105, 100, 100, 70, 75, 95),
       [mk_move("のしかかり", "ノーマル", @model.Physical, 85)],
     ),
-    mk_combatant(
-      mk_pokemon("Y", "ノーマル", "", 100, 95, 95, 70, 75, 85),
-      [mk_move("のしかかり", "ノーマル", @model.Physical, 85)],
-    ),
+    mk_combatant(mk_pokemon("Y", "ノーマル", "", 100, 95, 95, 70, 75, 85), [
+      mk_move("のしかかり", "ノーマル", @model.Physical, 85),
+    ]),
   ]
   let path = "pkdx_parallel_l2_parity.sqlite"
   let _ = @db.unlink_file(path)
@@ -224,8 +349,7 @@ test "build_shard_argv: orchestrator-resolved turn limits land in the shard CLI"
   // wire format here so the regression cannot return without a test
   // failure.
   let argv_screen = build_shard_argv(
-    "/some/pkdx", "screen", "/tmp/in.json", "/tmp/out0.json", 0, 5, "", "",
-    7, 9,
+    "/some/pkdx", "screen", "/tmp/in.json", "/tmp/out0.json", 0, 5, "", "", 7, 9,
   )
   let mut saw_mc = false
   let mut saw_refine = false
@@ -242,8 +366,8 @@ test "build_shard_argv: orchestrator-resolved turn limits land in the shard CLI"
   assert_true(saw_mc)
   assert_true(saw_refine)
   let argv_refine = build_shard_argv(
-    "/some/pkdx", "refine", "/tmp/in.json", "/tmp/out1.json", 0, 3,
-    "0,1,2", "3,4,5", 7, 9,
+    "/some/pkdx", "refine", "/tmp/in.json", "/tmp/out1.json", 0, 3, "0,1,2", "3,4,5",
+    7, 9,
   )
   // refine inherits the same flag pair (orchestrator passes both phases
   // the same resolved limits; children pick the relevant one).
@@ -293,8 +417,7 @@ test "run_select_shard: --mc-turn-limit override beats the JSON-derived value" {
   // Note: `MC_TURN_LIMIT` (= MC default) ≠ mc_override so a buggy worker
   // that ignored the CLI flag would yield a different matrix than the
   // direct call below.
-  let input_json =
-    "{\"team\":" +
+  let input_json = "{\"team\":" +
     parity_team_json(team, "A") +
     ",\"opponent\":" +
     parity_team_json(opp, "B") +
@@ -313,7 +436,7 @@ test "run_select_shard: --mc-turn-limit override beats the JSON-derived value" {
     Err(e) => fail("write_file_str failed: " + e)
   }
   // Worker rows 0..3 of the screen matrix using the override.
-  try run_select_shard(
+  run_select_shard(
     in_path,
     out_path,
     "screen",
@@ -334,8 +457,15 @@ test "run_select_shard: --mc-turn-limit override beats the JSON-derived value" {
     }
   }
   let worker_matrix = parse_test_shard_matrix(raw)
-  let expected = try screen_phase_rows(
-    team, opp, Single, mc_trials, mc_seed, 0, 3, mc_turn_limit=mc_override,
+  let expected = screen_phase_rows(
+    team,
+    opp,
+    Single,
+    mc_trials,
+    mc_seed,
+    0,
+    3,
+    mc_turn_limit=mc_override,
   ) catch {
     err => {
       let _ = @db.unlink_file(in_path)
@@ -356,7 +486,7 @@ test "run_select_shard: --mc-turn-limit override beats the JSON-derived value" {
   // the assertion below would always pass, defeating the regression
   // gate — guard against that explicitly.
   assert_true(MC_TURN_LIMIT != mc_override)
-  try run_select_shard(
+  run_select_shard(
     in_path,
     out_path,
     "screen",
@@ -403,8 +533,7 @@ test "run_select_shard: --refine-turn-limit override beats the JSON-derived valu
   let mc_seed : UInt64 = 4242UL
   let json_refine_tl = 2
   let override_refine_tl = 4
-  let input_json =
-    "{\"team\":" +
+  let input_json = "{\"team\":" +
     parity_team_json(team, "A") +
     ",\"opponent\":" +
     parity_team_json(opp, "B") +
@@ -426,7 +555,7 @@ test "run_select_shard: --refine-turn-limit override beats the JSON-derived valu
   }
   let row_keep = [0, 5, 13]
   let col_keep = [1, 2]
-  try run_select_shard(
+  run_select_shard(
     in_path,
     out_path,
     "refine",
@@ -447,7 +576,7 @@ test "run_select_shard: --refine-turn-limit override beats the JSON-derived valu
     }
   }
   let worker_matrix = parse_test_shard_matrix(raw)
-  let expected_override = try refine_phase_rows(
+  let expected_override = refine_phase_rows(
     team,
     opp,
     Single,
@@ -573,8 +702,7 @@ test "build_shard_argv: --progress is appended only when progress_mode != off" {
   // events; non-viz callers (and the existing tests) should keep the
   // original 12-flag wire format unchanged.
   let argv_off = build_shard_argv(
-    "/some/pkdx", "screen", "/tmp/in.json", "/tmp/out.json", 0, 5, "", "",
-    7, 9,
+    "/some/pkdx", "screen", "/tmp/in.json", "/tmp/out.json", 0, 5, "", "", 7, 9,
   )
   let mut saw_off = false
   for i in 0..<argv_off.length() {
@@ -584,8 +712,17 @@ test "build_shard_argv: --progress is appended only when progress_mode != off" {
   }
   assert_false(saw_off)
   let argv_json = build_shard_argv(
-    "/some/pkdx", "screen", "/tmp/in.json", "/tmp/out.json", 0, 5, "", "",
-    7, 9, progress_mode="json",
+    "/some/pkdx",
+    "screen",
+    "/tmp/in.json",
+    "/tmp/out.json",
+    0,
+    5,
+    "",
+    "",
+    7,
+    9,
+    progress_mode="json",
   )
   let mut saw_json = false
   for i in 0..<argv_json.length() {
@@ -596,8 +733,17 @@ test "build_shard_argv: --progress is appended only when progress_mode != off" {
   }
   assert_true(saw_json)
   let argv_stderr = build_shard_argv(
-    "/some/pkdx", "refine", "/tmp/in.json", "/tmp/out.json", 0, 5,
-    "0,1,2", "0,1,2", 7, 9, progress_mode="stderr",
+    "/some/pkdx",
+    "refine",
+    "/tmp/in.json",
+    "/tmp/out.json",
+    0,
+    5,
+    "0,1,2",
+    "0,1,2",
+    7,
+    9,
+    progress_mode="stderr",
   )
   let mut saw_stderr = false
   for i in 0..<argv_stderr.length() {
@@ -620,8 +766,7 @@ test "run_select_shard: emits one CellStart and one CellDone per cell, in order"
   let mc_trials = 4
   let mc_seed : UInt64 = 7UL
   let mc_tl = 2
-  let input_json =
-    "{\"team\":" +
+  let input_json = "{\"team\":" +
     parity_team_json(team, "A") +
     ",\"opponent\":" +
     parity_team_json(opp, "B") +
@@ -655,7 +800,7 @@ test "run_select_shard: emits one CellStart and one CellDone per cell, in order"
       _ => ()
     }
   }
-  try run_select_shard(
+  run_select_shard(
     in_path,
     out_path,
     "screen",
@@ -685,6 +830,9 @@ test "run_select_shard: emits one CellStart and one CellDone per cell, in order"
     @debug.assert_eq(sr, dr)
     @debug.assert_eq(sc, dc)
     @debug.assert_eq(order[i * 2], "S:" + sr.to_string() + "," + sc.to_string())
-    @debug.assert_eq(order[i * 2 + 1], "D:" + sr.to_string() + "," + sc.to_string())
+    @debug.assert_eq(
+      order[i * 2 + 1],
+      "D:" + sr.to_string() + "," + sc.to_string(),
+    )
   }
 }

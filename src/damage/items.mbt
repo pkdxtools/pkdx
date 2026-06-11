@@ -111,6 +111,7 @@ pub fn get_resist_berry_type(item : String) -> String {
   match item {
     "オッカのみ" => "ほのお"
     "イトケのみ" => "みず"
+    "ソクノのみ" => "でんき"
     "リンドのみ" => "くさ"
     "ヤチェのみ" => "こおり"
     "ヨプのみ" => "かくとう"

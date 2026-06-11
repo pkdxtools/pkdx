@@ -6,6 +6,25 @@
 
 ---
 
+## 0. デフォルト実数値 (フラグ未指定時の暗黙投資量)
+
+`--atk-stat` / `--def-stat` / `--def-hp` / `--atk-nature` / `--def-nature` を渡さないとき、エンジンは種族値から実数値を **攻防非対称のデフォルト** で自動計算する (`damage/engine.mbt:118-170`)。ここを誤解すると以降の全計算がズレるため最初に確認すること。
+
+| 側 | Champions (SP) | scarlet_violet 等 (EV/IV) | 性格補正 | 実装 |
+|----|----|----|----|----|
+| 攻撃側 (攻撃に使う stat) | **SP=32 (最大)** | **EV=252 / IV=31** | **×1.1 (特化相当)** | `damage/stat.mbt:308-337` |
+| 防御側 (受ける stat) | **SP=0 (無投資)** | **EV=0 / IV=31** | **×1.0 (無補正)** | `damage/stat.mbt:343-372` |
+| 防御側 HP | **SP=0 (無投資)** | **EV=0 / IV=31** | ─ | 同上 |
+
+- **「指定なし = 無投資 (SP=0)」では *ない***。攻撃側だけ最大投資 + 特化相当補正が暗黙適用される。「攻撃側は最大投資・防御側は無投資」は Showdown 等の主要ダメ計ツールと同じ前提で、意図的な設計 (`engine.mbt:144-146` のコメント参照)
+- **検証例 (Champions)**: デカヌチャン (A 種族値 75) の攻撃側デフォルト = floor((75+32+20)×1.1) = **139**。防御側 HP (種族値 85) = 85+0+75 = **160** (いずれも実機確認済み)
+- **実際の個体に合わせるには**: `pkdx damage` に SP / EV を直接渡すフラグは **無い**。投資量がデフォルトと異なる場合は実数値を自前計算し `--atk-stat` / `--def-stat` / `--def-hp` で渡す (rank 前の実数値として扱われる、Section 10 参照)。性格は `--atk-nature` / `--def-nature` に性格名を渡せば参照 stat に応じた補正が解決される (`engine.mbt:121-128`)
+- **典型的な間違い**:
+  - 無振り・無補正のアタッカーをフラグ無しで計算 → SP32+1.1 前提の過大ダメージを提示
+  - 耐久振りの受けポケモンをフラグ無しで計算 → SP0 前提の過大な被ダメージを提示
+
+---
+
 ## 1. 特性に由来する特殊処理
 
 ### おやこあい (Parental Bond)
@@ -318,7 +337,7 @@ pkdx damage "ガブリアス" "ハピナス" "じしん" \
 
 ### 適用順序
 
-Showdown 準拠で **「特性 final → 壁 → いろめがね → 道具 final → きのみ」** の順に掛かる (`damage/engine.mbt:388-404`)。「壁のあとに弱点保険で反撃」等のタイミングとは別物なので注意。
+Showdown 準拠で **「特性 final → 壁 → いろめがね → 道具 final → きのみ」** の順に掛かる (`damage/engine.mbt:388-404`)。きのみ (半減実) の詳細は Section 6 を参照。「壁のあとに弱点保険で反撃」等のタイミングとは別物なので注意。
 
 ```bash
 # シングル・リフレクター下 (物理技 → 0.5x)
@@ -419,7 +438,71 @@ pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version s
 
 ---
 
-## 6. 状態異常 (Status Condition)
+## 6. 半減実 (Resist Berry)
+
+防御側の持ち物 (`--def-item`) に半減実を渡すと、条件を満たした技ダメージが 0.5x (4096 ベースで `round5(dmg, 2048)`) になる (`damage/engine.mbt:520-527`)。
+
+### 発動条件
+
+次の **両方** を満たすときだけ掛かる:
+
+1. **技タイプ = 実の対応タイプ** (下表)。タイプ判定は Skin 特性 / ウェザーボール解決 **後** の最終タイプで行われる
+2. **抜群 (効果ばつぐん) であること**。等倍・半減・無効では発動しない。**唯一の例外がホズのみ**: ノーマル技なら相性を問わず発動する (`engine.mbt:523`)
+
+### タイプ対応表 (全 18 種)
+
+`damage/items.mbt:110-132` のハードコードが正で、エンジンは DB を参照しない (`get_resist_berry_type_db` は shadow test 専用)。アイテム名は下表の **日本語表記に完全一致** が必要 (英名・略記は不可)。マッピング全 18 種は `damage/resist_berry_mapping_wbtest.mbt` で pin されている。
+
+| 半減実 | 半減タイプ | | 半減実 | 半減タイプ |
+|---|---|---|---|---|
+| オッカのみ | ほのお | | ウタンのみ | エスパー |
+| イトケのみ | みず | | タンガのみ | むし |
+| ソクノのみ | でんき | | ヨロギのみ | いわ |
+| リンドのみ | くさ | | カシブのみ | ゴースト |
+| ヤチェのみ | こおり | | ハバンのみ | ドラゴン |
+| ヨプのみ | かくとう | | ナモのみ | あく |
+| ビアーのみ | どく | | リリバのみ | はがね |
+| シュカのみ | じめん | | ロゼルのみ | フェアリー |
+| バコウのみ | ひこう | | ホズのみ | ノーマル (※抜群不問) |
+
+### 適用位置・連続技との相互作用
+
+- Section 4 の適用順序「特性 final → 壁 → いろめがね → 道具 final → きのみ」の **最後尾** で掛かる。min-1 床補正の直前 (`engine.mbt:517-531`)
+- **連続技は初撃のみ半減**: 実は最初の有効ヒットで消費されるため、2 撃目以降には掛からない (初撃のみ `apply_resist_berry=true` で `compute_rolls` を呼び、以降の hit は no-berry テーブルを使う — `engine.mbt:538`, `592-604`, `654-673`)。スキルリンク 5 連でも半減されるのは 1 ヒット分だけ
+- **おやこあいの 2 撃目も非適用**: 初撃で消費済み、またはタイプ不一致で発動しなかったかのどちらかなので、2 撃目で再発動することはない (`engine.mbt:584`)
+- **エンジンは状態を持たない**: 「前のターンで実を消費済み」のシナリオは `--def-item` を外して再計算する (ばけのかわの `--disguise-active` と同じ運用)
+
+### JSON 出力
+
+半減実専用の出力フィールドは **無い**。`damages[]` / `variants[]` は半減適用後の値で返り、`input.defender.item` の echo で渡したアイテムを確認できるのみ。発動有無を機械的に確かめたい場合は `--def-item` 無しの同条件と比較する。
+
+### CLI 例 (数値は実機検証済み)
+
+```bash
+# ハバンのみ: 抜群ドラゴン技を半減 (270-320 → 135-160、確1 → 確2)
+pkdx damage ガブリアス ボーマンダ げきりん --def-item ハバンのみ --version scarlet_violet
+
+# ホズのみ: 等倍ノーマル技でも発動する (唯一の例外。283-334 → 141-167)
+pkdx damage カビゴン ハピナス のしかかり --def-item ホズのみ --version scarlet_violet
+
+# 抜群でなければ発動しない (ハピナスにこおり技は等倍 → ヤチェのみは無効果)
+pkdx damage パルシェン ハピナス つららばり --def-item ヤチェのみ --version scarlet_violet
+
+# 連続技は初撃のみ半減 (つららばり 3 hit: 252-300 → 210-250 = 1 hit 分だけ半減)
+pkdx damage パルシェン ガブリアス つららばり --def-item ヤチェのみ --version scarlet_violet
+
+# ソクノのみ: 抜群でんき技を半減 (268-316 → 134-158)
+pkdx damage ライチュウ ギャラドス 10まんボルト --def-item ソクノのみ --version scarlet_violet
+```
+
+### 未対応・注意
+
+- **アイテム実在チェックは行わない**: `--def-item` は任意の文字列を受け取り、ハードコード一覧に一致したときだけ適用される。タイプミスや未対応アイテムは黙って無視されるので、半減が掛かったかは出力値で確認すること。レギュレーション内で実際に入手可能かは別途 DB (`items` テーブル) を確認する。Champions の `item_effect` seed は現状オッカのみだけ (`migrate/m012_champions_items.mbt:52-61`) だが、CLI のダメ計はこの DB を見ないため 18 種が一律に効く
+- **payoff 層 (select / nash) は消費を状態として追跡**: `item_consumed` フラグで 1 試合 1 回の消費をモデル化し、消費後はアイテム無しでエンジンを呼ぶ (`payoff/switching_game_effects.mbt:562-650`, `payoff/damage_cache_layer.mbt:485-491`)。CLI 単発計算とは消費の扱いが異なる
+
+---
+
+## 7. 状態異常 (Status Condition)
 
 ### パーサ値域 (`damage/status_condition.mbt:82-93`, `model/status_condition.mbt`)
 
@@ -448,7 +531,7 @@ pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version s
 
 ---
 
-## 7. 急所 (Critical Hit)
+## 8. 急所 (Critical Hit)
 
 ### ランク無視ルール (`damage/stat_resolution.mbt:143-146`)
 
@@ -476,7 +559,7 @@ pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version s
 
 ---
 
-## 8. JSON 出力フィールド一覧
+## 9. JSON 出力フィールド一覧
 
 `model/calc_result.mbt` 参照。
 
@@ -492,9 +575,9 @@ pkdx damage "イッカネズミ" "ピカチュウ" "ネズミざん" --version s
 | `disguise_blocked` | `Bool` | ばけのかわ chip が `damages` に加算された時 `true` |
 | `disguise_chip` | `Int` | 加算された chip 値 (`def_hp / 8`、整数床)。0 なら未加算 |
 | `hits_dealt` | `Int` | 技の hit 数 (免疫時 1、Disguise 時も技の hit 数を保持、ParentalBond 時 2) |
-| `input` | `Object` | ダメ計に実際に渡した入力一式の echo (`cli/format.mbt` の `damage_input_to_json`)。下記 8.1 参照 |
+| `input` | `Object` | ダメ計に実際に渡した入力一式の echo (`cli/format.mbt` の `damage_input_to_json`)。下記 9.1 参照 |
 
-### 8.1 `input` フィールド
+### 9.1 `input` フィールド
 
 LLM が `damages` / `percents` / `ko` だけを読んで前提を取り違えるのを防ぐため、エンジンに渡した `DamageCalcInput` を echo back する。Phase 3 の条件テーブルは **必ずここから引く**。エンジンは出力したそのままで計算しているため、`input.*` と乖離した値をユーザーへ提示してはならない。
 
@@ -505,10 +588,10 @@ LLM が `damages` / `percents` / `ko` だけを読んで前提を取り違える
 | `input.attacker.base_stats` / `defender.base_stats` | `{hp, atk, def, spa, spd, spe: Int}` | フォーム別の種族値 |
 | `input.attacker.ability` / `defender.ability` | `String` | 空文字 = 指定なし |
 | `input.attacker.item` / `defender.item` | `String` | 空文字 = 持ち物なし |
-| `input.attacker.nature` / `defender.nature` | `String` | 空文字 = 攻撃側「特化相当 +10%」/ 防御側「無補正」のデフォルト |
+| `input.attacker.nature` / `defender.nature` | `String` | 空文字 = 攻撃側「特化相当 +10%」/ 防御側「無補正」のデフォルト (Section 0) |
 | `input.attacker.rank` / `defender.rank` | `Int` | -6..+6 |
-| `input.attacker.stat_override` / `defender.stat_override` | `Int` | `0` = 未指定。非 0 ならユーザー指定の rank 前実数値 |
-| `input.defender.hp_override` | `Int` | `0` = 未指定。非 0 ならユーザー指定の HP 実数値 |
+| `input.attacker.stat_override` / `defender.stat_override` | `Int` | `0` = 未指定 (Section 0 のデフォルト投資量で自動計算)。非 0 ならユーザー指定の rank 前実数値 |
+| `input.defender.hp_override` | `Int` | `0` = 未指定 (防御側 HP は SP=0/EV=0 で自動計算)。非 0 ならユーザー指定の HP 実数値 |
 | `input.attacker.status` / `defender.status` | `String` | `"none"`/`"paralyze"`/`"burn"`/`"poison"`/`"badpoison"`/`"sleep"`/`"drowsy"` |
 | `input.attacker.rank_up_count` / `defender.rank_up_count` | `Int` | アシストパワー / つけあがる用 |
 | `input.attacker.hp_num` / `hp_den` | `Int` | 攻撃側 HP 比 (やけっぱち)。デフォルトは `2/2` (満タン) |
@@ -530,7 +613,7 @@ LLM が `damages` / `percents` / `ko` だけを読んで前提を取り違える
 
 ---
 
-## 9. 未実装・注意点
+## 10. 未実装・注意点
 
 ### 未実装
 
@@ -546,7 +629,7 @@ LLM が `damages` / `percents` / `ko` だけを読んで前提を取り違える
 
 ---
 
-## 10. 4096 ベースの乗数表 (参考)
+## 11. 4096 ベースの乗数表 (参考)
 
 Showdown 準拠の整数乗算ベース。`round5(dmg, m) = (dmg × m + 2048) / 4096` の丸め規則。
 
@@ -560,5 +643,6 @@ Showdown 準拠の整数乗算ベース。`round5(dmg, m) = (dmg × m + 2048) / 
 | 壁 (シングル) | 2048 | 0.5x |
 | 壁 (ダブル) | 2732 | ≈ 0.667x |
 | テクニシャン (威力 ≤ 60) | 6144 | 1.5x |
+| 半減実 (Section 6) | 2048 | 0.5x |
 
 具体的な適用順序と丸めタイミングは `damage/engine.mbt` の `compute_rolls` を直接読むこと。

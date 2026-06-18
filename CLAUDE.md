@@ -21,8 +21,8 @@ CLIツール `pkdx` (MoonBit native binary) が pokedex.db への全クエリ、
     - 例（NG）: 〇〇なので✕✕すべきです
 2. ユーザーの情報を未確認のままupstreamへ送信してはならない。必ずremoteを確認し、送信対象が合っているかユーザーへ確認すること。
 3. 利用可能なポケモン、道具、技のプールを常にDBへ問い合わせ確認する。ユーザーが指定したフォーマット外の情報をフィードバックしてはならない
-    例: `Champions M-A` レギュレーション選択中に、準伝説ポケモンやサーフゴーを案内してしまう（M-Aフォーマット外）
-    例: `Champions M-A` レギュレーション選択中に、こだわりハチマキやとつげきチョッキを案内してしまう（M-Aフォーマット外）
+    例: `Champions M-B` レギュレーション選択中に、準伝説ポケモンやノココッチを案内してしまう（M-Bフォーマット外）
+    例: `Champions M-B` レギュレーション選択中に、こだわりハチマキやとつげきチョッキを案内してしまう（M-Bフォーマット外）
     例: DBデータからわからない場合は、ユーザーに許可をもらってから `WebSearch` を実行して最新の情報を取得する
 4. ダメージ計算に関しては必ず `pkdx damage` で計算してからフィードバックする。あなたが次に間違えやすい箇所
 5. タイプ相性に関しては必ず `pkdx type-chart` で計算してからフィードバックする。あなたが最も間違える箇所
@@ -238,7 +238,7 @@ SessionStart hook (`.claude/settings.json`) から呼ばれる 1-line JSON。
 | フィールド | 型 | 内容 |
 |---|---|---|
 | `version` | string | 現在の `box/regulation.json` の `version` (例: `"champions"`)。未設定時 `"champions"` |
-| `regulation` | string | 現在の `box/regulation.json` の `regulation` (例: `"M-A"`)。未設定時 `"M-A"` |
+| `regulation` | string | 現在の `box/regulation.json` の `regulation` (例: `"M-B"`)。未設定時 `"M-B"` |
 | `pkdx_version` | string | バイナリ build 時に焼き込まれた `version.mbt` の値 |
 | `repo_pkdx_version` | string | `moon.mod.json` の `version` を実行時に読んだ値。読めない場合は `""` |
 | `version_drift` | bool | `repo_pkdx_version != ""` かつ `repo_pkdx_version != pkdx_version` のとき `true`。`""` 比較は意図的に false 側 (silent) |

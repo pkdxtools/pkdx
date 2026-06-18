@@ -133,7 +133,7 @@ CLI のデフォルト実数値は **攻防非対称** (攻撃側 SP=32/EV=252 +
 ```bash
 $PKDX damage "<攻撃側名>" "<防御側名>" "<技名>" \
   [--version <ver>] \                    # champions を指定可能
-  [--regulation <reg>] \                # M-A 等（champions 時のみ有効）
+  [--regulation <reg>] \                # M-B 等（champions 時のみ有効）
   [--atk-ability <name>] [--def-ability <name>] \
   [--atk-item <name>] [--def-item <name>] \
   [--weather <type>] [--field <type>] \

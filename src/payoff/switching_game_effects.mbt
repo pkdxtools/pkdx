@@ -1560,7 +1560,7 @@ pub fn apply_healing(
       //   Rain / Sand / Snow → harsh (= 1/4)
       //   None               → default (= 1/2)
       // Gen9 仕様。霧 / 強い晴れ / 強い雨 / 乱気流は本 PR ではモデル外
-      // (Champions M-A は通常 4 天候 + 無天候のみ)。
+      // (Champions M-B は通常 4 天候 + 無天候のみ)。
       let (n, d) = match weather {
         @model.Weather::Sun => (sunny_n, sunny_d)
         @model.Weather::Rain | @model.Weather::Sand | @model.Weather::Snow =>

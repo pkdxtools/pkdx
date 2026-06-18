@@ -13,7 +13,7 @@
   "dependencies": {
     "@astrojs/sitemap": "3.7.2",
     "@resvg/resvg-js": "2.6.2",
-    "astro": "6.2.2",
+    "astro": "6.3.3",
     "satori": "0.26.0",
     "zod": "4.3.6"
   },

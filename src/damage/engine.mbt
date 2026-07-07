@@ -327,6 +327,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
 
   // Type effectiveness (using x4 integer encoding)
+  // フリーズドライのみず 2 倍上書きは move_effectiveness_x4 が担う。
   let atk_type_opt = @types.type_from_jp(move_type)
   let def1_opt = @types.type_from_jp(dfn.type1)
   let def2_opt = if dfn.type2.length() > 0 {
@@ -336,9 +337,9 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
   }
   let (eff1_x4, eff2_x4) = match (atk_type_opt, def1_opt) {
     (Some(at), Some(d1)) => {
-      let e1 = @types.get_effectiveness_x4(at, d1)
+      let e1 = move_effectiveness_x4(move_name, at, d1)
       let e2 = match def2_opt {
-        Some(d2) => @types.get_effectiveness_x4(at, d2)
+        Some(d2) => move_effectiveness_x4(move_name, at, d2)
         None => 4
       }
       (e1, e2)

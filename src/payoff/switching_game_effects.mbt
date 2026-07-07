@@ -621,13 +621,15 @@ pub fn apply_item_pre_damage_proc_fanout(
   }
   // ホズのみ triggers on any Normal-type hit (including neutral); other
   // resist berries trigger only on super-effective hits. Mirrors the engine
-  // gate in `damage/engine.mbt`'s resist-berry block.
+  // gate in `damage/engine.mbt`'s resist-berry block. move_name~ で
+  // フリーズドライのみず 2 倍上書き (ヤチェのみ発動) も engine と揃える。
   let triggers_on_neutral = defender.item == "ホズのみ"
   if !triggers_on_neutral &&
     !@damage.is_super_effective(
       resolved_type,
       defender.pokemon.type1,
       defender.pokemon.type2,
+      move_name=mv.name,
     ) {
     return [(1.0, state)]
   }

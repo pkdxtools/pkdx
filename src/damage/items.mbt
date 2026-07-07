@@ -154,10 +154,13 @@ pub fn contact_proc_item(name : String) -> Array[(@model.StatusKind, Int)] {
 /// the payoff layer to gate resist berry triggers (#97 / P5). Empty
 /// `def_type2` means single-typed defender. Returns `false` if a type name
 /// fails to resolve in the chart (immune-or-unknown is conservative).
+/// `move_name~` を渡すとフリーズドライのみず 2 倍上書きを反映する
+/// (engine の eff1_x4/eff2_x4 と同じ move_effectiveness_x4 を経由)。
 pub fn is_super_effective(
   move_type : String,
   def_type1 : String,
   def_type2 : String,
+  move_name? : String = "",
 ) -> Bool {
   let atk = match @types.type_from_jp(move_type) {
     Some(t) => t
@@ -167,10 +170,10 @@ pub fn is_super_effective(
     Some(t) => t
     None => return false
   }
-  let e1 = @types.get_effectiveness_x4(atk, d1)
+  let e1 = move_effectiveness_x4(move_name, atk, d1)
   let e2 = if def_type2.length() > 0 {
     match @types.type_from_jp(def_type2) {
-      Some(t) => @types.get_effectiveness_x4(atk, t)
+      Some(t) => move_effectiveness_x4(move_name, atk, t)
       None => 4
     }
   } else {

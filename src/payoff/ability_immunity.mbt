@@ -69,3 +69,36 @@ pub fn ability_blocks_sand_damage(ability : String) -> Bool {
     _ => false
   }
 }
+
+///|
+/// Return `true` when the ability nullifies Intimidate's Attack drop on the
+/// holder. Two mainline groups collapse into this truth table: the Gen8+
+/// Intimidate-specific blockers どんかん (Oblivious) / マイペース (Own Tempo)
+/// / せいしんりょく (Inner Focus) / きもったま (Scrappy), and the general
+/// stat-drop blockers クリアボディ (Clear Body) / かいりきバサミ (Hyper
+/// Cutter) / しろいけむり (White Smoke) / メタルプロテクト (Full Metal
+/// Body — note: no long vowel mark, matches the DB canonical spelling).
+/// Redirecting abilities (ばんけん / ミラーアーマー / びびり / あまのじゃく)
+/// are intentionally absent: they transform the drop rather than block it
+/// and are dispatched in `apply_intimidate_on_entry`.
+pub fn ability_blocks_intimidate(ability : String) -> Bool {
+  match ability {
+    "どんかん" => true
+    "マイペース" => true
+    "せいしんりょく" => true
+    "きもったま" => true
+    "クリアボディ" => true
+    "かいりきバサミ" => true
+    "しろいけむり" => true
+    "メタルプロテクト" => true
+    _ => false
+  }
+}
+
+///|
+/// Return `true` when the ability inverts every stat stage change applied to
+/// the holder. Mirrors あまのじゃく (Contrary): drops become raises and vice
+/// versa. Callers flip the sign of the delta before clamping.
+pub fn ability_reverses_stat_changes(ability : String) -> Bool {
+  ability == "あまのじゃく"
+}

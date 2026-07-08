@@ -58,6 +58,46 @@ fn expected_damage(r : @model.DamageCalcResult) -> Double {
 }
 
 ///|
+/// ばけのかわ (Disguise) の初段ブロックを反映した 1 variant 分の mean damage。
+///
+/// 本家仕様: intact なミミッキュへの最初のダメージ技は初段被弾が無効化され、
+/// 代わりに `chip` (= 最大HP/8 床) の固定ダメージで剥がれる。連続技は初段のみ
+/// ブロックし 2 段目以降は通常どおり通る。
+///
+/// variant の 16 ロール累積総和 `s` (= `total_damages`) から初段 16 ロール `s0`
+/// (= `hits[0].damage_per_roll`) を差し引き、残りを 16 で割って burn 補正を掛けた
+/// のち `chip` を加算する (chip は特性由来の固定ダメージなので burn 半減しない)。
+/// `hits` が空 (L2 由来などで per-hit 情報を持たない) 場合は全額ブロック扱い
+/// (`s0 = s`) とし mean = chip に落とす。単発技では `s0 = s` なので (s - s0)/16 = 0、
+/// mean = chip となる。
+///
+/// 初段減算は roll レベルで行うため小さなヘルパーに切り出してある。後続の
+/// team_monte_carlo (MC rollout) 側の disguise 実装も同じロジックを再利用する。
+fn disguise_reduced_mean(
+  variant : @model.DamageVariant,
+  category : @model.MoveCategory,
+  atk_burn : Bool,
+  chip : Int,
+) -> Int {
+  let mut s = 0
+  for j = 0; j < variant.total_damages.length(); j = j + 1 {
+    s = s + variant.total_damages[j]
+  }
+  let s0 = if variant.hits.is_empty() {
+    s
+  } else {
+    let first = variant.hits[0].damage_per_roll
+    let mut acc = 0
+    for j = 0; j < first.length(); j = j + 1 {
+      acc = acc + first[j]
+    }
+    acc
+  }
+  let reduced = if s - s0 > 0 { s - s0 } else { 0 }
+  apply_burn_to_mean(reduced / 16, category, atk_burn) + chip
+}
+
+///|
 /// Effective Lv50 max-HP realized from a combatant's base HP plus its
 /// `stat_system`. Payoff helpers that need a denominator for damage ratios
 /// (e.g. `pkdx nash graph` team-form fast path) go through here instead of

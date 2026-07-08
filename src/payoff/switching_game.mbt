@@ -63,6 +63,14 @@ pub(all) struct SwitchingGameState {
   // size; aligns with my_megaed / my_status indexing.
   my_item_consumed : Array[Bool]
   opp_item_consumed : Array[Bool]
+  // ばけのかわ (Disguise, ミミッキュ専用) の per-slot 消費フラグ。false =
+  // 未消費 (intact)、true = 剥がれ済み (busted)。最初のダメージ技被弾で
+  // `apply_damage_variants_fanout` が true を立てる。**1 戦闘 1 回のみ — Switch
+  // arm ではリセットしない** (switch-out で "" に戻る protean_locked と対照的
+  // に、交代しても回復しない本家仕様)。`my_item_consumed` と同じ「交代を跨いで
+  // 持続する slot-scoped フラグ」パターン。長さ = チーム数。
+  my_disguise_busted : Array[Bool]
+  opp_disguise_busted : Array[Bool]
   // Per-slot bitmask of moves used so far (bit `i` = move index `i` was used
   // at least once). Persists across switches — とっておき (Last Resort) needs
   // every other move to have been used before it becomes legal, and that
@@ -608,15 +616,27 @@ fn outcomes_from_calc_result(
   r : @model.DamageCalcResult,
   category : @model.MoveCategory,
   atk_burn : Bool,
+  def_disguise_intact? : Bool = false,
 ) -> Array[@model.DamageOutcome] {
   let outcomes : Array[@model.DamageOutcome] = []
+  // ばけのかわ intact のとき: 初段被弾をブロックし、代わりに固定 chip
+  // (= 防御側最大HP/8 床) で剥がす。engine は `disguise_active=false` 固定で
+  // 呼ばれる (build_input_with_ranks) ため r.variants の total_damages は素の
+  // 全ヒット合算値であり、初段減算 + chip 付与は payoff 層の transform で行う。
+  // r.defender_hp は engine が def_hp_override 込みで解いた防御側最大HP
+  // (= effective_hp と一致) なので chip の SSoT として使う。
+  let chip = r.defender_hp / 8
   for i = 0; i < r.variants.length(); i = i + 1 {
     let v = r.variants[i]
-    let mut s = 0
-    for j in 0..<16 {
-      s += v.total_damages[j]
+    let mean = if def_disguise_intact {
+      disguise_reduced_mean(v, category, atk_burn, chip)
+    } else {
+      let mut s = 0
+      for j in 0..<16 {
+        s += v.total_damages[j]
+      }
+      apply_burn_to_mean(s / 16, category, atk_burn)
     }
-    let mean = apply_burn_to_mean(s / 16, category, atk_burn)
     outcomes.push({
       probability: v.probability,
       mean_damage: mean,
@@ -700,6 +720,7 @@ fn compute_mean_damage(
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
   protean_consumed? : Bool = false,
+  def_disguise_intact? : Bool = false,
 ) -> Int {
   weighted_mean_floor(
     compute_damage_variants(
@@ -714,6 +735,7 @@ fn compute_mean_damage(
       weather~,
       field~,
       protean_consumed~,
+      def_disguise_intact~,
     ),
   )
 }
@@ -743,6 +765,7 @@ fn compute_damage_variants(
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
   protean_consumed? : Bool = false,
+  def_disguise_intact? : Bool = false,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -759,8 +782,8 @@ fn compute_damage_variants(
   // 振り分けし、外側の反射技カテゴリで一括ディスパッチされた値を使わない。
   if allow_reflect {
     match @damage.is_reflect_move(mv.name) {
-      Some(kind) =>
-        return reflect_damage_outcomes(
+      Some(kind) => {
+        let reflected = reflect_damage_outcomes(
           kind,
           attacker,
           defender,
@@ -772,6 +795,31 @@ fn compute_damage_variants(
           weather~,
           field~,
         )
+        // ばけのかわ intact な defender へ反射ダメージが返るケースも初撃扱いで
+        // ブロックされ chip のみになる。reflect は outcomes_from_calc_result を
+        // 通らず単一 outcome を直接返すので、ここで chip 化する。chip は
+        // effective_hp(defender)/8 (engine の def_hp_override と整合、= 変数
+        // 経路の r.defender_hp/8 と同値)。
+        //
+        // ただし反射ダメージが 0 (相手のタイプ無効 / 候補技なし / 期待値が 0 に
+        // 丸まる) のケースは「ダメージ技が当たっていない」= ばけのかわ は剥がれず
+        // chip も受けない (本家: 0 ダメージ被弾では Disguise は発動しない)。この
+        // ときは immune と同じ sentinel (mean_damage=0, hits_count=0) に落とし、
+        // fanout の bust ゲート (power>0 && hits_count>0) と chip 減算の両方を
+        // skip する。reflect の immune 早期 return は hits_count=1 を返すため、
+        // ここで明示的に hits_count=0 へ畳まないと 0 ダメージでも剥がれてしまう。
+        if def_disguise_intact {
+          let chip = effective_hp(defender) / 8
+          return reflected.map(fn(o) {
+            if o.mean_damage > 0 {
+              { ..o, mean_damage: chip }
+            } else {
+              { ..o, hits_count: 0 }
+            }
+          })
+        }
+        return reflected
+      }
       None => ()
     }
   }
@@ -790,7 +838,7 @@ fn compute_damage_variants(
   if r.is_immune {
     return [{ probability: 1.0, mean_damage: 0, hits_count: 0, hit_steps: [] }]
   }
-  outcomes_from_calc_result(r, mv.category, atk_burn)
+  outcomes_from_calc_result(r, mv.category, atk_burn, def_disguise_intact~)
 }
 
 ///|
@@ -1038,6 +1086,23 @@ fn apply_damage_variants_fanout(
   let target_is_me = !attacker_is_me
   let target_slot = defender_active
   let attacker_slot = attacker_active
+  // ばけのかわ: 被弾側 slot が intact なら (a) 初段被弾を無効化して chip で剥がす、
+  // (b) reflect / 通常技いずれも outcome.mean_damage は既に「初段減算 + chip」
+  // 済みで届く (compute_damage_variants / outcomes_from_calc_result の transform)。
+  // fanout 側では chip を差し引いた「技が実際に HP へ与えたダメージ」で recoil /
+  // drain を計算し、初撃なら剥がれフラグを立てる。`state` は攻撃解決前の状態なので
+  // intact 判定に使える。chip は engine の def_hp_override と整合する
+  // effective_hp/8 (= transform 側 r.defender_hp/8 と同値)。
+  let def_disguise_intact = disguise_intact_of(
+    state, attacker_is_me, defender_team, target_slot,
+  )
+  let disguise_chip = if def_disguise_intact &&
+    target_slot >= 0 &&
+    target_slot < defender_team.length() {
+    effective_hp(defender_team[target_slot]) / 8
+  } else {
+    0
+  }
   let leaves : Array[(Double, SwitchingGameState)] = []
   for i = 0; i < outcomes.length(); i = i + 1 {
     let outcome = outcomes[i]
@@ -1053,19 +1118,48 @@ fn apply_damage_variants_fanout(
     } else {
       outcome.mean_damage
     }
-    let state_dmg = with_hp_damage(
+    // ばけのかわ精度: recoil / drain (apply_healing の dmg 引数) は「技が実際に
+    // 与えたダメージ」= actual_dmg - chip で計算する。単発技ブロック時は
+    // outcome.mean_damage = chip なので dmg_for_effects = 0 → 反動なし・ドレイン
+    // 回復 0 (本家準拠)。非 intact 時は chip=0 で actual_dmg と同値。自己 stat_
+    // effects / 接触 proc / secondary status は with_post_hit_effects / 後段の
+    // fanout でブロック有無に関わらず従来どおり発生する。
+    let dmg_for_effects = if disguise_chip > 0 {
+      let d = actual_dmg - disguise_chip
+      if d > 0 {
+        d
+      } else {
+        0
+      }
+    } else {
+      actual_dmg
+    }
+    // HP 減算は chip 込みの full damage (outcome.mean_damage) で行う。
+    let state_dmg0 = with_hp_damage(
       state,
       target_is_me,
       target_slot,
       outcome.mean_damage,
     )
+    // ばけのかわ剥がれフラグを立てる: intact かつ ダメージ技 (power>0) かつ
+    // 実ヒット (hits_count>0 = immune でない)。immune (hits_count=0) は剥がさない。
+    // miss は per_side_attempt が fanout 到達前に止めるのでここには来ない。
+    // 1 戦闘 1 回のみ (Switch でリセットしない) は state 構築各サイトが busted を
+    // copy で持ち越すことで担保される。
+    let state_dmg = if def_disguise_intact &&
+      attacker_move.power > 0 &&
+      outcome.hits_count > 0 {
+      with_disguise_busted(state_dmg0, target_is_me, target_slot)
+    } else {
+      state_dmg0
+    }
     // Phase 2-E (#91): per-variant post-hit state effects so recoil /
     // self_ko / recharge / stat_effects compound on the variant-specific
     // damage rather than a single mean. State remains immutable; with_-
     // post_hit_effects produces a fresh copy with updated arrays.
     let state_v = with_post_hit_effects(
       state_dmg, attacker_is_me, attacker_slot, target_slot, attacker_team, defender_team,
-      attacker_move, actual_dmg,
+      attacker_move, dmg_for_effects,
     )
     let sub = compose_fanouts(state_v, [
       fn(s) {
@@ -1144,6 +1238,29 @@ fn with_hp_damage(
 }
 
 ///|
+/// ばけのかわ の被弾側 slot 消費フラグを `true` に立てた fresh state を返す。
+/// `target_is_me` = 防御側が自分側か。1 戦闘 1 回のみ剥がれ、Switch でリセット
+/// しない (state 構築各サイトが copy で持ち越す)。他配列は `..state` spread で
+/// 共有 (以降の fanout が fresh state を返すため in-place mutation にはならない)。
+/// bounds check は他の per-slot フラグと同じ防御スタイル。
+fn with_disguise_busted(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+) -> SwitchingGameState {
+  let my_disguise_busted = state.my_disguise_busted.copy()
+  let opp_disguise_busted = state.opp_disguise_busted.copy()
+  if target_is_me {
+    if target_slot >= 0 && target_slot < my_disguise_busted.length() {
+      my_disguise_busted[target_slot] = true
+    }
+  } else if target_slot >= 0 && target_slot < opp_disguise_busted.length() {
+    opp_disguise_busted[target_slot] = true
+  }
+  { ..state, my_disguise_busted, opp_disguise_busted }
+}
+
+///|
 /// Phase 2-E (#91): immutable counterpart of `resolve_post_hit_effects`.
 ///
 /// Applies the same fixed-order post-hit side effects (stat_effects on
@@ -1204,7 +1321,18 @@ fn with_post_hit_effects(
     opp_must_recharge
   }
   let opp_alive = defender_hps[defender_active] > 0
-  apply_stat_effects(attacker_ranks, defender_ranks, opp_alive, mv)
+  // raw ability で足りる: あまのじゃく を持つ mega form は存在しないため raw =
+  // mega 後実効と常に一致し、drain 経路の defender_ability raw 慣例とも整合する。
+  let attacker_ability = attacker_team[attacker_active].ability
+  let defender_ability = defender_team[defender_active].ability
+  apply_stat_effects(
+    attacker_ranks,
+    defender_ranks,
+    opp_alive,
+    mv,
+    attacker_ability~,
+    defender_ability~,
+  )
   apply_recoil(attacker_hps, attacker_active, mv, dmg)
   // 回復技 (HealingEffect) は self_ko の **手前** で適用する。本家挙動と
   // 整合: じばく + healing 等の組合せは現状ゲーム内で存在しないが、ある
@@ -1219,11 +1347,10 @@ fn with_post_hit_effects(
   // Stage 8: dmg と defender_ability を追加で渡す。Drain (ギガドレイン等) が
   // dmg * n / d を吸収し、defender_ability=ヘドロえき なら反転して attacker
   // が damage を受ける。defender_ability は damage 計算で参照される mega 後の
-  // ability ではなく raw な defender_team[active].ability を読む。回復計算は
-  // attacker mega 形態と独立 (Drain 倍率は move 側の n/d で決まる) なので
-  // mega 解決経路を再通する必要はない。
-  let attacker_ability = attacker_team[attacker_active].ability
-  let defender_ability = defender_team[defender_active].ability
+  // ability ではなく raw な defender_team[active].ability を読む (定義は
+  // apply_stat_effects 手前へ移動済み)。回復計算は attacker mega 形態と独立
+  // (Drain 倍率は move 側の n/d で決まる) なので mega 解決経路を再通する
+  // 必要はない。
   // Stage H (terrain × sleep): Rest がエレキ / ミストフィールド下で grounded
   // 使用者に失敗する判定のため `state.field` と attacker の grounded 状態を
   // 渡す。grounded は mega 後の type/ability/item で解くため、status fanout
@@ -1443,23 +1570,38 @@ fn clamp_zero(x : Int) -> Int {
 ///   (a hit that fainted the target doesn't land a rank drop).
 /// Other target values are ignored for forward-compat.
 ///
+/// `attacker_ability~` / `defender_ability~` feed the あまのじゃく (Contrary)
+/// check: when the entry's holder (attacker for `target=0`, defender for
+/// `target=1`) has an ability for which `ability_reverses_stat_changes` is
+/// true, the delta's sign is flipped before clamping. Both arguments are
+/// required (no default) so every call site states which abilities it
+/// resolved — non-Contrary inputs are bit-identical to the pre-Contrary
+/// behaviour.
+///
 /// Delta is added and clamped to `[-2, +2]` via `clamp_rank`.
 fn apply_stat_effects(
   self_ranks : Array[Int],
   opp_ranks : Array[Int],
   opp_alive : Bool,
   mv : @model.Move,
+  attacker_ability~ : String,
+  defender_ability~ : String,
 ) -> Unit {
   for eff in mv.stat_effects {
-    let ranks = if eff.target == 0 {
-      self_ranks
+    let (ranks, holder_ability) = if eff.target == 0 {
+      (self_ranks, attacker_ability)
     } else if eff.target == 1 && opp_alive {
-      opp_ranks
+      (opp_ranks, defender_ability)
     } else {
       continue
     }
     if eff.stat >= 0 && eff.stat < ranks.length() {
-      ranks[eff.stat] = clamp_rank(ranks[eff.stat] + eff.delta)
+      let delta = if ability_reverses_stat_changes(holder_ability) {
+        -eff.delta
+      } else {
+        eff.delta
+      }
+      ranks[eff.stat] = clamp_rank(ranks[eff.stat] + delta)
     }
   }
 }
@@ -1501,6 +1643,10 @@ fn apply_recoil(
 ///   4. self_ko (attacker HP forced to 0, regardless of `dmg`)
 ///   5. recharge (set only if attacker is still alive after 3 & 4)
 ///
+/// `attacker_ability~` / `defender_ability~` thread the あまのじゃく
+/// (Contrary) check into `apply_stat_effects` (see there); pass `""` for
+/// ability-less fixtures to keep the legacy behaviour bit-identical.
+///
 /// `pub` purely so the lib build sees it as exported; production sites
 /// have moved to `with_post_hit_effects`, leaving only white-box tests
 /// as callers — which the lib check would otherwise flag as unused.
@@ -1514,9 +1660,18 @@ pub fn resolve_post_hit_effects(
   attacker_must_recharge : Array[Bool],
   mv : @model.Move,
   dmg : Int,
+  attacker_ability~ : String,
+  defender_ability~ : String,
 ) -> Unit {
   let opp_alive = defender_hps[defender_active] > 0
-  apply_stat_effects(attacker_ranks, defender_ranks, opp_alive, mv)
+  apply_stat_effects(
+    attacker_ranks,
+    defender_ranks,
+    opp_alive,
+    mv,
+    attacker_ability~,
+    defender_ability~,
+  )
   apply_recoil(attacker_hps, attacker_active, mv, dmg)
   if mv.self_ko {
     attacker_hps[attacker_active] = 0

@@ -49,6 +49,12 @@ pub(all) struct DamageKey {
   // post-lock lookup (and distinct locked types would alias each other).
   atk_protean_locked : String
   def_protean_locked : String
+  // ばけのかわ (Disguise) が防御側 slot でまだ剥がれていない (intact) か。
+  // intact / busted で同一 matchup のダメージが変わる (intact は初段ブロック +
+  // chip、busted はフルダメージ) ため key に含める。含めないと intact 相手に
+  // 一度計算した reduced 値が busted 相手の lookup を shadow / alias してしまう
+  // (protean_locked を key に含めるのと同じ理屈)。
+  def_disguise_intact : Bool
 } derive(Eq, Hash)
 
 ///|
@@ -468,6 +474,7 @@ fn prepare_damage_lookup(
   field : @model.Field,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
+  def_disguise_intact? : Bool = false,
 ) -> (Bool, DamageKey, Combatant, Combatant, @model.Move) {
   let raw_attacker_full = if my_attacker {
     my_team[atk_idx]
@@ -513,6 +520,7 @@ fn prepare_damage_lookup(
       field,
       atk_protean_locked,
       def_protean_locked,
+      def_disguise_intact,
     }
     return (true, dummy_key, raw_attacker, raw_defender, mv)
   }
@@ -542,6 +550,7 @@ fn prepare_damage_lookup(
     field,
     atk_protean_locked,
     def_protean_locked,
+    def_disguise_intact,
   }
   (false, key, raw_attacker, raw_defender, mv)
 }
@@ -570,6 +579,7 @@ pub fn mean_damage_cached(
   field? : @model.Field = @model.Field::None,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
+  def_disguise_intact? : Bool = false,
 ) -> Int {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -589,6 +599,7 @@ pub fn mean_damage_cached(
     field,
     atk_protean_locked~,
     def_protean_locked~,
+    def_disguise_intact~,
   )
   if early {
     return 0
@@ -616,38 +627,62 @@ pub fn mean_damage_cached(
       // Both branches reduce through `apply_burn_to_mean`, so the L2-backed
       // path is guaranteed bit-identical to the L1-only path for the same
       // matchup — the disk still stores only pre-burn 16-roll tables.
-      let v = match cache.disk {
-        Some(_) =>
-          mean_damage_via_disk(
-            cache,
-            attacker,
-            defender,
-            mv,
-            key.atk_rank,
-            key.def_rank,
-            atk_burn~,
-            atk_ranks_full=Some(atk_ranks),
-            def_ranks_full=Some(def_ranks),
-            weather~,
-            field~,
-            protean_consumed~,
-            atk_protean_locked~,
-            def_protean_locked~,
-          )
-        None =>
-          compute_mean_damage(
-            attacker,
-            defender,
-            mv,
-            key.atk_rank,
-            key.def_rank,
-            atk_burn~,
-            atk_ranks_full=Some(atk_ranks),
-            def_ranks_full=Some(def_ranks),
-            weather~,
-            field~,
-            protean_consumed~,
-          )
+      //
+      // ばけのかわ intact のときは L2 disk を完全にバイパスする: disk の wire
+      // format (variants[].total_damages のみ) は per-hit の hit_steps を持たず
+      // 初段減算ができないため、intact 値を disk から読む / disk へ書くと誤った
+      // reduced 値が cross-session に残る。intact は fresh 計算し L1 のみに格納。
+      // intact / busted は DamageKey.def_disguise_intact で分離済みなので L1 内で
+      // alias しない。
+      let v = if def_disguise_intact {
+        compute_mean_damage(
+          attacker,
+          defender,
+          mv,
+          key.atk_rank,
+          key.def_rank,
+          atk_burn~,
+          atk_ranks_full=Some(atk_ranks),
+          def_ranks_full=Some(def_ranks),
+          weather~,
+          field~,
+          protean_consumed~,
+          def_disguise_intact=true,
+        )
+      } else {
+        match cache.disk {
+          Some(_) =>
+            mean_damage_via_disk(
+              cache,
+              attacker,
+              defender,
+              mv,
+              key.atk_rank,
+              key.def_rank,
+              atk_burn~,
+              atk_ranks_full=Some(atk_ranks),
+              def_ranks_full=Some(def_ranks),
+              weather~,
+              field~,
+              protean_consumed~,
+              atk_protean_locked~,
+              def_protean_locked~,
+            )
+          None =>
+            compute_mean_damage(
+              attacker,
+              defender,
+              mv,
+              key.atk_rank,
+              key.def_rank,
+              atk_burn~,
+              atk_ranks_full=Some(atk_ranks),
+              def_ranks_full=Some(def_ranks),
+              weather~,
+              field~,
+              protean_consumed~,
+            )
+        }
       }
       cache.data[key] = v
       v
@@ -688,6 +723,7 @@ fn damage_variants_cached(
   field? : @model.Field = @model.Field::None,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
+  def_disguise_intact? : Bool = false,
 ) -> Array[@model.DamageOutcome] {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -707,6 +743,7 @@ fn damage_variants_cached(
     field,
     atk_protean_locked~,
     def_protean_locked~,
+    def_disguise_intact~,
   )
   if early {
     return [{ probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] }]
@@ -743,6 +780,7 @@ fn damage_variants_cached(
         weather~,
         field~,
         protean_consumed~,
+        def_disguise_intact~,
       )
       cache.variants_data[key] = v
       // Touch the L2 disk cache so cross-session damage entries stay
@@ -752,26 +790,32 @@ fn damage_variants_cached(
       // is deferred — see open question on hit_steps fallback. Reflect
       // moves are short-circuited inside `mean_damage_via_disk` so the
       // L2 entry is never populated with the engine's zero fallback.
-      match cache.disk {
-        Some(_) => {
-          let _ = mean_damage_via_disk(
-            cache,
-            attacker,
-            defender,
-            mv,
-            key.atk_rank,
-            key.def_rank,
-            atk_burn~,
-            atk_ranks_full=Some(atk_ranks),
-            def_ranks_full=Some(def_ranks),
-            weather~,
-            field~,
-            protean_consumed~,
-            atk_protean_locked~,
-            def_protean_locked~,
-          )
+      //
+      // ばけのかわ intact のときは L2 populate も一切行わない: disk には常に
+      // 素の (disguise 非考慮) 値だけを載せる契約。intact 値を disk へ書くと
+      // wire format が hit_steps を持たないため busted 相手に誤読される。
+      if !def_disguise_intact {
+        match cache.disk {
+          Some(_) => {
+            let _ = mean_damage_via_disk(
+              cache,
+              attacker,
+              defender,
+              mv,
+              key.atk_rank,
+              key.def_rank,
+              atk_burn~,
+              atk_ranks_full=Some(atk_ranks),
+              def_ranks_full=Some(def_ranks),
+              weather~,
+              field~,
+              protean_consumed~,
+              atk_protean_locked~,
+              def_protean_locked~,
+            )
+          }
+          None => ()
         }
-        None => ()
       }
       v
     }

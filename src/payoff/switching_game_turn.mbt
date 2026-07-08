@@ -75,6 +75,11 @@ priv struct TurnWorkspace {
   opp_must_recharge : Array[Bool]
   my_item_consumed : Array[Bool]
   opp_item_consumed : Array[Bool]
+  // ばけのかわ per-slot 消費フラグ (SwitchingGameState と同構造)。ws round-trip
+  // で保持する。書き込みは apply_damage_variants_fanout 側、Switch でリセット
+  // しない (1 戦闘 1 回のみ)。
+  my_disguise_busted : Array[Bool]
+  opp_disguise_busted : Array[Bool]
   my_moves_used : Array[Int]
   opp_moves_used : Array[Int]
   // Stage 2 (healing-moves plan): mirror the new state fields so
@@ -117,6 +122,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_disguise_busted: state.my_disguise_busted.copy(),
+    opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -152,6 +159,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_must_recharge: ws.opp_must_recharge.copy(),
     my_item_consumed: ws.my_item_consumed.copy(),
     opp_item_consumed: ws.opp_item_consumed.copy(),
+    my_disguise_busted: ws.my_disguise_busted.copy(),
+    opp_disguise_busted: ws.opp_disguise_busted.copy(),
     my_moves_used: ws.my_moves_used.copy(),
     opp_moves_used: ws.opp_moves_used.copy(),
     weather: ws.weather,
@@ -311,6 +320,12 @@ fn resolve_attacker_leg(
   } else {
     ""
   }
+  // ばけのかわ: 被弾側 slot が ばけのかわ intact なら初段ブロック + chip を
+  // damage transform で反映する (`disguise_intact_of` が SSoT)。pre_damage_state
+  // は ws から round-trip 済みで disguise_busted を保持している。
+  let def_disguise_intact = disguise_intact_of(
+    pre_damage_state, attacker_is_me, defender_team_eff, defender_active,
+  )
   let outcomes = damage_variants_cached(
     dmg_cache,
     attacker_is_me,
@@ -330,6 +345,7 @@ fn resolve_attacker_leg(
     field=ws.field,
     atk_protean_locked~,
     def_protean_locked~,
+    def_disguise_intact~,
   )
   apply_damage_variants_fanout(
     pre_damage_state,
@@ -499,6 +515,8 @@ fn clone_state(
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_disguise_busted: state.my_disguise_busted.copy(),
+    opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -544,6 +562,66 @@ fn protean_locked_of(
   } else {
     ""
   }
+}
+
+///|
+/// 被弾側 slot の ばけのかわ が intact (= まだ剥がれていない) かどうか。
+/// `attacker_is_me` から見て被弾側は逆サイド: 特性が ばけのかわ かつ該当 slot の
+/// `*_disguise_busted` が false のとき true を返す。`damage_variants_cached` /
+/// `apply_damage_variants_fanout` の disguise transform 配線用の SSoT。
+///
+/// ミミッキュに mega form はないので raw ability で判定できる (mega 後の
+/// effective ability を解く必要がない)。slot が bounds 外、または busted 配列が
+/// team より短い旧 fixture のケースは「未 bust = intact」寄りに倒す (item_consumed
+/// と同じ防御スタイル。production では常に team 長なのでこの分岐は通らない)。
+fn disguise_intact_of(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  defender_team : Array[Combatant],
+  target_slot : Int,
+) -> Bool {
+  if target_slot < 0 || target_slot >= defender_team.length() {
+    return false
+  }
+  if defender_team[target_slot].ability != "ばけのかわ" {
+    return false
+  }
+  let busted_arr = if attacker_is_me {
+    state.opp_disguise_busted
+  } else {
+    state.my_disguise_busted
+  }
+  if target_slot < busted_arr.length() {
+    !busted_arr[target_slot]
+  } else {
+    true
+  }
+}
+
+///|
+/// 登場時いかくの DP 配線用ラッパ。entrant / target とも mega 後の実効特性
+/// (`effective_combatant`) で判定する。megaed は旧 fixture 対策の bounds check
+/// 込み (他配列と同じ防御スタイル)。rank 配列は in-place で mutate される。
+fn apply_intimidate_entry(
+  entrant_team : Array[Combatant],
+  entrant_slot : Int,
+  entrant_megaed : Array[Bool],
+  entrant_ranks : Array[Int],
+  target_team : Array[Combatant],
+  target_slot : Int,
+  target_megaed : Array[Bool],
+  target_ranks : Array[Int],
+) -> Unit {
+  let entrant_mega = entrant_slot < entrant_megaed.length() &&
+    entrant_megaed[entrant_slot]
+  let target_mega = target_slot < target_megaed.length() &&
+    target_megaed[target_slot]
+  apply_intimidate_on_entry(
+    effective_combatant(entrant_team[entrant_slot], entrant_mega).ability,
+    effective_combatant(target_team[target_slot], target_mega).ability,
+    target_ranks,
+    entrant_ranks,
+  )
 }
 
 ///|
@@ -658,6 +736,14 @@ pub fn transition_with_cache(
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
       }
+      // 登場時いかく: 双方同時登場は entrant ごとに 1 回ずつ。いかく持ちと
+      // 反射系特性は同一個体に同居しないので呼び出し順は結果に影響しない。
+      apply_intimidate_entry(
+        my_team, i, my_megaed_new, my_ranks_new, opp_team, j, opp_megaed_new, opp_ranks_new,
+      )
+      apply_intimidate_entry(
+        opp_team, j, opp_megaed_new, opp_ranks_new, my_team, i, my_megaed_new, my_ranks_new,
+      )
     }
     (Switch(i), UseMove(mj)) => {
       my_active_new = i
@@ -676,6 +762,18 @@ pub fn transition_with_cache(
       if state.my_active < my_protean_locked_new.length() {
         my_protean_locked_new[state.my_active] = ""
       }
+      // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。この
+      // 直後の opp の物理技は A-1 の opp_ranks_new で計算される。
+      apply_intimidate_entry(
+        my_team,
+        i,
+        my_megaed_new,
+        my_ranks_new,
+        opp_team,
+        state.opp_active,
+        opp_megaed_new,
+        opp_ranks_new,
+      )
       // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
       // are deferred to apply_damage_variants_fanout in the Some(...) arm
       // below, which fans the chance-node leaves across hit-count variants.
@@ -703,6 +801,18 @@ pub fn transition_with_cache(
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
       }
+      // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。my の
+      // 物理技は A-1 の my_ranks_new で計算される。
+      apply_intimidate_entry(
+        opp_team,
+        j,
+        opp_megaed_new,
+        opp_ranks_new,
+        my_team,
+        state.my_active,
+        my_megaed_new,
+        my_ranks_new,
+      )
       // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
       // post-hit effects are handled per-variant in the Some(...) arm.
       pre_dmg_defender_hp = opp_hps_new[j]
@@ -783,6 +893,11 @@ pub fn transition_with_cache(
     opp_must_recharge: opp_must_recharge_new,
     my_item_consumed: my_item_consumed_new,
     opp_item_consumed: opp_item_consumed_new,
+    // ばけのかわ: transition では剥がれ状態を書き換えず、そのまま持ち越す
+    // (Switch でもリセットしない)。実際の bust 書き込みは attack_event の
+    // apply_damage_variants_fanout が copy-on-write で行う。
+    my_disguise_busted: state.my_disguise_busted.copy(),
+    opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_moves_used: my_moves_used_new,
     opp_moves_used: opp_moves_used_new,
     weather: state.weather,
@@ -866,6 +981,10 @@ pub fn transition_with_cache(
         !attacker_is_me,
         target_slot,
       )
+      // ばけのかわ: 被弾側 slot が ばけのかわ intact なら初段ブロック + chip。
+      let def_disguise_intact = disguise_intact_of(
+        base_state, attacker_is_me, defender_team_eff, target_slot,
+      )
       let outcomes = damage_variants_cached(
         dmg_cache,
         attacker_is_me,
@@ -885,6 +1004,7 @@ pub fn transition_with_cache(
         field=base_state.field,
         atk_protean_locked~,
         def_protean_locked~,
+        def_disguise_intact~,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -1001,6 +1121,8 @@ fn pass_turn_state(
     opp_must_recharge: state.opp_must_recharge.copy(),
     my_item_consumed: state.my_item_consumed.copy(),
     opp_item_consumed: state.opp_item_consumed.copy(),
+    my_disguise_busted: state.my_disguise_busted.copy(),
+    opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1095,6 +1217,8 @@ pub fn attempt_turn_with_cache(
         opp_must_recharge: state.opp_must_recharge,
         my_item_consumed: state.my_item_consumed,
         opp_item_consumed: state.opp_item_consumed,
+        my_disguise_busted: state.my_disguise_busted,
+        opp_disguise_busted: state.opp_disguise_busted,
         my_moves_used: state.my_moves_used,
         opp_moves_used: state.opp_moves_used,
         weather: state.weather,
@@ -1220,6 +1344,17 @@ fn partial_act_outcomes(
       if state.my_active < my_protean_locked.length() {
         my_protean_locked[state.my_active] = ""
       }
+      // 登場時いかく: 相手が skip でも交代登場で発動する。
+      apply_intimidate_entry(
+        my_team,
+        i,
+        my_megaed,
+        my_ranks,
+        opp_team,
+        state.opp_active,
+        opp_megaed,
+        opp_ranks,
+      )
     }
     (false, Switch(j)) => {
       opp_active = j
@@ -1233,6 +1368,17 @@ fn partial_act_outcomes(
       if state.opp_active < opp_protean_locked.length() {
         opp_protean_locked[state.opp_active] = ""
       }
+      // 登場時いかく: 相手が skip でも交代登場で発動する。
+      apply_intimidate_entry(
+        opp_team,
+        j,
+        opp_megaed,
+        opp_ranks,
+        my_team,
+        state.my_active,
+        my_megaed,
+        my_ranks,
+      )
     }
     (true, UseMove(mi)) => {
       if mega_trigger {
@@ -1288,6 +1434,10 @@ fn partial_act_outcomes(
     opp_must_recharge,
     my_item_consumed,
     opp_item_consumed,
+    // ばけのかわ: partial-act でも剥がれ状態は書き換えず持ち越す。bust 書き込み
+    // は attack_event の apply_damage_variants_fanout が担う。
+    my_disguise_busted: state.my_disguise_busted.copy(),
+    opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_moves_used,
     opp_moves_used,
     weather: state.weather,
@@ -1370,6 +1520,10 @@ fn partial_act_outcomes(
         !attacker_is_me,
         target_slot,
       )
+      // ばけのかわ: 被弾側 slot が ばけのかわ intact なら初段ブロック + chip。
+      let def_disguise_intact = disguise_intact_of(
+        base_state, attacker_is_me, defender_team_eff, target_slot,
+      )
       let outcomes = damage_variants_cached(
         dmg_cache,
         attacker_is_me,
@@ -1389,6 +1543,7 @@ fn partial_act_outcomes(
         field=base_state.field,
         atk_protean_locked~,
         def_protean_locked~,
+        def_disguise_intact~,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -1732,6 +1887,8 @@ pub fn switching_game_winrate_stats(
     opp_must_recharge: Array::make(opp_team.length(), false),
     my_item_consumed: Array::make(my_team.length(), false),
     opp_item_consumed: Array::make(opp_team.length(), false),
+    my_disguise_busted: Array::make(my_team.length(), false),
+    opp_disguise_busted: Array::make(opp_team.length(), false),
     my_moves_used: Array::make(my_team.length(), 0),
     opp_moves_used: Array::make(opp_team.length(), 0),
     weather: @model.Weather::None,
@@ -1746,6 +1903,28 @@ pub fn switching_game_winrate_stats(
     field_turns_left: 0,
     turn: 0,
   }
+  // 登場時いかく: 先発 lead 同士 (双方 slot 0、megaed 全 false)。再帰前なので
+  // state の rank 配列を直接 mutate してよい。
+  apply_intimidate_entry(
+    my_team,
+    0,
+    state.my_megaed,
+    state.my_ranks,
+    opp_team,
+    0,
+    state.opp_megaed,
+    state.opp_ranks,
+  )
+  apply_intimidate_entry(
+    opp_team,
+    0,
+    state.opp_megaed,
+    state.opp_ranks,
+    my_team,
+    0,
+    state.my_megaed,
+    state.my_ranks,
+  )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(progress, dp_log_every)
   let dmg_cache = new_damage_cache(disk~)

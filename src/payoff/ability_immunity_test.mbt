@@ -164,3 +164,51 @@ test "ability_blocks_sand_damage_other_abilities_return_false" {
   @debug.assert_eq(ability_blocks_sand_damage("もうか"), false)
   @debug.assert_eq(ability_blocks_sand_damage(""), false)
 }
+
+///|
+/// Four abilities gained Intimidate-specific immunity in Gen8 (どんかん /
+/// マイペース / せいしんりょく / きもったま) and four block Attack drops in
+/// general (クリアボディ / かいりきバサミ / しろいけむり / メタルプロテクト).
+/// All eight must return true; nothing else does.
+test "ability_blocks_intimidate_truth_table" {
+  @debug.assert_eq(ability_blocks_intimidate("どんかん"), true)
+  @debug.assert_eq(ability_blocks_intimidate("マイペース"), true)
+  @debug.assert_eq(ability_blocks_intimidate("せいしんりょく"), true)
+  @debug.assert_eq(ability_blocks_intimidate("きもったま"), true)
+  @debug.assert_eq(ability_blocks_intimidate("クリアボディ"), true)
+  @debug.assert_eq(ability_blocks_intimidate("かいりきバサミ"), true)
+  @debug.assert_eq(ability_blocks_intimidate("しろいけむり"), true)
+  @debug.assert_eq(ability_blocks_intimidate("メタルプロテクト"), true)
+}
+
+///|
+/// いかく itself never blocks an incoming Intimidate — two Intimidate users
+/// facing each other both drop Attack. ばんけん / ミラーアーマー / びびり /
+/// あまのじゃく redirect the drop instead of blocking it, so they must stay
+/// false here and are dispatched separately in `apply_intimidate_on_entry`.
+test "ability_blocks_intimidate_other_abilities_return_false" {
+  @debug.assert_eq(ability_blocks_intimidate("いかく"), false)
+  @debug.assert_eq(ability_blocks_intimidate("テクニシャン"), false)
+  @debug.assert_eq(ability_blocks_intimidate("ばんけん"), false)
+  @debug.assert_eq(ability_blocks_intimidate("ミラーアーマー"), false)
+  @debug.assert_eq(ability_blocks_intimidate("びびり"), false)
+  @debug.assert_eq(ability_blocks_intimidate("あまのじゃく"), false)
+  @debug.assert_eq(ability_blocks_intimidate(""), false)
+}
+
+///|
+test "ability_reverses_stat_changes_contrary_returns_true" {
+  @debug.assert_eq(ability_reverses_stat_changes("あまのじゃく"), true)
+}
+
+///|
+test "ability_reverses_stat_changes_other_abilities_return_false" {
+  @debug.assert_eq(ability_reverses_stat_changes("いかく"), false)
+  @debug.assert_eq(ability_reverses_stat_changes("クリアボディ"), false)
+  @debug.assert_eq(ability_reverses_stat_changes("テクニシャン"), false)
+  @debug.assert_eq(
+    ability_reverses_stat_changes("ミラーアーマー"),
+    false,
+  )
+  @debug.assert_eq(ability_reverses_stat_changes(""), false)
+}

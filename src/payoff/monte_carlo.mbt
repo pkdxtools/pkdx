@@ -47,6 +47,7 @@ pub fn pick_best_move(
   field? : @model.Field = @model.Field::None,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
+  def_disguise_intact? : Bool = false,
 ) -> Int? {
   // Stage 7 (Protean / Libero MC parity): greedy 選択も `best_expected_damage` /
   // `team_perform_attack` と同じ Protean override を見る。ロック中の Protean 個体は
@@ -112,7 +113,27 @@ pub fn pick_best_move(
         protean_consumed=atk_consumed,
       ),
     )
-    let avg = avg_damage(r)
+    // ばけのかわ (Disguise) greedy コヒーレンス: defender が intact な ばけのかわ
+    // 持ちのとき、move 選択が見る期待ダメージも「初段ブロック + chip」済みの reduced
+    // 値にする。`best_expected_damage` (stay/switch スコアリング) と `team_perform_-
+    // attack` (実ダメージ) は既に reduced を見ているので、ここだけ素の avg_damage を
+    // 使うと「実際は無効化される高威力単発技」を選び、多段技より過小評価になって
+    // DP / MC parity が崩れる (Protean の前例と同種)。変換は DP と同じ
+    // `disguise_reduced_mean` を variant 加重平均 (= avg_damage 相当) で適用する。
+    // greedy は burn を模さないので atk_burn=false 固定。immune (`r.is_immune`) は
+    // 従来どおり 0。
+    let avg = if def_disguise_intact && !r.is_immune {
+      let chip = r.defender_hp / 8
+      let mut acc = 0.0
+      for vi = 0; vi < r.variants.length(); vi = vi + 1 {
+        let v = r.variants[vi]
+        let mean = disguise_reduced_mean(v, mv.category, false, chip)
+        acc = acc + v.probability * mean.to_double()
+      }
+      acc
+    } else {
+      avg_damage(r)
+    }
     if avg > best_avg {
       best_avg = avg
       best_idx = i

@@ -30,6 +30,7 @@ fn best_expected_damage(
   field? : @model.Field = @model.Field::None,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
+  def_disguise_intact? : Bool = false,
 ) -> Double {
   // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
   // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
@@ -85,7 +86,26 @@ fn best_expected_damage(
         protean_consumed=atk_consumed,
       ),
     )
-    let avg = avg_damage(r)
+    // ばけのかわ (Disguise) greedy コヒーレンス: defender が intact な ばけのかわ
+    // 持ちのとき、greedy が見る期待ダメージも「初段ブロック + chip」済みの reduced
+    // 値にする。さもないと greedy が実際は無効化される攻撃を過大評価し、実ダメージ
+    // (`team_perform_attack`) と乖離して DP / MC parity が崩れる (Protean の前例と
+    // 同種)。immune (`r.is_immune`) は従来どおり 0。変換は DP と同じ
+    // `disguise_reduced_mean` を variant 加重平均 (= avg_damage 相当) で適用する。
+    // greedy は burn を模さないので atk_burn=false 固定 (best_expected_damage 全体
+    // が burn 非考慮なのと整合)。
+    let avg = if def_disguise_intact && !r.is_immune {
+      let chip = r.defender_hp / 8
+      let mut acc = 0.0
+      for vi = 0; vi < r.variants.length(); vi = vi + 1 {
+        let v = r.variants[vi]
+        let mean = disguise_reduced_mean(v, mv.category, false, chip)
+        acc = acc + v.probability * mean.to_double()
+      }
+      acc
+    } else {
+      avg_damage(r)
+    }
     if avg > best {
       best = avg
     }
@@ -132,6 +152,7 @@ fn greedy_team_action(
   field? : @model.Field = @model.Field::None,
   my_protean_locked? : Array[String] = [],
   opp_protean_locked? : Array[String] = [],
+  opp_disguise_busted? : Array[Bool] = [],
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -143,6 +164,14 @@ fn greedy_team_action(
       ""
     }
   }
+  // ばけのかわ (Disguise) greedy コヒーレンス: 被弾側 (= opp active) が intact な
+  // ばけのかわ 持ちのとき、期待与ダメを reduced 値で評価する。`opp_disguise_busted`
+  // は opp 視点の busted 配列 (team_rollout が渡す)。default [] のときは常に intact
+  // 扱いだが、ability != "ばけのかわ" なら disguise_intact_mc が false を返すため
+  // 非 disguise チームでは no-op。
+  let opp_def_intact = disguise_intact_mc(
+    opp_team, opp_active, opp_disguise_busted,
+  )
   if must_recharge && my_hps[active] > 0 {
     return Some(TmUseMove(0))
   }
@@ -171,6 +200,7 @@ fn greedy_team_action(
         field~,
         atk_protean_locked=locked_of(my_protean_locked, s),
         def_protean_locked=opp_locked,
+        def_disguise_intact=opp_def_intact,
       )
       if score > best_score {
         best_score = score
@@ -234,6 +264,7 @@ fn greedy_team_action(
       field~,
       atk_protean_locked=active_locked,
       def_protean_locked=opp_locked,
+      def_disguise_intact=opp_def_intact,
     ) /
     opp_hp_denom
   let mut best_switch = -1
@@ -252,6 +283,7 @@ fn greedy_team_action(
         field~,
         atk_protean_locked=locked_of(my_protean_locked, s),
         def_protean_locked=opp_locked,
+        def_disguise_intact=opp_def_intact,
       ) /
       opp_hp_denom
     if v > best_switch_value {
@@ -275,6 +307,7 @@ fn greedy_team_action(
       field~,
       atk_protean_locked=active_locked,
       def_protean_locked=opp_locked,
+      def_disguise_intact=opp_def_intact,
     ) {
     Some(i) => Some(TmUseMove(i))
     None => Some(TmUseMove(0))
@@ -343,7 +376,18 @@ fn team_apply_post_hit(
   dmg : Int,
 ) -> Unit {
   let opp_alive = defender_hps[defender_active] > 0
-  apply_stat_effects(attacker_ranks, defender_ranks, opp_alive, mv)
+  // raw ability で足りる: あまのじゃく を持つ mega form は存在しないため raw =
+  // mega 後実効と常に一致し、drain 経路の defender_ability raw 慣例とも整合する。
+  let attacker_ability = attacker_team[attacker_active].ability
+  let defender_ability = defender_team[defender_active].ability
+  apply_stat_effects(
+    attacker_ranks,
+    defender_ranks,
+    opp_alive,
+    mv,
+    attacker_ability~,
+    defender_ability~,
+  )
   if mv.recoil_num > 0 && dmg > 0 {
     let raw = dmg * mv.recoil_num / mv.recoil_den
     let recoil = if raw < 1 { 1 } else { raw }
@@ -354,8 +398,6 @@ fn team_apply_post_hit(
   // healing の組合せは現状ゲーム内には無いが、ある場合は self_ko 側 (HP=0 強制
   // 上書き) が後勝ち、という DP 側の順序契約を MC でも維持する。
   let attacker_max = effective_hp(attacker_team[attacker_active])
-  let attacker_ability = attacker_team[attacker_active].ability
-  let defender_ability = defender_team[defender_active].ability
   let weather = weather_state[0]
   // Stage H (terrain × sleep): Rest がエレキ / ミストフィールド下で grounded
   // 使用者に失敗する DP 挙動を MC でも再現する。MC は mega を模さないため raw
@@ -489,9 +531,73 @@ pub fn tick_and_fire_wish_inplace(
 }
 
 ///|
+/// MC 版 ばけのかわ (Disguise) intact 判定。`defender_slot` の被弾側が ばけのかわ を
+/// 持ち、かつ `busted[defender_slot]` が false (まだ剥がれていない) なら true。DP 側
+/// `disguise_intact_of` (switching_game_turn.mbt) と semantics 一致 — MC は mega を
+/// 未モデルなので raw ability を読む (ばけのかわ を持つ mega form は存在しないため
+/// raw = mega 後実効と常に一致)。bounds check は他の per-slot ヘルパーと同じ防御スタ
+/// イル。`busted` が空配列 (greedy の default) のときは busted 未設定 = intact 扱い。
+fn disguise_intact_mc(
+  defender_team : Array[Combatant],
+  defender_slot : Int,
+  busted : Array[Bool],
+) -> Bool {
+  if defender_slot < 0 || defender_slot >= defender_team.length() {
+    return false
+  }
+  if defender_team[defender_slot].ability != "ばけのかわ" {
+    return false
+  }
+  if defender_slot < busted.length() && busted[defender_slot] {
+    return false
+  }
+  true
+}
+
+///|
+/// engine が legacy field (`r.damages`) を導出するのと同じ「最も確からしい variant」
+/// を返す。確率最大、同点は hits_count が大きい方 (engine.mbt の argmax と bit 一致)。
+/// これにより `most_likely_variant(r).total_damages == r.damages` が成り立ち、
+/// ばけのかわ 初段ブロックを単一ロールで解決するとき `r.damages[idx]` (= total) と
+/// `variant.hits[0].damage_per_roll[idx]` (= 初段) を同じ variant・同じ index から
+/// 引けて整合する。variants が空なら None (実際には engine は必ず 1 要素以上返す)。
+fn most_likely_variant(r : @model.DamageCalcResult) -> @model.DamageVariant? {
+  if r.variants.is_empty() {
+    return None
+  }
+  let mut best_idx = 0
+  for i = 1; i < r.variants.length(); i = i + 1 {
+    let cur = r.variants[i]
+    let best = r.variants[best_idx]
+    let strictly_better = cur.probability > best.probability
+    let tie_higher_hits = cur.probability == best.probability &&
+      cur.hits_count > best.hits_count
+    if strictly_better || tie_higher_hits {
+      best_idx = i
+    }
+  }
+  Some(r.variants[best_idx])
+}
+
+///|
 /// Apply one pre-selected attack in the team rollout. Mirrors
 /// `perform_attack_with` in `monte_carlo.mbt` but free-standing so the team
 /// rollout stays self-contained.
+///
+/// 戻り値 `(new_hp, dmg_for_effects, disguise_busted)`:
+///   - `new_hp`: 解決後の防御側 HP (0 床クランプ)。
+///   - `dmg_for_effects`: recoil / drain 計算に使う「技が実際に HP へ与えたダメージ」。
+///     非 ばけのかわ 時は実 dealt (= defender_hp - new_hp) で従来の
+///     `before - new_hp` と bit 一致。ばけのかわ intact ブロック時は chip を除いた
+///     later-hits 分 (単発ブロックなら 0) — DP 側 `dmg_for_effects = actual_dmg -
+///     chip` と semantics 一致。
+///   - `disguise_busted`: この攻撃で ばけのかわ が剥がれたか (intact かつ power>0
+///     かつ非 immune のダメージ技ヒット時 true)。caller が被弾側 slot の busted 配列
+///     を立てる。status / immune では false。
+///
+/// `def_disguise_intact` が true のとき初段被弾をブロックする。MC は screening 用の
+/// 単一ロール解決なので、most-likely variant の初段を同一 rng index で引いて近似する
+/// (連続技では DP の variant 加重ブロックと厳密一致しないが tol 内、単発技では厳密一致)。
 fn team_perform_attack(
   attacker : Combatant,
   defender : Combatant,
@@ -505,12 +611,14 @@ fn team_perform_attack(
   field? : @model.Field = @model.Field::None,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
-) -> Int {
+  def_disguise_intact? : Bool = false,
+) -> (Int, Int, Bool) {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
     // applies `stat_effects` (with opp_alive gating) via
-    // `team_apply_post_hit` so both branches share one resolver.
-    return defender_hp
+    // `team_apply_post_hit` so both branches share one resolver. ばけのかわ は
+    // 変化技では剥がれず chip も無い (dmg_for_effects=0, busted=false)。
+    return (defender_hp, 0, false)
   }
   let atk_rank = match mv.category {
     @model.Physical => atk_ranks[0]
@@ -551,28 +659,60 @@ fn team_perform_attack(
     ),
   )
   if r.is_immune {
-    return defender_hp
+    // タイプ無効: ばけのかわ は剥がれず chip も無い (DP `compute_damage_variants`
+    // の immune 早期 return と一致)。
+    return (defender_hp, 0, false)
   }
-  let raw = r.damages[rng.int(limit=16)]
-  // やけど + 物理: ダメージ半減。
-  let dmg = if atk_burn {
-    match mv.category {
-      @model.Physical => raw / 2
-      _ => raw
+  // burn 半減: 従来の単一ロール挙動 (物理 → raw/2) を helper 化。ばけのかわ の
+  // chip は特性由来の固定ダメージなので burn 半減しない (later-hits 分にのみ掛ける)。
+  fn burn_halve(x : Int) -> Int {
+    if atk_burn {
+      match mv.category {
+        @model.Physical => x / 2
+        _ => x
+      }
+    } else {
+      x
     }
-  } else {
-    raw
   }
-  // overkill 分が `before - new_hp` で過大計上されてドレイン / 反動を膨らませる
-  // のを防ぐため 0 床でクランプ。caller は `before - new_hp` を dealt として
-  // team_apply_post_hit に渡すので、ここで HP を 0 にすればその差分は actual
-  // dealt (= min(dmg, before)) に一致する。
-  let new_hp = defender_hp - dmg
-  if new_hp < 0 {
-    0
-  } else {
-    new_hp
+
+  let idx = rng.int(limit=16)
+  let raw = r.damages[idx]
+  if def_disguise_intact {
+    // ばけのかわ intact: 初段被弾を無効化し、代わりに chip (= 最大HP/8 床) で剥がす。
+    // 連続技は初段のみブロック → chip + (このロールの total − 初段) を通す。most-likely
+    // variant を r.damages 由来と一致させて同一 rng index で初段を引く (単一ロール近似)。
+    // hits が空 (per-hit 情報なし) なら全額ブロック扱い = 初段 = total → later 0。
+    let chip = effective_hp(defender) / 8
+    let first_hit = match most_likely_variant(r) {
+      Some(v) =>
+        if v.hits.is_empty() {
+          raw
+        } else {
+          v.hits[0].damage_per_roll[idx]
+        }
+      None => raw
+    }
+    let later = if raw - first_hit > 0 { raw - first_hit } else { 0 }
+    let dealt = chip + burn_halve(later)
+    let new_hp = if defender_hp - dealt < 0 { 0 } else { defender_hp - dealt }
+    // dmg_for_effects = actual_dealt - chip (DP と同 semantics)。単発ブロック時は
+    // actual_dealt = chip なので 0 → recoil / drain 0。0 床でクランプ。
+    let actual_dealt = defender_hp - new_hp
+    let dmg_for_effects = if actual_dealt - chip > 0 {
+      actual_dealt - chip
+    } else {
+      0
+    }
+    return (new_hp, dmg_for_effects, true)
   }
+  // 非 ばけのかわ: 従来どおり (単一ロール、burn 半減、0 床クランプ)。rng 消費は
+  // intact 分岐と同じ 1 回 (`idx`) なので、非 disguise チームの決定性は bit-exact。
+  // overkill 分が dmg_for_effects で過大計上されないよう、HP を 0 床にした差分
+  // (= actual dealt = min(dmg, defender_hp)) を dmg_for_effects として返す。
+  let dmg = burn_halve(raw)
+  let new_hp = if defender_hp - dmg < 0 { 0 } else { defender_hp - dmg }
+  (new_hp, defender_hp - new_hp, false)
 }
 
 ///|
@@ -749,8 +889,9 @@ fn record_protean_lock(
 ///
 /// - `+1.0` when all opponents are KO'd
 /// - `-1.0` when all own Pokemon are KO'd
-/// - `own_team_hp_ratio - opp_team_hp_ratio` clamped to `[-1, +1]` when `turn_limit`
-///   elapses with both sides still alive
+/// - `(own_team_hp_ratio - opp_team_hp_ratio) / 2` clamped to `[-1, +1]` when
+///   `turn_limit` elapses with both sides still alive (same draw convention
+///   as the DP `terminal_value`)
 ///
 /// Mega evolution is not modelled here (screening heuristic).
 pub fn team_rollout(
@@ -817,6 +958,12 @@ pub fn team_rollout(
   let opp_wish_turns : Array[Int] = [-1]
   let own_megaed : Array[Bool] = Array::make(own.length(), false)
   let opp_megaed : Array[Bool] = Array::make(opp.length(), false)
+  // ばけのかわ (Disguise): per-slot 消費フラグ。false = intact (初段被弾を無効化)。
+  // ミミッキュ が初めてダメージ技を受けたとき chip で剥がれ true になる。1 戦闘
+  // 1 回のみ・交代しても回復しないため、Switch arm では **リセットしない** (DP 側
+  // `SwitchingGameState.{my,opp}_disguise_busted` と同じ slot-bound・戦闘持続 semantics)。
+  let own_disguise_busted : Array[Bool] = Array::make(own.length(), false)
+  let opp_disguise_busted : Array[Bool] = Array::make(opp.length(), false)
   // Stage 7 (Protean / Libero MC parity): per-slot ロックタイプ。へんげんじざい /
   // リベロ 使用者が初手で撃った技のタイプを記録し、以降の攻撃 STAB / 被弾相性に
   // override で効かせる (DP 側 `SwitchingGameState.{my,opp}_protean_locked` と同じ
@@ -826,6 +973,22 @@ pub fn team_rollout(
   let opp_protean_locked : Array[String] = Array::make(opp.length(), "")
   let mut own_active = 0
   let mut opp_active = 0
+  // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
+  // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
+  // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
+  // (DP は effective_combatant の mega 後実効特性)。
+  apply_intimidate_on_entry(
+    own[own_active].ability,
+    opp[opp_active].ability,
+    opp_ranks,
+    own_ranks,
+  )
+  apply_intimidate_on_entry(
+    opp[opp_active].ability,
+    own[own_active].ability,
+    own_ranks,
+    opp_ranks,
+  )
   for _ in 0..<turn_limit {
     let a_own = greedy_team_action(
       own_active,
@@ -842,6 +1005,7 @@ pub fn team_rollout(
       field=field_state[0],
       my_protean_locked=own_protean_locked,
       opp_protean_locked~,
+      opp_disguise_busted~,
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -858,6 +1022,7 @@ pub fn team_rollout(
       field=field_state[0],
       my_protean_locked=opp_protean_locked,
       opp_protean_locked=own_protean_locked,
+      opp_disguise_busted=own_disguise_busted,
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -956,6 +1121,31 @@ pub fn team_rollout(
           }
           _ => ()
         }
+        // 登場時いかく: 双方の switch 解決 (active 更新 + rank reset) が済んだ
+        // 後に entrant ごとに 1 回ずつ適用する。両者同時 switch でも相手側の
+        // reset が先に完了しているため、いかくの -1 が reset で消されない (DP
+        // transition_with_cache の (Switch,Switch) arm と同順序)。switch-vs-move
+        // では Step 3 の move 解決より前 = 交代→いかく→技 の本家順序 (直後の
+        // 物理技は A-1 の rank で計算される)。死に出し (KO 後に
+        // greedy_team_action が返す forced TmSwitch) も上と同じ TmSwitch arm を
+        // 通るので追加配線は不要。MC は mega 未モデルなので raw の
+        // combatant.ability で判定する (DP は mega 後実効特性)。
+        if own_switches {
+          apply_intimidate_on_entry(
+            own[own_active].ability,
+            opp[opp_active].ability,
+            opp_ranks,
+            own_ranks,
+          )
+        }
+        if opp_switches {
+          apply_intimidate_on_entry(
+            opp[opp_active].ability,
+            own[own_active].ability,
+            own_ranks,
+            opp_ranks,
+          )
+        }
         // Step 3: resolve moves honouring paralysis speed halving and skips.
         if !own_switches && !opp_switches {
           let mi_own = match ao {
@@ -1017,7 +1207,10 @@ pub fn team_rollout(
                 opp[opp_active],
               ) {
               let before = opp_hps[opp_active]
-              opp_hps[opp_active] = team_perform_attack(
+              let opp_intact = disguise_intact_mc(
+                opp, opp_active, opp_disguise_busted,
+              )
+              let (res_hp, res_eff, res_bust) = team_perform_attack(
                 own[own_active],
                 opp[opp_active],
                 before,
@@ -1030,27 +1223,17 @@ pub fn team_rollout(
                 field=field_state[0],
                 atk_protean_locked=own_protean_locked[own_active],
                 def_protean_locked=opp_protean_locked[opp_active],
+                def_disguise_intact=opp_intact,
               )
+              opp_hps[opp_active] = res_hp
+              if res_bust && opp_active < opp_disguise_busted.length() {
+                opp_disguise_busted[opp_active] = true
+              }
               team_apply_post_hit(
-                own_hps,
-                own_active,
-                own_ranks,
-                own_must_recharge,
-                own_status,
-                own_wish_turns,
-                own,
-                opp_hps,
-                opp_active,
-                opp_ranks,
-                opp_leech_seeded,
-                opp,
-                opp_megaed,
-                weather_state,
-                weather_turns_state,
-                field_state,
-                field_turns_state,
-                mv_own,
-                before - opp_hps[opp_active],
+                own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
+                own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
+                weather_state, weather_turns_state, field_state, field_turns_state,
+                mv_own, res_eff,
               )
               record_protean_lock(
                 own_protean_locked,
@@ -1093,7 +1276,10 @@ pub fn team_rollout(
               // from own's move halves opp's physical damage this turn.
               let opp_burn_now = is_burned(opp_status[opp_active])
               let before = own_hps[own_active]
-              own_hps[own_active] = team_perform_attack(
+              let own_intact = disguise_intact_mc(
+                own, own_active, own_disguise_busted,
+              )
+              let (res_hp, res_eff, res_bust) = team_perform_attack(
                 opp[opp_active],
                 own[own_active],
                 before,
@@ -1106,27 +1292,17 @@ pub fn team_rollout(
                 field=field_state[0],
                 atk_protean_locked=opp_protean_locked[opp_active],
                 def_protean_locked=own_protean_locked[own_active],
+                def_disguise_intact=own_intact,
               )
+              own_hps[own_active] = res_hp
+              if res_bust && own_active < own_disguise_busted.length() {
+                own_disguise_busted[own_active] = true
+              }
               team_apply_post_hit(
-                opp_hps,
-                opp_active,
-                opp_ranks,
-                opp_must_recharge,
-                opp_status,
-                opp_wish_turns,
-                opp,
-                own_hps,
-                own_active,
-                own_ranks,
-                own_leech_seeded,
-                own,
-                own_megaed,
-                weather_state,
-                weather_turns_state,
-                field_state,
-                field_turns_state,
-                mv_opp,
-                before - own_hps[own_active],
+                opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
+                opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
+                weather_state, weather_turns_state, field_state, field_turns_state,
+                mv_opp, res_eff,
               )
               record_protean_lock(
                 opp_protean_locked,
@@ -1161,7 +1337,10 @@ pub fn team_rollout(
                 own[own_active],
               ) {
               let before = own_hps[own_active]
-              own_hps[own_active] = team_perform_attack(
+              let own_intact = disguise_intact_mc(
+                own, own_active, own_disguise_busted,
+              )
+              let (res_hp, res_eff, res_bust) = team_perform_attack(
                 opp[opp_active],
                 own[own_active],
                 before,
@@ -1174,27 +1353,17 @@ pub fn team_rollout(
                 field=field_state[0],
                 atk_protean_locked=opp_protean_locked[opp_active],
                 def_protean_locked=own_protean_locked[own_active],
+                def_disguise_intact=own_intact,
               )
+              own_hps[own_active] = res_hp
+              if res_bust && own_active < own_disguise_busted.length() {
+                own_disguise_busted[own_active] = true
+              }
               team_apply_post_hit(
-                opp_hps,
-                opp_active,
-                opp_ranks,
-                opp_must_recharge,
-                opp_status,
-                opp_wish_turns,
-                opp,
-                own_hps,
-                own_active,
-                own_ranks,
-                own_leech_seeded,
-                own,
-                own_megaed,
-                weather_state,
-                weather_turns_state,
-                field_state,
-                field_turns_state,
-                mv_opp,
-                before - own_hps[own_active],
+                opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
+                opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
+                weather_state, weather_turns_state, field_state, field_turns_state,
+                mv_opp, res_eff,
               )
               record_protean_lock(
                 opp_protean_locked,
@@ -1235,7 +1404,10 @@ pub fn team_rollout(
               ) {
               let own_burn_now = is_burned(own_status[own_active])
               let before = opp_hps[opp_active]
-              opp_hps[opp_active] = team_perform_attack(
+              let opp_intact = disguise_intact_mc(
+                opp, opp_active, opp_disguise_busted,
+              )
+              let (res_hp, res_eff, res_bust) = team_perform_attack(
                 own[own_active],
                 opp[opp_active],
                 before,
@@ -1248,27 +1420,17 @@ pub fn team_rollout(
                 field=field_state[0],
                 atk_protean_locked=own_protean_locked[own_active],
                 def_protean_locked=opp_protean_locked[opp_active],
+                def_disguise_intact=opp_intact,
               )
+              opp_hps[opp_active] = res_hp
+              if res_bust && opp_active < opp_disguise_busted.length() {
+                opp_disguise_busted[opp_active] = true
+              }
               team_apply_post_hit(
-                own_hps,
-                own_active,
-                own_ranks,
-                own_must_recharge,
-                own_status,
-                own_wish_turns,
-                own,
-                opp_hps,
-                opp_active,
-                opp_ranks,
-                opp_leech_seeded,
-                opp,
-                opp_megaed,
-                weather_state,
-                weather_turns_state,
-                field_state,
-                field_turns_state,
-                mv_own,
-                before - opp_hps[opp_active],
+                own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
+                own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
+                weather_state, weather_turns_state, field_state, field_turns_state,
+                mv_own, res_eff,
               )
               record_protean_lock(
                 own_protean_locked,
@@ -1308,7 +1470,10 @@ pub fn team_rollout(
               opp[opp_active],
             ) {
             let before = opp_hps[opp_active]
-            opp_hps[opp_active] = team_perform_attack(
+            let opp_intact = disguise_intact_mc(
+              opp, opp_active, opp_disguise_busted,
+            )
+            let (res_hp, res_eff, res_bust) = team_perform_attack(
               own[own_active],
               opp[opp_active],
               before,
@@ -1321,27 +1486,17 @@ pub fn team_rollout(
               field=field_state[0],
               atk_protean_locked=own_protean_locked[own_active],
               def_protean_locked=opp_protean_locked[opp_active],
+              def_disguise_intact=opp_intact,
             )
+            opp_hps[opp_active] = res_hp
+            if res_bust && opp_active < opp_disguise_busted.length() {
+              opp_disguise_busted[opp_active] = true
+            }
             team_apply_post_hit(
-              own_hps,
-              own_active,
-              own_ranks,
-              own_must_recharge,
-              own_status,
-              own_wish_turns,
-              own,
-              opp_hps,
-              opp_active,
-              opp_ranks,
-              opp_leech_seeded,
-              opp,
-              opp_megaed,
-              weather_state,
-              weather_turns_state,
-              field_state,
-              field_turns_state,
-              mv_own,
-              before - opp_hps[opp_active],
+              own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
+              own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
+              weather_state, weather_turns_state, field_state, field_turns_state,
+              mv_own, res_eff,
             )
             record_protean_lock(
               own_protean_locked,
@@ -1380,7 +1535,10 @@ pub fn team_rollout(
               own[own_active],
             ) {
             let before = own_hps[own_active]
-            own_hps[own_active] = team_perform_attack(
+            let own_intact = disguise_intact_mc(
+              own, own_active, own_disguise_busted,
+            )
+            let (res_hp, res_eff, res_bust) = team_perform_attack(
               opp[opp_active],
               own[own_active],
               before,
@@ -1393,27 +1551,17 @@ pub fn team_rollout(
               field=field_state[0],
               atk_protean_locked=opp_protean_locked[opp_active],
               def_protean_locked=own_protean_locked[own_active],
+              def_disguise_intact=own_intact,
             )
+            own_hps[own_active] = res_hp
+            if res_bust && own_active < own_disguise_busted.length() {
+              own_disguise_busted[own_active] = true
+            }
             team_apply_post_hit(
-              opp_hps,
-              opp_active,
-              opp_ranks,
-              opp_must_recharge,
-              opp_status,
-              opp_wish_turns,
-              opp,
-              own_hps,
-              own_active,
-              own_ranks,
-              own_leech_seeded,
-              own,
-              own_megaed,
-              weather_state,
-              weather_turns_state,
-              field_state,
-              field_turns_state,
-              mv_opp,
-              before - own_hps[own_active],
+              opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
+              opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
+              weather_state, weather_turns_state, field_state, field_turns_state,
+              mv_opp, res_eff,
             )
             record_protean_lock(
               opp_protean_locked,
@@ -1639,10 +1787,15 @@ pub fn team_rollout(
       }
     }
   }
-  // Turn limit hit: return HP ratio difference clamped to [-1, +1].
+  // Turn limit hit: return the HP ratio difference halved, clamped to
+  // [-1, +1]. The `/ 2` matches the DP draw convention
+  // (`terminal_value` in switching_game.mbt: `(my_r - opp_r) / 2`), keeping
+  // horizon draws in [-0.5, +0.5] so they never outweigh a decisive KO
+  // (±1.0). Without it MC draws sit on a 2x scale vs DP and every
+  // non-saturating MC/DP parity fixture diverges by |draw|/2.
   let own_ratio = team_hp_ratio(own, own_hps)
   let opp_ratio = team_hp_ratio(opp, opp_hps)
-  let v = own_ratio - opp_ratio
+  let v = (own_ratio - opp_ratio) / 2.0
   if v > 1.0 {
     1.0
   } else if v < -1.0 {

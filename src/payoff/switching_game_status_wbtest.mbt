@@ -494,7 +494,9 @@ fn mk_test_state(
     my_must_recharge: Array::make(team_size, false),
     opp_must_recharge: Array::make(team_size, false),
     my_item_consumed: Array::make(team_size, false),
+    my_disguise_busted: Array::make(team_size, false),
     opp_item_consumed: Array::make(team_size, false),
+    opp_disguise_busted: Array::make(team_size, false),
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,
@@ -819,7 +821,9 @@ fn mk_same_turn_state(
     my_must_recharge: [false],
     opp_must_recharge: [false],
     my_item_consumed: [false],
+    my_disguise_busted: [false],
     opp_item_consumed: [false],
+    opp_disguise_busted: [false],
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,
@@ -1108,7 +1112,17 @@ test "resolve_post_hit_effects: self_ko zeroes attacker HP even on 0-damage hit"
   let atk_mr = [false]
   let mv = mk_move("jibaku", "ノーマル", @model.Physical, 250, self_ko=true)
   resolve_post_hit_effects(
-    atk_hps, 0, atk_ranks, def_hps, 0, def_ranks, atk_mr, mv, 0,
+    atk_hps,
+    0,
+    atk_ranks,
+    def_hps,
+    0,
+    def_ranks,
+    atk_mr,
+    mv,
+    0,
+    attacker_ability="",
+    defender_ability="",
   )
   @debug.assert_eq(atk_hps[0], 0)
 }
@@ -1126,7 +1140,14 @@ test "apply_stat_effects: target=0 routes to self_ranks, target=1 to opp_ranks" 
     @model.StatEffect::{ stat: 0, delta: 2, target: 0 },
     @model.StatEffect::{ stat: 0, delta: -2, target: 1 },
   ])
-  apply_stat_effects(self_ranks, opp_ranks, true, mv)
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    true,
+    mv,
+    attacker_ability="",
+    defender_ability="",
+  )
   @debug.assert_eq(self_ranks[0], 2)
   @debug.assert_eq(opp_ranks[0], -2)
 }
@@ -1138,7 +1159,14 @@ test "apply_stat_effects: opp-target entries skipped when opp_alive=false" {
   let mv = mk_move("amaeru", "フェアリー", @model.Status, 0, stat_effects=[
     @model.StatEffect::{ stat: 0, delta: -2, target: 1 },
   ])
-  apply_stat_effects(self_ranks, opp_ranks, false, mv)
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    false,
+    mv,
+    attacker_ability="",
+    defender_ability="",
+  )
   @debug.assert_eq(opp_ranks[0], 0)
 }
 
@@ -1150,7 +1178,14 @@ test "apply_stat_effects: multi-stat opp-target (Namidame) drops both Atk and Sp
     @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
     @model.StatEffect::{ stat: 2, delta: -1, target: 1 },
   ])
-  apply_stat_effects(self_ranks, opp_ranks, true, mv)
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    true,
+    mv,
+    attacker_ability="",
+    defender_ability="",
+  )
   @debug.assert_eq(opp_ranks[0], -1)
   @debug.assert_eq(opp_ranks[2], -1)
   // self unchanged.
@@ -1166,7 +1201,14 @@ test "apply_stat_effects: self-only setup move (つるぎのまい) leaves opp u
   let mv = mk_move("sworddance", "ノーマル", @model.Status, 0, stat_effects=[
     @model.StatEffect::{ stat: 0, delta: 2, target: 0 },
   ])
-  apply_stat_effects(self_ranks, opp_ranks, true, mv)
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    true,
+    mv,
+    attacker_ability="",
+    defender_ability="",
+  )
   @debug.assert_eq(self_ranks[0], 2)
   @debug.assert_eq(opp_ranks[0], 0)
 }
@@ -1187,7 +1229,17 @@ test "resolve_post_hit_effects: recharge sets flag only when attacker survives" 
   let ranks_alive = [0, 0, 0, 0, 0]
   let mr_alive = [false]
   resolve_post_hit_effects(
-    hps_alive, 0, ranks_alive, def_hps, 0, def_ranks, mr_alive, mv, 40,
+    hps_alive,
+    0,
+    ranks_alive,
+    def_hps,
+    0,
+    def_ranks,
+    mr_alive,
+    mv,
+    40,
+    attacker_ability="",
+    defender_ability="",
   )
   @debug.assert_eq(mr_alive[0], true)
   // Dead attacker (e.g. previously knocked to 0 by recoil) should not be
@@ -1196,7 +1248,17 @@ test "resolve_post_hit_effects: recharge sets flag only when attacker survives" 
   let ranks_dead = [0, 0, 0, 0, 0]
   let mr_dead = [false]
   resolve_post_hit_effects(
-    hps_dead, 0, ranks_dead, def_hps, 0, def_ranks, mr_dead, mv, 40,
+    hps_dead,
+    0,
+    ranks_dead,
+    def_hps,
+    0,
+    def_ranks,
+    mr_dead,
+    mv,
+    40,
+    attacker_ability="",
+    defender_ability="",
   )
   @debug.assert_eq(mr_dead[0], false)
 }
@@ -1309,7 +1371,9 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     my_must_recharge: [false, false],
     opp_must_recharge: [false],
     my_item_consumed: [false, false],
+    my_disguise_busted: [false, false],
     opp_item_consumed: [false],
+    opp_disguise_busted: [false],
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,

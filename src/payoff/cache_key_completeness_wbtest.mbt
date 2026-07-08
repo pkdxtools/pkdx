@@ -403,7 +403,9 @@ fn ck_state_base() -> SwitchingGameState {
     my_must_recharge: [false, false],
     opp_must_recharge: [false, false],
     my_item_consumed: [false, false],
+    my_disguise_busted: [false, false],
     opp_item_consumed: [false, false],
+    opp_disguise_busted: [false, false],
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,
@@ -464,6 +466,20 @@ test "state cache key: opp_leech_seeded distinguishes the key" {
   let base = ck_state_base()
   let seeded = { ..base, opp_leech_seeded: [false, true] }
   assert_distinct_state_keys(base, seeded)
+}
+
+///|
+test "state cache key: my_disguise_busted distinguishes the key" {
+  let base = ck_state_base()
+  let busted = { ..base, my_disguise_busted: [true, false] }
+  assert_distinct_state_keys(base, busted)
+}
+
+///|
+test "state cache key: opp_disguise_busted distinguishes the key" {
+  let base = ck_state_base()
+  let busted = { ..base, opp_disguise_busted: [false, true] }
+  assert_distinct_state_keys(base, busted)
 }
 
 ///|

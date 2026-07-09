@@ -1793,6 +1793,18 @@ pub fn team_rollout(
   // horizon draws in [-0.5, +0.5] so they never outweigh a decisive KO
   // (±1.0). Without it MC draws sit on a 2x scale vs DP and every
   // non-saturating MC/DP parity fixture diverges by |draw|/2.
+  //
+  // NOTE (cross-cutting correctness fix — NOT ability wiring): this halving
+  // corrects a pre-existing MC/DP scale mismatch and therefore changes the
+  // horizon-draw value of **every** rollout, ability or not. Because
+  // ScreenedSwitchingGame Phase A ranks selections by these MC values, the
+  // screening / pruning order for ordinary (no Intimidate/Contrary/Disguise)
+  // teams can shift too — the change is not bit-identical for non-ability
+  // configs on the MC screening path (the DP path is unaffected). Draws are
+  // compressed toward 0 relative to decisive ±1.0 KO terminals, so the fix is
+  // not a uniform scaling of the payoff matrix. Baseline coverage that pins
+  // the corrected scale for an ordinary team lives in
+  // `team_monte_carlo_terminal_scale_wbtest.mbt`.
   let own_ratio = team_hp_ratio(own, own_hps)
   let opp_ratio = team_hp_ratio(opp, opp_hps)
   let v = (own_ratio - opp_ratio) / 2.0

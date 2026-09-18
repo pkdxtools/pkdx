@@ -54,16 +54,16 @@
 | プリセット名 | 有効メカニクス | レギュレーション | 備考 |
 |-------------|---------------|-----------------|------|
 | SV ランクマ | terastal | — | 現行レギュレーション |
-| Pokemon Champions | terastal, mega | M-B | `--version champions --regulation M-B` |
+| Pokemon Champions | terastal, mega | M-C | `--version champions --regulation M-C` |
 | SWSH | gigantamax | — | 過去世代 |
 | SM/USUM | zmove, mega | — | 過去世代 |
 | バニラ | なし | — | メカニクスなし |
 
 ### Pokemon Champions 固有ルール
 
-- **レギュレーション制**: シーズンごとに使用可能ポケモンが変わる。現在は M-B（M-A の後継、M-A ⊆ M-B の純加算）
-- **M-B**: champions.db 収録の全エントリが使用可能（208 種・メガシンカ 76 形態を含む計 361 エントリ。M-A の 323 エントリから +38）。正確なプールは DB が SSoT — `pkdx query "<名前>" --version champions` で在不在を確認する
-- **CLI**: `--version champions` で Champions 版データを使用。`--regulation M-B` を指定（`pkdx query --version champions` は champions.db に制限され、フォーマット外のポケモンは "not found" を返す）
+- **レギュレーション制**: シーズンごとに使用可能ポケモンが変わる。現在は M-C（M-B の後継、M-B ⊆ M-C の純加算）
+- **M-C**: champions.db 収録の全エントリが使用可能（231 種・メガシンカ 82 形態を含む計 396 エントリ。M-B の 361 エントリから +35、削除なし）。正確なプールは DB が SSoT — `pkdx query "<名前>" --version champions` で在不在を確認する
+- **CLI**: `--version champions` で Champions 版データを使用。`--regulation M-C` を指定（`pkdx query --version champions` は champions.db に制限され、フォーマット外のポケモンは "not found" を返す）
 - **技・種族値**: Champions 独自の技性能・習得リストを使用（既存作品と異なる場合がある）
 - **メガシンカ**: Champions 新規メガを含む。チーム内1体のみ
 
@@ -91,6 +91,6 @@ CLI で `--version champions` 指定時、`--ev` オプションは SP として
 - 伝説: ミュウツー, ルギア, ホウオウ, etc.
 - 幻: ミュウ, セレビィ, etc.
 
-### Champions M-B
-- M-B リスト外のポケモンは使用不可（`pkdx query "<名前>" --version champions` が "not found" を返すかで確認可能）
-- 伝説・幻は M-B リストに含まれない
+### Champions M-C
+- M-C リスト外のポケモンは使用不可（`pkdx query "<名前>" --version champions` が "not found" を返すかで確認可能）
+- 伝説・幻は M-C リストに含まれない

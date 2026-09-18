@@ -192,7 +192,7 @@ pkdx CLI または pokedex.db / champions.db が見つかりません。リポ�
 
 | # | 質問 | header | オプション | multiSelect |
 |---|------|--------|-----------|-------------|
-| 1 | レギュレーションは？ | レギュレーション | M-B | false |
+| 1 | レギュレーションは？ | レギュレーション | M-C | false |
 
 キャッシュに `regulation` フィールドも記録（champions以外では `null`）。
 

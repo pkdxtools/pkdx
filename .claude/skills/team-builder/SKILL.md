@@ -241,7 +241,7 @@ Phase 1-Team-Vision で vision 抽出 + `pkdx stat-reverse` 検証済みの SP /
      - `補正あり` → 技の category に応じて opponent の nature を決定:
        - **攻め format** (opponent = defender): 物理技なら `ずぶとい` (B↑), 特殊技なら `しんちょう` (D↑)
        - **受け format** (opponent = attacker): 物理技なら `いじっぱり` (A↑), 特殊技なら `ひかえめ` (C↑)
-   - **ポケモン名**: `pkdx query "<name>" --version champions --format json` で存在確認。`メガX` は DB 上のメガフォーム名に正規化（`M-B` で `X メガ進化形` や `メガ<X>` の綴り揺れを吸収）
+   - **ポケモン名**: `pkdx query "<name>" --version champions --format json` で存在確認。`メガX` は DB 上のメガフォーム名に正規化（`M-C` で `X メガ進化形` や `メガ<X>` の綴り揺れを吸収）
 
 4. **ステージング meta.json**: `pkdx damage --attach-team` は `.meta.json` が `box/teams/` 配下に実在している必要があるため、Phase 1-Team-Vision step 6 終了直後 / Phase 7-1 完了直後 に最終出力パスと同じ名前でステージング meta.json を pre-create する:
 
@@ -393,7 +393,7 @@ AskUserQuestion でゲームバージョンを質問:
 **推奨の理由**: Champions 以降は SP (Stat Points) 制に一本化されており、damage 計算・実数値算出・select のメガ進化後再計算ともに SP 前提で最適化されている。旧 EV/IV 制 (`scarlet_violet` / `legendsza` 等) は後方互換のために残しているが、新規構築は `champions` を選択すること。
 
 `champions` 選択時は続けてレギュレーションを質問:
-- `M-B`（current）
+- `M-C`（current）
 
 キャッシュに `version` と `regulation` を記録。`regulation` は champions 以外では空文字。
 
@@ -575,7 +575,7 @@ Champions のチーム画面スクショ 2 枚を、次のメッセージにま�
 $PKDX init-cache team > "$CACHE_FILE"
 ```
 
-2. 抽出 6 体を members に詰め、`version: "champions"`, `regulation: "M-B"`, `battle_format: "singles"`, `mechanics: "メガシンカ"` (該当時) を明記
+2. 抽出 6 体を members に詰め、`version: "champions"`, `regulation: "M-C"`, `battle_format: "singles"`, `mechanics: "メガシンカ"` (該当時) を明記
 
 3. `pkdx import-check` で冪等性判定:
 

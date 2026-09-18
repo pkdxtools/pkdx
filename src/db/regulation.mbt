@@ -8,13 +8,13 @@
 /// ここで保持しているのは「CLI で受け付けるレギュレーション名」だけで、
 /// `pkdx regulation set` の入力検証と `pkdx regulation list` の出力に使う。
 pub fn available_regulations() -> Array[String] {
-  ["M-B"]
+  ["M-C"]
 }
 
 ///|
 /// レギュレーション名をキャノニカル形（available_regulations() の表記）に正規化する。
 /// 大文字小文字の差分のみ吸収し、未登録の名前は None を返す。
-/// `m-b` / `M-B` / `M-b` をすべて `M-B` に揃えるため、`pkdx regulation set` が
+/// `m-c` / `M-C` / `M-c` をすべて `M-C` に揃えるため、`pkdx regulation set` が
 /// 小文字入力を受け付けられるようにする。
 pub fn canonicalize_regulation(name : String) -> String? {
   let known = available_regulations()

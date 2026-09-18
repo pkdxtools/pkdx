@@ -78,7 +78,7 @@ fn version_option() -> @admiral.OptionDef {
 fn regulation_option() -> @admiral.OptionDef {
   @admiral.string(
     "regulation",
-    description="Regulation filter (e.g. M-B). Only valid with --version champions",
+    description="Regulation filter (e.g. M-C). Only valid with --version champions",
     default=Some(""),
   )
 }
@@ -156,7 +156,7 @@ fn ctx_game(ctx : @admiral.Context) -> GameContext {
     pkdx_exit(1)
   }
   // Canonicalize the explicit `--regulation` value so case-insensitive input
-  // (e.g. `m-b`) resolves to the registered name (`M-B`). 未登録の名前は
+  // (e.g. `m-c`) resolves to the registered name (`M-C`). 未登録の名前は
   // ここで明示的に弾き、後続で silent no-op になる経路を作らない。
   // (旧アーキでは is_available() がここを通った値で filter していたが、
   //  champions.db 分離後は DB 自体がレギュレーション準拠サブセットを保持し、
@@ -231,7 +231,7 @@ fn cmd_regulation() -> @admiral.CommandDef {
   let subs : Array[@admiral.CommandDef] = [
     @admiral.command(
       name="get",
-      description="Print the active regulation (default M-B when unset)",
+      description="Print the active regulation (default M-C when unset)",
       run=Some(fn(_ctx) {
         let r = read_box_regulation_or_default()
         println(r.regulation)
@@ -243,13 +243,13 @@ fn cmd_regulation() -> @admiral.CommandDef {
       positionals=[
         @admiral.positional(
           "name",
-          description="Regulation name (e.g. M-B)",
+          description="Regulation name (e.g. M-C)",
           required=true,
         ),
       ],
       run=Some(fn(ctx) {
         let name = ctx_str(ctx, "name")
-        // Accept any case (`m-b`, `M-B`, …) and persist the canonical
+        // Accept any case (`m-c`, `M-C`, …) and persist the canonical
         // form. Keeps the documented `pkdx regulation set m-a` flow
         // working without surprising the rest of the codebase, which
         // compares regulation names exactly.
@@ -360,15 +360,15 @@ struct BoxRegulation {
 fn read_box_regulation_or_default() -> BoxRegulation {
   let path = box_regulation_path()
   if !@db.file_exists(path) {
-    return { version: "champions", regulation: "M-B" }
+    return { version: "champions", regulation: "M-C" }
   }
   let raw = match @db.read_file(path) {
     Some(s) => s
-    None => return { version: "champions", regulation: "M-B" }
+    None => return { version: "champions", regulation: "M-C" }
   }
   let parsed = try? @json.parse(raw)
   match parsed {
-    Err(_) => { version: "champions", regulation: "M-B" }
+    Err(_) => { version: "champions", regulation: "M-C" }
     Ok(j) =>
       match j {
         Object(obj) => {
@@ -378,11 +378,11 @@ fn read_box_regulation_or_default() -> BoxRegulation {
           }
           let regulation = match obj.get("regulation") {
             Some(String(s)) => s
-            _ => "M-B"
+            _ => "M-C"
           }
           { version, regulation }
         }
-        _ => { version: "champions", regulation: "M-B" }
+        _ => { version: "champions", regulation: "M-C" }
       }
   }
 }

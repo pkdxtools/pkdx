@@ -12,6 +12,11 @@ pub fn available_regulations() -> Array[String] {
 }
 
 ///|
+pub fn default_regulation() -> String {
+  available_regulations()[0]
+}
+
+///|
 /// レギュレーション名をキャノニカル形（available_regulations() の表記）に正規化する。
 /// 大文字小文字の差分のみ吸収し、未登録の名前は None を返す。
 /// `m-c` / `M-C` / `M-c` をすべて `M-C` に揃えるため、`pkdx regulation set` が

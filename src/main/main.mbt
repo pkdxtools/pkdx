@@ -358,32 +358,52 @@ struct BoxRegulation {
 
 ///|
 fn read_box_regulation_or_default() -> BoxRegulation {
+  let default = @db.default_regulation()
   let path = box_regulation_path()
   if !@db.file_exists(path) {
-    return { version: "champions", regulation: "M-C" }
+    return { version: "champions", regulation: default }
   }
   let raw = match @db.read_file(path) {
     Some(s) => s
-    None => return { version: "champions", regulation: "M-C" }
+    None => return { version: "champions", regulation: default }
   }
-  let parsed = try? @json.parse(raw)
-  match parsed {
-    Err(_) => { version: "champions", regulation: "M-C" }
-    Ok(j) =>
-      match j {
-        Object(obj) => {
-          let version = match obj.get("version") {
-            Some(String(s)) => s
-            _ => "champions"
-          }
-          let regulation = match obj.get("regulation") {
-            Some(String(s)) => s
-            _ => "M-C"
-          }
-          { version, regulation }
-        }
-        _ => { version: "champions", regulation: "M-C" }
+  let json = @json.parse(raw) catch {
+    _ => return { version: "champions", regulation: default }
+  }
+  match json {
+    Object(obj) => {
+      let version = match obj.get("version") {
+        Some(String(s)) => s
+        _ => "champions"
       }
+      let regulation = match obj.get("regulation") {
+        Some(String(s)) => resolve_persisted_regulation(s, default)
+        _ => default
+      }
+      { version, regulation }
+    }
+    _ => { version: "champions", regulation: default }
+  }
+}
+
+///|
+fn resolve_persisted_regulation(persisted : String, default : String) -> String {
+  match @db.canonicalize_regulation(persisted) {
+    Some(c) => c
+    None => {
+      pkdx_eprintln(
+        @db.to_c_bytes(
+          "Warning: box/regulation.json holds retired regulation '" +
+          persisted +
+          "'. Falling back to '" +
+          default +
+          "'. Run 'pkdx regulation set " +
+          default +
+          "' to update.",
+        ),
+      )
+      default
+    }
   }
 }
 

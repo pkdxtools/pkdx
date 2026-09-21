@@ -30,3 +30,9 @@ test "canonicalize_regulation: rejects retired M-B" {
   // M-B は M-C 移行に伴い退役。`pkdx regulation set M-B` は弾く。
   assert_true(canonicalize_regulation("M-B") == None)
 }
+
+///|
+test "default_regulation: is the first available regulation" {
+  assert_true(default_regulation() == "M-C")
+  assert_true(default_regulation() == available_regulations()[0])
+}

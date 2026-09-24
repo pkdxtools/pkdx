@@ -3,7 +3,7 @@ fn validate_with_schema(
   schema : @jsonschema.JsonSchema,
   json : Json,
 ) -> Array[@jsonschema.ValidationError] raise {
-  let resolver = @jsonschema.build_resolver(({} : Map[String, Json]).to_json())
+  let resolver = @jsonschema.build_resolver(Json::object(Map([])))
   @jsonschema.Validatable::validate(
     schema,
     json,

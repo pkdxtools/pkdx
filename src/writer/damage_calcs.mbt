@@ -79,7 +79,7 @@ fn set_optional_string(
 
 ///|
 fn rank_entry(stat_key : String, rank : Int) -> Map[String, Json] {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   if rank != 0 {
     m[stat_key] = rank.to_json()
   }

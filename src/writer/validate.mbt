@@ -158,7 +158,7 @@ pub fn validate_team_json(json : Json) -> Result[Unit, Array[String]] {
   }
   let b = @jsonschema.Builder::new()
   let schema = team_schema(b, strict=true)
-  let resolver = @jsonschema.build_resolver(({} : Map[String, Json]).to_json()) catch {
+  let resolver = @jsonschema.build_resolver(Json::object(Map([]))) catch {
     _ => return Err(["internal: failed to build schema resolver"])
   }
   let errors = @jsonschema.Validatable::validate(
@@ -189,7 +189,7 @@ pub fn validate_pokemon_json(json : Json) -> Result[Unit, Array[String]] {
   }
   let b = @jsonschema.Builder::new()
   let schema = pokemon_schema(b, strict=true)
-  let resolver = @jsonschema.build_resolver(({} : Map[String, Json]).to_json()) catch {
+  let resolver = @jsonschema.build_resolver(Json::object(Map([]))) catch {
     _ => return Err(["internal: failed to build schema resolver"])
   }
   let errors = @jsonschema.Validatable::validate(

@@ -2,12 +2,18 @@
 test "meta_div_rejects_usage_rates_not_summing_to_one" {
   let bad =
     #|{"usage": [0.5, 0.4, 0.3], "matrix": [[0, 1, -1], [-1, 0, 1], [1, -1, 0]]}
-  let err = try? run_meta_divergence(bad)
-  assert_true(err is Err(UsageNotNormalised(_)))
+  try run_meta_divergence(bad) catch {
+    e => assert_true(e is UsageNotNormalised(_))
+  } noraise {
+    _ => fail("expected run_meta_divergence to raise")
+  }
   let negative =
     #|{"usage": [0.5, 0.6, -0.1], "matrix": [[0, 1, -1], [-1, 0, 1], [1, -1, 0]]}
-  let err2 = try? run_meta_divergence(negative)
-  assert_true(err2 is Err(InvalidJsonMeta(_)))
+  try run_meta_divergence(negative) catch {
+    e => assert_true(e is InvalidJsonMeta(_))
+  } noraise {
+    _ => fail("expected run_meta_divergence to raise")
+  }
 }
 
 ///|

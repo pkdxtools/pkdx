@@ -20,15 +20,21 @@ test "nash_solve_json_matrix_form" {
 test "nash_solve_rejects_both_matrix_and_characters" {
   let bad =
     #|{"matrix": [[0, 1], [-1, 0]], "characters": [{"label": "A", "power": 0, "v": {"x": 1, "y": 0}}]}
-  let err = try? run_nash_solve(bad)
-  assert_true(err is Err(ConflictingInputs))
+  try run_nash_solve(bad) catch {
+    e => assert_true(e is ConflictingInputs)
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
 }
 
 ///|
 test "nash_solve_rejects_non_square" {
   let bad = "{\"matrix\":[[0,1,-1],[1,0]]}"
-  let err = try? run_nash_solve(bad)
-  assert_true(err is Err(NonSquareMatrix(_, _)))
+  try run_nash_solve(bad) catch {
+    e => assert_true(e is NonSquareMatrix(_, _))
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
 }
 
 ///|
@@ -112,8 +118,11 @@ test "nash_solve_reproduces_monocycle_nash_janken_e2e" {
 ///|
 test "nash_solve_nonzero_exit_on_infeasible" {
   // Invalid JSON triggers InvalidJson error → CLI would exit non-zero.
-  let err = try? run_nash_solve("not json at all")
-  assert_true(err is Err(InvalidJson(_)))
+  try run_nash_solve("not json at all") catch {
+    e => assert_true(e is InvalidJson(_))
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
 }
 
 ///|
@@ -162,15 +171,21 @@ test "nash_graph_node_labels_match_input" {
 ///|
 test "nash_solve_rejects_short_labels" {
   let bad = "{\"matrix\":[[0,1],[-1,0]],\"labels\":[\"A\"]}"
-  let err = try? run_nash_solve(bad)
-  assert_true(err is Err(LabelCountMismatch(2, 1)))
+  try run_nash_solve(bad) catch {
+    e => assert_true(e is LabelCountMismatch(2, 1))
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
 }
 
 ///|
 test "nash_graph_rejects_short_labels" {
   let bad = "{\"matrix\":[[0,1],[-1,0]],\"labels\":[\"A\"]}"
-  let err = try? run_nash_graph(bad, 0.5)
-  assert_true(err is Err(LabelCountMismatch(2, 1)))
+  try run_nash_graph(bad, 0.5) catch {
+    e => assert_true(e is LabelCountMismatch(2, 1))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
@@ -194,15 +209,21 @@ fn build_team_graph_json(
 ///|
 test "nash_graph_team_rejects_partial_team_without_opponent" {
   let bad = "{\"team\":" + build_team_json(2, "T", [100, 100]) + "}"
-  let err = try? run_nash_graph(bad, 0.0)
-  assert_true(err is Err(MissingField(_)))
+  try run_nash_graph(bad, 0.0) catch {
+    e => assert_true(e is MissingField(_))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
 test "nash_graph_team_rejects_opponent_only" {
   let bad = "{\"opponent\":" + build_team_json(2, "O", [100, 100]) + "}"
-  let err = try? run_nash_graph(bad, 0.0)
-  assert_true(err is Err(MissingField(_)))
+  try run_nash_graph(bad, 0.0) catch {
+    e => assert_true(e is MissingField(_))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
@@ -212,8 +233,11 @@ test "nash_graph_team_rejects_conflict_with_matrix" {
     ",\"opponent\":" +
     build_team_json(2, "O", [100, 100]) +
     ",\"matrix\":[[0,1],[-1,0]]}"
-  let err = try? run_nash_graph(bad, 0.0)
-  assert_true(err is Err(ConflictingInputs))
+  try run_nash_graph(bad, 0.0) catch {
+    e => assert_true(e is ConflictingInputs)
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
@@ -223,8 +247,11 @@ test "nash_graph_team_rejects_conflict_with_characters" {
     ",\"opponent\":" +
     build_team_json(2, "O", [100, 100]) +
     ",\"characters\":[{\"label\":\"A\",\"power\":0,\"v\":{\"x\":1,\"y\":0}}]}"
-  let err = try? run_nash_graph(bad, 0.0)
-  assert_true(err is Err(ConflictingInputs))
+  try run_nash_graph(bad, 0.0) catch {
+    e => assert_true(e is ConflictingInputs)
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
@@ -234,15 +261,21 @@ test "nash_graph_team_rejects_user_provided_labels" {
     [100, 100],
     ",\"labels\":[\"A\",\"B\",\"C\",\"D\"]",
   )
-  let err = try? run_nash_graph(bad, 0.0)
-  assert_true(err is Err(InvalidJson(_)))
+  try run_nash_graph(bad, 0.0) catch {
+    e => assert_true(e is InvalidJson(_))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
 test "nash_graph_team_rejects_non_positive_turn_limit" {
   let bad = build_team_graph_json([100, 100], [100, 100], ",\"turn_limit\":0")
-  let err = try? run_nash_graph(bad, 0.0)
-  assert_true(err is Err(InvalidJson(_)))
+  try run_nash_graph(bad, 0.0) catch {
+    e => assert_true(e is InvalidJson(_))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }
 
 ///|
@@ -355,8 +388,11 @@ test "nash_solve_rejects_team_input_as_unsupported" {
   // The shared parser must keep rejecting team input so `pkdx nash solve`
   // continues to refuse this shape after the graph extension.
   let team_form = build_team_graph_json([100, 100], [100, 100], "")
-  let err = try? run_nash_solve(team_form)
-  assert_true(err is Err(MissingField(_)))
+  try run_nash_solve(team_form) catch {
+    e => assert_true(e is MissingField(_))
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
 }
 
 ///|

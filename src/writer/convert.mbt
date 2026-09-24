@@ -53,7 +53,7 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
   guard input is Object(root) else {
     return Err("migrate_pokemon_meta_v011: expected object at top level")
   }
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   // Preserve top-level non-touched fields (version, regulation, phase, damage_calcs, updated_at, etc.)
   for k, v in root {
     if k != "pokemon" && k != "build" {
@@ -62,7 +62,7 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
   }
   match root.get("pokemon") {
     Some(Object(pokemon)) => {
-      let pokemon_out : Map[String, Json] = {}
+      let pokemon_out : Map[String, Json] = Map([])
       // 保持する識別子
       for k in ["name", "name_en", "globalNo"] {
         match pokemon.get(k) {
@@ -82,7 +82,7 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
   }
   match root.get("build") {
     Some(Object(build)) => {
-      let build_out : Map[String, Json] = {}
+      let build_out : Map[String, Json] = Map([])
       for k in ["nature", "ability", "item", "moves"] {
         match build.get(k) {
           Some(v) => build_out[k] = v
@@ -131,7 +131,7 @@ fn is_stats_field(key : String) -> Bool {
 /// 冪等 — new-format input は no-op。
 fn migrate_team_member(m : Json) -> Json {
   guard m is Object(obj) else { return m }
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for k, v in obj {
     if is_stats_field(k) {
       match v {
@@ -153,7 +153,7 @@ pub fn migrate_team_meta_v011(input : Json) -> Result[Json, String] {
   guard input is Object(root) else {
     return Err("migrate_team_meta_v011: expected object at top level")
   }
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for k, v in root {
     if k == "members" {
       match v {

@@ -395,7 +395,7 @@ pub fn build_team_document(
     blocks.push(heading(2, "防御相性マトリクス"))
     blocks.push(build_defense_table(defense, members))
   }
-  let empty_obj : Json = ({} : Map[String, Json]).to_json()
+  let empty_obj : Json = Json::object(Map([]))
   let primary_sel = match json {
     Object(root) =>
       match root.get("primary_selection") {

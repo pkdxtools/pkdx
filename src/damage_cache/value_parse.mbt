@@ -9,27 +9,23 @@
 /// 16-roll table recovered from disk can feed the mean-damage reducer
 /// without re-running `calc_damage`.
 pub fn parse_damages_from_json(json_str : String) -> Array[Int]? {
-  let parsed = try? @json.parse(json_str)
-  match parsed {
-    Err(_) => None
-    Ok(j) =>
-      match j {
-        Object(obj) =>
-          match obj.get("damages") {
-            Some(Array(arr)) => {
-              let out : Array[Int] = []
-              for i = 0; i < arr.length(); i = i + 1 {
-                match arr[i] {
-                  Number(n, ..) => out.push(n.to_int())
-                  _ => return None
-                }
-              }
-              Some(out)
+  let j = @json.parse(json_str) catch { _ => return None }
+  match j {
+    Object(obj) =>
+      match obj.get("damages") {
+        Some(Array(arr)) => {
+          let out : Array[Int] = []
+          for i = 0; i < arr.length(); i = i + 1 {
+            match arr[i] {
+              Number(n, ..) => out.push(n.to_int())
+              _ => return None
             }
-            _ => None
           }
+          Some(out)
+        }
         _ => None
       }
+    _ => None
   }
 }
 
@@ -67,53 +63,49 @@ pub(all) struct ParsedVariant {
 /// field (legacy v1 entry), or the field is malformed — callers treat
 /// those as a cache miss and fall back to recomputing.
 pub fn parse_variants_from_json(json_str : String) -> Array[ParsedVariant]? {
-  let parsed = try? @json.parse(json_str)
-  match parsed {
-    Err(_) => None
-    Ok(j) =>
-      match j {
-        Object(obj) =>
-          match obj.get("variants") {
-            Some(Array(arr)) => {
-              let out : Array[ParsedVariant] = []
-              for i = 0; i < arr.length(); i = i + 1 {
-                match arr[i] {
-                  Object(v_obj) => {
-                    let prob = match v_obj.get("probability") {
-                      Some(Number(n, ..)) => n
-                      _ => return None
-                    }
-                    let hits_count = match v_obj.get("hits_count") {
-                      Some(Number(n, ..)) => n.to_int()
-                      _ => return None
-                    }
-                    let total = match v_obj.get("total_damages") {
-                      Some(Array(td)) => {
-                        let acc : Array[Int] = []
-                        for j = 0; j < td.length(); j = j + 1 {
-                          match td[j] {
-                            Number(n, ..) => acc.push(n.to_int())
-                            _ => return None
-                          }
-                        }
-                        acc
+  let j = @json.parse(json_str) catch { _ => return None }
+  match j {
+    Object(obj) =>
+      match obj.get("variants") {
+        Some(Array(arr)) => {
+          let out : Array[ParsedVariant] = []
+          for i = 0; i < arr.length(); i = i + 1 {
+            match arr[i] {
+              Object(v_obj) => {
+                let prob = match v_obj.get("probability") {
+                  Some(Number(n, ..)) => n
+                  _ => return None
+                }
+                let hits_count = match v_obj.get("hits_count") {
+                  Some(Number(n, ..)) => n.to_int()
+                  _ => return None
+                }
+                let total = match v_obj.get("total_damages") {
+                  Some(Array(td)) => {
+                    let acc : Array[Int] = []
+                    for j = 0; j < td.length(); j = j + 1 {
+                      match td[j] {
+                        Number(n, ..) => acc.push(n.to_int())
+                        _ => return None
                       }
-                      _ => return None
                     }
-                    out.push({
-                      probability: prob,
-                      hits_count,
-                      total_damages: total,
-                    })
+                    acc
                   }
                   _ => return None
                 }
+                out.push({
+                  probability: prob,
+                  hits_count,
+                  total_damages: total,
+                })
               }
-              Some(out)
+              _ => return None
             }
-            _ => None
           }
+          Some(out)
+        }
         _ => None
       }
+    _ => None
   }
 }

@@ -537,8 +537,11 @@ test "parse_combatant_json: malformed nature raises InvalidJson" {
     #|    {"name":"じしん","type":"じめん","category":"物理","power":100}
     #|  ]
     #|}
-  let err = try? parse_single_combatant(src)
-  assert_true(err is Err(InvalidJson(_)))
+  try parse_single_combatant(src) catch {
+    e => assert_true(e is InvalidJson(_))
+  } noraise {
+    _ => fail("expected parse_single_combatant to raise")
+  }
 }
 
 ///|
@@ -555,8 +558,11 @@ test "parse_combatant_json: non-string nature raises InvalidJson" {
     #|    {"name":"じしん","type":"じめん","category":"物理","power":100}
     #|  ]
     #|}
-  let err = try? parse_single_combatant(src)
-  assert_true(err is Err(InvalidJson(_)))
+  try parse_single_combatant(src) catch {
+    e => assert_true(e is InvalidJson(_))
+  } noraise {
+    _ => fail("expected parse_single_combatant to raise")
+  }
 }
 
 ///|

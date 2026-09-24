@@ -48,7 +48,7 @@ test "team_breed_fallback_smoke: breed build subtree feeds into team member" {
   guard breed_root.get("build") is Some(Object(build)) else {
     fail("build missing")
   }
-  let mem : Map[String, Json] = {}
+  let mem : Map[String, Json] = Map([])
   for k, v in build {
     mem[k] = v
   }

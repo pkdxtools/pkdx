@@ -94,7 +94,7 @@ pub fn run_parallel_shards(
   // Flatten argv: concatenate every argument's UTF-8 bytes, each
   // NUL-terminated. The C side walks the buffer with `strlen + 1`
   // strides to recover the individual argv slots.
-  let buf = @buffer.new()
+  let buf = Buffer()
   let shard_argc = FixedArray::make(n_shards, 0)
   for i in 0..<n_shards {
     let args = argvs[i]

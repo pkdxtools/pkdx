@@ -37,7 +37,7 @@ pub fn has_long_stat_key(obj : Map[String, Json]) -> Bool {
 /// 常に short-key で返す。new-format input は no-op (冪等)。
 pub fn normalize_stats_to_short(value : Json) -> Json {
   guard value is Object(obj) else { return value }
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for pair in stat_key_long_short {
     let (long_k, short_k) = pair
     match obj.get(short_k) {

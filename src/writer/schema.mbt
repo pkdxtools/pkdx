@@ -25,7 +25,7 @@ fn stats_schema(
   b : @jsonschema.Builder,
   keys : Array[String],
 ) -> @jsonschema.JsonSchema {
-  let props : Map[String, @jsonschema.JsonSchema] = {}
+  let props : Map[String, @jsonschema.JsonSchema] = Map([])
   for i = 0; i < keys.length(); i = i + 1 {
     props[keys[i]] = b.number()
   }
@@ -219,13 +219,13 @@ pub fn generate_placeholder(schema : @jsonschema.JsonSchema) -> Json {
     Object(obj) =>
       match obj.properties {
         Some(props) => {
-          let map : Map[String, Json] = {}
+          let map : Map[String, Json] = Map([])
           props.each(fn(key, child_schema) {
             map.set(key, generate_placeholder(child_schema))
           })
           map.to_json()
         }
-        None => ({} : Map[String, Json]).to_json()
+        None => Json::object(Map([]))
       }
     OneOf(one_of) =>
       match @jsonschema.OneOfSchema::parse_nullable(one_of) {

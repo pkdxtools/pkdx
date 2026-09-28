@@ -161,6 +161,11 @@ case "$OS_TAG" in
     fi
     echo "    Also add C:/vcpkg/installed/x64-mingw-dynamic/bin to PATH so the"
     echo "    DLL resolves at runtime (used by 'moon test')."
+    echo "    moon's lib/runtime/env.c calls rand_s(), which mingw-w64 only"
+    echo "    declares when _CRT_RAND_S is defined first. If the build fails"
+    echo "    with \"implicit declaration of function 'rand_s'\", prepend the"
+    echo "    define once:"
+    echo "      sed -i '1i #define _CRT_RAND_S' \"\$HOME/.moon/lib/runtime/env.c\""
     echo "    Both 'moon build' and 'moon test' need OpenBLAS installed; the"
     echo "    production binary does not call BLAS symbols itself but the"
     echo "    transitive nash/payoff packages still trigger the linker pass."

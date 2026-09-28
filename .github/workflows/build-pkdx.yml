@@ -97,12 +97,14 @@ jobs:
         # every non-MSVC Windows build. mingw-w64's <stdlib.h> only declares
         # rand_s when _CRT_RAND_S is defined before the include, so the
         # MinGW gcc pinned below fails with "implicit declaration of
-        # function 'rand_s'". Prepend the define until upstream does it.
+        # function 'rand_s'". env.c does define _CRT_RAND_S itself, but only
+        # after <stdlib.h> has already been pulled in, so it has no effect.
+        # Prepend the define as the very first line until upstream moves it.
         if: runner.os == 'Windows'
         shell: bash
         run: |
           f="$HOME/.moon/lib/runtime/env.c"
-          if ! grep -q '_CRT_RAND_S' "$f"; then
+          if [ "$(head -1 "$f")" != "#define _CRT_RAND_S" ]; then
             printf '#define _CRT_RAND_S\n' | cat - "$f" > "$f.tmp" && mv "$f.tmp" "$f"
           fi
           head -3 "$f"

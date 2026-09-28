@@ -16,11 +16,11 @@ fn cleanup(path : String) -> Unit {
 test "persistent_cache: missing file → open_or_init creates empty cache" {
   let path = test_path("missing")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(cache) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache) else {
     fail("expected Ok on fresh create")
   }
-  let v = get(cache, "any-key")
-  close(cache)
+  let v = @damage_cache.get(cache, "any-key")
+  @damage_cache.close(cache)
   cleanup(path)
   match v {
     Some(_) => fail("fresh cache should not contain entries")
@@ -32,16 +32,16 @@ test "persistent_cache: missing file → open_or_init creates empty cache" {
 test "persistent_cache: existing cache with matching meta retains entries" {
   let path = test_path("meta_matches")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(c1) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c1) else {
     fail("first open should succeed")
   }
-  guard put(c1, "k1", "{\"a\":1}") is Ok(_) else { fail("put failed") }
-  close(c1)
-  guard open_or_init(path, "0.4.10") is Ok(c2) else {
+  guard @damage_cache.put(c1, "k1", "{\"a\":1}") is Ok(_) else { fail("put failed") }
+  @damage_cache.close(c1)
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c2) else {
     fail("second open should succeed")
   }
-  let v = get(c2, "k1")
-  close(c2)
+  let v = @damage_cache.get(c2, "k1")
+  @damage_cache.close(c2)
   cleanup(path)
   match v {
     Some(s) => @debug.assert_eq(s, "{\"a\":1}")
@@ -53,16 +53,16 @@ test "persistent_cache: existing cache with matching meta retains entries" {
 test "persistent_cache: pkdx_version mismatch clears entries" {
   let path = test_path("version_mismatch")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(c1) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c1) else {
     fail("first open failed")
   }
-  guard put(c1, "k1", "v1") is Ok(_) else { fail("put failed") }
-  close(c1)
-  guard open_or_init(path, "0.4.11") is Ok(c2) else {
+  guard @damage_cache.put(c1, "k1", "v1") is Ok(_) else { fail("put failed") }
+  @damage_cache.close(c1)
+  guard @damage_cache.open_or_init(path, "0.4.11") is Ok(c2) else {
     fail("second open failed")
   }
-  let v = get(c2, "k1")
-  close(c2)
+  let v = @damage_cache.get(c2, "k1")
+  @damage_cache.close(c2)
   cleanup(path)
   match v {
     Some(_) => fail("version mismatch should clear entries")
@@ -76,10 +76,10 @@ test "persistent_cache: schema_version mismatch clears entries" {
   cleanup(path)
   // seed with a fake older schema version by writing meta directly,
   // then confirm open_or_init wipes entries on mismatch.
-  guard open_or_init(path, "0.4.10") is Ok(c1) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c1) else {
     fail("first open failed")
   }
-  guard put(c1, "k1", "v1") is Ok(_) else { fail("put failed") }
+  guard @damage_cache.put(c1, "k1", "v1") is Ok(_) else { fail("put failed") }
   // Manually overwrite the schema_version row to simulate an older install.
   guard @db.exec_binds(
       c1.db,
@@ -89,12 +89,12 @@ test "persistent_cache: schema_version mismatch clears entries" {
     is Ok(_) else {
     fail("schema_version downgrade failed")
   }
-  close(c1)
-  guard open_or_init(path, "0.4.10") is Ok(c2) else {
+  @damage_cache.close(c1)
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c2) else {
     fail("second open failed")
   }
-  let v = get(c2, "k1")
-  close(c2)
+  let v = @damage_cache.get(c2, "k1")
+  @damage_cache.close(c2)
   cleanup(path)
   match v {
     Some(_) => fail("schema_version mismatch should clear entries")
@@ -110,11 +110,11 @@ test "persistent_cache: corrupted file recovers to empty cache" {
   // fails SQLite header validation and the unlink-then-retry recovery
   // path has to run to produce a usable cache.
   let _ = write_raw_file(path, "not a sqlite database")
-  guard open_or_init(path, "0.4.10") is Ok(cache) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache) else {
     fail("corrupted file should still yield a fresh cache")
   }
-  let v = get(cache, "anything")
-  close(cache)
+  let v = @damage_cache.get(cache, "anything")
+  @damage_cache.close(cache)
   cleanup(path)
   match v {
     Some(_) => fail("fresh cache should be empty")
@@ -126,11 +126,11 @@ test "persistent_cache: corrupted file recovers to empty cache" {
 test "persistent_cache: put/get round-trip preserves Japanese JSON" {
   let path = test_path("roundtrip")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(cache) else { fail("open failed") }
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache) else { fail("open failed") }
   let value = "{\"attacker\":\"ガブリアス\",\"move\":\"じしん\",\"damages\":[100,101]}"
-  guard put(cache, "key-ja", value) is Ok(_) else { fail("put failed") }
-  let got = get(cache, "key-ja")
-  close(cache)
+  guard @damage_cache.put(cache, "key-ja", value) is Ok(_) else { fail("put failed") }
+  let got = @damage_cache.get(cache, "key-ja")
+  @damage_cache.close(cache)
   cleanup(path)
   match got {
     Some(s) => @debug.assert_eq(s, value)
@@ -142,16 +142,16 @@ test "persistent_cache: put/get round-trip preserves Japanese JSON" {
 test "persistent_cache: survives close/reopen" {
   let path = test_path("close_reopen")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(c1) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c1) else {
     fail("first open failed")
   }
-  guard put(c1, "k1", "first") is Ok(_) else { fail("put failed") }
-  close(c1)
-  guard open_or_init(path, "0.4.10") is Ok(c2) else {
+  guard @damage_cache.put(c1, "k1", "first") is Ok(_) else { fail("put failed") }
+  @damage_cache.close(c1)
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c2) else {
     fail("second open failed")
   }
-  let got = get(c2, "k1")
-  close(c2)
+  let got = @damage_cache.get(c2, "k1")
+  @damage_cache.close(c2)
   cleanup(path)
   match got {
     Some(s) => @debug.assert_eq(s, "first")
@@ -163,13 +163,13 @@ test "persistent_cache: survives close/reopen" {
 test "persistent_cache: clear_all removes all entries" {
   let path = test_path("clear_all")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(cache) else { fail("open failed") }
-  guard put(cache, "k1", "v1") is Ok(_) else { fail("put failed") }
-  guard put(cache, "k2", "v2") is Ok(_) else { fail("put failed") }
-  guard clear_all(cache) is Ok(_) else { fail("clear_all failed") }
-  let v1 = get(cache, "k1")
-  let v2 = get(cache, "k2")
-  close(cache)
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache) else { fail("open failed") }
+  guard @damage_cache.put(cache, "k1", "v1") is Ok(_) else { fail("put failed") }
+  guard @damage_cache.put(cache, "k2", "v2") is Ok(_) else { fail("put failed") }
+  guard @damage_cache.clear_all(cache) is Ok(_) else { fail("clear_all failed") }
+  let v1 = @damage_cache.get(cache, "k1")
+  let v2 = @damage_cache.get(cache, "k2")
+  @damage_cache.close(cache)
   cleanup(path)
   match v1 {
     Some(_) => fail("k1 should be gone after clear_all")
@@ -185,21 +185,21 @@ test "persistent_cache: clear_all removes all entries" {
 test "persistent_cache: sync_meta_after_migrate updates meta without touching entries" {
   let path = test_path("sync_meta")
   cleanup(path)
-  guard open_or_init(path, "0.4.10") is Ok(c1) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(c1) else {
     fail("first open failed")
   }
-  guard put(c1, "k1", "v1") is Ok(_) else { fail("put failed") }
-  close(c1)
-  guard sync_meta_after_migrate(path, "0.4.11") is Ok(_) else {
+  guard @damage_cache.put(c1, "k1", "v1") is Ok(_) else { fail("put failed") }
+  @damage_cache.close(c1)
+  guard @damage_cache.sync_meta_after_migrate(path, "0.4.11") is Ok(_) else {
     fail("sync_meta_after_migrate failed")
   }
   // After sync, opening with the new version should keep entries
   // (because sync advanced the stored meta).
-  guard open_or_init(path, "0.4.11") is Ok(c2) else {
+  guard @damage_cache.open_or_init(path, "0.4.11") is Ok(c2) else {
     fail("second open failed")
   }
-  let v = get(c2, "k1")
-  close(c2)
+  let v = @damage_cache.get(c2, "k1")
+  @damage_cache.close(c2)
   cleanup(path)
   match v {
     Some(s) => @debug.assert_eq(s, "v1")

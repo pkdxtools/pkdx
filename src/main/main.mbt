@@ -1,11 +1,11 @@
 ///|
 fn main {
-  // @sys.get_cli_args() returns the program name as the first element. admiral
+  // @env.args() returns the program name as the first element. admiral
   // expects argv to begin with the first user-supplied token, so strip args[0]
   // before normalization. The normalizer then restores the legacy behaviors of
   // bare `pkdx`, `pkdx help`, and `pkdx version`, which admiral does not
   // provide on its own.
-  let raw = @sys.get_cli_args()
+  let raw = @env.args()
   let user_args : Array[String] = []
   for i = 1; i < raw.length(); i = i + 1 {
     user_args.push(raw[i])
@@ -423,7 +423,7 @@ fn write_box_regulation(regulation : String) -> Result[Unit, String] {
 
 ///|
 fn box_regulation_path() -> String {
-  match @sys.get_env_var("PKDX_BOX_REGULATION") {
+  match @env.get_env_var("PKDX_BOX_REGULATION") {
     Some(p) => p
     None => "box/regulation.json"
   }
@@ -436,7 +436,7 @@ fn box_regulation_path() -> String {
 /// or block when the file is missing (e.g. invoked outside the repo
 /// or before `setup.sh`).
 fn read_repo_pkdx_version() -> String {
-  let path = match @sys.get_env_var("PKDX_REPO_MOON_MOD") {
+  let path = match @env.get_env_var("PKDX_REPO_MOON_MOD") {
     Some(p) => p
     None => "moon.mod.json"
   }
@@ -1153,7 +1153,7 @@ fn cmd_migrate() -> @admiral.CommandDef {
 
 ///|
 fn run_migrate(repo_root : String) -> Unit {
-  let db_path = match @sys.get_env_var("POKEDEX_DB") {
+  let db_path = match @env.get_env_var("POKEDEX_DB") {
     Some(p) => p
     None => repo_root + "/pokedex/pokedex.db"
   }
@@ -2319,7 +2319,7 @@ fn run_coverage(types : Array[String]) -> Unit {
 
 ///|
 fn resolve_db_path() -> Result[String, String] {
-  match @sys.get_env_var("POKEDEX_DB") {
+  match @env.get_env_var("POKEDEX_DB") {
     Some(path) => return Ok(path)
     None => ()
   }

@@ -57,9 +57,18 @@ pub(all) enum ShardResult {
 } derive(Debug, Eq)
 
 ///|
+pub extend ShardResult with Debug::{to_repr}
+
+///|
+pub extend ShardResult with Eq::{not_equal, equal}
+
+///|
 pub suberror RunShardsError {
   InvalidInput(String)
 } derive(Debug)
+
+///|
+pub extend RunShardsError with Debug::{to_repr}
 
 ///|
 /// Spawn `argvs.length()` child processes, each invoking the running

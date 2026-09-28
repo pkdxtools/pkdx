@@ -81,7 +81,7 @@ fn mk_combatant(
   stat_points? : Array[Int]? = None,
   actual_stats? : Array[Int]? = None,
   ivs? : Array[Int]? = None,
-) -> Combatant {
+) -> @payoff.Combatant {
   {
     pokemon,
     moves,

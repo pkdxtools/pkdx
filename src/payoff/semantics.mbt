@@ -57,6 +57,12 @@ pub(all) enum TeamPayoffModel {
 } derive(Debug, Eq)
 
 ///|
+pub extend TeamPayoffModel with Debug::{to_repr}
+
+///|
+pub extend TeamPayoffModel with Eq::{not_equal, equal}
+
+///|
 /// A single-Pokemon combatant with moves and equipment. The underlying
 /// `Pokemon` carries base stats; `stat_system` controls Lv50 stat realisation
 /// (Standard EV252/IV31 or Champions SP).
@@ -96,6 +102,9 @@ pub(all) struct Combatant {
 } derive(Debug)
 
 ///|
+pub extend Combatant with Debug::{to_repr}
+
+///|
 pub suberror PayoffError {
   EmptyCombatants
   EmptyMoves(String)
@@ -106,3 +115,6 @@ pub suberror PayoffError {
   // combatants" message for a transport-layer error.
   ShardError(String)
 } derive(Debug)
+
+///|
+pub extend PayoffError with Debug::{to_repr}

@@ -21,6 +21,12 @@ pub(all) enum HitSpec {
 } derive(Debug, Eq)
 
 ///|
+pub extend HitSpec with Debug::{to_repr}
+
+///|
+pub extend HitSpec with Eq::{not_equal, equal}
+
+///|
 pub(all) enum HitPlan {
   Single
   FixedHits(Int)
@@ -38,6 +44,12 @@ pub(all) enum HitPlan {
   // p(N) = 0.9^(N-1) * 0.1 for N=1..9, p(10) = 0.9^9. Σ = 1.0.
   PopulationBomb(String)
 } derive(Debug, Eq)
+
+///|
+pub extend HitPlan with Debug::{to_repr}
+
+///|
+pub extend HitPlan with Eq::{not_equal, equal}
 
 ///|
 /// Moves that always hit exactly twice.

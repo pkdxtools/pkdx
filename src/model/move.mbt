@@ -13,6 +13,15 @@ pub(all) struct StatEffect {
 } derive(Debug, Eq, Hash)
 
 ///|
+pub extend StatEffect with Debug::{to_repr}
+
+///|
+pub extend StatEffect with Eq::{not_equal, equal}
+
+///|
+pub extend StatEffect with Hash::{hash, hash_combine}
+
+///|
 /// HP-restoring effect carried by healing moves. The payoff layer applies
 /// these in `with_post_hit_effects` (FixedFraction / WeatherDependent /
 /// Drain / Rest / LeechSeed / PainSplit / Wish) and during EOT ticks
@@ -51,6 +60,15 @@ pub(all) enum HealingEffect {
   PainSplit
   Wish
 } derive(Debug, Eq, Hash)
+
+///|
+pub extend HealingEffect with Debug::{to_repr}
+
+///|
+pub extend HealingEffect with Eq::{not_equal, equal}
+
+///|
+pub extend HealingEffect with Hash::{hash, hash_combine}
 
 ///|
 /// A move (technique) usable by a Pokemon. Move metadata used by the payoff
@@ -124,3 +142,9 @@ pub(all) struct Move {
   weather_set : Weather?
   field_set : Field?
 } derive(Debug, Eq)
+
+///|
+pub extend Move with Debug::{to_repr}
+
+///|
+pub extend Move with Eq::{not_equal, equal}

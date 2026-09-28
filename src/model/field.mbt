@@ -15,6 +15,15 @@ pub(all) enum Field {
 } derive(Debug, Eq, Hash)
 
 ///|
+pub extend Field with Debug::{to_repr}
+
+///|
+pub extend Field with Eq::{not_equal, equal}
+
+///|
+pub extend Field with Hash::{hash, hash_combine}
+
+///|
 /// Convert a field name to a `Field` enum.
 ///
 /// 二系統の入力を受ける:

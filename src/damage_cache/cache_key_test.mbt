@@ -1,8 +1,8 @@
 ///|
 /// Baseline `CacheKeyInput` for tests — each test starts from this and
 /// mutates exactly the fields under inspection.
-fn baseline() -> CacheKeyInput {
-  CacheKeyInput::{
+fn baseline() -> @damage_cache.CacheKeyInput {
+  @damage_cache.CacheKeyInput::{
     version: "champions",
     regulation: "",
     attacker: "ガブリアス",
@@ -59,9 +59,9 @@ fn baseline() -> CacheKeyInput {
 /// The key must be deterministic: identical inputs produce identical keys.
 test "build_cache_key: determinism across repeated calls" {
   let input = baseline()
-  guard build_cache_key(input) is Ok(first) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(input) is Ok(first) else { fail("unexpected Err") }
   for i = 0; i < 100; i = i + 1 {
-    guard build_cache_key(input) is Ok(next) else { fail("unexpected Err") }
+    guard @damage_cache.build_cache_key(input) is Ok(next) else { fail("unexpected Err") }
     @debug.assert_eq(next, first)
     let _ = i
   }
@@ -71,8 +71,8 @@ test "build_cache_key: determinism across repeated calls" {
 /// Column coverage: changing any single field must produce a different key.
 /// If two fields collapse into the same segment the encoding is broken.
 test "build_cache_key: single-field change yields distinct key" {
-  guard build_cache_key(baseline()) is Ok(base) else { fail("unexpected Err") }
-  let mutations : Array[CacheKeyInput] = [
+  guard @damage_cache.build_cache_key(baseline()) is Ok(base) else { fail("unexpected Err") }
+  let mutations : Array[@damage_cache.CacheKeyInput] = [
     { ..baseline(), version: "scarlet_violet" },
     { ..baseline(), regulation: "m-a" },
     { ..baseline(), attacker: "リザードン" },
@@ -129,7 +129,7 @@ test "build_cache_key: single-field change yields distinct key" {
     { ..baseline(), def_protean_locked: "みず" },
   ]
   for i = 0; i < mutations.length(); i = i + 1 {
-    guard build_cache_key(mutations[i]) is Ok(k) else {
+    guard @damage_cache.build_cache_key(mutations[i]) is Ok(k) else {
       fail("unexpected Err at i=\{i}")
     }
     assert_true(k != base)
@@ -140,18 +140,18 @@ test "build_cache_key: single-field change yields distinct key" {
 /// Ordering / injectivity: swapping the values of two same-type fields must
 /// yield a different key (otherwise the encoding aliases the two roles).
 test "build_cache_key: swap attacker/defender ability yields distinct key" {
-  let base_input : CacheKeyInput = {
+  let base_input : @damage_cache.CacheKeyInput = {
     ..baseline(),
     atk_ability: "いかく",
     def_ability: "マルチスケイル",
   }
-  let swapped : CacheKeyInput = {
+  let swapped : @damage_cache.CacheKeyInput = {
     ..baseline(),
     atk_ability: "マルチスケイル",
     def_ability: "いかく",
   }
-  guard build_cache_key(base_input) is Ok(k1) else { fail("unexpected Err") }
-  guard build_cache_key(swapped) is Ok(k2) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(base_input) is Ok(k1) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(swapped) is Ok(k2) else { fail("unexpected Err") }
   assert_true(k1 != k2)
 }
 
@@ -159,26 +159,26 @@ test "build_cache_key: swap attacker/defender ability yields distinct key" {
 /// Adjacent empty disambiguation: `(attacker="", defender="x")` and
 /// `(attacker="x", defender="")` must not collapse to the same key.
 test "build_cache_key: adjacent empty fields are disambiguated" {
-  let a : CacheKeyInput = {
+  let a : @damage_cache.CacheKeyInput = {
     ..baseline(),
     attacker: "",
     defender: "カイリュー",
   }
-  let b : CacheKeyInput = {
+  let b : @damage_cache.CacheKeyInput = {
     ..baseline(),
     attacker: "カイリュー",
     defender: "",
   }
-  guard build_cache_key(a) is Ok(k1) else { fail("unexpected Err") }
-  guard build_cache_key(b) is Ok(k2) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(a) is Ok(k1) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(b) is Ok(k2) else { fail("unexpected Err") }
   assert_true(k1 != k2)
 }
 
 ///|
 /// Pipe rejection: any input containing `|` must return Err.
 test "build_cache_key: rejects pipe character in attacker" {
-  let input : CacheKeyInput = { ..baseline(), attacker: "ガブ|リアス" }
-  match build_cache_key(input) {
+  let input : @damage_cache.CacheKeyInput = { ..baseline(), attacker: "ガブ|リアス" }
+  match @damage_cache.build_cache_key(input) {
     Ok(_) => fail("expected Err for pipe in attacker")
     Err(_) => ()
   }
@@ -188,10 +188,10 @@ test "build_cache_key: rejects pipe character in attacker" {
 /// Nature empty vs "まじめ": engine treats both as no-correction, but key
 /// distinguishes them (future behavior may diverge).
 test "build_cache_key: empty nature distinct from まじめ" {
-  let a : CacheKeyInput = { ..baseline(), atk_nature: "" }
-  let b : CacheKeyInput = { ..baseline(), atk_nature: "まじめ" }
-  guard build_cache_key(a) is Ok(k1) else { fail("unexpected Err") }
-  guard build_cache_key(b) is Ok(k2) else { fail("unexpected Err") }
+  let a : @damage_cache.CacheKeyInput = { ..baseline(), atk_nature: "" }
+  let b : @damage_cache.CacheKeyInput = { ..baseline(), atk_nature: "まじめ" }
+  guard @damage_cache.build_cache_key(a) is Ok(k1) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(b) is Ok(k2) else { fail("unexpected Err") }
   assert_true(k1 != k2)
 }
 
@@ -199,8 +199,8 @@ test "build_cache_key: empty nature distinct from まじめ" {
 /// Whitespace policy: leading or trailing spaces are rejected so callers
 /// cannot accidentally cache "ガブリアス" and " ガブリアス" separately.
 test "build_cache_key: rejects leading whitespace" {
-  let input : CacheKeyInput = { ..baseline(), attacker: " ガブリアス" }
-  match build_cache_key(input) {
+  let input : @damage_cache.CacheKeyInput = { ..baseline(), attacker: " ガブリアス" }
+  match @damage_cache.build_cache_key(input) {
     Ok(_) => fail("expected Err for leading whitespace")
     Err(_) => ()
   }
@@ -208,8 +208,8 @@ test "build_cache_key: rejects leading whitespace" {
 
 ///|
 test "build_cache_key: rejects trailing whitespace" {
-  let input : CacheKeyInput = { ..baseline(), attacker: "ガブリアス " }
-  match build_cache_key(input) {
+  let input : @damage_cache.CacheKeyInput = { ..baseline(), attacker: "ガブリアス " }
+  match @damage_cache.build_cache_key(input) {
     Ok(_) => fail("expected Err for trailing whitespace")
     Err(_) => ()
   }
@@ -219,18 +219,18 @@ test "build_cache_key: rejects trailing whitespace" {
 /// v6 schema bump: baseline key must start with the new version prefix so a
 /// damage_cache.sqlite written under v2/v3/v4/v5 cannot collide with v6 entries.
 test "build_cache_key: v6 schema prefix" {
-  guard build_cache_key(baseline()) is Ok(k) else { fail("unexpected Err") }
+  guard @damage_cache.build_cache_key(baseline()) is Ok(k) else { fail("unexpected Err") }
   assert_true(k.has_prefix("v6|"))
 }
 
 ///|
 /// Reflect inputs participate in validation: pipe characters are rejected.
 test "build_cache_key: rejects pipe character in incoming_attacker" {
-  let input : CacheKeyInput = {
+  let input : @damage_cache.CacheKeyInput = {
     ..baseline(),
     incoming_attacker: "カイ|リュー",
   }
-  match build_cache_key(input) {
+  match @damage_cache.build_cache_key(input) {
     Ok(_) => fail("expected Err for pipe in incoming_attacker")
     Err(_) => ()
   }

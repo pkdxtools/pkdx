@@ -7,7 +7,7 @@
 
 ///|
 test "SCHEMA_VERSION is 6 (bumped for protean lock type in cache key)" {
-  @debug.debug_inspect(SCHEMA_VERSION, content="6")
+  @debug.debug_inspect(@damage_cache.SCHEMA_VERSION, content="6")
 }
 
 ///|
@@ -21,7 +21,7 @@ test "parse_variants_from_json: extracts probability and hits length" {
     #|  {"probability":0.2,"hits_count":2,"total_damages":[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]},
     #|  {"probability":0.6,"hits_count":3,"total_damages":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]}
     #|]}
-  let result = parse_variants_from_json(json_str)
+  let result = @damage_cache.parse_variants_from_json(json_str)
   match result {
     Some(variants) => {
       @debug.debug_inspect(variants.length(), content="3")
@@ -41,7 +41,7 @@ test "parse_variants_from_json: returns None on missing variants field" {
   let json_str =
     #|{"damages":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
     #|"min":1,"max":16,"defender_hp":200,"ko":"5発以上"}
-  match parse_variants_from_json(json_str) {
+  match @damage_cache.parse_variants_from_json(json_str) {
     Some(_) => fail("expected None for legacy v1 json")
     None => ()
   }
@@ -49,7 +49,7 @@ test "parse_variants_from_json: returns None on missing variants field" {
 
 ///|
 test "parse_variants_from_json: returns None on malformed JSON" {
-  let result = parse_variants_from_json("not json")
+  let result = @damage_cache.parse_variants_from_json("not json")
   match result {
     Some(_) => fail("expected None for malformed json")
     None => ()

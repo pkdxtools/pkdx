@@ -6,7 +6,7 @@
 
 ///|
 /// Dominant attacker: one-shots the 100-HP dummy with STAB 150 BP move.
-fn build_dominant_team(label_prefix : String) -> Array[Combatant] {
+fn build_dominant_team(label_prefix : String) -> Array[@payoff.Combatant] {
   let mv = mk_move(
     "はかいこうせん",
     "ノーマル",
@@ -41,7 +41,7 @@ fn build_dominant_team(label_prefix : String) -> Array[Combatant] {
 
 ///|
 /// Fragile target: 1 HP, 1 offence, slow — guaranteed to get OHKO'd.
-fn build_fragile_team(label_prefix : String) -> Array[Combatant] {
+fn build_fragile_team(label_prefix : String) -> Array[@payoff.Combatant] {
   let mv = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
   let team = Array::make(
     3,
@@ -70,7 +70,7 @@ fn build_fragile_team(label_prefix : String) -> Array[Combatant] {
 test "team_monte_carlo_value_returns_plus_one_when_own_dominates" {
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
-  let v = team_monte_carlo_value(own, opp, 1, 123UL)
+  let v = @payoff.team_monte_carlo_value(own, opp, 1, 123UL)
   @debug.assert_eq(v, 1.0)
 }
 
@@ -78,7 +78,7 @@ test "team_monte_carlo_value_returns_plus_one_when_own_dominates" {
 test "team_monte_carlo_value_returns_minus_one_when_opponent_dominates" {
   let own = build_fragile_team("F")
   let opp = build_dominant_team("D")
-  let v = team_monte_carlo_value(own, opp, 1, 123UL)
+  let v = @payoff.team_monte_carlo_value(own, opp, 1, 123UL)
   @debug.assert_eq(v, -1.0)
 }
 
@@ -86,7 +86,7 @@ test "team_monte_carlo_value_returns_minus_one_when_opponent_dominates" {
 test "team_monte_carlo_value_stays_in_signed_unit_range" {
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
-  let v = team_monte_carlo_value(own, opp, 8, 42UL)
+  let v = @payoff.team_monte_carlo_value(own, opp, 8, 42UL)
   assert_true(v >= -1.0 && v <= 1.0)
 }
 
@@ -94,8 +94,8 @@ test "team_monte_carlo_value_stays_in_signed_unit_range" {
 test "team_monte_carlo_value_is_deterministic_for_same_seed" {
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
-  let v1 = team_monte_carlo_value(own, opp, 16, 7UL)
-  let v2 = team_monte_carlo_value(own, opp, 16, 7UL)
+  let v1 = @payoff.team_monte_carlo_value(own, opp, 16, 7UL)
+  let v2 = @payoff.team_monte_carlo_value(own, opp, 16, 7UL)
   @debug.assert_eq(v1, v2)
 }
 
@@ -103,7 +103,7 @@ test "team_monte_carlo_value_is_deterministic_for_same_seed" {
 test "team_monte_carlo_value_zero_trials_returns_zero" {
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
-  let v = team_monte_carlo_value(own, opp, 0, 42UL)
+  let v = @payoff.team_monte_carlo_value(own, opp, 0, 42UL)
   @debug.assert_eq(v, 0.0)
 }
 
@@ -112,9 +112,9 @@ test "team_rollout_single_trial_matches_monte_carlo_value_for_trivial_case" {
   // 1 trial の team_monte_carlo_value は team_rollout の結果と一致する。
   let own = build_dominant_team("D")
   let opp = build_fragile_team("F")
-  let rng = seeded_rng(99UL)
-  let v_rollout = team_rollout(own, opp, rng)
-  let v_mc = team_monte_carlo_value(own, opp, 1, 99UL)
+  let rng = @payoff.seeded_rng(99UL)
+  let v_rollout = @payoff.team_rollout(own, opp, rng)
+  let v_mc = @payoff.team_monte_carlo_value(own, opp, 1, 99UL)
   @debug.assert_eq(v_rollout, v_mc)
 }
 
@@ -142,8 +142,8 @@ test "team_rollout: faster Spore prevents slower target from attacking on the tu
   let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 50)
   let own = [mk_combatant(own_p, [spore])]
   let opp = [mk_combatant(opp_p, [tackle])]
-  let rng = seeded_rng(42UL)
-  let v = team_rollout(own, opp, rng, turn_limit=3, epsilon=0.0)
+  let rng = @payoff.seeded_rng(42UL)
+  let v = @payoff.team_rollout(own, opp, rng, turn_limit=3, epsilon=0.0)
   // With the fix, opp never gets to attack: turn 1 is blocked mid-turn by the
   // freshly-inflicted Sleep, and turns 2–3 are skipped by the pre-turn sleep
   // counter decrement. Both sides end at full HP, giving a clean 0.0 draw.
@@ -170,8 +170,8 @@ test "team_rollout_handles_hp_ratio_draw_at_turn_limit_one" {
       [mv],
     ),
   )
-  let rng = seeded_rng(3UL)
-  let v = team_rollout(own, opp, rng, turn_limit=1, epsilon=0.0)
+  let rng = @payoff.seeded_rng(3UL)
+  let v = @payoff.team_rollout(own, opp, rng, turn_limit=1, epsilon=0.0)
   // 1 turn で双方生存 → HP 比 diff は [-1, +1] に収まる絶対値 ≤ 0.5 程度の小さな値
   assert_true(v >= -0.5 && v <= 0.5)
 }

@@ -26,7 +26,7 @@ test "switching_game_winrate: L2 disk cache survives across DamageCache instance
   ]
 
   // First run: L1 + L2 both empty → every miss populates both layers.
-  let (_v1, _, dmg1) = switching_game_winrate_stats(
+  let (_v1, _, dmg1) = @payoff.switching_game_winrate_stats(
     team_a,
     team_b,
     3,
@@ -37,7 +37,7 @@ test "switching_game_winrate: L2 disk cache survives across DamageCache instance
 
   // Second run: fresh L1 but L2 persists in the SQLite file → disk
   // lookups hit for the same matchups.
-  let (_v2, _, dmg2) = switching_game_winrate_stats(
+  let (_v2, _, dmg2) = @payoff.switching_game_winrate_stats(
     team_a,
     team_b,
     3,

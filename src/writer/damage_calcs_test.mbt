@@ -129,7 +129,7 @@ fn mk_result_for_test(
 test "append_damage_calc: creates array when missing" {
   let meta : Json = { "members": [] }
   let entry : Json = { "title": "sample" }
-  let result = append_damage_calc(meta, entry)
+  let result = @writer.append_damage_calc(meta, entry)
   guard result is Object(r) else { fail("expected object") }
   guard r.get("damage_calcs") is Some(Array(arr)) else {
     fail("expected damage_calcs array")
@@ -144,7 +144,7 @@ test "append_damage_calc: appends to existing array" {
     "damage_calcs": [{ "title": "first" }, { "title": "second" }],
   }
   let entry : Json = { "title": "third" }
-  let result = append_damage_calc(meta, entry)
+  let result = @writer.append_damage_calc(meta, entry)
   guard result is Object(r) else { fail("expected object") }
   guard r.get("damage_calcs") is Some(Array(arr)) else {
     fail("expected damage_calcs array")
@@ -156,7 +156,7 @@ test "append_damage_calc: appends to existing array" {
 test "append_damage_calc: preserves other keys" {
   let meta : Json = { "battle_format": "singles", "members": [1, 2, 3] }
   let entry : Json = { "title": "probe" }
-  let result = append_damage_calc(meta, entry)
+  let result = @writer.append_damage_calc(meta, entry)
   guard result is Object(r) else { fail("expected object") }
   assert_true(r.get("battle_format") is Some(String("singles")))
   guard r.get("members") is Some(Array(m)) else { fail("members lost") }
@@ -167,7 +167,7 @@ test "append_damage_calc: preserves other keys" {
 test "append_damage_calc: non-object top-level returns as-is" {
   let meta : Json = [1, 2, 3]
   let entry : Json = { "title": "x" }
-  let result = append_damage_calc(meta, entry)
+  let result = @writer.append_damage_calc(meta, entry)
   guard result is Array(arr) else { fail("expected array pass-through") }
   @debug.debug_inspect(arr.length(), content="3")
 }
@@ -184,7 +184,7 @@ test "build_damage_calc_entry: physical move populates atk rank key" {
   )
   let input = mk_input_for_test(atk, def, move_, 2, 0, false)
   let result = mk_result_for_test("\u{78BA}\u{5B9A}2\u{767A}", 52.0, 61.7)
-  let entry = build_damage_calc_entry(input, result, "1:1 short", "")
+  let entry = @writer.build_damage_calc_entry(input, result, "1:1 short", "")
   guard entry is Object(e) else { fail("entry must be object") }
   guard e.get("guaranteed_hits") is Some(Number(n, ..)) else {
     fail("guaranteed_hits missing for kakutei 2")
@@ -210,7 +210,7 @@ test "build_damage_calc_entry: ransuu omits guaranteed_hits" {
   let result = mk_result_for_test(
     "\u{4E71}\u{6570}1\u{767A}(12/16)", 87.0, 102.0,
   )
-  let entry = build_damage_calc_entry(input, result, "", "")
+  let entry = @writer.build_damage_calc_entry(input, result, "", "")
   guard entry is Object(e) else { fail("entry must be object") }
   assert_true(e.get("guaranteed_hits") == None)
   // Special は spa ranks key を使う (= 0 なのでランクは空だが key 選択だけ確認)
@@ -238,7 +238,7 @@ test "build_damage_calc_entry: 16 rolls populated" {
   let move_ = mk_move_for_test("m", "normal", Physical, 60)
   let input = mk_input_for_test(atk, def, move_, 0, 0, false)
   let result = mk_result_for_test("\u{78BA}\u{5B9A}3\u{767A}", 34.0, 40.0)
-  let entry = build_damage_calc_entry(input, result, "t", "n")
+  let entry = @writer.build_damage_calc_entry(input, result, "t", "n")
   guard entry is Object(e) else { fail("entry must be object") }
   guard e.get("rolls_percent") is Some(Array(rolls)) else {
     fail("rolls_percent missing")
@@ -249,21 +249,21 @@ test "build_damage_calc_entry: 16 rolls populated" {
 ///|
 test "validate_attach_team_path: accepts canonical path" {
   @debug.debug_inspect(
-    validate_attach_team_path("box/teams/garchomp-build-2026-04-20.meta.json"),
+    @writer.validate_attach_team_path("box/teams/garchomp-build-2026-04-20.meta.json"),
     content="Ok(())",
   )
   @debug.debug_inspect(
-    validate_attach_team_path("./box/teams/x.meta.json"),
+    @writer.validate_attach_team_path("./box/teams/x.meta.json"),
     content="Ok(())",
   )
 }
 
 ///|
 test "validate_attach_team_path: rejects traversal" {
-  guard validate_attach_team_path("box/teams/../etc/passwd.meta.json") is Err(_) else {
+  guard @writer.validate_attach_team_path("box/teams/../etc/passwd.meta.json") is Err(_) else {
     fail("traversal via .. must be rejected")
   }
-  guard validate_attach_team_path("box/teams/sub/../../.ssh/id.meta.json")
+  guard @writer.validate_attach_team_path("box/teams/sub/../../.ssh/id.meta.json")
     is Err(_) else {
     fail("nested traversal must be rejected")
   }
@@ -271,33 +271,33 @@ test "validate_attach_team_path: rejects traversal" {
 
 ///|
 test "validate_attach_team_path: rejects absolute / home" {
-  guard validate_attach_team_path("/etc/passwd") is Err(_) else {
+  guard @writer.validate_attach_team_path("/etc/passwd") is Err(_) else {
     fail("absolute path must be rejected")
   }
-  guard validate_attach_team_path("~/box/teams/x.meta.json") is Err(_) else {
+  guard @writer.validate_attach_team_path("~/box/teams/x.meta.json") is Err(_) else {
     fail("~ expansion must be rejected")
   }
 }
 
 ///|
 test "validate_attach_team_path: rejects outside box/teams" {
-  guard validate_attach_team_path("box/pokemons/x.meta.json") is Err(_) else {
+  guard @writer.validate_attach_team_path("box/pokemons/x.meta.json") is Err(_) else {
     fail("outside box/teams must be rejected")
   }
-  guard validate_attach_team_path("other/teams/x.meta.json") is Err(_) else {
+  guard @writer.validate_attach_team_path("other/teams/x.meta.json") is Err(_) else {
     fail("non-box root must be rejected")
   }
 }
 
 ///|
 test "validate_attach_team_path: rejects wrong suffix" {
-  guard validate_attach_team_path("box/teams/x.json") is Err(_) else {
+  guard @writer.validate_attach_team_path("box/teams/x.json") is Err(_) else {
     fail(".json without .meta must be rejected")
   }
-  guard validate_attach_team_path("box/teams/x.md") is Err(_) else {
+  guard @writer.validate_attach_team_path("box/teams/x.md") is Err(_) else {
     fail(".md must be rejected")
   }
-  guard validate_attach_team_path("") is Err(_) else {
+  guard @writer.validate_attach_team_path("") is Err(_) else {
     fail("empty must be rejected")
   }
 }
@@ -313,7 +313,7 @@ test "build_damage_calc_entry: conditions propagated" {
     field: @model.Field::Grassy,
   }
   let result = mk_result_for_test("\u{78BA}\u{5B9A}1\u{767A}", 101.0, 119.0)
-  let entry = build_damage_calc_entry(input, result, "rain crit", "")
+  let entry = @writer.build_damage_calc_entry(input, result, "rain crit", "")
   guard entry is Object(e) else { fail("entry must be object") }
   guard e.get("conditions") is Some(Object(c)) else { fail("conditions") }
   assert_true(c.get("weather") is Some(String("\u{3042}\u{3081}")))

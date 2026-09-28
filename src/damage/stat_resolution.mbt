@@ -48,6 +48,12 @@ pub(all) struct StatResolution {
 } derive(Debug, Eq)
 
 ///|
+pub extend StatResolution with Debug::{to_repr}
+
+///|
+pub extend StatResolution with Eq::{not_equal, equal}
+
+///|
 /// Drive the decision table documented at the top of this file.
 ///
 /// The four raw stats (`atk_atk`, `atk_spa`, `def_def`, `def_spd`) are passed

@@ -73,7 +73,7 @@ fn bc_combatant(
   moves : Array[@model.Move],
   ability? : String = "",
   item? : String = "",
-) -> Combatant {
+) -> @payoff.Combatant {
   {
     pokemon,
     moves,
@@ -100,7 +100,7 @@ test "Phase 3-C-1: Triple Axel 1v1 turn=4 — cached_states ≤ 800" {
     type_="こおり",
   )
   let cmb = bc_combatant(bc_pokemon("axel", spe=100, hp=300), [mv])
-  let (_v, stats, _cache) = switching_game_winrate_stats([cmb], [cmb], 4)
+  let (_v, stats, _cache) = @payoff.switching_game_winrate_stats([cmb], [cmb], 4)
   assert_true(stats.cached_states <= 800)
 }
 
@@ -111,7 +111,7 @@ test "Phase 3-C-2: PopulationBomb 1v1 turn=4 — cached_states ≤ 4500" {
   // branch が減る効果を抑制する。baseline 実測: 2786 (2026-05 時点)。
   let mv = bc_move("ネズミざん", power=20, accuracy=90)
   let cmb = bc_combatant(bc_pokemon("popbomb", spe=100, hp=400), [mv])
-  let (_v, stats, _cache) = switching_game_winrate_stats([cmb], [cmb], 4)
+  let (_v, stats, _cache) = @payoff.switching_game_winrate_stats([cmb], [cmb], 4)
   assert_true(stats.cached_states <= 4500)
 }
 
@@ -136,7 +136,7 @@ test "Phase 3-C-3: PopulationBomb + ほのおのからだ + paralyze secondary +
     [bc_move("たいあたり", power=40)],
     ability="ほのおのからだ",
   )
-  let (_v, stats, _cache) = switching_game_winrate_stats(
+  let (_v, stats, _cache) = @payoff.switching_game_winrate_stats(
     [attacker],
     [defender],
     4,

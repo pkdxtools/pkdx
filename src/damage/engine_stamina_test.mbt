@@ -106,14 +106,14 @@ fn st_input(
 
 ///|
 test "is_stamina_ability: recognises じきゅうりょく" {
-  assert_true(is_stamina_ability("じきゅうりょく"))
+  assert_true(@damage.is_stamina_ability("じきゅうりょく"))
 }
 
 ///|
 test "is_stamina_ability: rejects unrelated abilities" {
-  assert_true(!is_stamina_ability("もふもふ"))
-  assert_true(!is_stamina_ability("いかく"))
-  assert_true(!is_stamina_ability(""))
+  assert_true(!@damage.is_stamina_ability("もふもふ"))
+  assert_true(!@damage.is_stamina_ability("いかく"))
+  assert_true(!@damage.is_stamina_ability(""))
 }
 
 ///|

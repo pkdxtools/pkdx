@@ -9,12 +9,24 @@ pub(all) enum StatIndex {
 } derive(Debug, Eq)
 
 ///|
+pub extend StatIndex with Debug::{to_repr}
+
+///|
+pub extend StatIndex with Eq::{not_equal, equal}
+
+///|
 pub(all) struct Nature {
   name_ja : String
   name_en : String
   up : StatIndex?
   down : StatIndex?
 } derive(Debug, Eq)
+
+///|
+pub extend Nature with Debug::{to_repr}
+
+///|
+pub extend Nature with Eq::{not_equal, equal}
 
 ///|
 pub fn all_natures() -> Array[Nature] {

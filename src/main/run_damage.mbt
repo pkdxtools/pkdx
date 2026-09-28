@@ -1,6 +1,6 @@
 ///|
 fn resolve_damage_cache_path() -> String {
-  match @sys.get_env_var(DAMAGE_CACHE_ENV_VAR) {
+  match @env.get_env_var(DAMAGE_CACHE_ENV_VAR) {
     Some(p) if p.length() > 0 => return p
     _ => ()
   }

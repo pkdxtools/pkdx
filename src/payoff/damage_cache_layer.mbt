@@ -58,6 +58,12 @@ pub(all) struct DamageKey {
 } derive(Eq, Hash)
 
 ///|
+pub extend DamageKey with Eq::{not_equal, equal}
+
+///|
+pub extend DamageKey with Hash::{hash, hash_combine}
+
+///|
 /// Memoized mean-damage cache for a single SwitchingGame evaluation. Stores
 /// `DamageKey → Int` (mean damage) and tracks hit/miss counts for
 /// observability.

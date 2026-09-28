@@ -26,6 +26,12 @@ pub(all) struct Pokemon {
 } derive(Debug, Eq)
 
 ///|
+pub extend Pokemon with Debug::{to_repr}
+
+///|
+pub extend Pokemon with Eq::{not_equal, equal}
+
+///|
 /// メガ進化後の差分を保持する。HP は進化で変化しないため含めない
 /// (最大HP/残HP整合性を壊さない)。type2 は空文字列なら単タイプ扱い。
 pub(all) struct MegaForm {
@@ -39,3 +45,9 @@ pub(all) struct MegaForm {
   ability : String
   name_ja : String
 } derive(Debug, Eq)
+
+///|
+pub extend MegaForm with Debug::{to_repr}
+
+///|
+pub extend MegaForm with Eq::{not_equal, equal}

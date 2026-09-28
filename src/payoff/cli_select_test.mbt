@@ -58,7 +58,7 @@ fn select_input_json_with_extra(
 test "select_6v6_single_outputs_3pick_distribution" {
   let team_sp = [100, 95, 105, 90, 110, 85]
   let opp_sp = [100, 100, 100, 100, 100, 100]
-  let out = run_select(
+  let out = @payoff.run_select(
     select_input_json_with_extra(
       team_sp, opp_sp, "single", ",\"team_payoff_model\":\"switching_game:1\"",
     ),
@@ -98,7 +98,7 @@ test "select_6v6_double_format_currently_unsupported" {
   let team_sp = [100, 95, 105, 90, 110, 85]
   let opp_sp = [100, 100, 100, 100, 100, 100]
   let errored = try {
-    let _ = run_select(select_input_json(team_sp, opp_sp, "double"))
+    let _ = @payoff.run_select(select_input_json(team_sp, opp_sp, "double"))
     false
   } catch {
     _ => true
@@ -110,7 +110,7 @@ test "select_6v6_double_format_currently_unsupported" {
 test "select_favours_faster_side_in_speed_asymmetric_lineup" {
   let team_sp = [150, 150, 150, 150, 150, 150]
   let opp_sp = [50, 50, 50, 50, 50, 50]
-  let out = run_select(
+  let out = @payoff.run_select(
     select_input_json_with_extra(
       team_sp, opp_sp, "single", ",\"team_payoff_model\":\"switching_game:2\"",
     ),
@@ -142,7 +142,7 @@ test "select_favours_faster_side_in_speed_asymmetric_lineup" {
 
 ///|
 test "select_reports_expected_winrate_and_exploitability" {
-  let out = run_select(
+  let out = @payoff.run_select(
     select_input_json_with_extra(
       [100, 100, 100, 100, 100, 100],
       [100, 100, 100, 100, 100, 100],
@@ -178,7 +178,7 @@ test "select_accepts_team_cache_json" {
     ",\"team_payoff_model\":\"switching_game:1\"",
   )
   // Should not raise.
-  let out = run_select(input)
+  let out = @payoff.run_select(input)
   assert_true(out.length() > 0)
   assert_true(out.contains("\"selection_names\""))
 }
@@ -190,16 +190,16 @@ test "select_markdown_report_written_to_box_teams" {
   // distribution table. (Actual file I/O is the caller's responsibility.)
   let team_sp = [100, 100, 100, 100, 100, 100]
   let opp_sp = [100, 100, 100, 100, 100, 100]
-  let team = parse_team_array(
+  let team = @payoff.parse_team_array(
     @json.parse(build_team_json(6, "T", team_sp)),
     "team",
   )
-  let opp = parse_team_array(
+  let opp = @payoff.parse_team_array(
     @json.parse(build_team_json(6, "O", opp_sp)),
     "opponent",
   )
-  let r = compute_select_with_team_model(team, opp, Single, SwitchingGame(1))
-  let md = render_select_markdown(r)
+  let r = @payoff.compute_select_with_team_model(team, opp, Single, SwitchingGame(1))
+  let md = @payoff.render_select_markdown(r)
   assert_true(md.contains("# Selection Report"))
   assert_true(md.contains("- format: single"))
   assert_true(md.contains("| probability | lead | bench |"))
@@ -213,7 +213,7 @@ test "run_select_json_rejects_malformed_team_payoff_model" {
     team_sp, opp_sp, "single", ",\"team_payoff_model\":\"unknown:bad\"",
   )
   let errored = try {
-    let _ = run_select(input)
+    let _ = @payoff.run_select(input)
     false
   } catch {
     _ => true
@@ -239,7 +239,7 @@ test "parse_move_json_reads_priority_and_stat_effects" {
   let parsed = match @json.parse(raw) {
     Object(m) =>
       match m.get("team") {
-        Some(t) => parse_team_array(t, "team")
+        Some(t) => @payoff.parse_team_array(t, "team")
         _ => {
           assert_true(false)
           return
@@ -284,7 +284,7 @@ test "parse_move_json_3elem_stat_effects_and_posthit_fields" {
   let parsed = match @json.parse(raw) {
     Object(m) =>
       match m.get("team") {
-        Some(t) => parse_team_array(t, "team")
+        Some(t) => @payoff.parse_team_array(t, "team")
         _ => {
           assert_true(false)
           return
@@ -336,7 +336,7 @@ test "parse_move_json_reads_field_set" {
   let parsed = match @json.parse(raw) {
     Object(m) =>
       match m.get("team") {
-        Some(t) => parse_team_array(t, "team")
+        Some(t) => @payoff.parse_team_array(t, "team")
         _ => {
           assert_true(false)
           return
@@ -385,7 +385,7 @@ test "parse_move_json_rejects_unknown_heal_kind" {
     }
   }
   let msg = try {
-    let _ = parse_team_array(team_json, "team")
+    let _ = @payoff.parse_team_array(team_json, "team")
     ""
   } catch {
     InvalidJson(msg) => msg
@@ -422,7 +422,7 @@ test "parse_move_json_rejects_unknown_weather_set" {
     }
   }
   let msg = try {
-    let _ = parse_team_array(team_json, "team")
+    let _ = @payoff.parse_team_array(team_json, "team")
     ""
   } catch {
     InvalidJson(msg) => msg
@@ -458,7 +458,7 @@ test "parse_move_json_rejects_unknown_field_set" {
     }
   }
   let msg = try {
-    let _ = parse_team_array(team_json, "team")
+    let _ = @payoff.parse_team_array(team_json, "team")
     ""
   } catch {
     InvalidJson(msg) => msg
@@ -481,7 +481,7 @@ test "run_select_with_screened_switching_game_returns_retained_shape" {
     "single",
     ",\"team_payoff_model\":\"screened_switching_game:10:42:0.5:1\"",
   )
-  let out = run_select(input)
+  let out = @payoff.run_select(input)
   // Parse the output JSON to read selection-array lengths.
   let root = match @json.parse(out) {
     Object(m) => m
@@ -527,7 +527,7 @@ test "run_select_rejects_screened_switching_game_with_double_format" {
     ",\"team_payoff_model\":\"screened_switching_game:10:42:0.5:1\"",
   )
   let errored = try {
-    let _ = run_select(input)
+    let _ = @payoff.run_select(input)
     false
   } catch {
     _ => true
@@ -550,7 +550,7 @@ test "run_select_rejects_team_size_other_than_six" {
     ",\"team_payoff_model\":\"switching_game:1\"",
   )
   let undersized_msg = try {
-    let _ = run_select(undersized)
+    let _ = @payoff.run_select(undersized)
     ""
   } catch {
     InvalidJson(msg) => msg
@@ -566,7 +566,7 @@ test "run_select_rejects_team_size_other_than_six" {
     ",\"team_payoff_model\":\"switching_game:1\"",
   )
   let oversized_msg = try {
-    let _ = run_select(oversized)
+    let _ = @payoff.run_select(oversized)
     ""
   } catch {
     InvalidJson(msg) => msg
@@ -603,7 +603,7 @@ test "select_accepts_team_builder_member_format" {
     ",\"opponent\":" +
     team +
     ",\"format\":\"single\",\"team_payoff_model\":\"switching_game:1\"}"
-  let out = run_select(input)
+  let out = @payoff.run_select(input)
   let j = @json.parse(out)
   match j {
     Object(m) =>
@@ -629,7 +629,7 @@ test "select_accepts_team_builder_member_format" {
 test "e2e: 6v6 turn_limit=3 degenerate fixture triggers Nash fallback" {
   // Baseline reset so other tests that may have incremented this counter
   // earlier in the same run do not pollute the assertion below.
-  silent_dp_fallback_count.val = 0
+  @payoff.silent_dp_fallback_count.val = 0
   let input_json = match
     @db.read_file("tests/fixtures/nash_select_input_6v6_t3.json") {
     Some(s) => s
@@ -638,7 +638,7 @@ test "e2e: 6v6 turn_limit=3 degenerate fixture triggers Nash fallback" {
       return
     }
   }
-  let output_json = run_select(input_json)
+  let output_json = @payoff.run_select(input_json)
   let output = @json.parse(output_json)
   match output {
     Object(obj) => {
@@ -675,7 +675,7 @@ test "e2e: 6v6 turn_limit=3 degenerate fixture triggers Nash fallback" {
       // path's silent-degrade branch was never exercised for this fixture,
       // so the scope-out (cli_select fallback does not depend on DP-level
       // silent fallback) is empirically valid.
-      inspect(silent_dp_fallback_count.val, content="0")
+      inspect(@payoff.silent_dp_fallback_count.val, content="0")
     }
     _ => fail("output is not a JSON object")
   }

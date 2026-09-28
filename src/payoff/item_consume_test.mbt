@@ -37,7 +37,7 @@ fn ic_combatant(
   ability? : String = "",
   item? : String = "",
   mega_form? : @model.MegaForm? = None,
-) -> Combatant {
+) -> @payoff.Combatant {
   {
     pokemon,
     moves: [],
@@ -57,7 +57,7 @@ fn ic_combatant(
 fn ic_state(
   my_hps? : Array[Int] = [200, 200, 200],
   opp_hps? : Array[Int] = [200, 200, 200],
-) -> SwitchingGameState {
+) -> @payoff.SwitchingGameState {
   {
     my_active: 0,
     opp_active: 0,
@@ -135,7 +135,7 @@ test "resist_berry: オッカのみ vs ほのお SE → consume (HP unchanged)" 
   let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
   let pre_dmg_hp = 200
   let mv = ic_move("ひのこ", "ほのお")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -158,7 +158,7 @@ test "resist_berry: オッカのみ vs ほのお non-SE (くさ resists) → no 
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[100, 200, 200])
   let mv = ic_move("ひのこ", "ほのお")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -179,7 +179,7 @@ test "resist_berry: オッカのみ already consumed → no refund" {
   let mut state = ic_state(opp_hps=[100, 200, 200])
   state = { ..state, opp_item_consumed: [true, false, false] }
   let mv = ic_move("ひのこ", "ほのお")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -195,7 +195,7 @@ test "resist_berry: defender holds no resist berry → no trigger" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[100, 200, 200])
   let mv = ic_move("ひのこ", "ほのお")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -219,7 +219,7 @@ test "focus_sash: full HP → KO 級 → HP=1 + consume" {
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let pre_dmg_hp = 200
   let mv = ic_move("はかいこうせん", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -241,7 +241,7 @@ test "focus_sash: not at full HP → no trigger (still KO)" {
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let pre_dmg_hp = 150
   let mv = ic_move("はかいこうせん", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -262,7 +262,7 @@ test "focus_sash: already consumed → no trigger" {
   let mut state = ic_state(opp_hps=[0, 200, 200])
   state = { ..state, opp_item_consumed: [true, false, false] }
   let mv = ic_move("はかいこうせん", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -286,7 +286,7 @@ test "fila_berry: post HP <= max/2 → +max/3 heal + consume" {
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 120
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -307,7 +307,7 @@ test "fila_berry: post HP > max/2 → no trigger" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[120, 200, 200])
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 180, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -328,7 +328,7 @@ test "fila_berry: KO hit (HP=0) → no trigger" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let mv = ic_move("はかいこうせん", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -352,7 +352,7 @@ test "fila_berry: zero-damage hit on already-low HP → no trigger" {
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 80
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -376,7 +376,7 @@ test "fila_berry: damage that does not cross threshold → no trigger" {
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 90
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -401,7 +401,7 @@ test "sitrus_berry: post HP <= max/2 → +max/4 heal + consume" {
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 120
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -421,7 +421,7 @@ test "sitrus_berry: KO hit (HP=0) → no trigger" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let mv = ic_move("はかいこうせん", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -443,7 +443,7 @@ test "sitrus_berry: damage that does not cross threshold → no trigger" {
   let post_dmg_state = ic_state(opp_hps=[80, 200, 200])
   let pre_dmg_hp = 90
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, pre_dmg_hp, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -467,7 +467,7 @@ test "probability mass: pre + post fanouts both sum to 1.0" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[100, 200, 200])
   let mv = ic_move("ひのこ", "ほのお")
-  let pre_outs = apply_item_pre_damage_proc_fanout(
+  let pre_outs = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   let mut pre_sum = 0.0
@@ -476,7 +476,7 @@ test "probability mass: pre + post fanouts both sum to 1.0" {
   }
   let pre_drift = if pre_sum > 1.0 { pre_sum - 1.0 } else { 1.0 - pre_sum }
   assert_true(pre_drift < 1.0e-9)
-  let post_outs = apply_item_post_damage_proc_fanout(
+  let post_outs = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   let mut post_sum = 0.0
@@ -504,7 +504,7 @@ test "focus_sash: multi-hit KO does not save the defender" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let mv = ic_move("にどげり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -530,7 +530,7 @@ test "focus_sash: ParentalBond multi-hit KO does not save the defender" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -558,7 +558,7 @@ test "resist_berry: フェアリースキン Normal move triggers ロゼルの�
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -581,7 +581,7 @@ test "resist_berry: ホズのみ triggers on neutral Normal hit" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -623,7 +623,7 @@ test "resist_berry: mega-form フェアリースキン rewrites Normal → consu
   let mut state = ic_state(opp_hps=[150, 200, 200])
   state = { ..state, my_megaed: [true, false, false] }
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -659,7 +659,7 @@ test "resist_berry: non-mega attacker w/ pre-mega Skin ability → no consume" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[150, 200, 200])
   let mv = ic_move("たいあたり", "ノーマル")
-  let outcomes = apply_item_pre_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_pre_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -698,7 +698,7 @@ test "focus_sash: mega-form おやこあい → no rescue on aggregate KO" {
   let mut state = ic_state(opp_hps=[0, 200, 200])
   state = { ..state, my_megaed: [true, false, false] }
   let mv = ic_move("すてみタックル", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")
@@ -736,7 +736,7 @@ test "focus_sash: non-mega base ability single move → Sash rescues to 1 HP" {
   let defender_team = [defender, defender, defender]
   let post_dmg_state = ic_state(opp_hps=[0, 200, 200])
   let mv = ic_move("すてみタックル", "ノーマル")
-  let outcomes = apply_item_post_damage_proc_fanout(
+  let outcomes = @payoff.apply_item_post_damage_proc_fanout(
     post_dmg_state, false, 0, defender_team, attacker_team, 200, mv,
   )
   @debug.debug_inspect(outcomes.length(), content="1")

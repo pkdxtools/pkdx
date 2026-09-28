@@ -40,7 +40,7 @@ test "idempotency: identical_cache_returns_skip" {
   let existing = [
     ("box/pokemons/マンムー/スカーフ型.meta.json", cache),
   ]
-  let result = check_pokemon_import(cache, existing)
+  let result = @writer.check_pokemon_import(cache, existing)
   @debug.debug_inspect(
     result,
     content=(
@@ -60,7 +60,7 @@ test "idempotency: differs_only_in_item_returns_diff" {
   let existing = [
     ("box/pokemons/マンムー/いのちのたま型.meta.json", b),
   ]
-  let result = check_pokemon_import(a, existing)
+  let result = @writer.check_pokemon_import(a, existing)
   match result {
     Diff(path, fields) => {
       @debug.debug_inspect(
@@ -76,7 +76,7 @@ test "idempotency: differs_only_in_item_returns_diff" {
         ),
       )
     }
-    _ => fail("Expected Diff, got \{to_repr(result)}")
+    _ => fail("Expected Diff, got \{Repr(result)}")
   }
 }
 
@@ -103,7 +103,7 @@ test "idempotency: move_order_difference_is_normalized" {
   ]
   build.set("moves", moves.to_json())
   let existing = [("box/pokemons/マンムー/スカーフ型.meta.json", b)]
-  let result = check_pokemon_import(a, existing)
+  let result = @writer.check_pokemon_import(a, existing)
   // sort 後は一致 → Skip
   @debug.debug_inspect(
     result,
@@ -117,6 +117,6 @@ test "idempotency: move_order_difference_is_normalized" {
 test "idempotency: empty_existing_returns_new" {
   let cache = mammu_cache()
   let existing : Array[(String, Json)] = []
-  let result = check_pokemon_import(cache, existing)
+  let result = @writer.check_pokemon_import(cache, existing)
   @debug.debug_inspect(result, content="New")
 }

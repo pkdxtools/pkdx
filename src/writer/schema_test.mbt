@@ -16,8 +16,8 @@ fn validate_with_schema(
 ///|
 test "generate_pokemon_placeholder: roundtrip relaxed schema accepts" {
   let b = @jsonschema.Builder::new()
-  let schema = pokemon_schema(b, strict=false)
-  let placeholder = generate_pokemon_placeholder()
+  let schema = @writer.pokemon_schema(b, strict=false)
+  let placeholder = @writer.generate_pokemon_placeholder()
   let errors = validate_with_schema(schema, placeholder)
   assert_true(errors.is_empty())
 }
@@ -25,8 +25,8 @@ test "generate_pokemon_placeholder: roundtrip relaxed schema accepts" {
 ///|
 test "generate_pokemon_placeholder: strict schema rejects" {
   let b = @jsonschema.Builder::new()
-  let schema = pokemon_schema(b, strict=true)
-  let placeholder = generate_pokemon_placeholder()
+  let schema = @writer.pokemon_schema(b, strict=true)
+  let placeholder = @writer.generate_pokemon_placeholder()
   let errors = validate_with_schema(schema, placeholder)
   assert_true(!errors.is_empty())
 }
@@ -34,8 +34,8 @@ test "generate_pokemon_placeholder: strict schema rejects" {
 ///|
 test "generate_team_placeholder: roundtrip relaxed schema accepts" {
   let b = @jsonschema.Builder::new()
-  let schema = team_schema(b, strict=false)
-  let placeholder = generate_team_placeholder()
+  let schema = @writer.team_schema(b, strict=false)
+  let placeholder = @writer.generate_team_placeholder()
   let errors = validate_with_schema(schema, placeholder)
   assert_true(errors.is_empty())
 }
@@ -43,15 +43,15 @@ test "generate_team_placeholder: roundtrip relaxed schema accepts" {
 ///|
 test "generate_team_placeholder: strict schema rejects" {
   let b = @jsonschema.Builder::new()
-  let schema = team_schema(b, strict=true)
-  let placeholder = generate_team_placeholder()
+  let schema = @writer.team_schema(b, strict=true)
+  let placeholder = @writer.generate_team_placeholder()
   let errors = validate_with_schema(schema, placeholder)
   assert_true(!errors.is_empty())
 }
 
 ///|
 test "generate_pokemon_placeholder: nullable fields are null" {
-  let json = generate_pokemon_placeholder()
+  let json = @writer.generate_pokemon_placeholder()
   guard json is Object(root) else { fail("expected object") }
   guard root.get("build") is Some(Object(build)) else {
     fail("expected build object")
@@ -65,7 +65,7 @@ test "generate_pokemon_placeholder: nullable fields are null" {
 
 ///|
 test "generate_pokemon_placeholder: numeric fields are zero" {
-  let json = generate_pokemon_placeholder()
+  let json = @writer.generate_pokemon_placeholder()
   guard json is Object(root) else { fail("expected object") }
   guard root.get("build") is Some(Object(build)) else {
     fail("expected build object")
@@ -79,7 +79,7 @@ test "generate_pokemon_placeholder: numeric fields are zero" {
 
 ///|
 test "generate_pokemon_placeholder: arrays default to empty" {
-  let json = generate_pokemon_placeholder()
+  let json = @writer.generate_pokemon_placeholder()
   guard json is Object(root) else { fail("expected object") }
   guard root.get("damage_calcs") is Some(Array(arr)) else {
     fail("expected damage_calcs array")
@@ -89,7 +89,7 @@ test "generate_pokemon_placeholder: arrays default to empty" {
 
 ///|
 test "generate_pokemon_placeholder: moves has 4 null-name slots" {
-  let json = generate_pokemon_placeholder()
+  let json = @writer.generate_pokemon_placeholder()
   guard json is Object(root) else { fail("expected object") }
   guard root.get("build") is Some(Object(build)) else {
     fail("expected build object")
@@ -106,7 +106,7 @@ test "generate_pokemon_placeholder: moves has 4 null-name slots" {
 
 ///|
 test "generate_team_placeholder: nullable fields are null" {
-  let json = generate_team_placeholder()
+  let json = @writer.generate_team_placeholder()
   guard json is Object(root) else { fail("expected object") }
   @debug.debug_inspect(root.get("battle_format"), content="Some(Null)")
   @debug.debug_inspect(root.get("mechanics"), content="Some(Null)")
@@ -115,7 +115,7 @@ test "generate_team_placeholder: nullable fields are null" {
 
 ///|
 test "generate_team_placeholder: members is empty array" {
-  let json = generate_team_placeholder()
+  let json = @writer.generate_team_placeholder()
   guard json is Object(root) else { fail("expected object") }
   guard root.get("members") is Some(Array(members)) else {
     fail("expected members array")
@@ -127,7 +127,7 @@ test "generate_team_placeholder: members is empty array" {
 /// pokemon.types[] は日本語 string の配列。要素数 1〜2 を strict schema で許容。
 test "pokemon_schema: types[] accepts 1..=2 japanese type strings" {
   let b = @jsonschema.Builder::new()
-  let schema = pokemon_schema(b, strict=true)
+  let schema = @writer.pokemon_schema(b, strict=true)
   let src =
     #|{
     #|  "pokemon": {
@@ -157,7 +157,7 @@ test "pokemon_schema: types[] accepts 1..=2 japanese type strings" {
 /// 4 要素以上は拒否される。
 test "pokemon_schema: abilities[] accepts 1..=3 entries" {
   let b = @jsonschema.Builder::new()
-  let schema = pokemon_schema(b, strict=true)
+  let schema = @writer.pokemon_schema(b, strict=true)
   let src =
     #|{
     #|  "pokemon": {
@@ -187,7 +187,7 @@ test "pokemon_schema: abilities[] accepts 1..=3 entries" {
 /// pkdx moves CLI 出力をそのまま team cache に格納できる保証。
 test "team_schema: member moves accuracy optional is accepted" {
   let b = @jsonschema.Builder::new()
-  let schema = team_schema(b, strict=true)
+  let schema = @writer.team_schema(b, strict=true)
   let src =
     #|{
     #|  "battle_format": "singles",

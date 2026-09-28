@@ -143,6 +143,15 @@ pub(all) struct SwitchingGameState {
 } derive(Debug, Eq, Hash)
 
 ///|
+pub extend SwitchingGameState with Debug::{to_repr}
+
+///|
+pub extend SwitchingGameState with Eq::{not_equal, equal}
+
+///|
+pub extend SwitchingGameState with Hash::{hash, hash_combine}
+
+///|
 /// Fresh `None`-filled status array sized for a team. Used at game entry
 /// and in test construction.
 pub fn zero_status(team_size : Int) -> Array[@model.StatusCondition] {
@@ -236,6 +245,9 @@ pub(all) struct SideAttempt {
 } derive(Debug)
 
 ///|
+pub extend SideAttempt with Debug::{to_repr}
+
+///|
 /// A single-turn action: use a move from the active Pokemon's moveset, or
 /// switch to another (alive, non-active) Pokemon on the same team.
 pub(all) enum ActionKind {
@@ -248,6 +260,12 @@ pub(all) enum ActionKind {
   // across later switches.
   Mega(Int)
 } derive(Debug, Eq)
+
+///|
+pub extend ActionKind with Debug::{to_repr}
+
+///|
+pub extend ActionKind with Eq::{not_equal, equal}
 
 ///|
 /// Live progress events emitted from the SwitchingGame DP and the screened
@@ -289,6 +307,9 @@ pub(all) enum ProgressEvent {
   CellDone(Array[Int], Array[Int], Int, Int, String)
   DpNode(Int, Int, Int, Int, Int, Int, String)
 } derive(Debug)
+
+///|
+pub extend ProgressEvent with Debug::{to_repr}
 
 ///|
 /// Observability hooks for memoization: callers can inspect hit/miss counts

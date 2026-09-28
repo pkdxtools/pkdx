@@ -22,6 +22,12 @@ pub(all) enum ReflectKind {
 } derive(Eq, Debug)
 
 ///|
+pub extend ReflectKind with Eq::{not_equal, equal}
+
+///|
+pub extend ReflectKind with Debug::{to_repr}
+
+///|
 /// Identify a reflect move by its Japanese name. Returns `None` for any
 /// non-reflect move.
 pub fn is_reflect_move(name : String) -> ReflectKind? {

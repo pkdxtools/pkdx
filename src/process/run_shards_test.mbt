@@ -24,13 +24,13 @@ fn setup_shell() -> String {
   let sh_candidates = ["/bin/sh", "/bin/bash"]
   for cand in sh_candidates {
     if @db.file_exists(cand) {
-      @sys.set_env_var("PKDX_SELF_EXEC", cand)
+      @env.set_env_var("PKDX_SELF_EXEC", cand)
       return "sh"
     }
   }
   let cmd_path = "C:\\Windows\\System32\\cmd.exe"
   if @db.file_exists(cmd_path) {
-    @sys.set_env_var("PKDX_SELF_EXEC", cmd_path)
+    @env.set_env_var("PKDX_SELF_EXEC", cmd_path)
     return "cmd"
   }
   abort("No shell found for testing run_parallel_shards")
@@ -43,7 +43,7 @@ test "run_parallel_shards single shard exit 0" {
     return
   }
   let argvs = [["sh", "-c", "true"]]
-  let results = run_parallel_shards(argvs, timeout_ms=10_000)
+  let results = @process.run_parallel_shards(argvs, timeout_ms=10_000)
   @debug.assert_eq(results.length(), 1)
   @debug.assert_eq(results[0], Ok)
 }
@@ -60,7 +60,7 @@ test "run_parallel_shards mixed exit codes are reported per shard" {
     ["sh", "-c", "exit 2"],
     ["sh", "-c", "exit 0"],
   ]
-  let results = run_parallel_shards(argvs, timeout_ms=10_000)
+  let results = @process.run_parallel_shards(argvs, timeout_ms=10_000)
   @debug.assert_eq(results.length(), 4)
   @debug.assert_eq(results[0], Ok)
   @debug.assert_eq(results[1], Exit(1))
@@ -84,7 +84,7 @@ test "run_parallel_shards times out long-running shards" {
     ["sh", "-c", "sleep 30"],
   ]
   let start_ms = monotonic_ms()
-  let results = run_parallel_shards(argvs, timeout_ms=1_500)
+  let results = @process.run_parallel_shards(argvs, timeout_ms=1_500)
   let elapsed_ms = monotonic_ms() - start_ms
   @debug.assert_eq(results.length(), 4)
   @debug.assert_eq(results[0], Ok)

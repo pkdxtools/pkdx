@@ -46,7 +46,7 @@ test "e2e: weather ball in sun becomes fire type power 100" {
   let dfn = e2e_pokemon("wb-dfn", "ノーマル", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("ウェザーボール", "ノーマル", @model.Special, 50)
   let inp = mk_damage_input(atk, dfn, mv, weather=@model.Weather::Sun)
-  let r = calc_damage(inp)
+  let r = @damage.calc_damage(inp)
   assert_true(!r.is_immune)
   @debug.debug_inspect(r.hits_dealt, content="1")
   @debug.debug_inspect(r.min_damage, content="114")
@@ -71,8 +71,8 @@ test "e2e: reflect halves physical damage" {
   )
   let inp_no = mk_damage_input(atk, dfn, mv)
   let inp_wall = mk_damage_input(atk, dfn, mv, wall=@model.Wall::Reflect)
-  let r_no = calc_damage(inp_no)
-  let r_wall = calc_damage(inp_wall)
+  let r_no = @damage.calc_damage(inp_no)
+  let r_wall = @damage.calc_damage(inp_wall)
   // Reflect cuts roughly in half (integer rounding keeps it just below 2x).
   assert_true(r_wall.max_damage * 2 <= r_no.max_damage + 1)
   assert_true(r_wall.max_damage * 2 >= r_no.max_damage - 2)
@@ -97,8 +97,8 @@ test "e2e: reflect is bypassed by critical hits" {
     wall=@model.Wall::Reflect,
     critical=true,
   )
-  let r_wall = calc_damage(inp_wall)
-  let r_crit = calc_damage(inp_wall_crit)
+  let r_wall = @damage.calc_damage(inp_wall)
+  let r_crit = @damage.calc_damage(inp_wall_crit)
   // Critical damage beats walled damage by ~3x (1.5 crit ÷ 0.5 wall).
   assert_true(r_crit.max_damage > r_wall.max_damage * 2)
 }
@@ -110,8 +110,8 @@ test "e2e: stored power scales with opponent's stat raises" {
   let mv = mk_move("つけあがる", "エスパー", @model.Special, 20)
   let inp_0 = mk_damage_input(atk, dfn, mv, def_rank_up_count=0)
   let inp_3 = mk_damage_input(atk, dfn, mv, def_rank_up_count=3)
-  let r0 = calc_damage(inp_0)
-  let r3 = calc_damage(inp_3)
+  let r0 = @damage.calc_damage(inp_0)
+  let r3 = @damage.calc_damage(inp_3)
   // Power 20 → 80 is 4× on paper. Integer rounding through `22*P*A/D/50 + 2`
   // at small power values drifts ~10-20% low, so assert the proportional
   // relation strongly (≥3×) but leave slack (≤4.5×).
@@ -126,8 +126,8 @@ test "e2e: lash out doubles at half HP" {
   let mv = mk_move("やけっぱち", "あく", @model.Physical, 75)
   let inp_full = mk_damage_input(atk, dfn, mv, atk_hp_num=2, atk_hp_den=2)
   let inp_half = mk_damage_input(atk, dfn, mv, atk_hp_num=1, atk_hp_den=2)
-  let r_full = calc_damage(inp_full)
-  let r_half = calc_damage(inp_half)
+  let r_full = @damage.calc_damage(inp_full)
+  let r_half = @damage.calc_damage(inp_half)
   // Power 75 → 150 near-doubles damage. Integer rounding across the
   // STAB / weather / crit modifier chain means strict ×2 drifts by a few
   // points either way — assert the proportional relation, not the exact
@@ -155,8 +155,8 @@ test "e2e: disguise active adds 1/8 chip on top of normal damage" {
     def_ability="ばけのかわ",
     disguise_active=false,
   )
-  let r_active = calc_damage(inp_active)
-  let r_inactive = calc_damage(inp_inactive)
+  let r_active = @damage.calc_damage(inp_active)
+  let r_inactive = @damage.calc_damage(inp_inactive)
   let chip = r_inactive.defender_hp / 8
   assert_true(r_active.disguise_blocked)
   assert_true(r_active.disguise_chip == chip)
@@ -180,9 +180,9 @@ test "e2e: shell side arm physical mode is blocked by Reflect (not LightScreen)"
   let inp_reflect = mk_damage_input(atk, dfn, mv, wall=@model.Wall::Reflect)
   let inp_light = mk_damage_input(atk, dfn, mv, wall=@model.Wall::LightScreen)
   let inp_base = mk_damage_input(atk, dfn, mv)
-  let r_base = calc_damage(inp_base)
-  let r_reflect = calc_damage(inp_reflect)
-  let r_light = calc_damage(inp_light)
+  let r_base = @damage.calc_damage(inp_base)
+  let r_reflect = @damage.calc_damage(inp_reflect)
+  let r_light = @damage.calc_damage(inp_light)
   // Physical 経路: Reflect が効きダメージ半減、LightScreen は効かない (base と一致)。
   assert_true(r_reflect.max_damage * 2 < r_base.max_damage + 4)
   assert_true(r_light.max_damage == r_base.max_damage)
@@ -197,8 +197,8 @@ test "e2e: facade doubles when attacker is burned" {
   let mv = mk_move("からげんき", "ノーマル", @model.Physical, 70)
   let inp_none = mk_damage_input(atk, dfn, mv)
   let inp_burn = mk_damage_input(atk, dfn, mv, atk_status_condition=Burn)
-  let r_none = calc_damage(inp_none)
-  let r_burn = calc_damage(inp_burn)
+  let r_none = @damage.calc_damage(inp_none)
+  let r_burn = @damage.calc_damage(inp_burn)
   // 威力 70 → 140 でほぼ倍増。整数丸めで ±5% 前後の揺れは許容。
   assert_true(r_burn.max_damage * 100 >= r_none.max_damage * 195)
   assert_true(r_burn.max_damage * 100 <= r_none.max_damage * 205)
@@ -211,8 +211,8 @@ test "e2e: hex doubles on statused defender" {
   let mv = mk_move("たたりめ", "ゴースト", @model.Special, 65)
   let inp_none = mk_damage_input(atk, dfn, mv)
   let inp_burn = mk_damage_input(atk, dfn, mv, def_status_condition=Burn)
-  let r_none = calc_damage(inp_none)
-  let r_burn = calc_damage(inp_burn)
+  let r_none = @damage.calc_damage(inp_none)
+  let r_burn = @damage.calc_damage(inp_burn)
   // ゴースト vs ノーマル = 0x damage → the engine hits the immune fast path
   // and returns all zeros. Hex still doubles base power internally (unit
   // test in variable_power_wbtest covers that), but the type chart wins.

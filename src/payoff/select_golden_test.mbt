@@ -107,7 +107,7 @@ fn build_select_input_asym(
 ///|
 test "select golden: 6v6 single, balanced same-speed teams" {
   let speeds = [100, 100, 100, 100, 100, 100]
-  let out = run_select(build_select_input(speeds, speeds))
+  let out = @payoff.run_select(build_select_input(speeds, speeds))
   @debug.debug_inspect(
     out,
     content=(
@@ -120,7 +120,7 @@ test "select golden: 6v6 single, balanced same-speed teams" {
 test "select golden: 6v6 single, team faster than opponent" {
   let team_speeds = [120, 115, 110, 105, 100, 95]
   let opp_speeds = [80, 75, 70, 65, 60, 55]
-  let out = run_select(build_select_input(team_speeds, opp_speeds))
+  let out = @payoff.run_select(build_select_input(team_speeds, opp_speeds))
   @debug.debug_inspect(
     out,
     content=(
@@ -359,7 +359,7 @@ test "select golden: healing fixture — Recover-bearing tank shifts value" {
     },
   ]
   let input = build_select_input_healing(team, opp, "switching_game:3")
-  let out = run_select(input)
+  let out = @payoff.run_select(input)
   @debug.debug_inspect(
     out,
     content=(
@@ -520,7 +520,7 @@ test "select golden: healing fixture — Sun-synced Moonlight" {
       moves_json: plain_moves,
     },
   ]
-  let out = run_select(
+  let out = @payoff.run_select(
     build_select_input_healing(team, opp, "switching_game:3"),
   )
   @debug.debug_inspect(
@@ -598,7 +598,7 @@ test "select golden: 6v6 single, asymmetric strong-vs-weak teams" {
     }
     out
   }
-  let out = run_select(build_select_input_asym(mk_team("T"), mk_opp()))
+  let out = @payoff.run_select(build_select_input_asym(mk_team("T"), mk_opp()))
   @debug.debug_inspect(
     out,
     content=(

@@ -38,27 +38,27 @@ test "convert_smoke: legacy pokemon fixture migrates then renders md" {
   let legacy = @json.parse(legacy_src)
 
   // 旧 schema を直接 validate すると legacy 誘導エラー。
-  let legacy_validation = validate_pokemon_json(legacy)
+  let legacy_validation = @writer.validate_pokemon_json(legacy)
   guard legacy_validation is Err(errs) else {
     fail("legacy schema must not pass validation")
   }
   assert_true(errs.iter().any(fn(e) { e.contains("pkdx convert meta") }))
 
   // migrate で新 schema に変換すれば通る。
-  let migrated = match migrate_pokemon_meta_v011(legacy) {
+  let migrated = match @writer.migrate_pokemon_meta_v011(legacy) {
     Ok(j) => j
     Err(e) => fail("migrate failed: \{e}")
   }
   {
-    let _r = validate_pokemon_json(migrated)
+    let _r = @writer.validate_pokemon_json(migrated)
     assert_true(_r is Ok(_))
   }
 
   // md 出力が期待される内容を含む。
-  let doc = build_pokemon_document(migrated, "マンムー")
+  let doc = @writer.build_pokemon_document(migrated, "マンムー")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("# マンムー 育成データ"))
-  assert_true(md.contains("| タイプ | こおり/じめん |"))
+  assert_true(compact_tables(md).contains("| タイプ | こおり/じめん |"))
   assert_true(md.contains("ようき (すばやさ↑ とくこう↓)"))
   assert_true(md.contains("あついしぼう"))
   assert_true(md.contains("こだわりスカーフ"))
@@ -88,11 +88,11 @@ test "convert_smoke: migration is idempotent" {
     #|  }
     #|}
   let legacy = @json.parse(legacy_src)
-  let once = match migrate_pokemon_meta_v011(legacy) {
+  let once = match @writer.migrate_pokemon_meta_v011(legacy) {
     Ok(j) => j
     Err(e) => fail("migrate failed: \{e}")
   }
-  let twice = match migrate_pokemon_meta_v011(once) {
+  let twice = match @writer.migrate_pokemon_meta_v011(once) {
     Ok(j) => j
     Err(e) => fail("migrate failed on new-format input: \{e}")
   }

@@ -5,7 +5,7 @@
 
 ///|
 /// Build a deterministic 6-member test team keyed by the given speeds.
-fn build_6_team(label_prefix : String, speeds : Array[Int]) -> Array[Combatant] {
+fn build_6_team(label_prefix : String, speeds : Array[Int]) -> Array[@payoff.Combatant] {
   let mv = mk_move("のしかかり", "ノーマル", @model.Physical, 85)
   let team = Array::make(
     6,
@@ -37,7 +37,7 @@ fn build_6_team(label_prefix : String, speeds : Array[Int]) -> Array[Combatant] 
 test "end_to_end_select_with_switching_game_model_returns_valid_distribution" {
   let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
   let opp = build_6_team("O", [100, 100, 100, 100, 100, 100])
-  let team_m = team_payoff_matrix_with_team_model(
+  let team_m = @payoff.team_payoff_matrix_with_team_model(
     team,
     opp,
     Single,
@@ -86,8 +86,8 @@ test "end_to_end_recoil_move_lowers_switching_game_winrate_vs_non_recoil" {
   let opp_team = [
     mk_combatant(opp_poke, [mk_move("x", "くさ", @model.Physical, 50)]),
   ]
-  let v_recoil = switching_game_winrate(recoil_team, opp_team, 6)
-  let v_non_recoil = switching_game_winrate(non_recoil_team, opp_team, 6)
+  let v_recoil = @payoff.switching_game_winrate(recoil_team, opp_team, 6)
+  let v_non_recoil = @payoff.switching_game_winrate(non_recoil_team, opp_team, 6)
   // Base power 120 vs 90 is balanced by recoil wear-down; the strict
   // inequality we want is "recoil variant cannot outperform the non-recoil
   // variant by a meaningful margin in a 1v1 extended DP". We assert the
@@ -119,8 +119,8 @@ test "end_to_end_amaeru_worth_more_vs_physical_than_vs_special_opp" {
     mk_pokemon("S", "ノーマル", "", 180, 50, 100, 150, 100, 90),
     [mk_move("blast", "ノーマル", @model.Special, 100)],
   )
-  let v_vs_phys = switching_game_winrate([user], [physical_opp], 6)
-  let v_vs_spec = switching_game_winrate([user], [special_opp], 6)
+  let v_vs_phys = @payoff.switching_game_winrate([user], [physical_opp], 6)
+  let v_vs_spec = @payoff.switching_game_winrate([user], [special_opp], 6)
   // Amaeru reduces physical pressure far more than special pressure, so the
   // user's DP value should be strictly better (or at least not worse) vs the
   // physical opponent.
@@ -169,8 +169,8 @@ test "end_to_end_lead_aware_switching_game_value_changes_with_lead" {
       [mv],
     ),
   ]
-  let v_t0_lead = switching_game_winrate([t0, t1, t2], opp, 4)
-  let v_t1_lead = switching_game_winrate([t1, t0, t2], opp, 4)
+  let v_t0_lead = @payoff.switching_game_winrate([t0, t1, t2], opp, 4)
+  let v_t1_lead = @payoff.switching_game_winrate([t1, t0, t2], opp, 4)
   assert_true((v_t0_lead - v_t1_lead).abs() > 1.0e-9)
 }
 
@@ -178,13 +178,13 @@ test "end_to_end_lead_aware_switching_game_value_changes_with_lead" {
 test "end_to_end_switching_game_reproducibility_same_inputs" {
   let team = build_6_team("T", [100, 95, 105, 90, 110, 85])
   let opp = build_6_team("O", [102, 101, 100, 99, 98, 97])
-  let m1 = team_payoff_matrix_with_team_model(
+  let m1 = @payoff.team_payoff_matrix_with_team_model(
     team,
     opp,
     Single,
     SwitchingGame(1),
   )
-  let m2 = team_payoff_matrix_with_team_model(
+  let m2 = @payoff.team_payoff_matrix_with_team_model(
     team,
     opp,
     Single,

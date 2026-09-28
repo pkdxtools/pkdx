@@ -25,21 +25,21 @@ test "build_pokemon_document: deterministic output" {
     #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
-  let doc = build_pokemon_document(json, "ガブリアス")
+  let doc = @writer.build_pokemon_document(json, "ガブリアス")
   let md = @markdown.serialize(doc)
-  let doc2 = build_pokemon_document(json, "ガブリアス")
+  let doc2 = @writer.build_pokemon_document(json, "ガブリアス")
   let md2 = @markdown.serialize(doc2)
   @debug.assert_eq(md, md2)
   assert_true(md.contains("# ガブリアス 育成データ"))
   assert_true(md.contains("## 基本情報"))
-  assert_true(md.contains("| ポケモン | ガブリアス |"))
-  assert_true(md.contains("| タイプ | ドラゴン/じめん |"))
+  assert_true(compact_tables(md).contains("| ポケモン | ガブリアス |"))
+  assert_true(compact_tables(md).contains("| タイプ | ドラゴン/じめん |"))
   assert_true(md.contains("ようき (すばやさ↑ とくこう↓)"))
   assert_true(md.contains("## 実数値 (Lv50, 6V)"))
-  assert_true(md.contains("| HP | 108 | 0 | 183 |"))
-  assert_true(md.contains("| すばやさ | 102 | 252 | 169 |"))
+  assert_true(compact_tables(md).contains("| HP | 108 | 0 | 183 |"))
+  assert_true(compact_tables(md).contains("| すばやさ | 102 | 252 | 169 |"))
   assert_true(md.contains("## 技構成"))
-  assert_true(md.contains("| じしん | じめん | 物理 | 100 | 100 |"))
+  assert_true(compact_tables(md).contains("| じしん | じめん | 物理 | 100 | 100 |"))
   assert_true(md.contains("## ダメージ計算用コマンド"))
   assert_true(md.contains("--atk-stat 182"))
   assert_true(md.contains("--def-hp 183"))
@@ -80,7 +80,7 @@ test "build_pokemon_document: with damage calcs" {
     #|  }]
     #|}
   let json = @json.parse(src)
-  let doc = build_pokemon_document(json, "ガブリアス")
+  let doc = @writer.build_pokemon_document(json, "ガブリアス")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("## ダメージ計算結果"))
   assert_true(md.contains("### 攻撃側 vs サーフゴー / じしん"))
@@ -114,9 +114,9 @@ test "build_pokemon_document: dual type pokemon" {
     #|  "damage_calcs": []
     #|}
   let json = @json.parse(src)
-  let doc = build_pokemon_document(json, "サーフゴー")
+  let doc = @writer.build_pokemon_document(json, "サーフゴー")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("# サーフゴー 育成データ"))
-  assert_true(md.contains("| タイプ | はがね/ゴースト |"))
+  assert_true(compact_tables(md).contains("| タイプ | はがね/ゴースト |"))
   assert_true(md.contains("ひかえめ (とくこう↑ こうげき↓)"))
 }

@@ -77,7 +77,7 @@ fn sgvt_combatant(
   pokemon : @model.Pokemon,
   mv : @model.Move,
   ability? : String = "",
-) -> Combatant {
+) -> @payoff.Combatant {
   {
     pokemon,
     moves: [mv],
@@ -94,7 +94,7 @@ fn sgvt_combatant(
 }
 
 ///|
-fn sgvt_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
+fn sgvt_state(my_hp : Int, opp_hp : Int) -> @payoff.SwitchingGameState {
   {
     my_active: 0,
     opp_active: 0,
@@ -152,13 +152,13 @@ test "Phase 3-B-1: みだれづき + ほのおのからだ contact → hits=5 le
     ability="ほのおのからだ",
   )
   let state = sgvt_state(20000, 20000)
-  let leaves = transition_with_cache(
+  let leaves = @payoff.transition_with_cache(
     state,
     UseMove(0),
     UseMove(0),
     [attacker],
     [defender],
-    new_damage_cache(),
+    @payoff.new_damage_cache(),
   )
   // hits=5 leaf を「opp_hps が最小のグループ」として識別 (5-hit が最大 damage)。
   // attacker burn proc は my_status[0] に反映される。
@@ -205,13 +205,13 @@ test "Phase 3-B-2: Triple Axel + paralyze secondary → hits=1 leaf 0.30, hits=3
   let attacker = sgvt_combatant(sgvt_pokemon("attacker", spe=200), mv_atk)
   let defender = sgvt_combatant(sgvt_pokemon("defender", spe=50), mv_dfn)
   let state = sgvt_state(20000, 20000)
-  let leaves = transition_with_cache(
+  let leaves = @payoff.transition_with_cache(
     state,
     UseMove(0),
     UseMove(0),
     [attacker],
     [defender],
-    new_damage_cache(),
+    @payoff.new_damage_cache(),
   )
   // opp_hps の groupwise (= hits-count ごと) 麻痺率を集計。
   // 最大 HP グループ = hits=1 (最小 dmg)、最小 HP グループ = hits=3 (最大 dmg)。
@@ -266,13 +266,13 @@ test "Phase 3-B-3: PopulationBomb HP compound across 10 vs 1 hit leaves" {
   let attacker = sgvt_combatant(sgvt_pokemon("attacker", spe=200), mv_atk)
   let defender = sgvt_combatant(sgvt_pokemon("defender", spe=50), mv_dfn)
   let state = sgvt_state(50000, 50000) // 10-hit でも余裕で残る HP
-  let leaves = transition_with_cache(
+  let leaves = @payoff.transition_with_cache(
     state,
     UseMove(0),
     UseMove(0),
     [attacker],
     [defender],
-    new_damage_cache(),
+    @payoff.new_damage_cache(),
   )
   let mut max_hp = -1
   let mut min_hp = 99999999
@@ -309,7 +309,7 @@ test "Phase 3-B-4: Triple Axel mirror match → exploitability ≤ 1e-6" {
     type_="こおり",
   )
   let cmb = sgvt_combatant(sgvt_pokemon("mirror", spe=100), mv)
-  let v = switching_game_winrate([cmb], [cmb], 4)
+  let v = @payoff.switching_game_winrate([cmb], [cmb], 4)
   assert_true(v.abs() < 1.0e-6)
 }
 
@@ -320,6 +320,6 @@ test "Phase 3-B-5: PopulationBomb mirror match → exploitability ≤ 1e-6" {
   let mv = sgvt_move("ネズミざん", power=20, accuracy=90)
   // KO 防止のため HP 高め
   let cmb = sgvt_combatant(sgvt_pokemon("mirror", spe=100, hp=400), mv)
-  let v = switching_game_winrate([cmb], [cmb], 3)
+  let v = @payoff.switching_game_winrate([cmb], [cmb], 3)
   assert_true(v.abs() < 1.0e-6)
 }

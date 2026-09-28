@@ -28,6 +28,9 @@ pub suberror MetaCliError {
 } derive(Debug)
 
 ///|
+pub extend MetaCliError with Debug::{to_repr}
+
+///|
 fn json_number_meta(j : Json, ctx : String) -> Double raise MetaCliError {
   match j {
     Number(n, ..) => n

@@ -3,7 +3,7 @@
 /// 各 mapper が期待通りに champout 数値 ID を表示名へ翻訳することを検証する。
 
 ///|
-fn fake_bundle() -> LabelBundle {
+fn fake_bundle() -> @champout_adapter.LabelBundle {
   let type_name : Map[String, String] = Map([])
   // typename.json は Index 9 が欠番なので、TYPENAME_011 = みず, _012 = くさ
   type_name["TYPENAME_000"] = "ノーマル"
@@ -34,28 +34,28 @@ test "resolve_type skips Index 9 in typename.json" {
   let b = fake_bundle()
   // type 値 11 はくさ (連続インデックス: 9 を飛ばして TYPENAME_012)
   @debug.debug_inspect(
-    resolve_type(b, "11"),
+    @champout_adapter.resolve_type(b, "11"),
     content=(
       #|"くさ"
     ),
   )
   // type 値 3 はどく
   @debug.debug_inspect(
-    resolve_type(b, "3"),
+    @champout_adapter.resolve_type(b, "3"),
     content=(
       #|"どく"
     ),
   )
   // 範囲外は空文字
   @debug.debug_inspect(
-    resolve_type(b, "99"),
+    @champout_adapter.resolve_type(b, "99"),
     content=(
       #|""
     ),
   )
   // 不正な数値文字列は 0 扱い → ノーマル
   @debug.debug_inspect(
-    resolve_type(b, ""),
+    @champout_adapter.resolve_type(b, ""),
     content=(
       #|"ノーマル"
     ),
@@ -66,19 +66,19 @@ test "resolve_type skips Index 9 in typename.json" {
 test "resolve_ability returns empty for id 0" {
   let b = fake_bundle()
   @debug.debug_inspect(
-    resolve_ability(b, "65"),
+    @champout_adapter.resolve_ability(b, "65"),
     content=(
       #|"しんりょく"
     ),
   )
   @debug.debug_inspect(
-    resolve_ability(b, "0"),
+    @champout_adapter.resolve_ability(b, "0"),
     content=(
       #|""
     ),
   )
   @debug.debug_inspect(
-    resolve_ability(b, ""),
+    @champout_adapter.resolve_ability(b, ""),
     content=(
       #|""
     ),
@@ -88,25 +88,25 @@ test "resolve_ability returns empty for id 0" {
 ///|
 test "resolve_move_category maps 0/1/2 to physical/special/status" {
   @debug.debug_inspect(
-    resolve_move_category("0"),
+    @champout_adapter.resolve_move_category("0"),
     content=(
       #|"物理"
     ),
   )
   @debug.debug_inspect(
-    resolve_move_category("1"),
+    @champout_adapter.resolve_move_category("1"),
     content=(
       #|"特殊"
     ),
   )
   @debug.debug_inspect(
-    resolve_move_category("2"),
+    @champout_adapter.resolve_move_category("2"),
     content=(
       #|"変化"
     ),
   )
   @debug.debug_inspect(
-    resolve_move_category("9"),
+    @champout_adapter.resolve_move_category("9"),
     content=(
       #|""
     ),
@@ -137,7 +137,7 @@ test "map_pokemon_entries maps Venusaur grass/poison correctly" {
       return
     }
   }
-  match map_pokemon_entries(fake_bundle(), json) {
+  match @champout_adapter.map_pokemon_entries(fake_bundle(), json) {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
@@ -234,7 +234,7 @@ test "map_pokemon_entries skips is_valid != 1" {
       return
     }
   }
-  match map_pokemon_entries(fake_bundle(), json) {
+  match @champout_adapter.map_pokemon_entries(fake_bundle(), json) {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => @debug.debug_inspect(entries.length(), content="0")
   }
@@ -260,7 +260,7 @@ test "map_move_entries normalizes power/accuracy zero to dash and copies direct/
       return
     }
   }
-  match map_move_entries(fake_bundle(), json) {
+  match @champout_adapter.map_move_entries(fake_bundle(), json) {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="2")
@@ -352,7 +352,7 @@ test "map_learnset_entries filters by valid_ids" {
   }
   let valid : Map[String, Bool] = Map([])
   valid["0003000"] = true
-  match map_learnset_entries(fake_bundle(), json, valid) {
+  match @champout_adapter.map_learnset_entries(fake_bundle(), json, valid) {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="2")
@@ -400,7 +400,7 @@ test "map_item_entries resolves id to name_ja" {
       return
     }
   }
-  match map_item_entries(fake_bundle(), json) {
+  match @champout_adapter.map_item_entries(fake_bundle(), json) {
     Err(e) => @debug.debug_inspect(e, content="map ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")

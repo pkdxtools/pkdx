@@ -14,6 +14,11 @@ fn text(content : String) -> @markdown.Inline {
 }
 
 ///|
+fn code(content : String) -> @markdown.Inline {
+  @markdown.Inline::Code(content~, backtick_count=1, span=s)
+}
+
+///|
 fn heading(level : Int, content : String) -> @markdown.Block {
   @markdown.Block::Heading(
     level~,
@@ -32,7 +37,7 @@ fn heading(level : Int, content : String) -> @markdown.Block {
 /// 空白系制御文字を半角スペース 1 個に正規化してから cell に詰める。
 /// パイプ `|` は mizchi/markdown 側が `\|` に自動エスケープする。
 fn normalize_cell_text(content : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in content {
     match c {
       '\n' | '\r' | '\t' => buf.write_char(' ')
@@ -49,11 +54,16 @@ fn cell(content : String) -> @markdown.TableCell {
 
 ///|
 fn bullet_list(items : Array[String]) -> @markdown.Block {
+  bullet_list_rich(items.map(fn(item) { [text(item)] }))
+}
+
+///|
+fn bullet_list_rich(items : Array[Array[@markdown.Inline]]) -> @markdown.Block {
   let list_items = items.map(fn(item) -> @markdown.ListItem {
     {
       children: [
         @markdown.Block::Paragraph(
-          children=[text(item)],
+          children=item,
           span=s,
           leading_trivia=t,
           trailing_trivia=t,

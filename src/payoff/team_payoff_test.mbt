@@ -5,8 +5,8 @@
 
 ///|
 test "combinations_returns_stable_lex_order" {
-  let a = combinations(4, 3)
-  let b = combinations(4, 3)
+  let a = @payoff.combinations(4, 3)
+  let b = @payoff.combinations(4, 3)
   @debug.debug_inspect(a.length(), content="4")
   @debug.debug_inspect(b.length(), content="4")
   for i in 0..<a.length() {
@@ -23,10 +23,10 @@ test "combinations_returns_stable_lex_order" {
 ///|
 test "combinations_with_lead_enumerates_n_times_choose_n_minus_1_k_minus_1" {
   // n=6, k=3 → 6 × C(5,2) = 60 selections (singles の標準ケース)
-  let s = combinations_with_lead(6, 3)
+  let s = @payoff.combinations_with_lead(6, 3)
   @debug.debug_inspect(s.length(), content="60")
   // n=4, k=3 → 4 × C(3,2) = 12 selections (テスト fixture でよく出る規模)
-  let t = combinations_with_lead(4, 3)
+  let t = @payoff.combinations_with_lead(4, 3)
   @debug.debug_inspect(t.length(), content="12")
   // 各エントリは [lead, b1, b2]、lead ∉ {b1, b2}、backups は昇順
   for tup in t {
@@ -56,14 +56,14 @@ test "combinations_with_lead_enumerates_n_times_choose_n_minus_1_k_minus_1" {
 ///|
 test "combinations_with_lead_handles_edge_cases" {
   // k = 1: 自分が lead でバックアップなし → n エントリ
-  let s = combinations_with_lead(3, 1)
+  let s = @payoff.combinations_with_lead(3, 1)
   @debug.debug_inspect(s.length(), content="3")
   @debug.debug_inspect(s[0], content="[0]")
   @debug.debug_inspect(s[1], content="[1]")
   @debug.debug_inspect(s[2], content="[2]")
   // k > n / k <= 0 / n = 0 はすべて空配列
-  @debug.debug_inspect(combinations_with_lead(2, 3).length(), content="0")
-  @debug.debug_inspect(combinations_with_lead(3, 0).length(), content="0")
-  @debug.debug_inspect(combinations_with_lead(0, 3).length(), content="0")
-  @debug.debug_inspect(combinations_with_lead(3, -1).length(), content="0")
+  @debug.debug_inspect(@payoff.combinations_with_lead(2, 3).length(), content="0")
+  @debug.debug_inspect(@payoff.combinations_with_lead(3, 0).length(), content="0")
+  @debug.debug_inspect(@payoff.combinations_with_lead(0, 3).length(), content="0")
+  @debug.debug_inspect(@payoff.combinations_with_lead(3, -1).length(), content="0")
 }

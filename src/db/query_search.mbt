@@ -15,6 +15,9 @@ pub(all) struct SearchResult {
 } derive(Debug)
 
 ///|
+pub extend SearchResult with Debug::{to_repr}
+
+///|
 /// Search Pokemon by type with optional speed minimum.
 ///
 /// version="champions" は champions.db (新スキーマ) ルートに delegate する。

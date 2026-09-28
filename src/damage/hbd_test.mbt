@@ -5,7 +5,7 @@ fn all_optimize_evs() -> FixedArray[Int] {
 }
 
 ///|
-fn default_weights() -> HbdWeights {
+fn default_weights() -> @damage.HbdWeights {
   { phys: 1, spec: 1 }
 }
 
@@ -13,7 +13,7 @@ fn default_weights() -> HbdWeights {
 test "optimize_hbd: Garchmock H/B/D budget respects constraints" {
   // Garchomp-like: 108/130/95/80/85/102
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd(
+  let result = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -43,7 +43,7 @@ test "optimize_hbd: greedy within 1% of brute-force optimum" {
   // reachable under EV caps (each stat capped at 252). Instead verify that the
   // greedy solution matches the brute-force global optimum within 1%.
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let greedy = optimize_hbd(
+  let greedy = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -51,7 +51,7 @@ test "optimize_hbd: greedy within 1% of brute-force optimum" {
     @model.HpSnap::NoSnap,
     default_weights(),
   )
-  let brute = optimize_hbd_topn(
+  let brute = @damage.optimize_hbd_topn(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -70,7 +70,7 @@ test "optimize_hbd: greedy within 1% of brute-force optimum" {
 test "optimize_hbd: fixed S=252 reserves budget" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
   let fixed : FixedArray[Int] = [-1, 0, -1, 0, -1, 252]
-  let result = optimize_hbd(
+  let result = @damage.optimize_hbd(
     garch,
     fixed,
     default_ivs(),
@@ -87,7 +87,7 @@ test "optimize_hbd: fixed S=252 reserves budget" {
 ///|
 test "optimize_hbd: HpSnap::Leftovers → H ≡ 1 (mod 16)" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd(
+  let result = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -102,7 +102,7 @@ test "optimize_hbd: HpSnap::Leftovers → H ≡ 1 (mod 16)" {
 ///|
 test "optimize_hbd: HpSnap::Residual → H ≡ 15 (mod 16)" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd(
+  let result = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -117,7 +117,7 @@ test "optimize_hbd: HpSnap::Residual → H ≡ 15 (mod 16)" {
 ///|
 test "optimize_hbd: Shedinja (base HP=1) falls back to B/D only" {
   let nuke = mk_pokemon("ヌケニン", 1, 90, 45, 30, 30, 40)
-  let result = optimize_hbd(
+  let result = @damage.optimize_hbd(
     nuke,
     all_optimize_evs(),
     default_ivs(),
@@ -134,7 +134,7 @@ test "optimize_hbd: Shedinja (base HP=1) falls back to B/D only" {
 ///|
 test "optimize_hbd: score is positive and monotonic through loop" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd(
+  let result = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -149,7 +149,7 @@ test "optimize_hbd: score is positive and monotonic through loop" {
 ///|
 test "optimize_hbd_topn: n=5 returns 5 candidates in descending order" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd_topn(
+  let result = @damage.optimize_hbd_topn(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -168,7 +168,7 @@ test "optimize_hbd_topn: n=5 returns 5 candidates in descending order" {
 ///|
 test "optimize_hbd_topn: top candidate close to greedy solution" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let greedy = optimize_hbd(
+  let greedy = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -176,7 +176,7 @@ test "optimize_hbd_topn: top candidate close to greedy solution" {
     @model.HpSnap::NoSnap,
     default_weights(),
   )
-  let brute = optimize_hbd_topn(
+  let brute = @damage.optimize_hbd_topn(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -196,7 +196,7 @@ test "optimize_hbd_topn: top candidate close to greedy solution" {
 ///|
 test "optimize_hbd_topn: constraint adherence" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd_topn(
+  let result = @damage.optimize_hbd_topn(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -226,7 +226,7 @@ test "optimize_hbd_topn: constraint adherence" {
 ///|
 test "optimize_hbd: asymmetric weights — phys≫spec favors B" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result_phys = optimize_hbd(
+  let result_phys = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -234,7 +234,7 @@ test "optimize_hbd: asymmetric weights — phys≫spec favors B" {
     @model.HpSnap::NoSnap,
     { phys: 10, spec: 1 },
   )
-  let result_spec = optimize_hbd(
+  let result_spec = @damage.optimize_hbd(
     garch,
     all_optimize_evs(),
     default_ivs(),
@@ -262,7 +262,7 @@ fn all_optimize_sps() -> FixedArray[Int] {
 ///|
 test "optimize_hbd_champions: budget and cap constraints" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd_champions(
+  let result = @damage.optimize_hbd_champions(
     garch,
     all_optimize_sps(),
     neutral_nature(),
@@ -285,14 +285,14 @@ test "optimize_hbd_champions: budget and cap constraints" {
 ///|
 test "optimize_hbd_champions: greedy within 1% of brute-force" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let greedy = optimize_hbd_champions(
+  let greedy = @damage.optimize_hbd_champions(
     garch,
     all_optimize_sps(),
     neutral_nature(),
     @model.HpSnap::NoSnap,
     default_weights(),
   )
-  let brute = optimize_hbd_topn_champions(
+  let brute = @damage.optimize_hbd_topn_champions(
     garch,
     all_optimize_sps(),
     neutral_nature(),
@@ -310,7 +310,7 @@ test "optimize_hbd_champions: greedy within 1% of brute-force" {
 test "optimize_hbd_champions: fixed S=32 reserves budget" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
   let fixed : FixedArray[Int] = [-1, 0, -1, 0, -1, 32]
-  let result = optimize_hbd_champions(
+  let result = @damage.optimize_hbd_champions(
     garch,
     fixed,
     neutral_nature(),
@@ -326,7 +326,7 @@ test "optimize_hbd_champions: fixed S=32 reserves budget" {
 ///|
 test "optimize_hbd_topn_champions: constraint adherence" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd_topn_champions(
+  let result = @damage.optimize_hbd_topn_champions(
     garch,
     all_optimize_sps(),
     neutral_nature(),
@@ -352,7 +352,7 @@ test "optimize_hbd_topn_champions: constraint adherence" {
 ///|
 test "optimize_hbd_champions: HpSnap::Leftovers" {
   let garch = mk_pokemon("ガブリアス", 108, 130, 95, 80, 85, 102)
-  let result = optimize_hbd_champions(
+  let result = @damage.optimize_hbd_champions(
     garch,
     all_optimize_sps(),
     neutral_nature(),

@@ -25,6 +25,15 @@ pub(all) enum StatusCondition {
 } derive(Debug, Eq, Hash)
 
 ///|
+pub extend StatusCondition with Debug::{to_repr}
+
+///|
+pub extend StatusCondition with Eq::{not_equal, equal}
+
+///|
+pub extend StatusCondition with Hash::{hash, hash_combine}
+
+///|
 /// Kind of status a move can inflict. Separate from `StatusCondition` because
 /// moves declare "what they try to apply" as a kind (e.g. BadPoisonKind for
 /// どくどく) while the actual condition the target ends up with carries
@@ -38,6 +47,15 @@ pub(all) enum StatusKind {
   // あくびが付与する予告状態。直接ねむりを与えず 1 ターン遅延させる。
   DrowsyKind
 } derive(Debug, Eq, Hash)
+
+///|
+pub extend StatusKind with Debug::{to_repr}
+
+///|
+pub extend StatusKind with Eq::{not_equal, equal}
+
+///|
+pub extend StatusKind with Hash::{hash, hash_combine}
 
 ///|
 /// Parse a Japanese status name into `StatusKind`. Accepts the canonical

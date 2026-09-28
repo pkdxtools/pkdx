@@ -15,7 +15,7 @@
 /// 実行ごとに異なり得るので候補を順に試す。POKEDEX_DB 環境変数が設定
 /// されていればそれを最優先する。
 fn find_test_db() -> String? {
-  match @sys.get_env_var("POKEDEX_DB") {
+  match @env.get_env_var("POKEDEX_DB") {
     Some(p) => return Some(p)
     None => ()
   }
@@ -25,9 +25,9 @@ fn find_test_db() -> String? {
   ]
   for i = 0; i < candidates.length(); i = i + 1 {
     let path = candidates[i]
-    match open(path) {
+    match @db.open(path) {
       Ok(db) => {
-        close(db)
+        @db.close(db)
         return Some(path)
       }
       Err(_) => continue
@@ -42,16 +42,16 @@ fn find_test_db() -> String? {
 /// 経由)。env なしの環境では `pokedex/champions.db` 等の sibling を探す。
 /// champions.db が存在しないインストールでは silent skip する (本ファイルの
 /// 他テスト同様、`fail` ではなく `None` を返して呼び出し側で `return`)。
-fn open_test_champions_db() -> Db? {
+fn open_test_champions_db() -> @db.Db? {
   let pokedex_path = match find_test_db() {
     Some(p) => p
     None => return None
   }
-  let champions_path = resolve_champions_db_path_from(pokedex_path)
-  if !file_exists(champions_path) {
+  let champions_path = @db.resolve_champions_db_path_from(pokedex_path)
+  if !@db.file_exists(champions_path) {
     return None
   }
-  match open_for(pokedex_path, @model.Champions) {
+  match @db.open_for(pokedex_path, @model.Champions) {
     Ok(db) => Some(db)
     Err(_) => None
   }
@@ -66,12 +66,12 @@ test "query_pokemon: カイリュー legendsza (rc-bug regression)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(db, "カイリュー", @model.Other("legendsza"))
-  close(db)
+  let result = @db.query_pokemon(db, "カイリュー", @model.Other("legendsza"))
+  @db.close(db)
   match result {
     Ok(p) => {
       // HP が 91 のままであること（バグ時は 81 になっていた）
@@ -113,16 +113,16 @@ test "query_pokemon: リザードン scarlet_violet" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "リザードン",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(p.hp, content="78")
@@ -161,8 +161,8 @@ test "query_pokemon: メガピクシー champions" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "メガピクシー", @model.Champions)
-  close(db)
+  let result = @db.query_pokemon(db, "メガピクシー", @model.Champions)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(p.hp, content="95")
@@ -208,8 +208,8 @@ test "query_pokemon: ガブリアス champions stats" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "ガブリアス", @model.Champions)
-  close(db)
+  let result = @db.query_pokemon(db, "ガブリアス", @model.Champions)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(p.hp, content="108")
@@ -242,8 +242,8 @@ test "query_moves: ガブリアス champions" {
     Some(d) => d
     None => return
   }
-  let result = query_moves(db, "0445", @model.Champions)
-  close(db)
+  let result = @db.query_moves(db, "0445", @model.Champions)
+  @db.close(db)
   match result {
     Ok(moves) => {
       assert_true(moves.length() > 0)
@@ -284,19 +284,19 @@ test "query_champions_moves: ロトム全フォルムの固有技" {
   ]
   for i = 0; i < cases.length(); i = i + 1 {
     let (pokemon, signature) = cases[i]
-    let id = match query_champions_pokemon_id_by_name(db, pokemon) {
+    let id = match @db.query_champions_pokemon_id_by_name(db, pokemon) {
       Ok(s) => s
       Err(e) => {
         fail(pokemon + ": id resolve failed: " + e)
-        close(db)
+        @db.close(db)
         return
       }
     }
-    let moves = match query_champions_moves(db, id) {
+    let moves = match @db.query_champions_moves(db, id) {
       Ok(ms) => ms
       Err(e) => {
         fail(pokemon + ": learnset failed: " + e)
-        close(db)
+        @db.close(db)
         return
       }
     }
@@ -309,11 +309,11 @@ test "query_champions_moves: ロトム全フォルムの固有技" {
     }
     if !found {
       fail(pokemon + " should learn " + signature)
-      close(db)
+      @db.close(db)
       return
     }
   }
-  close(db)
+  @db.close(db)
 }
 
 ///|
@@ -324,11 +324,11 @@ test "query_champions_moves: base ロトムは固有技を持たない" {
     Some(d) => d
     None => return
   }
-  let id = match query_champions_pokemon_id_by_name(db, "ロトム") {
+  let id = match @db.query_champions_pokemon_id_by_name(db, "ロトム") {
     Ok(s) => s
     Err(e) => {
       fail("ロトム id resolve failed: " + e)
-      close(db)
+      @db.close(db)
       return
     }
   }
@@ -338,15 +338,15 @@ test "query_champions_moves: base ロトムは固有技を持たない" {
       #|"0479000"
     ),
   )
-  let moves = match query_champions_moves(db, id) {
+  let moves = match @db.query_champions_moves(db, id) {
     Ok(ms) => ms
     Err(e) => {
       fail("base ロトム learnset failed: " + e)
-      close(db)
+      @db.close(db)
       return
     }
   }
-  close(db)
+  @db.close(db)
   let forbidden = [
     "ハイドロポンプ", "オーバーヒート", "ふぶき", "エアスラッシュ",
     "リーフストーム",
@@ -368,8 +368,8 @@ test "query_pokemon: スコヴィラン champions globalNo" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "スコヴィラン", @model.Champions)
-  close(db)
+  let result = @db.query_pokemon(db, "スコヴィラン", @model.Champions)
+  @db.close(db)
   match result {
     Ok(p) => {
       // 外部番号 939 と混同されがちだが正しい globalNo は 0952
@@ -396,16 +396,16 @@ test "query_pokemon: ガブリアス scarlet_violet stats" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "ガブリアス",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(p.hp, content="108")
@@ -443,8 +443,8 @@ test "query_pokemon: ウォッシュロトム champions (direct form alias)" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "ウォッシュロトム", @model.Champions)
-  close(db)
+  let result = @db.query_pokemon(db, "ウォッシュロトム", @model.Champions)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -494,16 +494,16 @@ test "query_pokemon: キュウコン（アローラ） scarlet_violet (composed 
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "キュウコン（アローラ）",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -545,8 +545,8 @@ test "query_pokemon: ロトム champions + forms list (discoverability)" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "ロトム", @model.Champions)
-  close(db)
+  let result = @db.query_pokemon(db, "ロトム", @model.Champions)
+  @db.close(db)
   match result {
     Ok(p) => {
       // 原種は base 情報を返す (既存動作の回帰チェックも兼ねる)
@@ -594,16 +594,16 @@ test "query_pokemon: キュウコン scarlet_violet + forms list (regional)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "キュウコン",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -636,8 +636,8 @@ test "query_pokemon: トリミアン champions (cosmetic forms listed)" {
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(db, "トリミアン", @model.Champions)
-  close(db)
+  let result = @db.query_pokemon(db, "トリミアン", @model.Champions)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -667,16 +667,16 @@ test "query_pokemon: イダイトウ（オス） scarlet_violet (gender alias jp
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "イダイトウ（オス）",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -715,16 +715,16 @@ test "query_pokemon: Basculegion (Male) scarlet_violet (gender alias eng → jpn
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "Basculegion (Male)",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -761,16 +761,16 @@ test "query_pokemon: Basculegion (Female) scarlet_violet (eng alias → jpn name
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "Basculegion (Female)",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -809,16 +809,16 @@ test "query_pokemon: イダイトウ scarlet_violet (base form discovery)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "イダイトウ",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -863,16 +863,16 @@ test "query_pokemon: ニャオニクス（オス） scarlet_violet (gender alias
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "ニャオニクス（オス）",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -915,12 +915,12 @@ test "query_pokemon: イダイトウ（オス） champions (gender alias version
     Some(d) => d
     None => return
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "イダイトウ（オス）",
     @model.Champions,
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(p) => {
       @debug.debug_inspect(
@@ -957,16 +957,16 @@ test "query_pokemon: Therian form absent in SV errors cleanly" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_pokemon(
+  let result = @db.query_pokemon(
     db,
     "ランドロス（れいじゅう）",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(_) => fail("should have failed: therian not in SV")
     Err(_) => ()

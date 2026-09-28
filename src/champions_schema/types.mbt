@@ -35,6 +35,12 @@ pub(all) struct PokemonEntry {
 } derive(Debug, Eq)
 
 ///|
+pub extend PokemonEntry with Debug::{to_repr}
+
+///|
+pub extend PokemonEntry with Eq::{not_equal, equal}
+
+///|
 /// Champions 技エントリ。`010_champions_moves/data.json` の各要素。
 /// pp / power / accuracy が String なのは `"-"` (該当なし) を含むため。
 /// `direct` は接触フラグ (1 = 接触 / 0 = 非接触)。`target` は range enum
@@ -56,6 +62,12 @@ pub(all) struct MoveEntry {
 } derive(Debug, Eq)
 
 ///|
+pub extend MoveEntry with Debug::{to_repr}
+
+///|
+pub extend MoveEntry with Eq::{not_equal, equal}
+
+///|
 /// Champions 技習得エントリ。`004_champions_learnset/data.json` の各要素。
 /// `id` は `PokemonEntry.id` と同じ体系で参照される。conditions は
 /// 取得経路の自由文字列 ("基本" / "Lv1" / "わざマシン" 等)。
@@ -64,6 +76,12 @@ pub(all) struct LearnsetEntry {
   conditions : String
   waza : String
 } derive(Debug, Eq)
+
+///|
+pub extend LearnsetEntry with Debug::{to_repr}
+
+///|
+pub extend LearnsetEntry with Eq::{not_equal, equal}
 
 ///|
 /// Champions アイテムエントリ。`013_items/data.json` の各要素。
@@ -75,3 +93,9 @@ pub(all) struct ItemEntry {
   category : String
   flavor : String
 } derive(Debug, Eq)
+
+///|
+pub extend ItemEntry with Debug::{to_repr}
+
+///|
+pub extend ItemEntry with Eq::{not_equal, equal}

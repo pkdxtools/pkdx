@@ -359,10 +359,10 @@ pub fn build_team_document(
   blocks.push(heading(1, "\{axis}軸構築 - \{date}"))
   blocks.push(heading(2, "フォーマット"))
   blocks.push(
-    bullet_list([
-      "バトル形式: \{battle_format}",
-      "メカニクス: \{mechanics}",
-      "ゲームバージョン: \{version}",
+    bullet_list_rich([
+      [text("バトル形式: \{battle_format}")],
+      [text("メカニクス: \{mechanics}")],
+      [text("ゲームバージョン: "), code(version)],
     ]),
   )
   let concept = json_string(json, "concept")
@@ -430,6 +430,7 @@ pub fn build_team_document(
   {
     frontmatter: Some(build_team_frontmatter(json, axis, date, publish~)),
     children: blocks,
+    definitions: [],
     span: s,
   }
 }
@@ -454,7 +455,7 @@ pub fn build_team_frontmatter(
   let member_names = members.map(fn(m) -> String { json_string(m, "name") })
   let title = "\{axis}軸構築 - \{date}"
   let entries : Array[(String, String)] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   fn add_quoted(key : String, value : String) -> Unit {
     entries.push((key, value))
     buf.write_string(key)
@@ -521,7 +522,7 @@ pub fn has_edit_lock(md_text : String) -> Bool {
 /// Escape a string for embedding in a YAML double-quoted scalar.
 /// Only `\` and `"` are escaped — keeping the parser contract simple.
 fn yaml_escape_double_quoted(content : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('"')
   for c in content {
     match c {
@@ -537,7 +538,7 @@ fn yaml_escape_double_quoted(content : String) -> String {
 ///|
 /// Emit a YAML flow-style string array: `["a", "b"]`.
 fn yaml_string_array(items : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('[')
   let mut first = true
   for item in items {

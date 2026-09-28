@@ -20,8 +20,8 @@ fn int_cleanup(path : String) -> Unit {
 }
 
 ///|
-fn int_baseline() -> CacheKeyInput {
-  CacheKeyInput::{
+fn int_baseline() -> @damage_cache.CacheKeyInput {
+  @damage_cache.CacheKeyInput::{
     version: "champions",
     regulation: "",
     attacker: "ガブリアス",
@@ -79,20 +79,20 @@ test "integration: build_cache_key + persistent_cache round-trip" {
   let path = int_test_path("roundtrip")
   int_cleanup(path)
   let input = int_baseline()
-  guard build_cache_key(input) is Ok(key) else {
+  guard @damage_cache.build_cache_key(input) is Ok(key) else {
     fail("build_cache_key failed")
   }
   let sample_json = "{\"attacker\":\"ガブリアス\",\"defender\":\"カイリュー\",\"move\":\"じしん\",\"damages\":[100,101,102],\"percents\":[50.0,51.0,52.0],\"min\":100,\"max\":102,\"defender_hp\":200,\"ko\":\"確定2発\"}"
-  guard open_or_init(path, "0.4.10") is Ok(cache) else {
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache) else {
     fail("open_or_init failed")
   }
-  guard put(cache, key, sample_json) is Ok(_) else { fail("put failed") }
-  close(cache)
-  guard open_or_init(path, "0.4.10") is Ok(cache2) else {
+  guard @damage_cache.put(cache, key, sample_json) is Ok(_) else { fail("put failed") }
+  @damage_cache.close(cache)
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache2) else {
     fail("reopen failed")
   }
-  let got = get(cache2, key)
-  close(cache2)
+  let got = @damage_cache.get(cache2, key)
+  @damage_cache.close(cache2)
   int_cleanup(path)
   match got {
     Some(s) => @debug.assert_eq(s, sample_json)
@@ -105,16 +105,16 @@ test "integration: two distinct inputs produce two distinct cache entries" {
   let path = int_test_path("distinct")
   int_cleanup(path)
   let a = int_baseline()
-  let b : CacheKeyInput = { ..int_baseline(), atk_rank: 2 }
-  guard build_cache_key(a) is Ok(ka) else { fail("key a failed") }
-  guard build_cache_key(b) is Ok(kb) else { fail("key b failed") }
+  let b : @damage_cache.CacheKeyInput = { ..int_baseline(), atk_rank: 2 }
+  guard @damage_cache.build_cache_key(a) is Ok(ka) else { fail("key a failed") }
+  guard @damage_cache.build_cache_key(b) is Ok(kb) else { fail("key b failed") }
   assert_true(ka != kb)
-  guard open_or_init(path, "0.4.10") is Ok(cache) else { fail("open failed") }
-  guard put(cache, ka, "{\"rank\":0}") is Ok(_) else { fail("put a failed") }
-  guard put(cache, kb, "{\"rank\":2}") is Ok(_) else { fail("put b failed") }
-  let va = get(cache, ka)
-  let vb = get(cache, kb)
-  close(cache)
+  guard @damage_cache.open_or_init(path, "0.4.10") is Ok(cache) else { fail("open failed") }
+  guard @damage_cache.put(cache, ka, "{\"rank\":0}") is Ok(_) else { fail("put a failed") }
+  guard @damage_cache.put(cache, kb, "{\"rank\":2}") is Ok(_) else { fail("put b failed") }
+  let va = @damage_cache.get(cache, ka)
+  let vb = @damage_cache.get(cache, kb)
+  @damage_cache.close(cache)
   int_cleanup(path)
   match (va, vb) {
     (Some(sa), Some(sb)) => {

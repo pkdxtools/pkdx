@@ -898,7 +898,7 @@ pub fn resolve_parallel(flag : String) -> Int raise NashCliError {
 /// without bringing `moonbitlang/x/sys` into the `@payoff` import block
 /// of every test file.
 fn get_env_var_default(key : String) -> String? {
-  @sys.get_env_var(key)
+  @env.get_env_var(key)
 }
 
 ///|
@@ -1243,6 +1243,11 @@ pub fn run_select_typed(
     ""
   }
   let effective_parallel = if input_path.length() == 0 { 1 } else { parallel }
+  errdefer {
+    if input_path.length() > 0 {
+      let _ = @db.unlink_file(input_path)
+    }
+  }
   let r = compute_select_with_team_model(
     team,
     opp,
@@ -1256,14 +1261,7 @@ pub fn run_select_typed(
     child_progress_mode~,
     child_progress_every~,
     nash_config~,
-  ) catch {
-    err => {
-      if input_path.length() > 0 {
-        let _ = @db.unlink_file(input_path)
-      }
-      raise err
-    }
-  }
+  )
   if input_path.length() > 0 {
     let _ = @db.unlink_file(input_path)
   }

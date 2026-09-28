@@ -15,7 +15,7 @@ test "nash_skill_end_to_end_janken_smoke" {
     #|    {"label": "C", "power": 0, "v": {"x": -1, "y": -1.7}}
     #|  ]
     #|}
-  let out = run_nash_solve(input)
+  let out = @payoff.run_nash_solve(input)
   // The skill expects to find the RPS-like cyclic equilibrium: value 0,
   // uniform 1/3 strategy. Parse and spot-check.
   let j = @json.parse(out)
@@ -61,7 +61,7 @@ test "team_builder_phase7_invokes_select_smoke" {
     ",\"opponent\":" +
     team +
     ",\"format\":\"single\",\"team_payoff_model\":\"switching_game:1\"}"
-  let out = run_select(input)
+  let out = @payoff.run_select(input)
   let j = @json.parse(out)
   match j {
     Object(m) => {

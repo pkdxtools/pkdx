@@ -24,7 +24,7 @@ const DEFAULT_CHAMPIONS_DB_RELPATH : String = "/pokedex/champions.db"
 /// installs can point at a fixture or alternate location); otherwise
 /// the path is `<repo_root>/pokedex/champions.db`.
 pub fn resolve_champions_db_path(repo_root : String) -> String {
-  match @sys.get_env_var(ENV_CHAMPIONS_DB) {
+  match @env.get_env_var(ENV_CHAMPIONS_DB) {
     Some(p) => p
     None => repo_root + DEFAULT_CHAMPIONS_DB_RELPATH
   }
@@ -45,7 +45,7 @@ pub fn resolve_champions_db_path(repo_root : String) -> String {
 /// all route through it so a custom `POKEDEX_DB` (or `CHAMPIONS_DB`)
 /// can never produce divergent attach targets.
 pub fn resolve_champions_db_path_from(pokedex_path : String) -> String {
-  match @sys.get_env_var(ENV_CHAMPIONS_DB) {
+  match @env.get_env_var(ENV_CHAMPIONS_DB) {
     Some(p) => return p
     None => ()
   }

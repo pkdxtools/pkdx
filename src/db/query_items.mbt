@@ -26,6 +26,12 @@ pub(all) enum ItemEffectKind {
 } derive(Debug, Eq)
 
 ///|
+pub extend ItemEffectKind with Debug::{to_repr}
+
+///|
+pub extend ItemEffectKind with Eq::{not_equal, equal}
+
+///|
 pub(all) struct ItemEffect {
   item_name : String
   kind : ItemEffectKind
@@ -37,6 +43,12 @@ pub(all) struct ItemEffect {
   is_physical : Int? // 1 = physical only, 0 = special only, None = either
   super_effective_only : Bool
 } derive(Debug, Eq)
+
+///|
+pub extend ItemEffect with Debug::{to_repr}
+
+///|
+pub extend ItemEffect with Eq::{not_equal, equal}
 
 ///|
 fn parse_effect_kind(s : String) -> ItemEffectKind {

@@ -1,38 +1,38 @@
 ///|
 test "available_regulations: contains M-C" {
-  let regs = available_regulations()
+  let regs = @db.available_regulations()
   assert_true(regs.contains("M-C"))
 }
 
 ///|
 test "canonicalize_regulation: accepts lowercase 'm-c'" {
-  assert_true(canonicalize_regulation("m-c") == Some("M-C"))
+  assert_true(@db.canonicalize_regulation("m-c") == Some("M-C"))
 }
 
 ///|
 test "canonicalize_regulation: accepts canonical 'M-C'" {
-  assert_true(canonicalize_regulation("M-C") == Some("M-C"))
+  assert_true(@db.canonicalize_regulation("M-C") == Some("M-C"))
 }
 
 ///|
 test "canonicalize_regulation: rejects unknown names" {
-  assert_true(canonicalize_regulation("M-Z") == None)
+  assert_true(@db.canonicalize_regulation("M-Z") == None)
 }
 
 ///|
 test "canonicalize_regulation: rejects retired M-A" {
   // M-A は M-B 移行に伴い退役。`pkdx regulation set M-A` は弾く。
-  assert_true(canonicalize_regulation("M-A") == None)
+  assert_true(@db.canonicalize_regulation("M-A") == None)
 }
 
 ///|
 test "canonicalize_regulation: rejects retired M-B" {
   // M-B は M-C 移行に伴い退役。`pkdx regulation set M-B` は弾く。
-  assert_true(canonicalize_regulation("M-B") == None)
+  assert_true(@db.canonicalize_regulation("M-B") == None)
 }
 
 ///|
 test "default_regulation: is the first available regulation" {
-  assert_true(default_regulation() == "M-C")
-  assert_true(default_regulation() == available_regulations()[0])
+  assert_true(@db.default_regulation() == "M-C")
+  assert_true(@db.default_regulation() == @db.available_regulations()[0])
 }

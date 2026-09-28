@@ -56,7 +56,7 @@ test "perf baseline (healing): 2v2 with Recover cached_states ≤ 2 × baseline"
     mk_pokemon("B1", "ノーマル", "", 200, 100, 100, 100, 100, 90),
     [tackle],
   )
-  let (v, stats, _) = switching_game_winrate_stats([a0, a1], [b0, b1], 5)
+  let (v, stats, _) = @payoff.switching_game_winrate_stats([a0, a1], [b0, b1], 5)
   println(
     "perf 2v2 healing tl=5: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses} (baseline=\{BASELINE_2V2})",
   )
@@ -83,7 +83,7 @@ test "perf baseline (healing): 3v3 with Recover cached_states ≤ 2 × baseline"
     atk : Int,
     spe : Int,
     extra : Array[@model.Move],
-  ) -> Combatant {
+  ) -> @payoff.Combatant {
     let moves : Array[@model.Move] = [mk_move("m", t1, @model.Physical, 30)]
     for m in extra {
       moves.push(m)
@@ -100,7 +100,7 @@ test "perf baseline (healing): 3v3 with Recover cached_states ≤ 2 × baseline"
     mk("B1", "じめん", 150, 100, 95, []),
     mk("B2", "ノーマル", 150, 100, 105, []),
   ]
-  let (v, stats, _) = switching_game_winrate_stats(team_a, team_b, 3)
+  let (v, stats, _) = @payoff.switching_game_winrate_stats(team_a, team_b, 3)
   println(
     "perf 3v3 healing tl=3: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses} (baseline=\{BASELINE_3V3})",
   )

@@ -5,7 +5,7 @@
 
 ///|
 test "champions_ddl returns the expected number of statements" {
-  let stmts = champions_ddl()
+  let stmts = @champions_schema.champions_ddl()
   // 7 tables + 3 indexes = 10 statements
   @debug.debug_inspect(stmts.length(), content="10")
 }
@@ -19,14 +19,14 @@ test "apply_ddl is idempotent on in-memory DB" {
     }
     Ok(d) => d
   }
-  match apply_ddl(db) {
+  match @champions_schema.apply_ddl(db) {
     Err(e) => {
       @debug.debug_inspect(e, content="first apply_ddl Ok")
       return
     }
     Ok(_) => ()
   }
-  match apply_ddl(db) {
+  match @champions_schema.apply_ddl(db) {
     Err(e) => {
       @debug.debug_inspect(e, content="second apply_ddl Ok")
       return
@@ -69,7 +69,7 @@ test "parse_pokemon_entries accepts a minimal valid record" {
       return
     }
   }
-  match parse_pokemon_entries(json) {
+  match @champions_schema.parse_pokemon_entries(json) {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
@@ -119,7 +119,7 @@ test "parse_pokemon_entries rejects missing required string field" {
       return
     }
   }
-  match parse_pokemon_entries(json) {
+  match @champions_schema.parse_pokemon_entries(json) {
     Ok(_) =>
       @debug.debug_inspect("expected err", content="missing type1 should fail")
     Err(e) => assert_true(e.contains("type1"))
@@ -142,7 +142,7 @@ test "parse_move_entries accepts power as a non-numeric token" {
       return
     }
   }
-  match parse_move_entries(json) {
+  match @champions_schema.parse_move_entries(json) {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
@@ -171,7 +171,7 @@ test "parse_learnset_entries minimal record" {
       return
     }
   }
-  match parse_learnset_entries(json) {
+  match @champions_schema.parse_learnset_entries(json) {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")
@@ -201,7 +201,7 @@ test "parse_item_entries minimal record" {
       return
     }
   }
-  match parse_item_entries(json) {
+  match @champions_schema.parse_item_entries(json) {
     Err(e) => @debug.debug_inspect(e, content="parse ok")
     Ok(entries) => {
       @debug.debug_inspect(entries.length(), content="1")

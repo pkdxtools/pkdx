@@ -108,7 +108,7 @@ test "PopulationBomb (ネズミざん) damage engine: 10 variants with hits_coun
   let atk = epb_pokemon("attacker")
   let dfn = epb_pokemon("defender")
   let mv = epb_move("ネズミざん")
-  let r = calc_damage(epb_input(atk, dfn, mv))
+  let r = @damage.calc_damage(epb_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="10")
   for i = 0; i < 10; i = i + 1 {
     let v = r.variants[i]
@@ -122,7 +122,7 @@ test "PopulationBomb damage engine: variants probability distribution matches ge
   let atk = epb_pokemon("attacker")
   let dfn = epb_pokemon("defender")
   let mv = epb_move("ネズミざん")
-  let r = calc_damage(epb_input(atk, dfn, mv))
+  let r = @damage.calc_damage(epb_input(atk, dfn, mv))
   let mut total = 0.0
   for i = 0; i < r.variants.length(); i = i + 1 {
     total = total + r.variants[i].probability
@@ -139,7 +139,7 @@ test "Triple Axel damage engine: 3 variants — unchanged after PopulationBomb a
   let atk = epb_pokemon("attacker")
   let dfn = epb_pokemon("defender")
   let mv = epb_move("トリプルアクセル")
-  let r = calc_damage(epb_input(atk, dfn, mv))
+  let r = @damage.calc_damage(epb_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="3")
   assert_true(epb_approx(r.variants[0].probability, 0.10, 1.0e-12))
   assert_true(epb_approx(r.variants[1].probability, 0.09, 1.0e-12))
@@ -155,7 +155,7 @@ test "PopulationBomb damage engine: cumulative damage grows with hits_count" {
   let atk = epb_pokemon("attacker")
   let dfn = epb_pokemon("defender")
   let mv = epb_move("ネズミざん")
-  let r = calc_damage(epb_input(atk, dfn, mv))
+  let r = @damage.calc_damage(epb_input(atk, dfn, mv))
   for i = 0; i < r.variants.length() - 1; i = i + 1 {
     let cur = r.variants[i].total_damages[0]
     let next = r.variants[i + 1].total_damages[0]

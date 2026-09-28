@@ -6,12 +6,12 @@ test "query_learners: じしん scarlet_violet" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(db, "じしん", @model.Other("scarlet_violet"))
-  close(db)
+  let result = @db.query_learners(db, "じしん", @model.Other("scarlet_violet"))
+  @db.close(db)
   match result {
     Ok(results) => {
       assert_true(results.length() > 10)
@@ -52,8 +52,8 @@ test "query_learners: だいちのちから champions" {
     Some(d) => d
     None => return
   }
-  let result = query_learners(db, "だいちのちから", @model.Champions)
-  close(db)
+  let result = @db.query_learners(db, "だいちのちから", @model.Champions)
+  @db.close(db)
   match result {
     Ok(results) => {
       assert_true(results.length() > 0)
@@ -77,16 +77,16 @@ test "query_learners: nonexistent move returns empty" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(
+  let result = @db.query_learners(
     db,
     "そんざいしないわざ",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(results) => @debug.debug_inspect(results.length(), content="0")
     Err(e) => fail("query_learners failed: " + e)
@@ -100,12 +100,12 @@ test "query_learners: no duplicate globalNo" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_learners(db, "じしん", @model.Other("scarlet_violet"))
-  close(db)
+  let result = @db.query_learners(db, "じしん", @model.Other("scarlet_violet"))
+  @db.close(db)
   match result {
     Ok(results) =>
       for i = 0; i < results.length(); i = i + 1 {

@@ -35,3 +35,6 @@ pub(all) struct IncomingOpts {
   // attack can still crit and that scales the reflected damage.
   critical : Bool
 } derive(Debug)
+
+///|
+pub extend IncomingOpts with Debug::{to_repr}

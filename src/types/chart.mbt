@@ -22,6 +22,12 @@ pub enum PokemonType {
 } derive(Debug, Eq)
 
 ///|
+pub extend PokemonType with Debug::{to_repr}
+
+///|
+pub extend PokemonType with Eq::{not_equal, equal}
+
+///|
 /// All 18 types in order.
 pub let all_types : Array[PokemonType] = [
   Normal,

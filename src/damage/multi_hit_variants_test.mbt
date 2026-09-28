@@ -108,7 +108,7 @@ test "triple-axel: 3 variants with probabilities 0.10 / 0.09 / 0.81" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("トリプルアクセル")
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="3")
   // 1 hit, 2 hit, 3 hit (in order) — 途中外れ仕様
   assert_true(approx_eq(r.variants[0].probability, 0.10))
@@ -124,7 +124,7 @@ test "fury attack (みだれづき): 4 variants with probabilities 0.375/0.375/0
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("みだれづき")
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="4")
   assert_true(approx_eq(r.variants[0].probability, 0.375))
   assert_true(approx_eq(r.variants[1].probability, 0.375))
@@ -141,7 +141,7 @@ test "Skill Link + fury attack: variants=1, hits=5" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("みだれづき")
-  let r = calc_damage(mhv_input(atk, dfn, mv, atk_ability="スキルリンク"))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv, atk_ability="スキルリンク"))
   @debug.debug_inspect(r.variants.length(), content="1")
   assert_true(approx_eq(r.variants[0].probability, 1.0))
   @debug.debug_inspect(r.variants[0].hits.length(), content="5")
@@ -154,7 +154,7 @@ test "fixed-3 non-variant move (すいりゅうれんだ): variants=1, hits=3" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("すいりゅうれんだ")
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="3")
 }
@@ -164,7 +164,7 @@ test "fixed-2 move (にどげり): variants=1, hits=2" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("にどげり")
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="2")
 }
@@ -174,7 +174,7 @@ test "single hit (たいあたり): variants=1, hits=1" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("たいあたり")
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="1")
 }
@@ -184,7 +184,7 @@ test "ParentalBond on single-hit base: variants=1, hits=2" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("たいあたり")
-  let r = calc_damage(mhv_input(atk, dfn, mv, atk_ability="おやこあい"))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv, atk_ability="おやこあい"))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="2")
 }
@@ -197,7 +197,7 @@ test "triple-axel hits[i] damage_per_roll is monotonic in damage" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("トリプルアクセル")
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   // 1-hit variant ≤ 2-hit variant ≤ 3-hit variant in total damage
   let t1 = r.variants[0].total_damages[0]
   let t2 = r.variants[1].total_damages[0]
@@ -214,7 +214,7 @@ test "triple-axel: per-hit power ramps base × hit_index" {
   let atk = mhv_pokemon("attacker")
   let dfn = mhv_pokemon("defender")
   let mv = mhv_move("トリプルアクセル") // power=25 in mhv_move
-  let r = calc_damage(mhv_input(atk, dfn, mv))
+  let r = @damage.calc_damage(mhv_input(atk, dfn, mv))
   // 3-hit variant の hits[0] / hits[1] / hits[2] を比較する。
   let three = r.variants[2]
   @debug.debug_inspect(three.hits.length(), content="3")

@@ -118,7 +118,7 @@ test "m015 idempotent: first run inserts all 4 entries" {
       return
     }
   }
-  let msg = match run_015(db, ".") {
+  let msg = match @migrate.run_015(db, ".") {
     Ok(s) => s
     Err(e) => {
       @db.close(db)
@@ -146,7 +146,7 @@ test "m015 idempotent: second run re-applies as UPDATE, row count stable" {
       return
     }
   }
-  match run_015(db, ".") {
+  match @migrate.run_015(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -157,7 +157,7 @@ test "m015 idempotent: second run re-applies as UPDATE, row count stable" {
   let rows_after_first = count_m015_rows(db)
   let field_after_first = count_field_rows(db)
   let cols_after_first = count_m015_columns(db)
-  let msg2 = match run_015(db, ".") {
+  let msg2 = match @migrate.run_015(db, ".") {
     Ok(s) => s
     Err(e) => {
       @db.close(db)
@@ -187,7 +187,7 @@ test "m015 idempotent: third run is identical to second (steady state)" {
       return
     }
   }
-  match run_015(db, ".") {
+  match @migrate.run_015(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -195,7 +195,7 @@ test "m015 idempotent: third run is identical to second (steady state)" {
       return
     }
   }
-  match run_015(db, ".") {
+  match @migrate.run_015(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -203,7 +203,7 @@ test "m015 idempotent: third run is identical to second (steady state)" {
       return
     }
   }
-  let msg3 = match run_015(db, ".") {
+  let msg3 = match @migrate.run_015(db, ".") {
     Ok(s) => s
     Err(e) => {
       @db.close(db)
@@ -234,7 +234,7 @@ test "m014 + m015 co-existence: rows are independent across both migrations" {
       return
     }
   }
-  match run_014(db, ".") {
+  match @migrate.run_014(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -242,7 +242,7 @@ test "m014 + m015 co-existence: rows are independent across both migrations" {
       return
     }
   }
-  match run_015(db, ".") {
+  match @migrate.run_015(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -257,7 +257,7 @@ test "m014 + m015 co-existence: rows are independent across both migrations" {
   // m015 の列は 2 列 (m014 の列とは独立)
   @debug.assert_eq(count_m015_columns(db), 2)
   // m014 を再実行しても m015 行 / 列は影響しない (authoritative reset の境界)
-  match run_014(db, ".") {
+  match @migrate.run_014(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)

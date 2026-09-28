@@ -57,7 +57,7 @@ test "migrate_pokemon_meta_v011: full conversion" {
     #|}
   let old = @json.parse(old_src)
   let expected = @json.parse(expected_src)
-  let result = migrate_pokemon_meta_v011(old)
+  let result = @writer.migrate_pokemon_meta_v011(old)
   guard result is Ok(converted) else { fail("Expected Ok") }
   @debug.assert_eq(converted, expected)
 }
@@ -83,7 +83,7 @@ test "migrate_pokemon_meta_v011: idempotent on new-format input" {
     #|  }
     #|}
   let new_input = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(new_input)
+  let result = @writer.migrate_pokemon_meta_v011(new_input)
   guard result is Ok(converted) else { fail("Expected Ok") }
   @debug.assert_eq(converted, new_input)
 }
@@ -113,7 +113,7 @@ test "migrate_pokemon_meta_v011: single-type pokemon without type2 key" {
     #|  }
     #|}
   let old = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(old)
+  let result = @writer.migrate_pokemon_meta_v011(old)
   guard result is Ok(Object(root)) else { fail("Expected Ok(Object)") }
   guard root.get("pokemon") is Some(Object(pokemon)) else {
     fail("pokemon section missing")
@@ -150,7 +150,7 @@ test "migrate_pokemon_meta_v011: type2 is null" {
     #|  }
     #|}
   let old = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(old)
+  let result = @writer.migrate_pokemon_meta_v011(old)
   guard result is Ok(Object(root)) else { fail("Expected Ok(Object)") }
   guard root.get("pokemon") is Some(Object(pokemon)) else {
     fail("pokemon section missing")
@@ -187,7 +187,7 @@ test "migrate_pokemon_meta_v011: abilities canonical order with nulls filtered" 
     #|  }
     #|}
   let old = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(old)
+  let result = @writer.migrate_pokemon_meta_v011(old)
   guard result is Ok(Object(root)) else { fail("Expected Ok(Object)") }
   guard root.get("pokemon") is Some(Object(pokemon)) else {
     fail("pokemon section missing")
@@ -222,7 +222,7 @@ test "migrate_pokemon_meta_v011: build.role absent + legacy keys dropped" {
     #|  }
     #|}
   let old = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(old)
+  let result = @writer.migrate_pokemon_meta_v011(old)
   guard result is Ok(Object(root)) else { fail("Expected Ok(Object)") }
   guard root.get("build") is Some(Object(build)) else {
     fail("build section missing")
@@ -255,7 +255,7 @@ test "migrate_pokemon_meta_v011: preserves role on new-format input" {
     #|  }
     #|}
   let new_input = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(new_input)
+  let result = @writer.migrate_pokemon_meta_v011(new_input)
   guard result is Ok(Object(root)) else { fail("Expected Ok(Object)") }
   guard root.get("build") is Some(Object(build)) else {
     fail("build section missing")
@@ -293,11 +293,11 @@ test "migrate_team_meta_v011: members long-key stats are shortened" {
     #|  "matchup_plans": []
     #|}
   let old = @json.parse(old_src)
-  let result = migrate_team_meta_v011(old)
+  let result = @writer.migrate_team_meta_v011(old)
   guard result is Ok(converted) else { fail("Expected Ok") }
   // 変換後は validate を通過する必要がある (legacy 誘導エラーが消えている)。
   {
-    let _r = validate_team_json(converted)
+    let _r = @writer.validate_team_json(converted)
     assert_true(_r is Ok(_))
   }
   // members[0].base_stats が short key になっている。
@@ -344,11 +344,11 @@ test "migrate_team_meta_v011: idempotent on new-format input" {
     #|  "matchup_plans": []
     #|}
   let input = @json.parse(src)
-  let once = match migrate_team_meta_v011(input) {
+  let once = match @writer.migrate_team_meta_v011(input) {
     Ok(j) => j
     Err(e) => fail("migrate failed: \{e}")
   }
-  let twice = match migrate_team_meta_v011(once) {
+  let twice = match @writer.migrate_team_meta_v011(once) {
     Ok(j) => j
     Err(e) => fail("migrate failed on new-format input: \{e}")
   }
@@ -380,7 +380,7 @@ test "migrate_team_meta_v011: passthrough for new-format team cache" {
     #|  "matchup_plans": []
     #|}
   let input = @json.parse(src)
-  let result = migrate_team_meta_v011(input)
+  let result = @writer.migrate_team_meta_v011(input)
   guard result is Ok(converted) else { fail("Expected Ok") }
   @debug.assert_eq(converted, input)
 }
@@ -391,6 +391,6 @@ test "migrate_pokemon_meta_v011: error on non-object input" {
   let src =
     #|[]
   let bad = @json.parse(src)
-  let result = migrate_pokemon_meta_v011(bad)
+  let result = @writer.migrate_pokemon_meta_v011(bad)
   assert_true(result is Err(_))
 }

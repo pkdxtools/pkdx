@@ -6,7 +6,7 @@
 
 ///|
 test "seed_to_bytes_encodes_uint64_little_endian_with_zero_padding" {
-  let b = seed_to_bytes(0x0102030405060708UL)
+  let b = @payoff.seed_to_bytes(0x0102030405060708UL)
   @debug.assert_eq(b.length(), 32)
   @debug.assert_eq(b[0], b'\x08')
   @debug.assert_eq(b[1], b'\x07')
@@ -23,15 +23,15 @@ test "seed_to_bytes_encodes_uint64_little_endian_with_zero_padding" {
 
 ///|
 test "rand_chacha8_accepts_32_byte_seed_and_produces_output" {
-  let rng = seeded_rng(0UL)
+  let rng = @payoff.seeded_rng(0UL)
   let n = rng.int(limit=100)
   assert_true(n >= 0 && n < 100)
 }
 
 ///|
 test "seeded_rng_same_seed_same_int_sequence" {
-  let rng1 = seeded_rng(42UL)
-  let rng2 = seeded_rng(42UL)
+  let rng1 = @payoff.seeded_rng(42UL)
+  let rng2 = @payoff.seeded_rng(42UL)
   for _ in 0..<16 {
     @debug.assert_eq(rng1.int(limit=16), rng2.int(limit=16))
   }
@@ -39,8 +39,8 @@ test "seeded_rng_same_seed_same_int_sequence" {
 
 ///|
 test "seeded_rng_different_seeds_yield_different_sequences" {
-  let rng1 = seeded_rng(1UL)
-  let rng2 = seeded_rng(2UL)
+  let rng1 = @payoff.seeded_rng(1UL)
+  let rng2 = @payoff.seeded_rng(2UL)
   let mut diff = 0
   for _ in 0..<100 {
     if rng1.int(limit=16) != rng2.int(limit=16) {
@@ -52,7 +52,7 @@ test "seeded_rng_different_seeds_yield_different_sequences" {
 
 ///|
 test "seeded_rng_int_output_within_range" {
-  let rng = seeded_rng(123UL)
+  let rng = @payoff.seeded_rng(123UL)
   for _ in 0..<1000 {
     let n = rng.int(limit=16)
     assert_true(n >= 0 && n < 16)
@@ -73,7 +73,7 @@ test "pick_best_move_selects_highest_average_damage_and_excludes_power_zero" {
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [mk_move("anything", "ノーマル", @model.Physical, 80)],
   )
-  match pick_best_move(atk, dfn) {
+  match @payoff.pick_best_move(atk, dfn) {
     Some(idx) => @debug.assert_eq(idx, 2)
     None => assert_true(false)
   }
@@ -95,10 +95,10 @@ test "rollout_pick_move_epsilon_one_samples_uniformly_across_all_moves" {
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [mk_move("x", "ノーマル", @model.Physical, 80)],
   )
-  let rng = seeded_rng(123UL)
+  let rng = @payoff.seeded_rng(123UL)
   let seen = Array::make(3, false)
   for _ in 0..<50 {
-    match rollout_pick_move(atk, dfn, rng, 1.0) {
+    match @payoff.rollout_pick_move(atk, dfn, rng, 1.0) {
       Some(i) => seen[i] = true
       None => assert_true(false)
     }
@@ -124,9 +124,9 @@ test "rollout_pick_move_epsilon_zero_always_picks_greedy_damaging_move" {
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [mk_move("x", "ノーマル", @model.Physical, 80)],
   )
-  let rng = seeded_rng(456UL)
+  let rng = @payoff.seeded_rng(456UL)
   for _ in 0..<20 {
-    match rollout_pick_move(atk, dfn, rng, 0.0) {
+    match @payoff.rollout_pick_move(atk, dfn, rng, 0.0) {
       Some(i) => @debug.assert_eq(i, 2)
       None => assert_true(false)
     }
@@ -151,8 +151,8 @@ test "rollout_pick_move_status_only_moveset_still_returns_some" {
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [mk_move("x", "ノーマル", @model.Physical, 80)],
   )
-  let rng = seeded_rng(789UL)
-  match rollout_pick_move(atk, dfn, rng, 0.0) {
+  let rng = @payoff.seeded_rng(789UL)
+  match @payoff.rollout_pick_move(atk, dfn, rng, 0.0) {
     Some(i) => assert_true(i >= 0 && i < 2)
     None => assert_true(false)
   }

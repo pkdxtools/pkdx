@@ -7,6 +7,12 @@ pub(all) enum MoveCategory {
 } derive(Debug, Eq)
 
 ///|
+pub extend MoveCategory with Debug::{to_repr}
+
+///|
+pub extend MoveCategory with Eq::{not_equal, equal}
+
+///|
 /// Convert Japanese category name to MoveCategory enum.
 pub fn category_from_jp(name : String) -> MoveCategory {
   match name {

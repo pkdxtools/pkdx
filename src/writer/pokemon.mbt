@@ -265,5 +265,5 @@ pub fn build_pokemon_document(json : Json, name : String) -> @markdown.Document 
     ),
   )
 
-  { frontmatter: None, children: blocks, span: s }
+  { frontmatter: None, children: blocks, definitions: [], span: s }
 }

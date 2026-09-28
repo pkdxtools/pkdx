@@ -109,7 +109,7 @@ test "variants: probability sum is 1.0 ± 1e-9 for single-hit move" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("じしん")
-  let r = calc_damage(hsp_input(atk, dfn, mv))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv))
   let s = sum_probabilities(r.variants)
   let delta = if s > 1.0 { s - 1.0 } else { 1.0 - s }
   assert_true(delta < 1.0e-9)
@@ -120,7 +120,7 @@ test "variants: probability sum is 1.0 ± 1e-9 for triple-axel" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("トリプルアクセル")
-  let r = calc_damage(hsp_input(atk, dfn, mv))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv))
   let s = sum_probabilities(r.variants)
   let delta = if s > 1.0 { s - 1.0 } else { 1.0 - s }
   assert_true(delta < 1.0e-9)
@@ -131,7 +131,7 @@ test "variants: probability sum is 1.0 ± 1e-9 for random 2-5 hit move" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("みだれづき")
-  let r = calc_damage(hsp_input(atk, dfn, mv))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv))
   let s = sum_probabilities(r.variants)
   let delta = if s > 1.0 { s - 1.0 } else { 1.0 - s }
   assert_true(delta < 1.0e-9)
@@ -143,7 +143,7 @@ test "variants: every result has at least one variant" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("じしん")
-  let r = calc_damage(hsp_input(atk, dfn, mv))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv))
   assert_true(r.variants.length() >= 1)
 }
 
@@ -152,7 +152,7 @@ test "Skill Link + Random2to5 degenerates to variants=1 hits=5" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("みだれづき")
-  let r = calc_damage(hsp_input(atk, dfn, mv, atk_ability="スキルリンク"))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv, atk_ability="スキルリンク"))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="5")
 }
@@ -164,14 +164,14 @@ test "Random2to5 and TripleVariant are mutually exclusive on resolve_auto_hits" 
   // depend on this.
   let triple_set = ["トリプルアクセル", "トリプルキック"]
   for i = 0; i < triple_set.length(); i = i + 1 {
-    let spec = resolve_auto_hits(triple_set[i])
+    let spec = @damage.resolve_auto_hits(triple_set[i])
     @debug.debug_inspect(spec, content="FixedHit(3)")
   }
   let random_2_5 = [
     "みだれづき", "ロックブラスト", "みずしゅりけん",
   ]
   for i = 0; i < random_2_5.length(); i = i + 1 {
-    let spec = resolve_auto_hits(random_2_5[i])
+    let spec = @damage.resolve_auto_hits(random_2_5[i])
     @debug.debug_inspect(spec, content="Random2to5")
   }
 }
@@ -181,7 +181,7 @@ test "single-hit move produces variants[0].hits.length == 1" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("じしん")
-  let r = calc_damage(hsp_input(atk, dfn, mv))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="1")
 }
@@ -191,7 +191,7 @@ test "ParentalBond produces variants=1 hits=2" {
   let atk = hsp_pokemon("attacker")
   let dfn = hsp_pokemon("defender")
   let mv = hsp_move("じしん")
-  let r = calc_damage(hsp_input(atk, dfn, mv, atk_ability="おやこあい"))
+  let r = @damage.calc_damage(hsp_input(atk, dfn, mv, atk_ability="おやこあい"))
   @debug.debug_inspect(r.variants.length(), content="1")
   @debug.debug_inspect(r.variants[0].hits.length(), content="2")
 }

@@ -19,6 +19,9 @@ pub(all) enum GameVersion {
 } derive(Eq)
 
 ///|
+pub extend GameVersion with Eq::{not_equal, equal}
+
+///|
 pub fn GameVersion::parse(s : String) -> GameVersion {
   if s == "champions" {
     Champions

@@ -9,6 +9,15 @@ pub(all) enum Weather {
 } derive(Debug, Eq, Hash)
 
 ///|
+pub extend Weather with Debug::{to_repr}
+
+///|
+pub extend Weather with Eq::{not_equal, equal}
+
+///|
+pub extend Weather with Hash::{hash, hash_combine}
+
+///|
 /// Convert Japanese weather name to Weather enum.
 pub fn weather_from_jp(name : String) -> Weather {
   match name {

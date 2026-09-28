@@ -8,6 +8,12 @@ pub(all) struct HbdWeights {
 } derive(Debug, Eq)
 
 ///|
+pub extend HbdWeights with Debug::{to_repr}
+
+///|
+pub extend HbdWeights with Eq::{not_equal, equal}
+
+///|
 /// A single optimization candidate.
 /// `evs` is a 6-length array in HP,Atk,Def,SpA,SpD,Spe order.
 pub(all) struct HbdCandidate {
@@ -19,12 +25,18 @@ pub(all) struct HbdCandidate {
 } derive(Debug)
 
 ///|
+pub extend HbdCandidate with Debug::{to_repr}
+
+///|
 /// Result of `optimize_hbd` / `optimize_hbd_topn`.
 /// `warning` is set when a snap constraint had to be relaxed as fallback.
 pub(all) struct HbdResult {
   candidates : Array[HbdCandidate]
   warning : String?
 } derive(Debug)
+
+///|
+pub extend HbdResult with Debug::{to_repr}
 
 ///|
 /// Bulk index objective: f = H · B · D / (s·B + p·D).

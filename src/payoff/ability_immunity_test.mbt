@@ -8,24 +8,24 @@
 
 ///|
 test "ability_blocks_status_insomnia_blocks_sleep_and_drowsy" {
-  @debug.assert_eq(ability_blocks_status("ふみん", @model.SleepKind), true)
-  @debug.assert_eq(ability_blocks_status("ふみん", @model.DrowsyKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("ふみん", @model.SleepKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("ふみん", @model.DrowsyKind), true)
 }
 
 ///|
 test "ability_blocks_status_vital_spirit_blocks_sleep_and_drowsy" {
-  @debug.assert_eq(ability_blocks_status("やるき", @model.SleepKind), true)
-  @debug.assert_eq(ability_blocks_status("やるき", @model.DrowsyKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("やるき", @model.SleepKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("やるき", @model.DrowsyKind), true)
 }
 
 ///|
 test "ability_blocks_status_sweet_veil_blocks_sleep_and_drowsy" {
   @debug.assert_eq(
-    ability_blocks_status("スイートベール", @model.SleepKind),
+    @payoff.ability_blocks_status("スイートベール", @model.SleepKind),
     true,
   )
   @debug.assert_eq(
-    ability_blocks_status("スイートベール", @model.DrowsyKind),
+    @payoff.ability_blocks_status("スイートベール", @model.DrowsyKind),
     true,
   )
 }
@@ -33,13 +33,13 @@ test "ability_blocks_status_sweet_veil_blocks_sleep_and_drowsy" {
 ///|
 test "ability_blocks_status_insomnia_does_not_block_non_sleep_kinds" {
   @debug.assert_eq(
-    ability_blocks_status("ふみん", @model.ParalyzeKind),
+    @payoff.ability_blocks_status("ふみん", @model.ParalyzeKind),
     false,
   )
-  @debug.assert_eq(ability_blocks_status("ふみん", @model.BurnKind), false)
-  @debug.assert_eq(ability_blocks_status("ふみん", @model.PoisonKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("ふみん", @model.BurnKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("ふみん", @model.PoisonKind), false)
   @debug.assert_eq(
-    ability_blocks_status("ふみん", @model.BadPoisonKind),
+    @payoff.ability_blocks_status("ふみん", @model.BadPoisonKind),
     false,
   )
 }
@@ -47,13 +47,13 @@ test "ability_blocks_status_insomnia_does_not_block_non_sleep_kinds" {
 ///|
 test "ability_blocks_status_vital_spirit_does_not_block_non_sleep_kinds" {
   @debug.assert_eq(
-    ability_blocks_status("やるき", @model.ParalyzeKind),
+    @payoff.ability_blocks_status("やるき", @model.ParalyzeKind),
     false,
   )
-  @debug.assert_eq(ability_blocks_status("やるき", @model.BurnKind), false)
-  @debug.assert_eq(ability_blocks_status("やるき", @model.PoisonKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("やるき", @model.BurnKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("やるき", @model.PoisonKind), false)
   @debug.assert_eq(
-    ability_blocks_status("やるき", @model.BadPoisonKind),
+    @payoff.ability_blocks_status("やるき", @model.BadPoisonKind),
     false,
   )
 }
@@ -61,19 +61,19 @@ test "ability_blocks_status_vital_spirit_does_not_block_non_sleep_kinds" {
 ///|
 test "ability_blocks_status_sweet_veil_does_not_block_non_sleep_kinds" {
   @debug.assert_eq(
-    ability_blocks_status("スイートベール", @model.ParalyzeKind),
+    @payoff.ability_blocks_status("スイートベール", @model.ParalyzeKind),
     false,
   )
   @debug.assert_eq(
-    ability_blocks_status("スイートベール", @model.BurnKind),
+    @payoff.ability_blocks_status("スイートベール", @model.BurnKind),
     false,
   )
   @debug.assert_eq(
-    ability_blocks_status("スイートベール", @model.PoisonKind),
+    @payoff.ability_blocks_status("スイートベール", @model.PoisonKind),
     false,
   )
   @debug.assert_eq(
-    ability_blocks_status("スイートベール", @model.BadPoisonKind),
+    @payoff.ability_blocks_status("スイートベール", @model.BadPoisonKind),
     false,
   )
 }
@@ -82,59 +82,59 @@ test "ability_blocks_status_sweet_veil_does_not_block_non_sleep_kinds" {
 test "ability_blocks_status_magic_guard_does_not_block_status_application" {
   // Magic Guard suppresses residual damage, not the status itself.
   @debug.assert_eq(
-    ability_blocks_status("マジックガード", @model.SleepKind),
+    @payoff.ability_blocks_status("マジックガード", @model.SleepKind),
     false,
   )
   @debug.assert_eq(
-    ability_blocks_status("マジックガード", @model.DrowsyKind),
+    @payoff.ability_blocks_status("マジックガード", @model.DrowsyKind),
     false,
   )
   @debug.assert_eq(
-    ability_blocks_status("マジックガード", @model.BurnKind),
+    @payoff.ability_blocks_status("マジックガード", @model.BurnKind),
     false,
   )
 }
 
 ///|
 test "ability_blocks_status_unrelated_ability_never_blocks" {
-  @debug.assert_eq(ability_blocks_status("もうか", @model.SleepKind), false)
-  @debug.assert_eq(ability_blocks_status("もうか", @model.DrowsyKind), false)
-  @debug.assert_eq(ability_blocks_status("もうか", @model.BurnKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("もうか", @model.SleepKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("もうか", @model.DrowsyKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("もうか", @model.BurnKind), false)
 }
 
 ///|
 test "ability_blocks_status_empty_ability_never_blocks" {
-  @debug.assert_eq(ability_blocks_status("", @model.SleepKind), false)
-  @debug.assert_eq(ability_blocks_status("", @model.DrowsyKind), false)
-  @debug.assert_eq(ability_blocks_status("", @model.ParalyzeKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("", @model.SleepKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("", @model.DrowsyKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("", @model.ParalyzeKind), false)
 }
 
 ///|
 test "ability_blocks_leech_seed_magic_guard_returns_true" {
-  @debug.assert_eq(ability_blocks_leech_seed("マジックガード"), true)
+  @debug.assert_eq(@payoff.ability_blocks_leech_seed("マジックガード"), true)
 }
 
 ///|
 test "ability_blocks_leech_seed_other_abilities_return_false" {
-  @debug.assert_eq(ability_blocks_leech_seed("ふみん"), false)
-  @debug.assert_eq(ability_blocks_leech_seed("やるき"), false)
-  @debug.assert_eq(ability_blocks_leech_seed("スイートベール"), false)
-  @debug.assert_eq(ability_blocks_leech_seed("ヘドロえき"), false)
-  @debug.assert_eq(ability_blocks_leech_seed(""), false)
+  @debug.assert_eq(@payoff.ability_blocks_leech_seed("ふみん"), false)
+  @debug.assert_eq(@payoff.ability_blocks_leech_seed("やるき"), false)
+  @debug.assert_eq(@payoff.ability_blocks_leech_seed("スイートベール"), false)
+  @debug.assert_eq(@payoff.ability_blocks_leech_seed("ヘドロえき"), false)
+  @debug.assert_eq(@payoff.ability_blocks_leech_seed(""), false)
 }
 
 ///|
 test "ability_reverses_drain_liquid_ooze_returns_true" {
-  @debug.assert_eq(ability_reverses_drain("ヘドロえき"), true)
+  @debug.assert_eq(@payoff.ability_reverses_drain("ヘドロえき"), true)
 }
 
 ///|
 test "ability_reverses_drain_other_abilities_return_false" {
-  @debug.assert_eq(ability_reverses_drain("マジックガード"), false)
-  @debug.assert_eq(ability_reverses_drain("ふみん"), false)
-  @debug.assert_eq(ability_reverses_drain("やるき"), false)
-  @debug.assert_eq(ability_reverses_drain("スイートベール"), false)
-  @debug.assert_eq(ability_reverses_drain(""), false)
+  @debug.assert_eq(@payoff.ability_reverses_drain("マジックガード"), false)
+  @debug.assert_eq(@payoff.ability_reverses_drain("ふみん"), false)
+  @debug.assert_eq(@payoff.ability_reverses_drain("やるき"), false)
+  @debug.assert_eq(@payoff.ability_reverses_drain("スイートベール"), false)
+  @debug.assert_eq(@payoff.ability_reverses_drain(""), false)
 }
 
 ///|
@@ -143,11 +143,11 @@ test "ability_reverses_drain_other_abilities_return_false" {
 /// (はがね / いわ / じめん) is enforced at the call site, not through this
 /// helper, so the truth table here only enumerates ability-side blockers.
 test "ability_blocks_sand_damage_truth_table" {
-  @debug.assert_eq(ability_blocks_sand_damage("マジックガード"), true)
-  @debug.assert_eq(ability_blocks_sand_damage("すなかき"), true)
-  @debug.assert_eq(ability_blocks_sand_damage("すながくれ"), true)
-  @debug.assert_eq(ability_blocks_sand_damage("すなのちから"), true)
-  @debug.assert_eq(ability_blocks_sand_damage("ぼうじん"), true)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("マジックガード"), true)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("すなかき"), true)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("すながくれ"), true)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("すなのちから"), true)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("ぼうじん"), true)
 }
 
 ///|
@@ -156,13 +156,13 @@ test "ability_blocks_sand_damage_truth_table" {
 /// users (バンギラス / カバルドン / ギガイアス 等) are Rock / Ground and are
 /// covered by the type-immunity check at the call site, never by this helper.
 test "ability_blocks_sand_damage_other_abilities_return_false" {
-  @debug.assert_eq(ability_blocks_sand_damage("すなおこし"), false)
-  @debug.assert_eq(ability_blocks_sand_damage("ふみん"), false)
-  @debug.assert_eq(ability_blocks_sand_damage("やるき"), false)
-  @debug.assert_eq(ability_blocks_sand_damage("スイートベール"), false)
-  @debug.assert_eq(ability_blocks_sand_damage("ヘドロえき"), false)
-  @debug.assert_eq(ability_blocks_sand_damage("もうか"), false)
-  @debug.assert_eq(ability_blocks_sand_damage(""), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("すなおこし"), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("ふみん"), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("やるき"), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("スイートベール"), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("ヘドロえき"), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage("もうか"), false)
+  @debug.assert_eq(@payoff.ability_blocks_sand_damage(""), false)
 }
 
 ///|
@@ -171,14 +171,14 @@ test "ability_blocks_sand_damage_other_abilities_return_false" {
 /// general (クリアボディ / かいりきバサミ / しろいけむり / メタルプロテクト).
 /// All eight must return true; nothing else does.
 test "ability_blocks_intimidate_truth_table" {
-  @debug.assert_eq(ability_blocks_intimidate("どんかん"), true)
-  @debug.assert_eq(ability_blocks_intimidate("マイペース"), true)
-  @debug.assert_eq(ability_blocks_intimidate("せいしんりょく"), true)
-  @debug.assert_eq(ability_blocks_intimidate("きもったま"), true)
-  @debug.assert_eq(ability_blocks_intimidate("クリアボディ"), true)
-  @debug.assert_eq(ability_blocks_intimidate("かいりきバサミ"), true)
-  @debug.assert_eq(ability_blocks_intimidate("しろいけむり"), true)
-  @debug.assert_eq(ability_blocks_intimidate("メタルプロテクト"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("どんかん"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("マイペース"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("せいしんりょく"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("きもったま"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("クリアボディ"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("かいりきバサミ"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("しろいけむり"), true)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("メタルプロテクト"), true)
 }
 
 ///|
@@ -187,28 +187,28 @@ test "ability_blocks_intimidate_truth_table" {
 /// あまのじゃく redirect the drop instead of blocking it, so they must stay
 /// false here and are dispatched separately in `apply_intimidate_on_entry`.
 test "ability_blocks_intimidate_other_abilities_return_false" {
-  @debug.assert_eq(ability_blocks_intimidate("いかく"), false)
-  @debug.assert_eq(ability_blocks_intimidate("テクニシャン"), false)
-  @debug.assert_eq(ability_blocks_intimidate("ばんけん"), false)
-  @debug.assert_eq(ability_blocks_intimidate("ミラーアーマー"), false)
-  @debug.assert_eq(ability_blocks_intimidate("びびり"), false)
-  @debug.assert_eq(ability_blocks_intimidate("あまのじゃく"), false)
-  @debug.assert_eq(ability_blocks_intimidate(""), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("いかく"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("テクニシャン"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("ばんけん"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("ミラーアーマー"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("びびり"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("あまのじゃく"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate(""), false)
 }
 
 ///|
 test "ability_reverses_stat_changes_contrary_returns_true" {
-  @debug.assert_eq(ability_reverses_stat_changes("あまのじゃく"), true)
+  @debug.assert_eq(@payoff.ability_reverses_stat_changes("あまのじゃく"), true)
 }
 
 ///|
 test "ability_reverses_stat_changes_other_abilities_return_false" {
-  @debug.assert_eq(ability_reverses_stat_changes("いかく"), false)
-  @debug.assert_eq(ability_reverses_stat_changes("クリアボディ"), false)
-  @debug.assert_eq(ability_reverses_stat_changes("テクニシャン"), false)
+  @debug.assert_eq(@payoff.ability_reverses_stat_changes("いかく"), false)
+  @debug.assert_eq(@payoff.ability_reverses_stat_changes("クリアボディ"), false)
+  @debug.assert_eq(@payoff.ability_reverses_stat_changes("テクニシャン"), false)
   @debug.assert_eq(
-    ability_reverses_stat_changes("ミラーアーマー"),
+    @payoff.ability_reverses_stat_changes("ミラーアーマー"),
     false,
   )
-  @debug.assert_eq(ability_reverses_stat_changes(""), false)
+  @debug.assert_eq(@payoff.ability_reverses_stat_changes(""), false)
 }

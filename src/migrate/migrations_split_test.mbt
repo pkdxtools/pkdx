@@ -5,9 +5,9 @@
 
 ///|
 test "migrations() is the concatenation of pokedex + champions" {
-  let pdx = migrations_pokedex()
-  let cmp = migrations_champions()
-  let all = migrations()
+  let pdx = @migrate.migrations_pokedex()
+  let cmp = @migrate.migrations_champions()
+  let all = @migrate.migrations()
   assert_true(pdx.length() + cmp.length() == all.length())
   let names : Array[String] = []
   for i = 0; i < all.length(); i = i + 1 {
@@ -39,7 +39,7 @@ test "migrations() is the concatenation of pokedex + champions" {
 
 ///|
 test "migrations_champions hosts the champions.db lineup" {
-  let cmp = migrations_champions()
+  let cmp = @migrate.migrations_champions()
   @debug.debug_inspect(cmp.length(), content="6")
   let expected = [
     "008_champions_init_schema", "009_champions_pokemon", "010_champions_moves",
@@ -58,7 +58,7 @@ test "migrations_champions hosts the champions.db lineup" {
 
 ///|
 test "migrations_pokedex hosts the live pokedex-side entries" {
-  let pdx = migrations_pokedex()
+  let pdx = @migrate.migrations_pokedex()
   let expected = [
     "001_mega_legendsza", "002_move_meta", "003_mega_forms", "004_move_meta_ailment",
     "005_move_meta_posthit", "006_form_name_aliases", "007_gender_symbol_aliases",

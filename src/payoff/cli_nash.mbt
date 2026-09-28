@@ -38,6 +38,9 @@ pub suberror NashCliError {
 } derive(Debug)
 
 ///|
+pub extend NashCliError with Debug::{to_repr}
+
+///|
 /// Parse one number (Double) from a Json node. `raise InvalidJson` if not a
 /// number.
 fn json_number(j : Json, ctx : String) -> Double raise NashCliError {

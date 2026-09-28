@@ -24,3 +24,9 @@ pub(all) struct DamageOutcome {
   hits_count : Int
   hit_steps : Array[HitStep]
 } derive(Debug, Eq)
+
+///|
+pub extend DamageOutcome with Debug::{to_repr}
+
+///|
+pub extend DamageOutcome with Eq::{not_equal, equal}

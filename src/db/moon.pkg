@@ -1,7 +1,7 @@
 import {
   "pkdxtools/pkdx/src/model",
   "moonbitlang/core/json" @json,
-  "moonbitlang/x/sys",
+  "moonbitlang/core/env",
 }
 
 import {

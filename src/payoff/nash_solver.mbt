@@ -23,6 +23,9 @@ pub(all) enum NashSolverPath {
 } derive(Eq)
 
 ///|
+pub extend NashSolverPath with Eq::{not_equal, equal}
+
+///|
 /// Manual Show impl so callers can `inspect` / interpolate solver paths
 /// without dragging Debug requirements through transitive fields.
 pub impl Show for NashSolverPath with output(self, logger) {
@@ -32,6 +35,9 @@ pub impl Show for NashSolverPath with output(self, logger) {
     Mwu => logger.write_string("Mwu")
   }
 }
+
+///|
+pub extend NashSolverPath with Show::{to_string, output}
 
 ///|
 /// Tuning knobs for the fallback chain. `tol` is the exploitability tolerance

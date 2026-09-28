@@ -17,16 +17,16 @@ test "query_move: エレキフィールド has field_set=Electric (m015 smoke)" 
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(
+  let result = @db.query_move(
     db,
     "エレキフィールド",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(mv) =>
       match mv.field_set {
@@ -51,16 +51,16 @@ test "query_move: グラスフィールド has field_set=Grassy (m015 smoke)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(
+  let result = @db.query_move(
     db,
     "グラスフィールド",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(mv) =>
       match mv.field_set {
@@ -85,16 +85,16 @@ test "query_move: ミストフィールド has field_set=Misty (m015 smoke)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(
+  let result = @db.query_move(
     db,
     "ミストフィールド",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(mv) =>
       match mv.field_set {
@@ -119,16 +119,16 @@ test "query_move: サイコフィールド has field_set=Psychic (m015 smoke)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(
+  let result = @db.query_move(
     db,
     "サイコフィールド",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(mv) =>
       match mv.field_set {
@@ -154,12 +154,12 @@ test "query_move: たいあたり has field_set=None (default)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "たいあたり", @model.Other("scarlet_violet"))
-  close(db)
+  let result = @db.query_move(db, "たいあたり", @model.Other("scarlet_violet"))
+  @db.close(db)
   match result {
     Ok(mv) => @debug.debug_inspect(mv.field_set, content="None")
     Err(e) => fail("query_move たいあたり failed: " + e)
@@ -174,12 +174,12 @@ test "query_move: にほんばれ has weather_set=Sun but field_set=None (indepe
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "にほんばれ", @model.Other("scarlet_violet"))
-  close(db)
+  let result = @db.query_move(db, "にほんばれ", @model.Other("scarlet_violet"))
+  @db.close(db)
   match result {
     Ok(mv) => {
       match mv.weather_set {
@@ -198,8 +198,8 @@ test "query_move: にほんばれ has weather_set=Sun but field_set=None (indepe
 /// 確立された PRAGMA-based column detection の field 列バリエーション。
 test "query_move: gracefully handles legacy DB without field columns (m015 compat)" {
   let path = "_build/test_m015_legacy_schema.db"
-  let _ = unlink_file(path)
-  let db = match open_rwc(path) {
+  let _ = @db.unlink_file(path)
+  let db = match @db.open_rwc(path) {
     Ok(d) => d
     Err(e) => {
       fail("open_rwc legacy schema db failed: " + e)
@@ -259,18 +259,18 @@ test "query_move: gracefully handles legacy DB without field columns (m015 compa
     ins_local_waza,
   ]
   for sql in create_sqls {
-    match exec(db, sql) {
+    match @db.exec(db, sql) {
       Err(e) => {
-        close(db)
+        @db.close(db)
         fail("CREATE/INSERT failed: " + e)
         return
       }
       Ok(_) => ()
     }
   }
-  let result = query_move(db, "たいあたり", @model.Other("scarlet_violet"))
-  close(db)
-  let _ = unlink_file(path)
+  let result = @db.query_move(db, "たいあたり", @model.Other("scarlet_violet"))
+  @db.close(db)
+  let _ = @db.unlink_file(path)
   match result {
     Ok(mv) => @debug.debug_inspect(mv.field_set, content="None")
     Err(e) =>
@@ -283,22 +283,22 @@ test "query_move: gracefully handles legacy DB without field columns (m015 compa
 ///|
 /// parse_field_set 単体: canonical (DB) 文字列 → Field?。
 test "parse_field_set: canonical strings → Field variant" {
-  match parse_field_set("electric") {
+  match @db.parse_field_set("electric") {
     Some(Electric) => ()
     _ => fail("electric should yield Some(Electric)")
   }
-  match parse_field_set("grassy") {
+  match @db.parse_field_set("grassy") {
     Some(Grassy) => ()
     _ => fail("grassy should yield Some(Grassy)")
   }
-  match parse_field_set("misty") {
+  match @db.parse_field_set("misty") {
     Some(Misty) => ()
     _ => fail("misty should yield Some(Misty)")
   }
-  match parse_field_set("psychic") {
+  match @db.parse_field_set("psychic") {
     Some(Psychic) => ()
     _ => fail("psychic should yield Some(Psychic)")
   }
-  @debug.debug_inspect(parse_field_set(""), content="None")
-  @debug.debug_inspect(parse_field_set("unknown"), content="None")
+  @debug.debug_inspect(@db.parse_field_set(""), content="None")
+  @debug.debug_inspect(@db.parse_field_set("unknown"), content="None")
 }

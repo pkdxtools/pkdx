@@ -182,6 +182,12 @@ pub enum MetaKind {
 } derive(Debug, Eq)
 
 ///|
+pub extend MetaKind with Debug::{to_repr}
+
+///|
+pub extend MetaKind with Eq::{not_equal, equal}
+
+///|
 pub fn detect_meta_kind(input : Json) -> MetaKind {
   guard input is Object(root) else { return Unknown }
   match (root.get("pokemon"), root.get("build"), root.get("members")) {

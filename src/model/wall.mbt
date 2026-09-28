@@ -13,6 +13,12 @@ pub(all) enum Wall {
 } derive(Debug, Eq)
 
 ///|
+pub extend Wall with Debug::{to_repr}
+
+///|
+pub extend Wall with Eq::{not_equal, equal}
+
+///|
 /// CLI parser. Accepts empty string or a handful of canonical spellings.
 /// Unknown values return NoWall (callers check before propagating to
 /// CacheKeyInput if strict validation is needed).

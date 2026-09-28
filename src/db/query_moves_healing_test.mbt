@@ -17,16 +17,16 @@ test "query_move: じこさいせい has FixedFraction(1, 2) healing (m014 smoke
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(
+  let result = @db.query_move(
     db,
     "じこさいせい",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(mv) => {
       match mv.healing {
@@ -59,12 +59,12 @@ test "query_move: たいあたり has no healing/weather_set (default None)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "たいあたり", @model.Other("scarlet_violet"))
-  close(db)
+  let result = @db.query_move(db, "たいあたり", @model.Other("scarlet_violet"))
+  @db.close(db)
   match result {
     Ok(mv) => {
       @debug.debug_inspect(mv.healing, content="None")
@@ -83,12 +83,12 @@ test "query_move: にほんばれ has weather_set=Sun (m014 smoke)" {
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(db, "にほんばれ", @model.Other("scarlet_violet"))
-  close(db)
+  let result = @db.query_move(db, "にほんばれ", @model.Other("scarlet_violet"))
+  @db.close(db)
   match result {
     Ok(mv) => {
       match mv.weather_set {
@@ -119,8 +119,8 @@ test "query_move: にほんばれ has weather_set=Sun (m014 smoke)" {
 /// 旧 SELECT を使い、Move.healing=None / weather_set=None を返す。
 test "query_move: gracefully handles legacy DB without heal columns (Issue #3)" {
   let path = "_build/test_issue3_legacy_schema.db"
-  let _ = unlink_file(path)
-  let db = match open_rwc(path) {
+  let _ = @db.unlink_file(path)
+  let db = match @db.open_rwc(path) {
     Ok(d) => d
     Err(e) => {
       fail("open_rwc legacy schema db failed: " + e)
@@ -172,9 +172,9 @@ test "query_move: gracefully handles legacy DB without heal columns (Issue #3)" 
     ins_local_waza,
   ]
   for sql in create_sqls {
-    match exec(db, sql) {
+    match @db.exec(db, sql) {
       Err(e) => {
-        close(db)
+        @db.close(db)
         fail("CREATE/INSERT failed: " + e)
         return
       }
@@ -184,9 +184,9 @@ test "query_move: gracefully handles legacy DB without heal columns (Issue #3)" 
   // 旧実装 (m014 列を unconditionally SELECT) では prepare で fail する。
   // Option A 修正後: PRAGMA で列が無いことを検出し、旧 SELECT (heal/weather 無し)
   // を実行して Move を返す。
-  let result = query_move(db, "たいあたり", @model.Other("scarlet_violet"))
-  close(db)
-  let _ = unlink_file(path)
+  let result = @db.query_move(db, "たいあたり", @model.Other("scarlet_violet"))
+  @db.close(db)
+  let _ = @db.unlink_file(path)
   match result {
     Ok(mv) => {
       // 修正後の期待挙動: graceful な None。
@@ -213,8 +213,8 @@ test "query_move: gracefully handles legacy DB without heal columns (Issue #3)" 
 /// PRAGMA でチェックし、1 列でも欠けたら旧 SELECT にフォールバックする。
 test "query_move: gracefully handles partial m014 schema (heal_kind only)" {
   let path = "_build/test_issue3_partial_schema.db"
-  let _ = unlink_file(path)
-  let db = match open_rwc(path) {
+  let _ = @db.unlink_file(path)
+  let db = match @db.open_rwc(path) {
     Ok(d) => d
     Err(e) => {
       fail("open_rwc partial schema db failed: " + e)
@@ -266,18 +266,18 @@ test "query_move: gracefully handles partial m014 schema (heal_kind only)" {
     ins_local_waza,
   ]
   for sql in create_sqls {
-    match exec(db, sql) {
+    match @db.exec(db, sql) {
       Err(e) => {
-        close(db)
+        @db.close(db)
         fail("CREATE/INSERT failed: " + e)
         return
       }
       Ok(_) => ()
     }
   }
-  let result = query_move(db, "たいあたり", @model.Other("scarlet_violet"))
-  close(db)
-  let _ = unlink_file(path)
+  let result = @db.query_move(db, "たいあたり", @model.Other("scarlet_violet"))
+  @db.close(db)
+  let _ = @db.unlink_file(path)
   match result {
     Ok(mv) => {
       @debug.debug_inspect(mv.healing, content="None")
@@ -299,16 +299,16 @@ test "query_move: つきのひかり has WeatherDependent (default/sunny/harsh)"
     Some(p) => p
     None => return
   }
-  let db = match open(db_path) {
+  let db = match @db.open(db_path) {
     Ok(d) => d
     Err(e) => fail("failed to open test db: " + e)
   }
-  let result = query_move(
+  let result = @db.query_move(
     db,
     "つきのひかり",
     @model.Other("scarlet_violet"),
   )
-  close(db)
+  @db.close(db)
   match result {
     Ok(mv) =>
       match mv.healing {

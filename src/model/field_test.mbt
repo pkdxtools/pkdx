@@ -11,34 +11,34 @@
 
 ///|
 test "field_from_jp: canonical (DB) keys → Field variant" {
-  assert_true(field_from_jp("electric") == Field::Electric)
-  assert_true(field_from_jp("grassy") == Field::Grassy)
-  assert_true(field_from_jp("misty") == Field::Misty)
-  assert_true(field_from_jp("psychic") == Field::Psychic)
+  assert_true(@model.field_from_jp("electric") == @model.Field::Electric)
+  assert_true(@model.field_from_jp("grassy") == @model.Field::Grassy)
+  assert_true(@model.field_from_jp("misty") == @model.Field::Misty)
+  assert_true(@model.field_from_jp("psychic") == @model.Field::Psychic)
 }
 
 ///|
 test "field_from_jp: Japanese (CLI) keys → Field variant" {
-  assert_true(field_from_jp("エレキ") == Field::Electric)
-  assert_true(field_from_jp("グラス") == Field::Grassy)
-  assert_true(field_from_jp("ミスト") == Field::Misty)
-  assert_true(field_from_jp("サイコ") == Field::Psychic)
+  assert_true(@model.field_from_jp("エレキ") == @model.Field::Electric)
+  assert_true(@model.field_from_jp("グラス") == @model.Field::Grassy)
+  assert_true(@model.field_from_jp("ミスト") == @model.Field::Misty)
+  assert_true(@model.field_from_jp("サイコ") == @model.Field::Psychic)
 }
 
 ///|
 test "field_from_jp: empty / unknown → None" {
-  assert_true(field_from_jp("") == Field::None)
-  assert_true(field_from_jp("unknown") == Field::None)
-  assert_true(field_from_jp("でんき") == Field::None)
+  assert_true(@model.field_from_jp("") == @model.Field::None)
+  assert_true(@model.field_from_jp("unknown") == @model.Field::None)
+  assert_true(@model.field_from_jp("でんき") == @model.Field::None)
 }
 
 ///|
 test "Field::is_active: None false, others true" {
-  assert_false(Field::is_active(Field::None))
-  assert_true(Field::is_active(Field::Electric))
-  assert_true(Field::is_active(Field::Grassy))
-  assert_true(Field::is_active(Field::Misty))
-  assert_true(Field::is_active(Field::Psychic))
+  assert_false(@model.Field::is_active(@model.Field::None))
+  assert_true(@model.Field::is_active(@model.Field::Electric))
+  assert_true(@model.Field::is_active(@model.Field::Grassy))
+  assert_true(@model.Field::is_active(@model.Field::Misty))
+  assert_true(@model.Field::is_active(@model.Field::Psychic))
 }
 
 ///|
@@ -48,19 +48,19 @@ test "Field: Debug derive enables debug_inspect (variant-name distinct)" {
   // 具体的な出力文字列は @debug の実装に任せ、本テストは「derive(Debug)
   // が成立していること」を変更時の早期警告として pin する (compile が通れば
   // debug_inspect が動く)。
-  @debug.debug_inspect(Field::None, content="None")
-  @debug.debug_inspect(Field::Electric, content="Electric")
-  @debug.debug_inspect(Field::Grassy, content="Grassy")
-  @debug.debug_inspect(Field::Misty, content="Misty")
-  @debug.debug_inspect(Field::Psychic, content="Psychic")
+  @debug.debug_inspect(@model.Field::None, content="None")
+  @debug.debug_inspect(@model.Field::Electric, content="Electric")
+  @debug.debug_inspect(@model.Field::Grassy, content="Grassy")
+  @debug.debug_inspect(@model.Field::Misty, content="Misty")
+  @debug.debug_inspect(@model.Field::Psychic, content="Psychic")
 }
 
 ///|
 test "Field: Hash derive enables Map key (Stage F damage cache prep)" {
   // Hash + Eq があれば `Map[Field, T]` のキーになれる。Stage F の damage
   // cache key で Field を埋め込むときの prerequisite。
-  let m : Map[Field, Int] = Map([(Field::None, 0), (Field::Electric, 1)])
-  assert_true(m.get(Field::None) == Some(0))
-  assert_true(m.get(Field::Electric) == Some(1))
-  assert_true(m.get(Field::Grassy) == None)
+  let m : Map[@model.Field, Int] = Map([(@model.Field::None, 0), (@model.Field::Electric, 1)])
+  assert_true(m.get(@model.Field::None) == Some(0))
+  assert_true(m.get(@model.Field::Electric) == Some(1))
+  assert_true(m.get(@model.Field::Grassy) == None)
 }

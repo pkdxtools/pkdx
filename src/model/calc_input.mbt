@@ -63,3 +63,6 @@ pub(all) struct DamageCalcInput {
   // Step1 ダメージに必要な modifier をすべて保持する。
   incoming : IncomingOpts?
 } derive(Debug)
+
+///|
+pub extend DamageCalcInput with Debug::{to_repr}

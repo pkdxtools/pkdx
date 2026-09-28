@@ -15,6 +15,12 @@ pub(all) enum MultiHit {
 } derive(Debug, Eq)
 
 ///|
+pub extend MultiHit with Debug::{to_repr}
+
+///|
+pub extend MultiHit with Eq::{not_equal, equal}
+
+///|
 /// CLI parser. Accepts "auto" / "expected" / "<int>". Integer out of 1..=5 is
 /// clamped; unparseable strings fall back to Auto.
 pub fn multi_hit_from_str(s : String) -> MultiHit {

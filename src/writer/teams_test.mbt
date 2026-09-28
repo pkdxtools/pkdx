@@ -24,18 +24,18 @@ test "build_team_document: deterministic markdown output" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-06")
   let md = @markdown.serialize(doc)
-  let doc2 = build_team_document(json, "ガブリアス", "2026-04-06")
+  let doc2 = @writer.build_team_document(json, "ガブリアス", "2026-04-06")
   let md2 = @markdown.serialize(doc2)
   @debug.assert_eq(md, md2)
   assert_true(md.contains("# ガブリアス軸構築 - 2026-04-06"))
   assert_true(md.contains("## チーム"))
-  assert_true(md.contains("| 1 | ガブリアス |"))
+  assert_true(compact_tables(md).contains("| 1 | ガブリアス |"))
   assert_true(md.contains("108/130/95/80/85/102"))
   assert_true(md.contains("## 推奨技構成"))
   assert_true(md.contains("### ガブリアス"))
-  assert_true(md.contains("| じしん |"))
+  assert_true(compact_tables(md).contains("| じしん |"))
   assert_true(!md.contains("## 構築の強み"))
   assert_true(!md.contains("## 構築の弱み・注意点"))
 }
@@ -72,7 +72,7 @@ test "build_team_document: doubles matchup plans" {
     #|  }]
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "テスト", "2026-04-06")
+  let doc = @writer.build_team_document(json, "テスト", "2026-04-06")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("## 選出パターン"))
   assert_true(md.contains("先発:"))
@@ -105,10 +105,10 @@ test "build_team_document: members table uses メモ header" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-06")
   let md = @markdown.serialize(doc)
-  assert_true(md.contains("| メモ |"))
-  assert_false(md.contains("| 役割 |"))
+  assert_true(compact_tables(md).contains("| メモ |"))
+  assert_false(compact_tables(md).contains("| 役割 |"))
 }
 
 ///|
@@ -139,7 +139,7 @@ test "build_team_document: memo with pipe is escaped" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-06")
   let md = @markdown.serialize(doc)
   // memo セル全体 (`| HBD振り\|物理受け\|襷想定 |`) が 1 行として残っていること。
   assert_true(md.contains("HBD振り\\|物理受け\\|襷想定"))
@@ -193,7 +193,7 @@ test "build_team_document: memo with newlines collapsed to single row" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-06")
   let md = @markdown.serialize(doc)
   // 3 フィールドがすべてスペース区切りで同一行に存在すること
   assert_true(md.contains("物理アタッカー 襷ステロ型 S最速"))
@@ -203,7 +203,7 @@ test "build_team_document: memo with newlines collapsed to single row" {
     let mut count = 0
     for line in lines {
       let line_str = line.to_owned()
-      if line_str.contains("| 1 | ガブリアス |") {
+      if compact_tables(line_str).contains("| 1 | ガブリアス |") {
         count = count + 1
       }
     }
@@ -240,7 +240,7 @@ test "build_team_document: build data section hidden when no nature/sp/actual" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-06")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-06")
   let md = @markdown.serialize(doc)
   assert_false(md.contains("## 育成データ"))
 }
@@ -277,7 +277,7 @@ test "build_team_document: build data section renders when populated" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "マンムー", "2026-04-19")
+  let doc = @writer.build_team_document(json, "マンムー", "2026-04-19")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("## 育成データ"))
   assert_true(md.contains("ようき"))
@@ -337,11 +337,11 @@ test "build_team_document: build data row shows hyphen when member lacks fields"
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "マンムー", "2026-04-19")
+  let doc = @writer.build_team_document(json, "マンムー", "2026-04-19")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("## 育成データ"))
   // 2 行目 (ガブリアス) は nature / SP / 実数値すべて "-" で出力される
-  assert_true(md.contains("| 2 | ガブリアス | - | - | - |"))
+  assert_true(compact_tables(md).contains("| 2 | ガブリアス | - | - | - |"))
 }
 
 ///|
@@ -374,12 +374,12 @@ test "build_team_document: coverage and defense matrix" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "A", "2026-04-06")
+  let doc = @writer.build_team_document(json, "A", "2026-04-06")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("## 攻撃カバー率"))
-  assert_true(md.contains("| くさ | ほのお | A | 2.0 |"))
+  assert_true(compact_tables(md).contains("| くさ | ほのお | A | 2.0 |"))
   assert_true(md.contains("## 防御相性マトリクス"))
-  assert_true(md.contains("| みず |"))
+  assert_true(compact_tables(md).contains("| みず |"))
 }
 
 ///|
@@ -399,7 +399,7 @@ test "build_team_document: emits YAML frontmatter with core fields" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-20")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-20")
   let md = @markdown.serialize(doc)
   assert_true(md.has_prefix("---\n"))
   assert_true(md.contains("title: \"ガブリアス軸構築 - 2026-04-20\""))
@@ -435,7 +435,7 @@ test "build_team_document: publish=true flips published to true" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(
+  let doc = @writer.build_team_document(
     json,
     "ガブリアス",
     "2026-04-20",
@@ -459,7 +459,7 @@ test "build_team_document: omits regulation when empty" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ガブリアス", "2026-04-20")
+  let doc = @writer.build_team_document(json, "ガブリアス", "2026-04-20")
   let md = @markdown.serialize(doc)
   assert_false(md.contains("regulation:"))
 }
@@ -478,7 +478,7 @@ test "build_team_document: frontmatter survives parse round-trip" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "ザシアン", "2026-04-20")
+  let doc = @writer.build_team_document(json, "ザシアン", "2026-04-20")
   let md = @markdown.serialize(doc)
   let reparsed = @markdown.parse(md).document
   match reparsed.frontmatter {
@@ -524,7 +524,7 @@ test "build_team_document: axis with double quotes is escaped" {
     #|  "matchup_plans": []
     #|}
   let json = @json.parse(src)
-  let doc = build_team_document(json, "\"トリッキー\"", "2026-04-20")
+  let doc = @writer.build_team_document(json, "\"トリッキー\"", "2026-04-20")
   let md = @markdown.serialize(doc)
   assert_true(md.contains("axis: \"\\\"トリッキー\\\"\""))
   let reparsed = @markdown.parse(md).document
@@ -543,7 +543,7 @@ test "has_edit_lock: recognises edited: true" {
     #|---
     #|
     #|# body
-  assert_true(has_edit_lock(md))
+  assert_true(@writer.has_edit_lock(md))
 }
 
 ///|
@@ -554,7 +554,7 @@ test "has_edit_lock: edited: false is unlocked" {
     #|---
     #|
     #|# body
-  assert_false(has_edit_lock(md))
+  assert_false(@writer.has_edit_lock(md))
 }
 
 ///|
@@ -563,12 +563,12 @@ test "has_edit_lock: missing frontmatter is unlocked" {
     #|# just a heading
     #|
     #|no frontmatter here.
-  assert_false(has_edit_lock(md))
+  assert_false(@writer.has_edit_lock(md))
 }
 
 ///|
 test "has_edit_lock: empty input is unlocked" {
-  assert_false(has_edit_lock(""))
+  assert_false(@writer.has_edit_lock(""))
 }
 
 ///|
@@ -579,7 +579,7 @@ test "has_edit_lock: capital True is unlocked (strict literal)" {
     #|---
     #|
     #|# body
-  assert_false(has_edit_lock(md))
+  assert_false(@writer.has_edit_lock(md))
 }
 
 ///|
@@ -590,7 +590,7 @@ test "has_edit_lock: quoted \"true\" is locked (parser strips quotes)" {
     #|---
     #|
     #|# body
-  assert_true(has_edit_lock(md))
+  assert_true(@writer.has_edit_lock(md))
 }
 
 ///|
@@ -601,7 +601,7 @@ test "has_edit_lock: key without space still works" {
     #|---
     #|
     #|# body
-  assert_true(has_edit_lock(md))
+  assert_true(@writer.has_edit_lock(md))
 }
 
 ///|
@@ -611,5 +611,5 @@ test "has_edit_lock: missing closing fence is unlocked" {
     #|edited: true
     #|
     #|# body but never closed
-  assert_false(has_edit_lock(md))
+  assert_false(@writer.has_edit_lock(md))
 }

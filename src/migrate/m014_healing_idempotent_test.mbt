@@ -124,7 +124,7 @@ test "m014 idempotent: first run inserts all 21 entries" {
       return
     }
   }
-  let msg = match run_014(db, ".") {
+  let msg = match @migrate.run_014(db, ".") {
     Ok(s) => s
     Err(e) => {
       @db.close(db)
@@ -154,7 +154,7 @@ test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
     }
   }
   // 1 回目
-  match run_014(db, ".") {
+  match @migrate.run_014(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -166,7 +166,7 @@ test "m014 idempotent: second run re-applies as UPDATE, row count stable" {
   let healing_after_first = count_healing_rows(db)
   let cols_after_first = count_m014_columns(db)
   // 2 回目: authoritative reset → 21 件 UPDATE で同じ状態へ収束。
-  let msg2 = match run_014(db, ".") {
+  let msg2 = match @migrate.run_014(db, ".") {
     Ok(s) => s
     Err(e) => {
       @db.close(db)
@@ -196,7 +196,7 @@ test "m014 idempotent: third run is identical to second (steady state)" {
       return
     }
   }
-  match run_014(db, ".") {
+  match @migrate.run_014(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -204,7 +204,7 @@ test "m014 idempotent: third run is identical to second (steady state)" {
       return
     }
   }
-  match run_014(db, ".") {
+  match @migrate.run_014(db, ".") {
     Ok(_) => ()
     Err(e) => {
       @db.close(db)
@@ -212,7 +212,7 @@ test "m014 idempotent: third run is identical to second (steady state)" {
       return
     }
   }
-  let msg3 = match run_014(db, ".") {
+  let msg3 = match @migrate.run_014(db, ".") {
     Ok(s) => s
     Err(e) => {
       @db.close(db)

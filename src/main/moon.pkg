@@ -13,7 +13,7 @@ import {
   "mizchi/markdown",
   "mizchi/admiral",
   "moonbitlang/core/json",
-  "moonbitlang/x/sys",
+  "moonbitlang/core/env",
   "moonbitlang/core/debug" @debug,
 }
 

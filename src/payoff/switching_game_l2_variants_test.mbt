@@ -15,12 +15,12 @@
 /// Helper: invoke `mean_damage_cached` for the simple 1v1 setup used
 /// throughout this file.
 fn l2v_mean(
-  cache : DamageCache,
-  my_team : Array[Combatant],
-  opp_team : Array[Combatant],
+  cache : @payoff.DamageCache,
+  my_team : Array[@payoff.Combatant],
+  opp_team : Array[@payoff.Combatant],
 ) -> Int {
   let zero_ranks = [0, 0, 0, 0, 0]
-  mean_damage_cached(
+  @payoff.mean_damage_cached(
     cache, true, 0, zero_ranks, 0, zero_ranks, 0, my_team, opp_team,
   )
 }
@@ -52,12 +52,12 @@ test "mean_damage_cached: L2 hit on Triple Axel returns the variants-weighted me
   // Disk-less baseline: drives `compute_mean_damage` directly through
   // L1, which in turn reduces via `compute_damage_variants`. This is the
   // value the L2 path must match exactly.
-  let baseline_cache = new_damage_cache()
+  let baseline_cache = @payoff.new_damage_cache()
   let baseline = l2v_mean(baseline_cache, my_team, opp_team)
 
   // Populate L2: fresh cache + disk → L1+L2 miss → `compute_and_populate_disk`
   // writes v3 JSON to the SQLite cache.
-  let populate_cache = new_damage_cache(disk=Some(disk))
+  let populate_cache = @payoff.new_damage_cache(disk=Some(disk))
   let populate_value = l2v_mean(populate_cache, my_team, opp_team)
   assert_true(populate_cache.disk_misses > 0)
   @debug.assert_eq(populate_cache.disk_hits, 0)
@@ -67,7 +67,7 @@ test "mean_damage_cached: L2 hit on Triple Axel returns the variants-weighted me
 
   // Read L2: brand-new in-memory cache so L1 cannot serve the lookup; the
   // SQLite file persists across DamageCache instances.
-  let read_cache = new_damage_cache(disk=Some(disk))
+  let read_cache = @payoff.new_damage_cache(disk=Some(disk))
   let read_value = l2v_mean(read_cache, my_team, opp_team)
   assert_true(read_cache.disk_hits > 0)
   // The pre-fix bug: `mean_damage_via_disk` reduced the legacy
@@ -104,13 +104,13 @@ test "mean_damage_cached: L2 hit on Random2to5 returns the variants-weighted mea
   let my_team = [atk]
   let opp_team = [dfn]
 
-  let baseline = l2v_mean(new_damage_cache(), my_team, opp_team)
+  let baseline = l2v_mean(@payoff.new_damage_cache(), my_team, opp_team)
 
-  let populate_cache = new_damage_cache(disk=Some(disk))
+  let populate_cache = @payoff.new_damage_cache(disk=Some(disk))
   let _ = l2v_mean(populate_cache, my_team, opp_team)
   assert_true(populate_cache.disk_misses > 0)
 
-  let read_cache = new_damage_cache(disk=Some(disk))
+  let read_cache = @payoff.new_damage_cache(disk=Some(disk))
   let read_value = l2v_mean(read_cache, my_team, opp_team)
   assert_true(read_cache.disk_hits > 0)
   @debug.assert_eq(read_value, baseline)
@@ -149,13 +149,13 @@ test "mean_damage_cached: reflect move does not poison L2 disk with zero" {
 
   // Disk-less baseline: drives reflect_damage_outcomes directly. Non-zero
   // because the opponent has a valid physical candidate.
-  let baseline = l2v_mean(new_damage_cache(), my_team, opp_team)
+  let baseline = l2v_mean(@payoff.new_damage_cache(), my_team, opp_team)
   assert_true(baseline > 0)
 
   // Disk-backed populate path: must NOT call compute_and_populate_disk
   // for reflect moves. The short-circuit in mean_damage_via_disk keeps
   // disk_misses at 0 and returns the proper variants-based value.
-  let populate_cache = new_damage_cache(disk=Some(disk))
+  let populate_cache = @payoff.new_damage_cache(disk=Some(disk))
   let populate_value = l2v_mean(populate_cache, my_team, opp_team)
   @debug.assert_eq(populate_value, baseline)
   @debug.assert_eq(populate_cache.disk_misses, 0)
@@ -165,7 +165,7 @@ test "mean_damage_cached: reflect move does not poison L2 disk with zero" {
   // Even if a prior session somehow wrote a zero entry under this key,
   // mean_damage_via_disk now short-circuits BEFORE the disk lookup, so
   // the reflected value is always recomputed and stays non-zero.
-  let read_cache = new_damage_cache(disk=Some(disk))
+  let read_cache = @payoff.new_damage_cache(disk=Some(disk))
   let read_value = l2v_mean(read_cache, my_team, opp_team)
   @debug.assert_eq(read_value, baseline)
   @debug.assert_eq(read_cache.disk_hits, 0)

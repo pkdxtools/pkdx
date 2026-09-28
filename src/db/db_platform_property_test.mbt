@@ -10,13 +10,13 @@ test "validate_champions_schema accepts an empty champions.db (P1-B)" {
   // empty so #94 (items) has a target. Validation must be a no-op
   // until P2-C lands the first required table.
   let tmp = "pkdx_empty_champions_test.db"
-  let _ = unlink_file(tmp)
-  match open_rwc(tmp) {
+  let _ = @db.unlink_file(tmp)
+  match @db.open_rwc(tmp) {
     Err(_) => return
     Ok(db) => {
-      let r = validate_champions_schema(db)
-      close(db)
-      let _ = unlink_file(tmp)
+      let r = @db.validate_champions_schema(db)
+      @db.close(db)
+      let _ = @db.unlink_file(tmp)
       match r {
         Ok(_) => ()
         Err(e) =>

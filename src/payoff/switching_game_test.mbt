@@ -2,7 +2,7 @@
 /// Helper: dummy team of `n` Pokemon, each with HP `hp`, one damage move,
 /// identical stats — used for terminal/action unit tests where stat details
 /// don't matter.
-fn build_dummy_team(n : Int, hp : Int) -> Array[Combatant] {
+fn build_dummy_team(n : Int, hp : Int) -> Array[@payoff.Combatant] {
   let out = Array::make(
     n,
     mk_combatant(
@@ -31,7 +31,7 @@ fn build_dummy_team(n : Int, hp : Int) -> Array[Combatant] {
 
 ///|
 test "state_is_hashable_and_distinguishes_meaningful_fields" {
-  let base : SwitchingGameState = {
+  let base : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100, 100],
@@ -64,7 +64,7 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
     field_turns_left: 0,
     turn: 0,
   }
-  let same : SwitchingGameState = {
+  let same : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100, 100],
@@ -105,7 +105,7 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
   assert_true(base != diff_hp)
   assert_true(base != diff_turn)
   // HashMap key: same states collide on get; different states do not.
-  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
   cache[base] = 0.5
   match cache.get(same) {
     Some(v) => @debug.assert_eq(v, 0.5)
@@ -121,7 +121,7 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
 test "terminal_value_all_my_fainted_returns_minus_one" {
   let team_a = build_dummy_team(3, 100)
   let team_b = build_dummy_team(3, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [0, 0, 0],
@@ -154,7 +154,7 @@ test "terminal_value_all_my_fainted_returns_minus_one" {
     field_turns_left: 0,
     turn: 0,
   }
-  match terminal_value(state, team_a, team_b, 5) {
+  match @payoff.terminal_value(state, team_a, team_b, 5) {
     Some(v) => @debug.assert_eq(v, -1.0)
     None => assert_true(false)
   }
@@ -164,7 +164,7 @@ test "terminal_value_all_my_fainted_returns_minus_one" {
 test "terminal_value_all_opp_fainted_returns_plus_one" {
   let team_a = build_dummy_team(3, 100)
   let team_b = build_dummy_team(3, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100, 100],
@@ -197,7 +197,7 @@ test "terminal_value_all_opp_fainted_returns_plus_one" {
     field_turns_left: 0,
     turn: 0,
   }
-  match terminal_value(state, team_a, team_b, 5) {
+  match @payoff.terminal_value(state, team_a, team_b, 5) {
     Some(v) => @debug.assert_eq(v, 1.0)
     None => assert_true(false)
   }
@@ -209,7 +209,7 @@ test "terminal_value_turn_limit_reached_returns_hp_ratio_in_signed_range" {
   // because opp has more HP left).
   let team_a = build_dummy_team(2, 100)
   let team_b = build_dummy_team(2, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [50, 50],
@@ -242,7 +242,7 @@ test "terminal_value_turn_limit_reached_returns_hp_ratio_in_signed_range" {
     field_turns_left: 0,
     turn: 3,
   }
-  match terminal_value(state, team_a, team_b, 3) {
+  match @payoff.terminal_value(state, team_a, team_b, 3) {
     Some(v) => assert_true((v - -0.25).abs() < 1.0e-9)
     None => assert_true(false)
   }
@@ -252,7 +252,7 @@ test "terminal_value_turn_limit_reached_returns_hp_ratio_in_signed_range" {
 test "terminal_value_both_alive_before_limit_returns_none" {
   let team_a = build_dummy_team(3, 100)
   let team_b = build_dummy_team(3, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100, 100],
@@ -285,7 +285,7 @@ test "terminal_value_both_alive_before_limit_returns_none" {
     field_turns_left: 0,
     turn: 0,
   }
-  match terminal_value(state, team_a, team_b, 5) {
+  match @payoff.terminal_value(state, team_a, team_b, 5) {
     Some(_) => assert_true(false)
     None => ()
   }
@@ -296,7 +296,7 @@ test "alive_actions_excludes_fainted_switch_targets" {
   let team = build_dummy_team(3, 100)
   // active=0; team[1] KO'd (hp=0); team[2] alive → only Switch(2) legal
   let hps = [100, 0, 100]
-  let actions = alive_actions(0, hps, team, false)
+  let actions = @payoff.alive_actions(0, hps, team, false)
   let mut move_count = 0
   let switch_targets : Array[Int] = []
   for a in actions {
@@ -313,7 +313,7 @@ test "alive_actions_excludes_fainted_switch_targets" {
 
 ///|
 test "team_payoff_model_enum_exhaustive_match" {
-  let models : Array[TeamPayoffModel] = [
+  let models : Array[@payoff.TeamPayoffModel] = [
     SwitchingGame(2),
     ScreenedSwitchingGame(100, 7UL, 0.5, 2),
   ]
@@ -343,7 +343,7 @@ test "value_returns_terminal_value_for_terminal_state" {
   // Already at turn_limit with equal HPs → delta = 0.
   let team_a = build_dummy_team(2, 100)
   let team_b = build_dummy_team(2, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100],
@@ -376,10 +376,10 @@ test "value_returns_terminal_value_for_terminal_state" {
     field_turns_left: 0,
     turn: 5,
   }
-  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
-  let stats = new_stats()
-  let dmg_cache = new_damage_cache()
-  let v = value(state, team_a, team_b, 5, cache, stats, dmg_cache)
+  let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
+  let stats = @payoff.new_stats()
+  let dmg_cache = @payoff.new_damage_cache()
+  let v = @payoff.value(state, team_a, team_b, 5, cache, stats, dmg_cache)
   @debug.assert_eq(v, 0.0)
 }
 
@@ -395,7 +395,7 @@ test "value_matches_nash_value_of_one_step_payoff_matrix" {
     mk_pokemon("B", "ノーマル", "", 1, 50, 50, 50, 50, 50),
     [mk_move("weak", "ノーマル", @model.Physical, 1)],
   )
-  let v = switching_game_winrate([strong], [weak], 1)
+  let v = @payoff.switching_game_winrate([strong], [weak], 1)
   @debug.assert_eq(v, 1.0)
 }
 
@@ -403,7 +403,7 @@ test "value_matches_nash_value_of_one_step_payoff_matrix" {
 test "value_caches_result_via_value_stats" {
   let team_a = build_dummy_team(2, 100)
   let team_b = build_dummy_team(2, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100],
@@ -436,19 +436,19 @@ test "value_caches_result_via_value_stats" {
     field_turns_left: 0,
     turn: 0,
   }
-  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
-  let stats = new_stats()
-  let dmg_cache = new_damage_cache()
-  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
+  let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
+  let stats = @payoff.new_stats()
+  let dmg_cache = @payoff.new_damage_cache()
+  let _ = @payoff.value(state, team_a, team_b, 2, cache, stats, dmg_cache)
   let hits_before = stats.hits
-  let _ = value(state, team_a, team_b, 2, cache, stats, dmg_cache)
+  let _ = @payoff.value(state, team_a, team_b, 2, cache, stats, dmg_cache)
   assert_true(stats.hits > hits_before)
 }
 
 ///|
 test "switching_game_winrate_mirror_match_returns_near_zero" {
   let team = build_dummy_team(2, 100)
-  let v = switching_game_winrate(team, team, 2)
+  let v = @payoff.switching_game_winrate(team, team, 2)
   assert_true(v.abs() < 1.0e-6)
 }
 
@@ -472,7 +472,7 @@ test "switching_game_winrate_dominant_team_returns_positive" {
       mk_move("weak", "ノーマル", @model.Physical, 10),
     ]),
   ]
-  let v = switching_game_winrate(strong_team, weak_team, 2)
+  let v = @payoff.switching_game_winrate(strong_team, weak_team, 2)
   assert_true(v > 0.5)
 }
 
@@ -487,7 +487,7 @@ test "switching_game_winrate_turn_limit_one_matches_single_turn_best1v1_on_initi
     mk_pokemon("B", "ノーマル", "", 1, 50, 50, 50, 50, 50),
     [mk_move("weak", "ノーマル", @model.Physical, 1)],
   )
-  let v = switching_game_winrate([strong], [weak], 1)
+  let v = @payoff.switching_game_winrate([strong], [weak], 1)
   assert_true((v - 1.0).abs() < 1.0e-9)
 }
 
@@ -503,7 +503,7 @@ test "transition_attack_vs_attack_resolves_sequentially_by_speed" {
     mk_pokemon("Slow", "ノーマル", "", 1, 200, 100, 100, 100, 50),
     [mk_move("chunk", "ノーマル", @model.Physical, 90)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -536,7 +536,7 @@ test "transition_attack_vs_attack_resolves_sequentially_by_speed" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, UseMove(0), UseMove(0), [fast], [slow])
+  let next = @payoff.transition(state, UseMove(0), UseMove(0), [fast], [slow])
   @debug.assert_eq(next.opp_hps[0], 0)
   @debug.assert_eq(next.my_hps[0], 100)
   @debug.assert_eq(next.turn, 1)
@@ -561,7 +561,7 @@ test "transition_attack_vs_switch_damages_newly_switched_target" {
       [mk_move("x", "ノーマル", @model.Physical, 40)],
     ),
   ]
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -594,7 +594,7 @@ test "transition_attack_vs_switch_damages_newly_switched_target" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, UseMove(0), Switch(1), my_team, opp_team)
+  let next = @payoff.transition(state, UseMove(0), Switch(1), my_team, opp_team)
   @debug.assert_eq(next.opp_active, 1)
   @debug.assert_eq(next.my_hps[0], 100)
   assert_true(next.opp_hps[1] < 100)
@@ -624,7 +624,7 @@ test "transition_switch_vs_switch_updates_actives_only_without_damage" {
       [mk_move("x", "ノーマル", @model.Physical, 40)],
     ),
   ]
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100],
@@ -657,7 +657,7 @@ test "transition_switch_vs_switch_updates_actives_only_without_damage" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, Switch(1), Switch(1), my_team, opp_team)
+  let next = @payoff.transition(state, Switch(1), Switch(1), my_team, opp_team)
   @debug.assert_eq(next.my_active, 1)
   @debug.assert_eq(next.opp_active, 1)
   @debug.assert_eq(next.my_hps[0], 100)
@@ -688,7 +688,7 @@ test "alive_actions_includes_all_moves_and_alive_switches" {
     ),
   ]
   let hps = [100, 100, 100]
-  let actions = alive_actions(0, hps, team, false)
+  let actions = @payoff.alive_actions(0, hps, team, false)
   // 3 moves + 2 switches = 5 legal actions
   @debug.assert_eq(actions.length(), 5)
   let mut moves = 0
@@ -724,7 +724,7 @@ test "alive_actions: とっておき is barred when other moves not yet used" {
   let hps = [100, 100]
   // moves_used 未追跡 (default) → bit mask は 0 として読まれ、ねこだまし
   // (idx 0) が「未使用」扱い。とっておき はこの状態では使えない。
-  let actions = alive_actions(0, hps, team, false)
+  let actions = @payoff.alive_actions(0, hps, team, false)
   let mut last_resort_count = 0
   let mut nekodamashi_count = 0
   for a in actions {
@@ -761,7 +761,7 @@ test "alive_actions: とっておき becomes legal once other moves used" {
   let hps = [100, 100]
   // ねこだまし (idx 0) を使用済みとマーク。とっておき が解禁される。
   let moves_used = [1, 0]
-  let actions = alive_actions(0, hps, team, false, moves_used~)
+  let actions = @payoff.alive_actions(0, hps, team, false, moves_used~)
   let mut last_resort_count = 0
   for a in actions {
     match a {
@@ -789,7 +789,7 @@ test "alive_actions: lone とっておき is always legal" {
     ),
   ]
   let hps = [100, 100]
-  let actions = alive_actions(0, hps, team, false)
+  let actions = @payoff.alive_actions(0, hps, team, false)
   // 1 move (とっておき, 解禁状態) + 1 switch
   @debug.assert_eq(actions.length(), 2)
 }
@@ -798,7 +798,7 @@ test "alive_actions: lone とっておき is always legal" {
 test "state_ranks_distinguish_otherwise_identical_states" {
   // Rank vectors participate in the HashMap key so setup-move plans do not
   // collide with their un-boosted counterparts.
-  let base : SwitchingGameState = {
+  let base : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -833,7 +833,7 @@ test "state_ranks_distinguish_otherwise_identical_states" {
   }
   let boosted = { ..base, my_ranks: [2, 0, 0, 0, 0] }
   assert_true(base != boosted)
-  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
   cache[base] = 0.1
   cache[boosted] = 0.9
   match cache.get(base) {
@@ -866,7 +866,7 @@ test "transition_priority_move_outpaces_faster_opponent" {
     mk_pokemon("FastN", "ノーマル", "", 1, 250, 100, 100, 100, 200),
     [mk_move("じしん", "じめん", @model.Physical, 250)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -899,7 +899,7 @@ test "transition_priority_move_outpaces_faster_opponent" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, UseMove(0), UseMove(0), [slow_prio], [
+  let next = @payoff.transition(state, UseMove(0), UseMove(0), [slow_prio], [
     fast_normal,
   ])
   // Priority KO skips the opponent's attack.
@@ -921,7 +921,7 @@ test "transition_sword_dance_raises_attacker_rank_by_two" {
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [mk_move("x", "ノーマル", @model.Physical, 40)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -954,7 +954,7 @@ test "transition_sword_dance_raises_attacker_rank_by_two" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, UseMove(0), UseMove(0), [me], [opp])
+  let next = @payoff.transition(state, UseMove(0), UseMove(0), [me], [opp])
   @debug.assert_eq(next.my_ranks[0], 2)
 }
 
@@ -972,7 +972,7 @@ test "transition_rank_clamps_to_plus_two_after_two_sword_dances" {
     mk_pokemon("B", "ノーマル", "", 100, 100, 100, 100, 100, 100),
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
-  let mut state : SwitchingGameState = {
+  let mut state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -1005,9 +1005,9 @@ test "transition_rank_clamps_to_plus_two_after_two_sword_dances" {
     field_turns_left: 0,
     turn: 0,
   }
-  state = transition(state, UseMove(0), UseMove(0), [me], [opp])
+  state = @payoff.transition(state, UseMove(0), UseMove(0), [me], [opp])
   @debug.assert_eq(state.my_ranks[0], 2)
-  state = transition(state, UseMove(0), UseMove(0), [me], [opp])
+  state = @payoff.transition(state, UseMove(0), UseMove(0), [me], [opp])
   // Clamped to +2, not accumulating to +4.
   @debug.assert_eq(state.my_ranks[0], 2)
 }
@@ -1034,7 +1034,7 @@ test "transition_switch_resets_active_ranks_to_zero" {
       [mk_move("x", "ノーマル", @model.Physical, 40)],
     ),
   ]
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100],
@@ -1067,7 +1067,7 @@ test "transition_switch_resets_active_ranks_to_zero" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, Switch(1), Switch(1), my_team, opp_team)
+  let next = @payoff.transition(state, Switch(1), Switch(1), my_team, opp_team)
   // Both sides' ranks reset to the zero vector.
   for i in 0..<5 {
     @debug.assert_eq(next.my_ranks[i], 0)
@@ -1087,7 +1087,7 @@ test "transition_rank_affects_damage_sword_dance_increases_output" {
     mk_pokemon("B", "ノーマル", "", 500, 100, 100, 100, 100, 50),
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
-  let neutral : SwitchingGameState = {
+  let neutral : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -1120,9 +1120,9 @@ test "transition_rank_affects_damage_sword_dance_increases_output" {
     field_turns_left: 0,
     turn: 0,
   }
-  let boosted : SwitchingGameState = { ..neutral, my_ranks: [2, 0, 0, 0, 0] }
-  let after_neutral = transition(neutral, UseMove(0), UseMove(0), [me], [opp])
-  let after_boosted = transition(boosted, UseMove(0), UseMove(0), [me], [opp])
+  let boosted : @payoff.SwitchingGameState = { ..neutral, my_ranks: [2, 0, 0, 0, 0] }
+  let after_neutral = @payoff.transition(neutral, UseMove(0), UseMove(0), [me], [opp])
+  let after_boosted = @payoff.transition(boosted, UseMove(0), UseMove(0), [me], [opp])
   let dmg_neutral = 500 - after_neutral.opp_hps[0]
   let dmg_boosted = 500 - after_boosted.opp_hps[0]
   assert_true(dmg_boosted > dmg_neutral)
@@ -1142,7 +1142,7 @@ test "switching_game_winrate_stats_completes_and_caches" {
   )
   let team_a = [strong, strong]
   let team_b = [ok, ok]
-  let (v, stats, _) = switching_game_winrate_stats(team_a, team_b, 2)
+  let (v, stats, _) = @payoff.switching_game_winrate_stats(team_a, team_b, 2)
   assert_true(v >= -1.0 && v <= 1.0)
   assert_true(!v.is_nan())
   // The recursion must have run (at least one miss observed).
@@ -1155,7 +1155,7 @@ test "switching_game_winrate_stats_mirror_match_still_zero" {
     mk_pokemon("M", "ノーマル", "", 120, 120, 120, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 60)],
   )
-  let (v, _, _) = switching_game_winrate_stats([team, team], [team, team], 2)
+  let (v, _, _) = @payoff.switching_game_winrate_stats([team, team], [team, team], 2)
   assert_true(v.abs() < 1.0e-6)
 }
 
@@ -1173,7 +1173,7 @@ test "damage_cache_hits_dominate_misses_on_repeated_recursion" {
     mk_pokemon("B0", "ノーマル", "", 120, 110, 110, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 60)],
   )
-  let (_, _, dmg) = switching_game_winrate_stats([a, a], [b, b], 2)
+  let (_, _, dmg) = @payoff.switching_game_winrate_stats([a, a], [b, b], 2)
   assert_true(dmg.misses >= 1)
   assert_true(dmg.hits >= dmg.misses)
 }
@@ -1188,7 +1188,7 @@ test "damage_cache_misses_bounded_by_key_space" {
     mk_pokemon("B0", "ノーマル", "", 120, 110, 110, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 60)],
   )
-  let (_, _, dmg) = switching_game_winrate_stats([a, a], [b, b], 2)
+  let (_, _, dmg) = @payoff.switching_game_winrate_stats([a, a], [b, b], 2)
   assert_true(dmg.misses <= 8)
 }
 
@@ -1205,7 +1205,7 @@ test "damage_cache_single_turn_uses_at_most_two_unique_keys" {
     mk_pokemon("Slow", "ノーマル", "", 100, 200, 100, 100, 100, 50),
     [mk_move("mv", "ノーマル", @model.Physical, 60)],
   )
-  let (_, _, dmg) = switching_game_winrate_stats([fast], [slow], 2)
+  let (_, _, dmg) = @payoff.switching_game_winrate_stats([fast], [slow], 2)
   assert_true(dmg.misses <= 2)
 }
 
@@ -1221,10 +1221,10 @@ test "damage_cache_hits_increment_on_repeated_identical_transitions" {
     mk_pokemon("B", "ノーマル", "", 200, 100, 100, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 40)],
   )
-  let cache = new_damage_cache()
+  let cache = @payoff.new_damage_cache()
   let ranks = [0, 0, 0, 0, 0]
-  let d1 = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
-  let d2 = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
+  let d1 = @payoff.mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
+  let d2 = @payoff.mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
   @debug.assert_eq(d1, d2)
   @debug.assert_eq(cache.misses, 1)
   @debug.assert_eq(cache.hits, 1)
@@ -1243,10 +1243,10 @@ test "damage_cache_distinguishes_sides_for_symmetric_teams" {
     mk_pokemon("B", "ノーマル", "", 100, 80, 100, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 80)],
   )
-  let cache = new_damage_cache()
+  let cache = @payoff.new_damage_cache()
   let ranks = [0, 0, 0, 0, 0]
-  let d_mine = mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
-  let d_opp = mean_damage_cached(cache, false, 0, ranks, 0, ranks, 0, [a], [b])
+  let d_mine = @payoff.mean_damage_cached(cache, true, 0, ranks, 0, ranks, 0, [a], [b])
+  let d_opp = @payoff.mean_damage_cached(cache, false, 0, ranks, 0, ranks, 0, [a], [b])
   // Both entries are fresh misses, not collisions.
   @debug.assert_eq(cache.misses, 2)
   @debug.assert_eq(cache.hits, 0)
@@ -1283,7 +1283,7 @@ fn mk_mega_state_1v1(
   opp_mega_used? : Bool = false,
   my_megaed? : Bool = false,
   opp_megaed? : Bool = false,
-) -> SwitchingGameState {
+) -> @payoff.SwitchingGameState {
   {
     my_active: 0,
     opp_active: 0,
@@ -1327,7 +1327,7 @@ test "state_is_hashable_with_mega_fields" {
   let diff_my_used = { ..base, my_mega_used: true }
   let diff_opp_used = { ..base, opp_mega_used: true }
   let diff_my_flag = { ..base, my_megaed: [true] }
-  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+  let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
   cache[base] = 0.1
   cache[diff_my_used] = 0.2
   cache[diff_opp_used] = 0.3
@@ -1353,7 +1353,7 @@ test "alive_actions_includes_mega_when_available" {
     ),
   ]
   let hps = [100]
-  let actions = alive_actions(0, hps, team, false)
+  let actions = @payoff.alive_actions(0, hps, team, false)
   let mut moves = 0
   let mut megas = 0
   let mut switches = 0
@@ -1379,7 +1379,7 @@ test "alive_actions_excludes_mega_when_already_used" {
     ),
   ]
   let hps = [100]
-  let actions = alive_actions(0, hps, team, true) // mega_used = true
+  let actions = @payoff.alive_actions(0, hps, team, true) // mega_used = true
   let mut megas = 0
   for a in actions {
     match a {
@@ -1401,7 +1401,7 @@ test "alive_actions_excludes_mega_when_no_mega_form" {
     ),
   ]
   let hps = [100]
-  let actions = alive_actions(0, hps, team, false)
+  let actions = @payoff.alive_actions(0, hps, team, false)
   let mut megas = 0
   for a in actions {
     match a {
@@ -1425,7 +1425,7 @@ test "transition_mega_sets_mega_used_and_megaed_flags" {
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
   let state = mk_mega_state_1v1(my_hp=100, opp_hp=500)
-  let next = transition(state, Mega(0), UseMove(0), [me], [opp])
+  let next = @payoff.transition(state, Mega(0), UseMove(0), [me], [opp])
   @debug.assert_eq(next.my_mega_used, true)
   @debug.assert_eq(next.my_megaed[0], true)
   // Opp side unchanged.
@@ -1452,8 +1452,8 @@ test "transition_mega_vs_move_uses_mega_stats_for_damage" {
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
   let state = mk_mega_state_1v1(my_hp=100, opp_hp=500)
-  let after_mega = transition(state, Mega(0), UseMove(0), [mega_attacker], [opp])
-  let after_plain = transition(
+  let after_mega = @payoff.transition(state, Mega(0), UseMove(0), [mega_attacker], [opp])
+  let after_plain = @payoff.transition(
     state,
     UseMove(0),
     UseMove(0),
@@ -1484,8 +1484,8 @@ test "transition_mega_vs_move_uses_mega_type_for_stab" {
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
   let state = mk_mega_state_1v1(my_hp=100, opp_hp=500)
-  let after_mega = transition(state, Mega(0), UseMove(0), [mega_attacker], [opp])
-  let after_plain = transition(
+  let after_mega = @payoff.transition(state, Mega(0), UseMove(0), [mega_attacker], [opp])
+  let after_plain = @payoff.transition(
     state,
     UseMove(0),
     UseMove(0),
@@ -1515,7 +1515,7 @@ test "transition_mega_vs_switch_damages_newly_switched_target" {
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
   let opp_team = [opp_0, opp_1]
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -1548,7 +1548,7 @@ test "transition_mega_vs_switch_damages_newly_switched_target" {
     field_turns_left: 0,
     turn: 0,
   }
-  let next = transition(state, Mega(0), Switch(1), [me], opp_team)
+  let next = @payoff.transition(state, Mega(0), Switch(1), [me], opp_team)
   @debug.assert_eq(next.opp_active, 1)
   // Outgoing opp slot untouched, incoming slot took the mega-boosted hit.
   @debug.assert_eq(next.opp_hps[0], 500)
@@ -1571,7 +1571,7 @@ test "transition_simultaneous_mega_both_sides_flips_both" {
     mega_form=Some(mk_mega_form(atk=200)),
   )
   let state = mk_mega_state_1v1(my_hp=500, opp_hp=500)
-  let next = transition(state, Mega(0), Mega(0), [me], [opp])
+  let next = @payoff.transition(state, Mega(0), Mega(0), [me], [opp])
   @debug.assert_eq(next.my_mega_used, true)
   @debug.assert_eq(next.opp_mega_used, true)
   @debug.assert_eq(next.my_megaed[0], true)
@@ -1596,7 +1596,7 @@ test "mega_persists_after_switch_out_and_back_in" {
     mk_pokemon("B", "ノーマル", "", 500, 100, 100, 100, 100, 50),
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100],
@@ -1630,10 +1630,10 @@ test "mega_persists_after_switch_out_and_back_in" {
     turn: 0,
   }
   // Turn 1: mega slot 0.
-  let after_mega = transition(state, Mega(0), UseMove(0), [me_0, me_1], [opp])
+  let after_mega = @payoff.transition(state, Mega(0), UseMove(0), [me_0, me_1], [opp])
   @debug.assert_eq(after_mega.my_megaed[0], true)
   // Turn 2: switch to slot 1.
-  let after_switch_out = transition(
+  let after_switch_out = @payoff.transition(
     after_mega,
     Switch(1),
     UseMove(0),
@@ -1644,7 +1644,7 @@ test "mega_persists_after_switch_out_and_back_in" {
   // Slot 0's mega flag must still be set.
   @debug.assert_eq(after_switch_out.my_megaed[0], true)
   // Turn 3: switch back to slot 0.
-  let after_switch_back = transition(
+  let after_switch_back = @payoff.transition(
     after_switch_out,
     Switch(0),
     UseMove(0),
@@ -1672,7 +1672,7 @@ test "alive_actions_no_mega_for_second_pokemon_after_first_mega" {
     ),
   ]
   let hps = [100, 100]
-  let actions = alive_actions(1, hps, team, true)
+  let actions = @payoff.alive_actions(1, hps, team, true)
   let mut megas = 0
   for a in actions {
     match a {
@@ -1697,7 +1697,7 @@ test "non_mega_game_regression_preserves_existing_winrate" {
     mk_pokemon("B0", "ノーマル", "", 100, 80, 80, 60, 80, 80),
     [mk_move("mv", "ノーマル", @model.Physical, 40)],
   )
-  let v = switching_game_winrate([strong], [weak], 2)
+  let v = @payoff.switching_game_winrate([strong], [weak], 2)
   assert_true(v > 0.0)
 }
 
@@ -1714,9 +1714,9 @@ test "damage_cache_distinguishes_mega_vs_base" {
     mk_pokemon("B", "ノーマル", "", 500, 100, 100, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 80)],
   )
-  let cache = new_damage_cache()
+  let cache = @payoff.new_damage_cache()
   let ranks = [0, 0, 0, 0, 0]
-  let d_base = mean_damage_cached(
+  let d_base = @payoff.mean_damage_cached(
     cache,
     true,
     0,
@@ -1729,7 +1729,7 @@ test "damage_cache_distinguishes_mega_vs_base" {
     atk_mega=false,
     def_mega=false,
   )
-  let d_mega = mean_damage_cached(
+  let d_mega = @payoff.mean_damage_cached(
     cache,
     true,
     0,
@@ -1746,7 +1746,7 @@ test "damage_cache_distinguishes_mega_vs_base" {
   @debug.assert_eq(cache.hits, 0)
   assert_true(d_mega > d_base)
   // Hit on repeated lookup confirms the cache reuses the new mega key.
-  let d_mega_again = mean_damage_cached(
+  let d_mega_again = @payoff.mean_damage_cached(
     cache,
     true,
     0,
@@ -1774,15 +1774,15 @@ test "damage_cache_distinguishes_mega_vs_base" {
 /// αβ / saddle short-circuits; any change to action enumeration, transition
 /// resolution, or caching must be mirrored here.
 fn value_no_prune(
-  state : SwitchingGameState,
-  my_team : Array[Combatant],
-  opp_team : Array[Combatant],
+  state : @payoff.SwitchingGameState,
+  my_team : Array[@payoff.Combatant],
+  opp_team : Array[@payoff.Combatant],
   turn_limit : Int,
-  cache : @hashmap.HashMap[SwitchingGameState, Double],
-  stats : ValueStats,
-  dmg_cache : DamageCache,
+  cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double],
+  stats : @payoff.ValueStats,
+  dmg_cache : @payoff.DamageCache,
 ) -> Double {
-  match terminal_value(state, my_team, opp_team, turn_limit) {
+  match @payoff.terminal_value(state, my_team, opp_team, turn_limit) {
     Some(v) => return v
     None => ()
   }
@@ -1793,13 +1793,13 @@ fn value_no_prune(
     }
     None => stats.misses = stats.misses + 1
   }
-  let actions_me = alive_actions(
+  let actions_me = @payoff.alive_actions(
     state.my_active,
     state.my_hps,
     my_team,
     state.my_mega_used,
   )
-  let actions_opp = alive_actions(
+  let actions_opp = @payoff.alive_actions(
     state.opp_active,
     state.opp_hps,
     opp_team,
@@ -1817,7 +1817,7 @@ fn value_no_prune(
   }
   for i in 0..<actions_me.length() {
     for j in 0..<actions_opp.length() {
-      let outcomes = transition_with_cache(
+      let outcomes = @payoff.transition_with_cache(
         state,
         actions_me[i],
         actions_opp[j],
@@ -1852,10 +1852,10 @@ fn value_no_prune(
 ///|
 /// Top-level entry point for the no-pruning reference implementation.
 fn switching_game_winrate_no_prune(
-  my_team : Array[Combatant],
-  opp_team : Array[Combatant],
+  my_team : Array[@payoff.Combatant],
+  opp_team : Array[@payoff.Combatant],
   turn_limit : Int,
-) -> (Double, ValueStats) {
+) -> (Double, @payoff.ValueStats) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
   for i in 0..<my_team.length() {
@@ -1866,7 +1866,7 @@ fn switching_game_winrate_no_prune(
   }
   let my_megaed = Array::make(my_team.length(), false)
   let opp_megaed = Array::make(opp_team.length(), false)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps,
@@ -1877,8 +1877,8 @@ fn switching_game_winrate_no_prune(
     opp_mega_used: false,
     my_megaed,
     opp_megaed,
-    my_status: zero_status(my_team.length()),
-    opp_status: zero_status(opp_team.length()),
+    my_status: @payoff.zero_status(my_team.length()),
+    opp_status: @payoff.zero_status(opp_team.length()),
     my_must_recharge: Array::make(my_team.length(), false),
     opp_must_recharge: Array::make(opp_team.length(), false),
     my_item_consumed: Array::make(my_team.length(), false),
@@ -1893,15 +1893,15 @@ fn switching_game_winrate_no_prune(
     my_protean_locked: Array::make(my_team.length(), ""),
     opp_leech_seeded: Array::make(opp_team.length(), false),
     opp_protean_locked: Array::make(opp_team.length(), ""),
-    my_wish_turns: no_wish_pending(my_team.length()),
-    opp_wish_turns: no_wish_pending(opp_team.length()),
+    my_wish_turns: @payoff.no_wish_pending(my_team.length()),
+    opp_wish_turns: @payoff.no_wish_pending(opp_team.length()),
     field: @model.Field::None,
     field_turns_left: 0,
     turn: 0,
   }
-  let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
-  let stats = new_stats()
-  let dmg_cache = new_damage_cache()
+  let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
+  let stats = @payoff.new_stats()
+  let dmg_cache = @payoff.new_damage_cache()
   let v = value_no_prune(
     state, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
   )
@@ -1921,7 +1921,7 @@ test "alpha_beta_returns_same_value_as_no_pruning_minimal_1v1" {
     mk_pokemon("B", "ノーマル", "", 100, 120, 100, 100, 100, 100),
     [mk_move("slash", "ノーマル", @model.Physical, 70)],
   )
-  let v_prune = switching_game_winrate([a], [b], 2)
+  let v_prune = @payoff.switching_game_winrate([a], [b], 2)
   let (v_no_prune, _) = switching_game_winrate_no_prune([a], [b], 2)
   assert_true((v_prune - v_no_prune).abs() < 1.0e-12)
 }
@@ -1948,7 +1948,7 @@ test "alpha_beta_returns_same_value_as_no_pruning_with_switch" {
     mk_pokemon("B1", "ノーマル", "", 130, 100, 100, 100, 100, 110),
     [mk_move("swift", "ノーマル", @model.Physical, 65)],
   )
-  let v_prune = switching_game_winrate([a0, a1], [b0, b1], 1)
+  let v_prune = @payoff.switching_game_winrate([a0, a1], [b0, b1], 1)
   let (v_no_prune, _) = switching_game_winrate_no_prune([a0, a1], [b0, b1], 1)
   assert_true((v_prune - v_no_prune).abs() < 1.0e-12)
 }
@@ -1959,7 +1959,7 @@ test "alpha_beta_returns_same_value_as_no_pruning_mirror_match" {
     mk_pokemon("A", "ノーマル", "", 120, 120, 120, 100, 100, 100),
     [mk_move("mv", "ノーマル", @model.Physical, 60)],
   )
-  let v_prune = switching_game_winrate([a], [a], 2)
+  let v_prune = @payoff.switching_game_winrate([a], [a], 2)
   let (v_no_prune, _) = switching_game_winrate_no_prune([a], [a], 2)
   assert_true((v_prune - v_no_prune).abs() < 1.0e-12)
   assert_true(v_prune.abs() < 1.0e-9)
@@ -1975,7 +1975,7 @@ test "alpha_beta_reduces_or_matches_miss_count" {
     mk_pokemon("W0", "ノーマル", "", 50, 50, 50, 50, 50, 30),
     [mk_move("weak", "ノーマル", @model.Physical, 10)],
   )
-  let (_, stats_prune, _) = switching_game_winrate_stats(
+  let (_, stats_prune, _) = @payoff.switching_game_winrate_stats(
     [strong, strong],
     [weak, weak],
     1,
@@ -1994,7 +1994,7 @@ test "value_accepts_explicit_alpha_beta_and_matches_default" {
   // same result as omitting them. Locks in the default-arg contract so a
   // future change to the defaults won't silently alter caller semantics.
   let team = build_dummy_team(2, 100)
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100, 100],
@@ -2027,14 +2027,14 @@ test "value_accepts_explicit_alpha_beta_and_matches_default" {
     field_turns_left: 0,
     turn: 0,
   }
-  let cache1 : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
-  let cache2 : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
-  let dmg1 = new_damage_cache()
-  let dmg2 = new_damage_cache()
-  let s1 = new_stats()
-  let s2 = new_stats()
-  let v1 = value(state, team, team, 2, cache1, s1, dmg1)
-  let v2 = value(state, team, team, 2, cache2, s2, dmg2, alpha=-1.0, beta=1.0)
+  let cache1 : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
+  let cache2 : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
+  let dmg1 = @payoff.new_damage_cache()
+  let dmg2 = @payoff.new_damage_cache()
+  let s1 = @payoff.new_stats()
+  let s2 = @payoff.new_stats()
+  let v1 = @payoff.value(state, team, team, 2, cache1, s1, dmg1)
+  let v2 = @payoff.value(state, team, team, 2, cache2, s2, dmg2, alpha=-1.0, beta=1.0)
   assert_true((v1 - v2).abs() < 1.0e-12)
 }
 
@@ -2062,7 +2062,7 @@ test "switching_game_turn_limit_3_produces_finite_value_on_multi_pokemon_team" {
     mk_pokemon("B1", "くさ", "", 120, 130, 100, 130, 100, 130),
     [mk_move("leaf", "くさ", @model.Special, 80)],
   )
-  let v = switching_game_winrate([a0, a1], [b0, b1], 2)
+  let v = @payoff.switching_game_winrate([a0, a1], [b0, b1], 2)
   assert_true(v >= -1.0 && v <= 1.0)
   assert_true(!v.is_nan())
   assert_true(!v.is_inf())
@@ -2091,7 +2091,7 @@ test "state_space_2v2_default_turn_limit_bounded" {
     mk_pokemon("B1", "ノーマル", "", 200, 100, 100, 100, 100, 90),
     [mk_move("tackle", "ノーマル", @model.Physical, 30)],
   )
-  let (v, stats, dmg) = switching_game_winrate_stats(
+  let (v, stats, dmg) = @payoff.switching_game_winrate_stats(
     [a0, a1],
     [b0, b1],
     @payoff.DP_TURN_LIMIT,
@@ -2116,7 +2116,7 @@ test "state_space_3v3_turn_limit_5_bounded" {
     hp : Int,
     atk : Int,
     spe : Int,
-  ) -> Combatant {
+  ) -> @payoff.Combatant {
     mk_combatant(mk_pokemon(name, t1, "", hp, atk, 100, atk, 100, spe), [
       mk_move("m", t1, @model.Physical, 30),
     ])
@@ -2131,7 +2131,7 @@ test "state_space_3v3_turn_limit_5_bounded" {
     mk("B1", "じめん", 150, 100, 95),
     mk("B2", "ノーマル", 150, 100, 105),
   ]
-  let (v, stats, _) = switching_game_winrate_stats(team_a, team_b, 5)
+  let (v, stats, _) = @payoff.switching_game_winrate_stats(team_a, team_b, 5)
   println(
     "3v3 tl=5: value=\{v}, cached_states=\{stats.cached_states}, hits=\{stats.hits}, misses=\{stats.misses}",
   )
@@ -2159,7 +2159,7 @@ test "Amaeru lowers opp Atk -2 this turn, slower physical damage reduced" {
     mk_pokemon("B", "ノーマル", "", 200, 180, 100, 100, 100, 50),
     [mk_move("tackle", "ノーマル", @model.Physical, 80)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [200],
@@ -2192,9 +2192,9 @@ test "Amaeru lowers opp Atk -2 this turn, slower physical damage reduced" {
     field_turns_left: 0,
     turn: 0,
   }
-  let ns_amaeru = transition(state, UseMove(0), UseMove(0), [fast], [slow])
+  let ns_amaeru = @payoff.transition(state, UseMove(0), UseMove(0), [fast], [slow])
   let damage_with_amaeru = 200 - ns_amaeru.my_hps[0]
-  let ns_filler = transition(state, UseMove(1), UseMove(0), [fast], [slow])
+  let ns_filler = @payoff.transition(state, UseMove(1), UseMove(0), [fast], [slow])
   let damage_without = 200 - ns_filler.my_hps[0]
   assert_true(damage_without > 0)
   assert_true(damage_with_amaeru < damage_without)
@@ -2223,7 +2223,7 @@ test "recoil 1/2 subtracts half of damage from attacker HP" {
     mk_pokemon("B", "ノーマル", "", 200, 100, 100, 100, 100, 60),
     [mk_move("tackle", "ノーマル", @model.Physical, 40)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [200],
@@ -2256,7 +2256,7 @@ test "recoil 1/2 subtracts half of damage from attacker HP" {
     field_turns_left: 0,
     turn: 0,
   }
-  let ns = transition(state, UseMove(0), UseMove(0), [attacker], [defender])
+  let ns = @payoff.transition(state, UseMove(0), UseMove(0), [attacker], [defender])
   let dmg_dealt = 200 - ns.opp_hps[0]
   // Recoil is max(1, dmg/2), so attacker HP drop should equal dmg/2 plus any
   // non-recoil losses (defender uses Tackle which DOES hit — pin numeric
@@ -2281,7 +2281,7 @@ test "self_ko zeroes attacker HP even when hitting Ghost (dmg=0)" {
     mk_pokemon("Ghost", "ゴースト", "", 200, 100, 100, 100, 100, 50),
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -2314,7 +2314,7 @@ test "self_ko zeroes attacker HP even when hitting Ghost (dmg=0)" {
     field_turns_left: 0,
     turn: 0,
   }
-  let ns = transition(state, UseMove(0), UseMove(0), [attacker], [ghost])
+  let ns = @payoff.transition(state, UseMove(0), UseMove(0), [attacker], [ghost])
   // Ghost ist immune to the Normal-type self-destruct, so defender HP untouched.
   @debug.assert_eq(ns.opp_hps[0], 200)
   // Attacker fainted from self_ko regardless of the 0-damage hit.
@@ -2335,7 +2335,7 @@ test "recharge move forces attacker skip on the turn after the hit lands" {
     mk_pokemon("B", "ノーマル", "", 300, 100, 100, 100, 100, 60),
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
-  let s0 : SwitchingGameState = {
+  let s0 : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [200],
@@ -2368,13 +2368,13 @@ test "recharge move forces attacker skip on the turn after the hit lands" {
     field_turns_left: 0,
     turn: 0,
   }
-  let outs1 = attempt_turn_with_cache(
+  let outs1 = @payoff.attempt_turn_with_cache(
     s0,
     UseMove(0),
     UseMove(0),
     [me],
     [opp],
-    new_damage_cache(),
+    @payoff.new_damage_cache(),
   )
   @debug.assert_eq(outs1.length(), 1)
   let (_, s1) = outs1[0]
@@ -2385,13 +2385,13 @@ test "recharge move forces attacker skip on the turn after the hit lands" {
   // into turn 2.
   @debug.assert_eq(s1.my_must_recharge[0], true)
   let hp_before_turn2 = s1.opp_hps[0]
-  let outs2 = attempt_turn_with_cache(
+  let outs2 = @payoff.attempt_turn_with_cache(
     s1,
     UseMove(0),
     UseMove(0),
     [me],
     [opp],
-    new_damage_cache(),
+    @payoff.new_damage_cache(),
   )
   @debug.assert_eq(outs2.length(), 1)
   let (_, s2) = outs2[0]
@@ -2416,7 +2416,7 @@ test "must_recharge forces attacker UseMove to skip and clears after one turn" {
     mk_pokemon("B", "ノーマル", "", 200, 100, 100, 100, 100, 50),
     [mk_move("idle", "ノーマル", @model.Status, 0)],
   )
-  let state : SwitchingGameState = {
+  let state : @payoff.SwitchingGameState = {
     my_active: 0,
     opp_active: 0,
     my_hps: [100],
@@ -2449,13 +2449,13 @@ test "must_recharge forces attacker UseMove to skip and clears after one turn" {
     field_turns_left: 0,
     turn: 0,
   }
-  let outs = attempt_turn_with_cache(
+  let outs = @payoff.attempt_turn_with_cache(
     state,
     UseMove(0),
     UseMove(0),
     [me],
     [opp],
-    new_damage_cache(),
+    @payoff.new_damage_cache(),
   )
   // Deterministic: no accuracy/status fan-out from either side.
   @debug.assert_eq(outs.length(), 1)

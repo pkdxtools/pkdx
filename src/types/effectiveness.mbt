@@ -7,6 +7,9 @@ pub(all) struct CoverageResult {
 } derive(Debug)
 
 ///|
+pub extend CoverageResult with Debug::{to_repr}
+
+///|
 /// Calculate offensive coverage for a set of attack types.
 /// Returns which defending types are hit for at least neutral (>=1x) damage.
 pub fn calc_coverage(attack_types : Array[PokemonType]) -> CoverageResult {

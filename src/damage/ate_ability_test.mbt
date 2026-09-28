@@ -29,7 +29,7 @@ test "ate skin: フェアリースキン on ハイパーボイス matches Showdo
     def_nature=Some(neutral_nature()),
     is_double=true,
   )
-  let r = calc_damage(inp)
+  let r = @damage.calc_damage(inp)
   assert_true(!r.is_immune)
   @debug.debug_inspect(r.min_damage, content="138")
   @debug.debug_inspect(r.max_damage, content="164")
@@ -64,7 +64,7 @@ test "ate skin: フェアリースキン crit on ハイパーボイス matches S
     is_double=true,
     critical=true,
   )
-  let r = calc_damage(inp)
+  let r = @damage.calc_damage(inp)
   @debug.debug_inspect(r.min_damage, content="206")
   @debug.debug_inspect(r.max_damage, content="246")
   @debug.debug_inspect(
@@ -102,8 +102,8 @@ test "ate skin: type override drops Normal STAB but adds new-type STAB if matche
     atk_nature=Some(neutral_nature()),
     def_nature=Some(neutral_nature()),
   )
-  let r_skin = calc_damage(inp_skin)
-  let r_no = calc_damage(inp_no_skin)
+  let r_skin = @damage.calc_damage(inp_skin)
+  let r_no = @damage.calc_damage(inp_no_skin)
   // skin: Fairy STAB 1.5x AND power 1.2x → both apply on top of no-skin Normal.
   // Mathematically the ratio is 1.5 * 1.2 = 1.8.
   assert_true(r_skin.max_damage * 10 >= r_no.max_damage * 17)

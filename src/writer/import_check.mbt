@@ -27,6 +27,12 @@ pub(all) enum ImportCheckResult {
 } derive(Debug, Eq)
 
 ///|
+pub extend ImportCheckResult with Debug::{to_repr}
+
+///|
+pub extend ImportCheckResult with Eq::{not_equal, equal}
+
+///|
 pub fn import_check_result_to_json(r : ImportCheckResult) -> Json {
   match r {
     Skip(path) => { "status": "skip", "matched_file": path.to_json() }
@@ -76,6 +82,12 @@ pub(all) struct PokemonTuple {
 } derive(Debug, Eq)
 
 ///|
+pub extend PokemonTuple with Debug::{to_repr}
+
+///|
+pub extend PokemonTuple with Eq::{not_equal, equal}
+
+///|
 /// Team cache JSON から比較用タプルを抽出
 pub fn extract_team_tuple(json : Json) -> TeamTuple {
   let battle_format = json_str_at(json, ["battle_format"])
@@ -109,12 +121,24 @@ pub(all) struct TeamTuple {
 } derive(Debug, Eq)
 
 ///|
+pub extend TeamTuple with Debug::{to_repr}
+
+///|
+pub extend TeamTuple with Eq::{not_equal, equal}
+
+///|
 pub(all) struct TeamMemberTuple {
   name : String
   ability : String
   item : String
   moves : Array[String]
 } derive(Debug, Eq)
+
+///|
+pub extend TeamMemberTuple with Debug::{to_repr}
+
+///|
+pub extend TeamMemberTuple with Eq::{not_equal, equal}
 
 ///|
 /// Pokemon タプル差分を検出。一致なら空配列、差分あればフィールド名列挙

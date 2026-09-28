@@ -35,8 +35,8 @@ test "libero: grants ~1.5x STAB on a non-matching move type" {
     atk_nature=Some(neutral_nature()),
     def_nature=Some(neutral_nature()),
   )
-  let r_no = calc_damage(inp_no)
-  let r_libero = calc_damage(inp_libero)
+  let r_no = @damage.calc_damage(inp_no)
+  let r_libero = @damage.calc_damage(inp_libero)
   assert_true(r_libero.max_damage > r_no.max_damage)
   // 1.5x with 4096 rounding → bound to [1.4, 1.6] to absorb mid-pipeline rounding.
   assert_true(r_libero.max_damage * 10 >= r_no.max_damage * 14)
@@ -49,7 +49,7 @@ test "protean == libero (identical damage)" {
   let atk = mk_pokemon_typed("atk", "みず", "", 100, 100, 100, 120, 100, 100)
   let dfn = mk_pokemon_typed("dfn", "ノーマル", "", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("でんき技", "でんき", @model.Special, 90)
-  let r_protean = calc_damage(
+  let r_protean = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -59,7 +59,7 @@ test "protean == libero (identical damage)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero = calc_damage(
+  let r_libero = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -82,7 +82,7 @@ test "libero: suppressed under Terastallization (no extra STAB)" {
   let atk = mk_pokemon_typed("atk", "みず", "", 100, 100, 100, 120, 100, 100)
   let dfn = mk_pokemon_typed("dfn", "ノーマル", "", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("でんき技", "でんき", @model.Special, 90)
-  let r_libero_tera = calc_damage(
+  let r_libero_tera = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -93,7 +93,7 @@ test "libero: suppressed under Terastallization (no extra STAB)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_noability_tera = calc_damage(
+  let r_noability_tera = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -103,7 +103,7 @@ test "libero: suppressed under Terastallization (no extra STAB)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero_notera = calc_damage(
+  let r_libero_notera = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -128,7 +128,7 @@ test "libero: no double-count when move already matches user type" {
   let atk = mk_pokemon_typed("atk", "みず", "", 100, 100, 100, 120, 100, 100)
   let dfn = mk_pokemon_typed("dfn", "ノーマル", "", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("みず技", "みず", @model.Special, 90)
-  let r_no = calc_damage(
+  let r_no = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -137,7 +137,7 @@ test "libero: no double-count when move already matches user type" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero = calc_damage(
+  let r_libero = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -161,7 +161,7 @@ test "libero: no STAB once already activated this switch-in (consumed)" {
   let atk = mk_pokemon_typed("atk", "みず", "", 100, 100, 100, 120, 100, 100)
   let dfn = mk_pokemon_typed("dfn", "ノーマル", "", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("でんき技", "でんき", @model.Special, 90)
-  let r_no = calc_damage(
+  let r_no = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -170,7 +170,7 @@ test "libero: no STAB once already activated this switch-in (consumed)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero_first = calc_damage(
+  let r_libero_first = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -180,7 +180,7 @@ test "libero: no STAB once already activated this switch-in (consumed)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero_consumed = calc_damage(
+  let r_libero_consumed = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -210,7 +210,7 @@ test "protean/libero: does NOT activate on a status move (no auto-STAB leak)" {
   let dfn = mk_pokemon_typed("dfn", "ノーマル", "", 100, 80, 80, 80, 80, 80)
   // でんき変化技: 使用者タイプ みず とも防御 ノーマル とも非一致。
   let mv = mk_move("でんき変化技", "でんき", @model.Status, 0)
-  let r_no = calc_damage(
+  let r_no = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -219,7 +219,7 @@ test "protean/libero: does NOT activate on a status move (no auto-STAB leak)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero = calc_damage(
+  let r_libero = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -229,7 +229,7 @@ test "protean/libero: does NOT activate on a status move (no auto-STAB leak)" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_protean = calc_damage(
+  let r_protean = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -253,7 +253,7 @@ test "protean: consumed state matches libero consumed state" {
   let atk = mk_pokemon_typed("atk", "みず", "", 100, 100, 100, 120, 100, 100)
   let dfn = mk_pokemon_typed("dfn", "ノーマル", "", 100, 80, 80, 80, 80, 80)
   let mv = mk_move("でんき技", "でんき", @model.Special, 90)
-  let r_protean_consumed = calc_damage(
+  let r_protean_consumed = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,
@@ -264,7 +264,7 @@ test "protean: consumed state matches libero consumed state" {
       def_nature=Some(neutral_nature()),
     ),
   )
-  let r_libero_consumed = calc_damage(
+  let r_libero_consumed = @damage.calc_damage(
     mk_damage_input(
       atk,
       dfn,

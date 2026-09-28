@@ -20,7 +20,7 @@
 
 ///|
 test "field F-1: Electric + でんき + attacker grounded → 5325 (1.3x)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Electric,
     "10まんボルト",
     "でんき",
@@ -32,7 +32,7 @@ test "field F-1: Electric + でんき + attacker grounded → 5325 (1.3x)" {
 
 ///|
 test "field F-1: Grassy + くさ + attacker grounded → 5325 (1.3x)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Grassy,
     "リーフブレード",
     "くさ",
@@ -44,7 +44,7 @@ test "field F-1: Grassy + くさ + attacker grounded → 5325 (1.3x)" {
 
 ///|
 test "field F-1: Psychic + エスパー + attacker grounded → 5325 (1.3x)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Psychic,
     "サイコキネシス",
     "エスパー",
@@ -56,7 +56,7 @@ test "field F-1: Psychic + エスパー + attacker grounded → 5325 (1.3x)" {
 
 ///|
 test "field F-1: Electric + でんき + attacker NOT grounded → 0 (no boost)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Electric,
     "10まんボルト",
     "でんき",
@@ -70,7 +70,7 @@ test "field F-1: Electric + でんき + attacker NOT grounded → 0 (no boost)" 
 
 ///|
 test "field F-1: Grassy + じしん + defender grounded → 2048 (0.5x)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Grassy,
     "じしん",
     "じめん",
@@ -82,7 +82,7 @@ test "field F-1: Grassy + じしん + defender grounded → 2048 (0.5x)" {
 
 ///|
 test "field F-1: Grassy + マグニチュード + defender grounded → 2048" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Grassy,
     "マグニチュード",
     "じめん",
@@ -94,7 +94,7 @@ test "field F-1: Grassy + マグニチュード + defender grounded → 2048" {
 
 ///|
 test "field F-1: Grassy + じならし + defender grounded → 2048" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Grassy,
     "じならし",
     "じめん",
@@ -106,7 +106,7 @@ test "field F-1: Grassy + じならし + defender grounded → 2048" {
 
 ///|
 test "field F-1: Grassy + じしん + defender NOT grounded → 0 (no debuff)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Grassy,
     "じしん",
     "じめん",
@@ -118,7 +118,7 @@ test "field F-1: Grassy + じしん + defender NOT grounded → 0 (no debuff)" {
 
 ///|
 test "field F-1: Misty + ドラゴン + defender grounded → 2048 (0.5x)" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Misty,
     "りゅうのはどう",
     "ドラゴン",
@@ -130,7 +130,7 @@ test "field F-1: Misty + ドラゴン + defender grounded → 2048 (0.5x)" {
 
 ///|
 test "field F-1: Misty + ドラゴン + defender NOT grounded → 0" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Misty,
     "りゅうのはどう",
     "ドラゴン",
@@ -146,7 +146,7 @@ test "field F-1: Misty + ドラゴン + defender NOT grounded → 0" {
 test "field F-1: Grassy + ground move other than EQ/Mag/Bull → 0" {
   // Gen 9: Grassy debuff is restricted to じしん/マグニチュード/じならし.
   // Other ground moves (e.g. あなをほる) are not weakened.
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Grassy,
     "あなをほる",
     "じめん",
@@ -158,7 +158,7 @@ test "field F-1: Grassy + ground move other than EQ/Mag/Bull → 0" {
 
 ///|
 test "field F-1: Field::None always 0" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::None,
     "10まんボルト",
     "でんき",
@@ -170,7 +170,7 @@ test "field F-1: Field::None always 0" {
 
 ///|
 test "field F-1: Electric + non-electric move → 0" {
-  let mod_ = get_field_damage_mod(
+  let mod_ = @damage.get_field_damage_mod(
     @model.Field::Electric,
     "なみのり",
     "みず",
@@ -184,39 +184,39 @@ test "field F-1: Electric + non-electric move → 0" {
 
 ///|
 test "field F-1: is_grounded — plain normal type → true" {
-  assert_true(is_grounded(type1="ノーマル", type2="", ability="", item=""))
+  assert_true(@damage.is_grounded(type1="ノーマル", type2="", ability="", item=""))
 }
 
 ///|
 test "field F-1: is_grounded — Flying type1 → false" {
-  assert_false(is_grounded(type1="ひこう", type2="", ability="", item=""))
+  assert_false(@damage.is_grounded(type1="ひこう", type2="", ability="", item=""))
 }
 
 ///|
 test "field F-1: is_grounded — Flying type2 → false" {
   assert_false(
-    is_grounded(type1="ノーマル", type2="ひこう", ability="", item=""),
+    @damage.is_grounded(type1="ノーマル", type2="ひこう", ability="", item=""),
   )
 }
 
 ///|
 test "field F-1: is_grounded — Levitate (ふゆう) ability → false" {
   assert_false(
-    is_grounded(type1="ノーマル", type2="", ability="ふゆう", item=""),
+    @damage.is_grounded(type1="ノーマル", type2="", ability="ふゆう", item=""),
   )
 }
 
 ///|
 test "field F-1: is_grounded — Air Balloon (ふうせん) item → false" {
   assert_false(
-    is_grounded(type1="ノーマル", type2="", ability="", item="ふうせん"),
+    @damage.is_grounded(type1="ノーマル", type2="", ability="", item="ふうせん"),
   )
 }
 
 ///|
 test "field F-1: is_grounded — combined (Flying + Pressure + Leftovers) → false" {
   assert_false(
-    is_grounded(
+    @damage.is_grounded(
       type1="ひこう",
       type2="",
       ability="プレッシャー",

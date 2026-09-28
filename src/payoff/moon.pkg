@@ -12,7 +12,7 @@ import {
   "moonbitlang/core/random" @random,
   "moonbitlang/core/string" @string,
   "moonbitlang/core/hashmap" @hashmap,
-  "moonbitlang/x/sys" @sys,
+  "moonbitlang/core/env",
   "moonbitlang/core/debug" @debug,
 }
 

@@ -7,6 +7,12 @@ pub(all) enum BattleFormat {
 } derive(Debug, Eq)
 
 ///|
+pub extend BattleFormat with Debug::{to_repr}
+
+///|
+pub extend BattleFormat with Eq::{not_equal, equal}
+
+///|
 fn pick_count(format : BattleFormat) -> Int {
   match format {
     Single => 3

@@ -5,6 +5,9 @@ pub enum OutputFormat {
 } derive(Debug)
 
 ///|
+pub extend OutputFormat with Debug::{to_repr}
+
+///|
 /// Normalize the user-supplied CLI args (i.e. `argv` minus the program name)
 /// into the form admiral expects, preserving the legacy entry points that the
 /// hand-rolled parser used to handle:

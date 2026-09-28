@@ -1,6 +1,6 @@
 ///|
 test "nproc returns at least 1" {
-  let n = nproc()
+  let n = @process.nproc()
   assert_true(n >= 1)
 }
 
@@ -10,7 +10,7 @@ test "self_exec_path returns Some when the process is launched normally" {
   // moonbit-run helper). Either way the OS call should succeed.
   // We only assert presence + non-empty path; the exact suffix differs
   // between macOS / Linux / Windows.
-  let path = self_exec_path()
+  let path = @process.self_exec_path()
   match path {
     Some(p) => assert_true(p.length() > 0)
     None => abort("self_exec_path returned None — OS lookup failed")
@@ -19,8 +19,8 @@ test "self_exec_path returns Some when the process is launched normally" {
 
 ///|
 test "mkstemp_file creates a unique writable temp file" {
-  let p1 = mkstemp_file("pkdx_process_test")
-  let p2 = mkstemp_file("pkdx_process_test")
+  let p1 = @process.mkstemp_file("pkdx_process_test")
+  let p2 = @process.mkstemp_file("pkdx_process_test")
   match (p1, p2) {
     (Some(a), Some(b)) => {
       assert_true(a.length() > 0)

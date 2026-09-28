@@ -19,6 +19,12 @@ pub(all) struct HitStep {
 } derive(Debug, Eq)
 
 ///|
+pub extend HitStep with Debug::{to_repr}
+
+///|
+pub extend HitStep with Eq::{not_equal, equal}
+
+///|
 /// A probabilistic outcome of a multi-hit move. `probability` is the chance
 /// this variant materialises (Σ over a result's variants is 1.0 ± 1e-9).
 /// `hits.length() == hits_count` is the number of hits that connected in
@@ -40,6 +46,12 @@ pub(all) struct DamageVariant {
   max : Int
   ko_text : String
 } derive(Debug, Eq)
+
+///|
+pub extend DamageVariant with Debug::{to_repr}
+
+///|
+pub extend DamageVariant with Eq::{not_equal, equal}
 
 ///|
 pub(all) struct DamageCalcResult {
@@ -69,3 +81,6 @@ pub(all) struct DamageCalcResult {
   // are derived from the most-likely variant for backward compatibility.
   variants : Array[DamageVariant]
 } derive(Debug)
+
+///|
+pub extend DamageCalcResult with Debug::{to_repr}

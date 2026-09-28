@@ -10,6 +10,12 @@ pub(all) enum HpSnap {
 } derive(Debug, Eq)
 
 ///|
+pub extend HpSnap with Debug::{to_repr}
+
+///|
+pub extend HpSnap with Eq::{not_equal, equal}
+
+///|
 /// Check whether an HP actual value satisfies a snap constraint.
 pub fn matches_snap(hp : Int, snap : HpSnap) -> Bool {
   match snap {

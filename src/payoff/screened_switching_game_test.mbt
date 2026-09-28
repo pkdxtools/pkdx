@@ -4,7 +4,7 @@
 /// (team MC rollout, SwitchingGame value recursion) is covered elsewhere.
 
 ///|
-fn build_screen_team(label : String) -> Array[Combatant] {
+fn build_screen_team(label : String) -> Array[@payoff.Combatant] {
   let mv = mk_move("のしかかり", "ノーマル", @model.Physical, 85)
   let team = Array::make(
     4,
@@ -38,7 +38,7 @@ test "team_payoff_matrix_screened_bit_exact_when_keep_top_one" {
   // フォールスルーする。値・形状の両方で bit-exact 一致を要求する。
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
-  let (screened, rows, cols) = team_payoff_matrix_screened(
+  let (screened, rows, cols) = @payoff.team_payoff_matrix_screened(
     team,
     opp,
     Single,
@@ -48,7 +48,7 @@ test "team_payoff_matrix_screened_bit_exact_when_keep_top_one" {
     refine_turn_limit=1,
     mc_turn_limit=1,
   )
-  let oracle = team_payoff_matrix_with_team_model(
+  let oracle = @payoff.team_payoff_matrix_with_team_model(
     team,
     opp,
     Single,
@@ -78,7 +78,7 @@ test "team_payoff_matrix_screened_retained_count_matches_ceil_of_quantile" {
   let opp = build_screen_team("B")
   // 4 × C(3, 2) = 12 lead-aware selections on each side. keep_top = 0.5 →
   // ceil(12 * 0.5) = 6.
-  let (_, rows, cols) = team_payoff_matrix_screened(
+  let (_, rows, cols) = @payoff.team_payoff_matrix_screened(
     team,
     opp,
     Single,
@@ -96,7 +96,7 @@ test "team_payoff_matrix_screened_retained_count_matches_ceil_of_quantile" {
 test "team_payoff_matrix_screened_retained_indices_are_sorted_ascending" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
-  let (_, rows, cols) = team_payoff_matrix_screened(
+  let (_, rows, cols) = @payoff.team_payoff_matrix_screened(
     team,
     opp,
     Single,
@@ -118,7 +118,7 @@ test "team_payoff_matrix_screened_retained_indices_are_sorted_ascending" {
 test "team_payoff_matrix_screened_retained_count_is_monotonic_in_keep_top" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
-  let (_, rows_low, _) = team_payoff_matrix_screened(
+  let (_, rows_low, _) = @payoff.team_payoff_matrix_screened(
     team,
     opp,
     Single,
@@ -128,7 +128,7 @@ test "team_payoff_matrix_screened_retained_count_is_monotonic_in_keep_top" {
     refine_turn_limit=1,
     mc_turn_limit=1,
   )
-  let (_, rows_high, _) = team_payoff_matrix_screened(
+  let (_, rows_high, _) = @payoff.team_payoff_matrix_screened(
     team,
     opp,
     Single,
@@ -145,7 +145,7 @@ test "team_payoff_matrix_screened_retained_count_is_monotonic_in_keep_top" {
 test "team_payoff_matrix_screened_keeps_nash_weighted_rows" {
   let team = build_screen_team("A")
   let opp = build_screen_team("B")
-  let (_, retained_rows, _) = team_payoff_matrix_screened(
+  let (_, retained_rows, _) = @payoff.team_payoff_matrix_screened(
     team,
     opp,
     Single,
@@ -165,7 +165,7 @@ test "screen_nash_scores_preserves_support_that_mean_would_drop" {
   // Nash-weighted scoring assigns equal scores to all support rows (= game
   // value), so all 3 survive any quantile ≥ 1/3.
   let screen = [[0.9, -0.4, -0.4], [-0.2, 0.6, 0.0], [-0.2, 0.0, 0.6]]
-  let (row_scores, _) = screen_nash_scores(screen, 3, 3)
+  let (row_scores, _) = @payoff.screen_nash_scores(screen, 3, 3)
   let tol = 1.0e-4
   // All Nash-support rows must have equal score (= game value).
   assert_true((row_scores[0] - row_scores[1]).abs() < tol)

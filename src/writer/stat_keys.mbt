@@ -49,5 +49,5 @@ pub fn normalize_stats_to_short(value : Json) -> Json {
         }
     }
   }
-  out.to_json()
+  Json(out)
 }

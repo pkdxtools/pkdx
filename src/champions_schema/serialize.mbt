@@ -10,75 +10,75 @@
 ///|
 fn pokemon_to_json(e : PokemonEntry) -> Json {
   {
-    "id": e.id.to_json(),
-    "no": e.no.to_json(),
-    "globalNo": e.globalNo.to_json(),
-    "form": e.form.to_json(),
-    "name_jpn": e.name_jpn.to_json(),
-    "pokedex": e.pokedex.to_json(),
-    "type1": e.type1.to_json(),
-    "type2": e.type2.to_json(),
-    "hp": e.hp.to_json(),
-    "attack": e.attack.to_json(),
-    "defense": e.defense.to_json(),
-    "special_attack": e.special_attack.to_json(),
-    "special_defense": e.special_defense.to_json(),
-    "speed": e.speed.to_json(),
-    "ability1": e.ability1.to_json(),
-    "ability2": e.ability2.to_json(),
-    "dream_ability": e.dream_ability.to_json(),
+    "id": Json(e.id),
+    "no": Json(e.no),
+    "globalNo": Json(e.globalNo),
+    "form": Json(e.form),
+    "name_jpn": Json(e.name_jpn),
+    "pokedex": Json(e.pokedex),
+    "type1": Json(e.type1),
+    "type2": Json(e.type2),
+    "hp": Json(e.hp),
+    "attack": Json(e.attack),
+    "defense": Json(e.defense),
+    "special_attack": Json(e.special_attack),
+    "special_defense": Json(e.special_defense),
+    "speed": Json(e.speed),
+    "ability1": Json(e.ability1),
+    "ability2": Json(e.ability2),
+    "dream_ability": Json(e.dream_ability),
   }
 }
 
 ///|
 fn move_to_json(e : MoveEntry) -> Json {
   {
-    "waza": e.waza.to_json(),
-    "type": e.type_.to_json(),
-    "category": e.category.to_json(),
-    "pp": e.pp.to_json(),
-    "power": e.power.to_json(),
-    "accuracy": e.accuracy.to_json(),
-    "direct": e.direct.to_json(),
-    "target": e.target.to_json(),
+    "waza": Json(e.waza),
+    "type": Json(e.type_),
+    "category": Json(e.category),
+    "pp": Json(e.pp),
+    "power": Json(e.power),
+    "accuracy": Json(e.accuracy),
+    "direct": Json(e.direct),
+    "target": Json(e.target),
   }
 }
 
 ///|
 fn learnset_to_json(e : LearnsetEntry) -> Json {
   {
-    "id": e.id.to_json(),
-    "conditions": e.conditions.to_json(),
-    "waza": e.waza.to_json(),
+    "id": Json(e.id),
+    "conditions": Json(e.conditions),
+    "waza": Json(e.waza),
   }
 }
 
 ///|
 fn item_to_json(e : ItemEntry) -> Json {
   {
-    "name_ja": e.name_ja.to_json(),
-    "name_en": e.name_en.to_json(),
-    "category": e.category.to_json(),
-    "flavor": e.flavor.to_json(),
+    "name_ja": Json(e.name_ja),
+    "name_en": Json(e.name_en),
+    "category": Json(e.category),
+    "flavor": Json(e.flavor),
   }
 }
 
 ///|
 pub fn serialize_pokemon_entries(entries : Array[PokemonEntry]) -> Json {
-  entries.map(pokemon_to_json).to_json()
+  Json(entries.map(pokemon_to_json))
 }
 
 ///|
 pub fn serialize_move_entries(entries : Array[MoveEntry]) -> Json {
-  entries.map(move_to_json).to_json()
+  Json(entries.map(move_to_json))
 }
 
 ///|
 pub fn serialize_learnset_entries(entries : Array[LearnsetEntry]) -> Json {
-  entries.map(learnset_to_json).to_json()
+  Json(entries.map(learnset_to_json))
 }
 
 ///|
 pub fn serialize_item_entries(entries : Array[ItemEntry]) -> Json {
-  entries.map(item_to_json).to_json()
+  Json(entries.map(item_to_json))
 }

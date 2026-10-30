@@ -1617,6 +1617,58 @@ const VALUE_PRUNE_EPS : Double = 1.0e-12
 pub let silent_dp_fallback_count : Ref[Int] = { val: 0 }
 
 ///|
+/// Observational counters for `pkdx select-bench`.
+///
+/// Default `dp_profile_enabled = false`. While false, `value` and
+/// `screen_nash_scores` only read the flag; they do not change returned
+/// values, prune decisions, or which solver runs. While true, the counters
+/// below increment. Not thread-safe — same constraint as
+/// `silent_dp_fallback_count`. `dp_profile_nodes` counts cache misses
+/// (expanded DP nodes). `dp_profile_lp` counts `solve_zero_sum` calls inside
+/// `value` that returned `Optimal` (saddle / prune paths are not LPs).
+/// `dp_profile_screen_lp` counts the Phase B screening Nash solve.
+pub let dp_profile_enabled : Ref[Bool] = { val: false }
+
+///|
+pub let dp_profile_nodes : Ref[Int] = { val: 0 }
+
+///|
+pub let dp_profile_hits : Ref[Int] = { val: 0 }
+
+///|
+pub let dp_profile_lp : Ref[Int] = { val: 0 }
+
+///|
+pub let dp_profile_lp_fail : Ref[Int] = { val: 0 }
+
+///|
+pub let dp_profile_saddle : Ref[Int] = { val: 0 }
+
+///|
+pub let dp_profile_pruned : Ref[Int] = { val: 0 }
+
+///|
+pub let dp_profile_screen_lp : Ref[Int] = { val: 0 }
+
+///|
+pub fn dp_profile_reset() -> Unit {
+  dp_profile_nodes.val = 0
+  dp_profile_hits.val = 0
+  dp_profile_lp.val = 0
+  dp_profile_lp_fail.val = 0
+  dp_profile_saddle.val = 0
+  dp_profile_pruned.val = 0
+  dp_profile_screen_lp.val = 0
+}
+
+///|
+fn dp_profile_add(counter : Ref[Int]) -> Unit {
+  if dp_profile_enabled.val {
+    counter.val = counter.val + 1
+  }
+}
+
+///|
 /// Recursive Nash value of a `SwitchingGameState`. Solves a per-state zero-sum
 /// matrix whose cells are `value(next_state, ...)` for each action pair.
 /// Memoized by `cache` (state-value memo) and `dmg_cache` (damage-table memo);
@@ -1657,9 +1709,13 @@ pub fn value(
   match cache.get(state) {
     Some(v) => {
       stats.hits = stats.hits + 1
+      dp_profile_add(dp_profile_hits)
       return v
     }
-    None => stats.misses = stats.misses + 1
+    None => {
+      stats.misses = stats.misses + 1
+      dp_profile_add(dp_profile_nodes)
+    }
   }
   let actions_me = alive_actions(
     state.my_active,
@@ -1739,6 +1795,7 @@ pub fn value(
   if pruned_early {
     // Do NOT cache: the returned value is a lower bound, not the exact Nash.
     // A different caller with a wider β would miss the true value.
+    dp_profile_add(dp_profile_pruned)
     maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "pruned")
     return lower
   }
@@ -1763,6 +1820,7 @@ pub fn value(
   // caller with a tighter `α` would miss the true Nash. Symmetric to the
   // β-cutoff above (which returns `lower` as a valid lower bound).
   if upper <= alpha + VALUE_PRUNE_EPS {
+    dp_profile_add(dp_profile_pruned)
     maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "alpha_pruned")
     return upper
   }
@@ -1772,6 +1830,7 @@ pub fn value(
   if upper - lower <= VALUE_SADDLE_TOL {
     let saddle = (upper + lower) / 2.0
     cache.set(state, saddle)
+    dp_profile_add(dp_profile_saddle)
     maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "saddle")
     return saddle
   }
@@ -1782,12 +1841,19 @@ pub fn value(
   let lp = @nash.solve_zero_sum(m) catch {
     _ => {
       silent_dp_fallback_count.val = silent_dp_fallback_count.val + 1
+      dp_profile_add(dp_profile_lp_fail)
       return 0.0
     }
   }
   let result = match lp {
-    Optimal(value~, ..) => value
-    _ => 0.0
+    Optimal(value~, ..) => {
+      dp_profile_add(dp_profile_lp)
+      value
+    }
+    _ => {
+      dp_profile_add(dp_profile_lp_fail)
+      0.0
+    }
   }
   cache.set(state, result)
   maybe_emit_dp_node(stats, depth, rows, cols, total_outcomes, "nash")

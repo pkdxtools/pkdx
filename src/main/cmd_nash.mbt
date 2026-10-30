@@ -808,3 +808,91 @@ fn run_meta_divergence_cmd() -> Unit {
   }
   println(out)
 }
+
+///|
+/// `pkdx select-bench` — reproducible timings for the selection Nash
+/// pipeline. TSV on stdout. Solver results are the existing functions;
+/// this command only times them.
+fn cmd_select_bench() -> @admiral.CommandDef {
+  @admiral.command(
+    name="select-bench",
+    description="Benchmark select / Nash solvers (TSV on stdout). Fixed seeds. Does not change results.",
+    options=[
+      @admiral.string(
+        "tier",
+        description="smoke | default | full. Ignored when --case is set.",
+        default=Some("default"),
+      ),
+      @admiral.string(
+        "case",
+        description="Run one case id. Empty runs every case in --tier.",
+        default=Some(""),
+      ),
+      @admiral.int(
+        "repeats",
+        description="Override repeats. 0 keeps the per-case default.",
+        default=Some(0),
+      ),
+      @admiral.bool(
+        "list",
+        description="Print case ids for --tier and exit",
+      ),
+    ],
+    run=Some(fn(ctx) {
+      run_select_bench_cmd(
+        ctx_str(ctx, "tier"),
+        ctx_str(ctx, "case"),
+        ctx_int(ctx, "repeats"),
+        ctx.get_bool("list"),
+      )
+    }),
+  )
+}
+
+///|
+fn run_select_bench_cmd(
+  tier : String,
+  case_id : String,
+  repeats : Int,
+  list_only : Bool,
+) -> Unit {
+  if list_only {
+    let ids = @payoff.select_bench_case_ids(tier) catch {
+      err => {
+        exit_error(nash_cli_error_message(err))
+        return
+      }
+    }
+    for id in ids {
+      println(id)
+    }
+    return
+  }
+  if case_id.length() > 0 {
+    let row = @payoff.run_select_bench_case(case_id, repeats=repeats) catch {
+      err => {
+        exit_error(nash_cli_error_message(err))
+        return
+      }
+    }
+    println(@payoff.format_select_bench_tsv([row]))
+    return
+  }
+  let ids = @payoff.select_bench_case_ids(tier) catch {
+    err => {
+      exit_error(nash_cli_error_message(err))
+      return
+    }
+  }
+  let rows : Array[@payoff.SelectBenchRow] = []
+  for id in ids {
+    let row = @payoff.run_select_bench_case(id, repeats=repeats) catch {
+      err => {
+        exit_error(nash_cli_error_message(err))
+        return
+      }
+    }
+    rows.push(row)
+  }
+  println(@payoff.format_select_bench_tsv(rows))
+}

@@ -206,16 +206,16 @@ pub fn generate_placeholder(schema : @jsonschema.JsonSchema) -> Json {
   match schema {
     String(s) =>
       match s.enum_ {
-        Some(values) if values.length() > 0 => values[0].to_json()
-        _ => "".to_json()
+        Some(values) if values.length() > 0 => Json(values[0])
+        _ => Json("")
       }
-    Number(_) | Integer(_) => (0 : Int).to_json()
-    Boolean(_) => false.to_json()
+    Number(_) | Integer(_) => Json((0 : Int))
+    Boolean(_) => Json(false)
     Null(_) => Json::null()
     Any(_) => Json::null()
     Const(c) => c.value
     Enum(_) => Json::null()
-    Array(_) => ([] : Array[Json]).to_json()
+    Array(_) => Json(([] : Array[Json]))
     Object(obj) =>
       match obj.properties {
         Some(props) => {
@@ -223,7 +223,7 @@ pub fn generate_placeholder(schema : @jsonschema.JsonSchema) -> Json {
           props.each(fn(key, child_schema) {
             map.set(key, generate_placeholder(child_schema))
           })
-          map.to_json()
+          Json(map)
         }
         None => Json::object(Map([]))
       }

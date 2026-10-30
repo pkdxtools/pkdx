@@ -31,19 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install MoonBit (Unix)
-        if: runner.os != 'Windows'
+      - name: Install MoonBit
+        shell: bash
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
-
-      - name: Install MoonBit (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
-          echo "$env:USERPROFILE\.moon\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+          bash scripts/install_moon.sh
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            echo "$USERPROFILE/.moon/bin" >> "$GITHUB_PATH"
+          else
+            echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install BLAS (Linux)
         if: runner.os == 'Linux'
@@ -92,23 +88,6 @@ jobs:
           # Add OpenBLAS DLL dir to PATH for runtime resolution during moon test.
           Add-Content $env:GITHUB_PATH "C:\msys64\mingw64\bin"
 
-      - name: Patch MoonBit runtime for MinGW (Windows)
-        # moon 0.1.20260920 ships lib/runtime/env.c, which calls rand_s() on
-        # every non-MSVC Windows build. mingw-w64's <stdlib.h> only declares
-        # rand_s when _CRT_RAND_S is defined before the include, so the
-        # MinGW gcc pinned below fails with "implicit declaration of
-        # function 'rand_s'". env.c does define _CRT_RAND_S itself, but only
-        # after <stdlib.h> has already been pulled in, so it has no effect.
-        # Prepend the define as the very first line until upstream moves it.
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          f="$HOME/.moon/lib/runtime/env.c"
-          if [ "$(head -1 "$f")" != "#define _CRT_RAND_S" ]; then
-            printf '#define _CRT_RAND_S\n' | cat - "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-          fi
-          head -3 "$f"
-
       - name: Configure MoonBit compiler (Windows)
         # MoonBit's native backend reads MOON_CC for compiler override (NOT the
         # conventional CC); without it, auto-detection picks cl.exe (MSVC) on
@@ -126,10 +105,9 @@ jobs:
         run: echo "MOON_CC=C:/msys64/mingw64/bin/gcc.exe" >> "$GITHUB_ENV"
 
       - name: Build
-        run: |
-          moon update
-          bash scripts/configure_native_link_flags.sh
-          moon build --target native src/main
+        # moon_build_native.sh pins the post-update steps: migrate legacy
+        # mooncakes manifests, rewrite native link flags, then moon build.
+        run: bash scripts/moon_build_native.sh
         shell: bash
 
       - name: Test

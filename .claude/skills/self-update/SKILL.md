@@ -214,7 +214,7 @@ cd $REPO_ROOT && git commit --no-edit
 
 ### 1-4: バイナリ更新（GitHub Releases ダウンロード固定）
 
-**ソース差分の有無に関係なく必ず実行する**。GitHub Releases のアセット差し替え、ローカルバイナリ欠損、`moon.mod.json` との version drift 残留などをまとめてカバーするため、ユーザーへの選択肢提示は行わない。`./setup.sh` が以下を一括で行う:
+**ソース差分の有無に関係なく必ず実行する**。GitHub Releases のアセット差し替え、ローカルバイナリ欠損、`moon.mod` との version drift 残留などをまとめてカバーするため、ユーザーへの選択肢提示は行わない。`./setup.sh` が以下を一括で行う:
 
 - 古いバイナリキャッシュのクリア
 - GitHub Releases から最新 pkdx バイナリをダウンロード
@@ -230,7 +230,7 @@ cd $REPO_ROOT && ./setup.sh
 
 `pkdx migrate` は bookkeeping を持たない seed-script モデルで、全マイグレーションが冪等（UPDATE / INSERT OR REPLACE / existence-check / 自己所有テーブルの DELETE→再投入）として実装されているため、再適用しても DB は data.json の状態へ収束する。
 
-ローカル開発でビルド済みバイナリを使いたい場合は、`./setup.sh` を流した後に手動で `moon build --target native --release src/main` を打つ。
+ローカル開発でビルド済みバイナリを使いたい場合は、`./setup.sh` を流した後に手動で `bash scripts/moon_build_native.sh --release` を打つ。
 
 ### 1-5: 動作確認
 
@@ -241,7 +241,7 @@ $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
 
 `"version_drift":false` が出ればバイナリと repo の version が一致している。
 
-`true` の場合は、バイナリ側だけが新しい version を持ち、repo の `moon.mod.json` が
+`true` の場合は、バイナリ側だけが新しい version を持ち、repo の `moon.mod` が
 古い状態で取り残されている。これを放置すると SessionStart hook が毎セッション
 `version_drift_message` を注入し続けるため、以下の **drift 復旧フロー** を順に試す。
 
@@ -255,12 +255,12 @@ $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
    ※ `setup.sh` の Step 0 が `origin` を判定し、canonical `pkdxtools/pkdx` 以外なら
    `upstream` を `pkdxtools/pkdx` に向けて自動追加する。
 
-2. **未取り込みコミットを fetch + merge** — `moon.mod.json` の version bump
+2. **未取り込みコミットを fetch + merge** — `moon.mod` の version bump
    コミットが upstream/origin に存在するのに HEAD に取り込まれていないケース:
    ```bash
    # $UPDATE_REMOTE は Phase 0-1 で設定済み (fork=upstream, clone=origin)
    cd $REPO_ROOT && git fetch $UPDATE_REMOTE
-   cd $REPO_ROOT && git log --oneline HEAD..$UPDATE_REMOTE/$UPSTREAM_BRANCH -- moon.mod.json | head -5
+   cd $REPO_ROOT && git log --oneline HEAD..$UPDATE_REMOTE/$UPSTREAM_BRANCH -- moon.mod | head -5
    cd $REPO_ROOT && git merge $UPDATE_REMOTE/$UPSTREAM_BRANCH --no-edit
    ```
    コンフリクトが出たら **Phase 1-3** の手順に従って解決する。
@@ -275,10 +275,10 @@ $REPO_ROOT/bin/pkdx context --json | grep -o '"version_drift":[^,]*'
 
 4. **まだ `true` のとき** — 以下の可能性をユーザーに報告し、状況に応じた
    選択肢を提示する:
-   - GitHub Releases にまだ最新版が反映されていない（upstream `moon.mod.json` の
+   - GitHub Releases にまだ最新版が反映されていない（upstream `moon.mod` の
      値より古いバイナリしか配布されていない）→ 数分待って `./setup.sh` を再実行
    - `./setup.sh` の DL が失敗した（CDN/network 不調）→ `./setup.sh` を再実行
-   - ローカルにビルド済みバイナリがあり、それが古い → `moon build --target native --release src/main`
+   - ローカルにビルド済みバイナリがあり、それが古い → `bash scripts/moon_build_native.sh --release`
      でリビルド、または `_build/native/{release,debug}/build/src/main/main.exe` を削除して
      `./setup.sh` を再実行（リリースバイナリへフォールバックされる）
 

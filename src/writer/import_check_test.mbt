@@ -56,7 +56,7 @@ test "idempotency: differs_only_in_item_returns_diff" {
   // item を変更 (こだわりスカーフ → いのちのたま)
   guard b is Object(root) else { fail("unexpected json shape") }
   guard root.get("build") is Some(Object(build)) else { fail("missing build") }
-  build.set("item", "いのちのたま".to_json())
+  build.set("item", Json("いのちのたま"))
   let existing = [
     ("box/pokemons/マンムー/いのちのたま型.meta.json", b),
   ]
@@ -101,7 +101,7 @@ test "idempotency: move_order_difference_is_normalized" {
     parse_move(m3),
     parse_move(m4),
   ]
-  build.set("moves", moves.to_json())
+  build.set("moves", Json(moves))
   let existing = [("box/pokemons/マンムー/スカーフ型.meta.json", b)]
   let result = @writer.check_pokemon_import(a, existing)
   // sort 後は一致 → Skip

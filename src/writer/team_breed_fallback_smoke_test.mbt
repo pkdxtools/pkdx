@@ -78,7 +78,7 @@ test "team_breed_fallback_smoke: breed build subtree feeds into team member" {
     #|}
   let team = @json.parse(team_src)
   guard team is Object(team_root) else { fail("team parse failed") }
-  team_root["members"] = [mem.to_json()].to_json()
+  team_root["members"] = Json([Json(mem)])
   let _r = @writer.validate_team_json(@json.to_json(team))
   assert_true(_r is Ok(_))
 }

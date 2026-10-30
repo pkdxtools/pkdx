@@ -24,8 +24,8 @@ while getopts "n:" opt; do
   esac
 done
 
-if [ ! -f "$REPO_ROOT/moon.mod.json" ]; then
-  echo "bench_branch.sh: $REPO_ROOT/moon.mod.json not found — run ./setup.sh from the repo root." >&2
+if [ ! -f "$REPO_ROOT/moon.mod" ]; then
+  echo "bench_branch.sh: $REPO_ROOT/moon.mod not found — run ./setup.sh from the repo root." >&2
   exit 1
 fi
 

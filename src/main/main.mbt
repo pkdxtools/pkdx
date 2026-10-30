@@ -310,11 +310,11 @@ fn cmd_context() -> @admiral.CommandDef {
       // with version=champions so the attached schema is in scope.
       let (items_count, mons_count) = count_champions_assets()
       // バイナリにビルド時点で焼き込まれた `pkdx_version` と、リポジトリ側の
-      // SSoT である `moon.mod.json` の version を比較する。drift がある
+      // SSoT である `moon.mod` の version を比較する。drift がある
       // = ユーザーが `git pull` 後 `setup.sh` を再実行していない or 古い
       // バイナリがキャッシュに残っている、のどちらか。SessionStart hook で
       // この JSON を読んだ agent がユーザーに再ビルドを促す。
-      // repo_version が空 (= moon.mod.json が読めない / repo 外で実行 etc.)
+      // repo_version が空 (= moon.mod が読めない / repo 外で実行 etc.)
       // のときは drift 判定せず silent 扱いにする。
       let repo_version = read_repo_pkdx_version()
       let drift = repo_version != "" && repo_version != pkdx_version
@@ -329,18 +329,18 @@ fn cmd_context() -> @admiral.CommandDef {
       }
       // Construct via Json values + stringify so that any string field
       // (notably repo_version coming from a user-controllable
-      // moon.mod.json via PKDX_REPO_MOON_MOD) gets quotes / backslashes
+      // moon.mod via PKDX_REPO_MOON_MOD) gets quotes / backslashes
       // escaped. Raw concatenation here previously emitted invalid
       // JSON when the source contained `"` or `\`.
       let payload : Json = {
-        "version": r.version.to_json(),
-        "regulation": r.regulation.to_json(),
-        "pkdx_version": pkdx_version.to_json(),
-        "repo_pkdx_version": repo_version.to_json(),
-        "version_drift": drift.to_json(),
-        "version_drift_message": drift_message.to_json(),
-        "items_count": items_count.to_json(),
-        "champions_pokemon_count": mons_count.to_json(),
+        "version": Json(r.version),
+        "regulation": Json(r.regulation),
+        "pkdx_version": Json(pkdx_version),
+        "repo_pkdx_version": Json(repo_version),
+        "version_drift": Json(drift),
+        "version_drift_message": Json(drift_message),
+        "items_count": Json(items_count),
+        "champions_pokemon_count": Json(mons_count),
       }
       println(payload.stringify())
     }),
@@ -430,15 +430,21 @@ fn box_regulation_path() -> String {
 }
 
 ///|
-/// Read the `version` field from the repository's `moon.mod.json`
-/// (the SSoT for pkdx CLI version). Returns `""` on any failure —
-/// `pkdx context` is on the SessionStart hot path and must never raise
-/// or block when the file is missing (e.g. invoked outside the repo
-/// or before `setup.sh`).
+/// Read the `version` field from the repository's `moon.mod`
+/// (the SSoT for pkdx CLI version). `moon.mod.json` is still accepted
+/// when `PKDX_REPO_MOON_MOD` points at one, or when `moon.mod` is absent.
+/// Returns `""` on any failure — `pkdx context` is on the SessionStart
+/// hot path and must never raise or block when the file is missing
+/// (e.g. invoked outside the repo or before `setup.sh`).
 fn read_repo_pkdx_version() -> String {
   let path = match @env.get_env_var("PKDX_REPO_MOON_MOD") {
     Some(p) => p
-    None => "moon.mod.json"
+    None =>
+      if @db.file_exists("moon.mod") {
+        "moon.mod"
+      } else {
+        "moon.mod.json"
+      }
   }
   if !@db.file_exists(path) {
     return ""
@@ -447,16 +453,48 @@ fn read_repo_pkdx_version() -> String {
     Some(s) => s
     None => return ""
   }
+  match version_from_json_manifest(raw) {
+    Some(s) => s
+    None => version_from_moon_mod_dsl(raw)
+  }
+}
+
+///|
+fn version_from_json_manifest(raw : String) -> String? {
   try @json.parse(raw) catch {
-    _ => ""
+    _ => None
   } noraise {
     Object(obj) =>
       match obj.get("version") {
-        Some(String(s)) => s
-        _ => ""
+        Some(String(s)) => Some(s)
+        _ => None
       }
-    _ => ""
+    _ => None
   }
+}
+
+///|
+/// `version = "0.6.2"` assignment in a `moon.mod` DSL file.
+fn version_from_moon_mod_dsl(raw : String) -> String {
+  for line in raw.split("\n") {
+    let trimmed = line.to_owned().trim().to_owned()
+    match trimmed.split_once("=") {
+      Some((key, rest)) => {
+        let key_s = key.to_owned().trim().to_owned()
+        if key_s == "version" {
+          let value = rest.to_owned().trim().to_owned()
+          let parts = value.split("\"").collect()
+          if parts.length() >= 2 {
+            return parts[1].to_owned()
+          } else {
+            return ""
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  ""
 }
 
 ///|

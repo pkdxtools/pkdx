@@ -69,11 +69,24 @@ cd "$REPO_ROOT"
 
 echo "# pkdx select-bench"
 echo "# binary: $PKDX"
+# Full `moon version --all` (moon, moonc, moonrun, feature flags). moonc is
+# the compiler identity; future toolchain pins use the moonc distribution
+# URL, not the moon CLI date stamp alone.
+MOONC_VERSION="unknown"
 if command -v moon >/dev/null 2>&1; then
-  echo "# moon: $(moon version 2>/dev/null | head -n 1)"
+  echo "# moon version --all:"
+  while IFS= read -r line || [ -n "$line" ]; do
+    echo "# $line"
+  done < <(moon version --all 2>&1)
+  # Second field of `moonc v0.10.18+6c83a7f62 (date) path`.
+  MOONC_VERSION="$(moon version --all 2>/dev/null | awk '/^moonc / { print $2; exit }')"
+  if [ -z "$MOONC_VERSION" ]; then
+    MOONC_VERSION="unknown"
+  fi
 else
-  echo "# moon: (not on PATH)"
+  echo "# moon version --all: (moon not on PATH)"
 fi
+echo "# moonc: $MOONC_VERSION"
 echo "# uname: $(uname -srm)"
 echo "# nproc: $(nproc 2>/dev/null || echo 1)"
 echo "# tier: $TIER"
@@ -113,10 +126,13 @@ while IFS= read -r case_id; do
     max_rss="-"
   fi
   if [ "$header_done" -eq 0 ]; then
-    head -n 1 "$tsv_file" | awk -v ORS='\n' '{ print $0 "\tgnu_time_max_rss_kb" }'
+    head -n 1 "$tsv_file" | awk -v ORS='\n' '{ print $0 "\tgnu_time_max_rss_kb\tmoonc" }'
     header_done=1
   fi
-  # Data row is the second line. Append the external RSS sample.
-  awk 'NR==2 { print $0 "\t'"$max_rss"'" }' "$tsv_file"
+  # Data row is the second line. Append RSS and the moonc version token
+  # (`v0.10.18+6c83a7f62`). The full `moon version --all` text is the
+  # comment block above the table.
+  awk -v rss="$max_rss" -v moonc="$MOONC_VERSION" \
+    'NR==2 { print $0 "\t" rss "\t" moonc }' "$tsv_file"
   rm -f "$rss_file" "$tsv_file"
 done < <(list_cases)

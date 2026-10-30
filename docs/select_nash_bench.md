@@ -9,6 +9,9 @@
 | 項目 | 値 |
 |---|---|
 | moon | `moon 0.1.20261028 (e1e1f15 2026-10-28)` |
+| moonc | `v0.10.18+6c83a7f62`（2026-10-28）。配布ピンは今後この moonc 形式の URL に切り替わる |
+| moonrun | `0.1.20261028 (e1e1f15 2026-10-28)` |
+| feature flags | `rr_moon_mod,rr_moon_pkg` |
 | uname | Linux 6.12.94+ x86_64 |
 | CPU | Intel Xeon, 4 vCPU |
 | MemTotal | 16,387,280 kB |
@@ -17,7 +20,19 @@
 | damage cache | なし（`disk = None`）。SQLite のヒットで時間が揺れない |
 | RSS | GNU time の `Maximum resident set size`（KB）。プロセス起動を含む |
 
-`moon 0.1.20261028` は `moon.mod.json` を拒否する。計測のときだけ、作業ツリーで `moon fmt` による `moon.mod` 移行と、`.mooncakes/` 内の依存パッケージの同様の移行を行った。その差分はコミットしていない。ソルバの戻り値を変える変更は入っていない。
+この計測時の `moon version --all` 全文（パスは実行環境のホーム）:
+
+```
+moon 0.1.20261028 (e1e1f15 2026-10-28) ~/.moon/bin/moon
+moonc v0.10.18+6c83a7f62 (2026-10-28) ~/.moon/bin/moonc
+moonrun 0.1.20261028 (e1e1f15 2026-10-28) ~/.moon/bin/moonrun
+
+Feature flags enabled: rr_moon_mod,rr_moon_pkg
+```
+
+`scripts/bench_select.sh` は毎回 `moon version --all` を実行し、各行を `# ` 付きで結果の先頭に書く。TSV の `moonc` 列には 2 番目のフィールド（`v0.10.18+6c83a7f62`）だけを繰り返す。`pkdx select-bench` 自身の TSV は数値のままにして、1 行目がヘッダである前提を壊さない。
+
+`moon 0.1.20261028` / `moonc v0.10.18+6c83a7f62` は `moon.mod.json` を拒否する。計測のときだけ、作業ツリーで `moon fmt` による `moon.mod` 移行と、`.mooncakes/` 内の依存パッケージの同様の移行を行った。その差分はコミットしていない。ソルバの戻り値を変える変更は入っていない。
 
 `vm_hwm_kb` 列は -1 になる。`@db.read_file` はファイルサイズで読むため、サイズ 0 の `/proc/self/status` を取れない。ピーク RSS はスクリプトが付ける `gnu_time_max_rss_kb` を使う。
 
@@ -35,7 +50,19 @@ bash scripts/bench_select.sh -c nash_rps_3
 bash scripts/bench_select.sh -c select_status_heavy -n 1
 ```
 
-スクリプトはケースごとにプロセスを分け、TSV に GNU time の max RSS を足す。seed はケース内で固定（行列は `42`、screening は `42`、退化フィクスチャは `tests/fixtures/nash_simplex_failure_60x60.json`）。同じバイナリなら `value` / `solver` / `dp_*` は繰り返して一致する。時間と RSS は一致しない。
+スクリプトはケースごとにプロセスを分け、TSV に GNU time の max RSS と `moonc` 版を足す。結果を残すときは標準出力をそのまま保存する。先頭の `# moon version --all:` ブロックが `moon version --all` の全文で、表の `moonc` 列がコンパイラ版（例: `v0.10.18+6c83a7f62`）である。
+
+```bash
+bash scripts/bench_select.sh -t default | tee /tmp/pkdx_select_bench.tsv
+```
+
+単体で `moon version --all` を見るとき:
+
+```bash
+moon version --all
+```
+
+seed はケース内で固定（行列は `42`、screening は `42`、退化フィクスチャは `tests/fixtures/nash_simplex_failure_60x60.json`）。同じバイナリなら `value` / `solver` / `dp_*` は繰り返して一致する。時間と RSS は一致しない。
 
 スモークは `moon test --target native src/payoff/select_bench_test.mbt`。時間の上限は assert しない。2 回走らせて value・ソルバ・DP カウンタが一致すること、状態異常セルが状態を剥がしたペアより DP ノードが多いこと、を見る。
 

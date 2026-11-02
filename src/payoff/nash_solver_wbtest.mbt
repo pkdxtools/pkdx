@@ -247,6 +247,7 @@ test "scaled noise at O(1) still takes the simplex path" {
 
 ///|
 test "16x16 1e-10 noise: solve_zero_sum raises InconsistentGame col LP unbounded" {
+  // This reproduction depends on nash-mbt 0.1.1's internal epsilons. If it fails after a nash-mbt bump, the fixture is stale rather than a regression, so rebuild a matrix that still reproduces the failure.
   let m = inconsistent_noise_matrix_16()
   assert_eq(m.rows(), 16)
   assert_eq(m.cols(), 16)

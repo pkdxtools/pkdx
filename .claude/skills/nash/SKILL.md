@@ -101,10 +101,13 @@ JSON
   "row_strategy": [0.333, 0.333, 0.333],
   "col_strategy": [0.333, 0.333, 0.333],
   "exploitability": 0,
+  "nash_solver": "simplex",
   "support": {"row": [0, 1, 2], "col": [0, 1, 2]},
   "labels": ["R", "P", "S"]
 }
 ```
+
+`nash_solver` は解を返した経路 (`simplex` / `fictitious_play` / `mwu`)。simplex が iteration limit で止まった行列は fictitious play に切り替わり、その exploitability が tol 以上なら mwu に進む。tol の既定は 0.05、反復回数の既定は 10000。入力の `nash_solver_config.tol` と `nash_solver_config.iterations` で上書きできる。両方とも tol を超えたときはコマンドが失敗する。pure-saddle は simplex 経路の内側で返り、`nash_solver` は `simplex` のまま。
 
 ### 結果整形
 
@@ -113,6 +116,7 @@ JSON
 
 - **ゲーム値**: {value}
 - **exploitability**: {exploitability} (< 1e-6 なら厳密解とみなしてよい)
+- **solver**: {nash_solver}
 
 ### 行プレイヤーの混合戦略
 | index | label | 確率 |

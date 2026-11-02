@@ -198,7 +198,9 @@ test "select_markdown_report_written_to_box_teams" {
     @json.parse(build_team_json(6, "O", opp_sp)),
     "opponent",
   )
-  let r = @payoff.compute_select_with_team_model(team, opp, Single, SwitchingGame(1))
+  let (r, _) = @payoff.compute_select_with_team_model(
+    team, opp, Single, SwitchingGame(1),
+  )
   let md = @payoff.render_select_markdown(r)
   assert_true(md.contains("# Selection Report"))
   assert_true(md.contains("- format: single"))

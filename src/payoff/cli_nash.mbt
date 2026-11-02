@@ -4,6 +4,11 @@
 /// Input JSON accepts either a direct payoff matrix or a list of characters
 /// (monocycle (p, v) form). Exactly one must be supplied.
 ///
+/// `matrix` may be any non-empty rectangle, including 1×N and N×1. Rows must
+/// all have the same length. `pkdx nash solve` solves that zero-sum game.
+/// `pkdx nash graph` still requires a square matrix: the DOT emitter draws
+/// one node set, with edge `i -> j` labeled `A[i, j]`.
+///
 /// ```
 /// {"matrix": [[0, 1, -1], [-1, 0, 1], [1, -1, 0]], "labels": ["A", "B", "C"]}
 /// {"characters": [{"label": "A", "power": 0, "v": {"x": 2, "y": 0}}, ...]}
@@ -26,6 +31,9 @@ pub suberror NashCliError {
   InvalidJson(String)
   MissingField(String)
   ConflictingInputs
+  /// `pkdx nash graph` matrix/characters input is rectangular but not square.
+  /// Payload is `(rows, cols)`. Ragged and empty matrices are `InvalidJson`.
+  /// `pkdx nash solve` accepts a non-square rectangle.
   NonSquareMatrix(Int, Int)
   LabelCountMismatch(Int, Int)
   InfeasibleGame
@@ -88,15 +96,23 @@ fn parse_matrix_input(
       _ => raise InvalidJson("matrix[" + i.to_string() + "] must be an array")
     }
   }
-  // Validate rectangular shape.
+  // Rectangular and non-empty. A zero-sum matrix game does not need to be
+  // square; ragged rows and a 0-column matrix are still rejected.
   let cols = data[0].length()
+  if cols == 0 {
+    raise InvalidJson("matrix must be non-empty")
+  }
   for i in 1..<n {
     if data[i].length() != cols {
-      raise NonSquareMatrix(n, data[i].length())
+      raise InvalidJson(
+        "matrix rows have inconsistent lengths: row 0 has " +
+        cols.to_string() +
+        ", row " +
+        i.to_string() +
+        " has " +
+        data[i].length().to_string(),
+      )
     }
-  }
-  if n != cols {
-    raise NonSquareMatrix(n, cols)
   }
   data
 }
@@ -447,6 +463,12 @@ pub fn run_nash_graph(
     return run_nash_graph_team(obj, threshold)
   }
   let (matrix, labels) = parse_nash_input(input_json)
+  // One node set: edge i -> j uses labels[i] and labels[j]. That is a
+  // matchup among the same actions, so a rectangular game (two action sets)
+  // is left to `pkdx nash solve`.
+  if matrix.rows() != matrix.cols() {
+    raise NonSquareMatrix(matrix.rows(), matrix.cols())
+  }
   let mut out = "digraph payoff {\n"
   for i in 0..<matrix.rows() {
     out = out + "  \"" + dot_escape(labels[i]) + "\";\n"

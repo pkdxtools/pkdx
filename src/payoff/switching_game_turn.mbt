@@ -625,6 +625,24 @@ fn apply_intimidate_entry(
 }
 
 ///|
+/// 再生力の DP 配線。出ていく slot の mega 後実効特性で判定し、最大 HP は
+/// `pokemon.hp`（メガは HP を変えない。HP プールの上限）。ひんし・非再生力は
+/// helper 内で no-op。登場時いかくより前（switch-out → switch-in）に呼ぶ。
+fn apply_regenerator_switch_out(
+  team : Array[Combatant],
+  slot : Int,
+  megaed : Array[Bool],
+  hps : Array[Int],
+) -> Unit {
+  if slot < 0 || slot >= team.length() || slot >= hps.length() {
+    return
+  }
+  let is_mega = slot < megaed.length() && megaed[slot]
+  let eff = effective_combatant(team[slot], is_mega)
+  apply_regenerator_on_switch_out(eff.ability, hps, slot, eff.pokemon.hp)
+}
+
+///|
 /// Apply one game step to `state` given both players' actions, using
 /// `dmg_cache` to memoize the 16-roll damage computations. Damage is applied
 /// in action-order (priority → effective speed; first KO skips the slower
@@ -736,6 +754,13 @@ pub fn transition_with_cache(
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
       }
+      // 再生力: 出ていく slot だけ。同時交代でも互いの回復は独立。ひんしは不発。
+      apply_regenerator_switch_out(
+        my_team, state.my_active, my_megaed_new, my_hps_new,
+      )
+      apply_regenerator_switch_out(
+        opp_team, state.opp_active, opp_megaed_new, opp_hps_new,
+      )
       // 登場時いかく: 双方同時登場は entrant ごとに 1 回ずつ。いかく持ちと
       // 反射系特性は同一個体に同居しないので呼び出し順は結果に影響しない。
       apply_intimidate_entry(
@@ -762,6 +787,10 @@ pub fn transition_with_cache(
       if state.my_active < my_protean_locked_new.length() {
         my_protean_locked_new[state.my_active] = ""
       }
+      // 再生力: 自分の出ていく slot。交代先 (i) と相手 active は回復しない。
+      apply_regenerator_switch_out(
+        my_team, state.my_active, my_megaed_new, my_hps_new,
+      )
       // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。この
       // 直後の opp の物理技は A-1 の opp_ranks_new で計算される。
       apply_intimidate_entry(
@@ -801,6 +830,10 @@ pub fn transition_with_cache(
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
       }
+      // 再生力: 相手の出ていく slot。交代先 (j) と自分 active は回復しない。
+      apply_regenerator_switch_out(
+        opp_team, state.opp_active, opp_megaed_new, opp_hps_new,
+      )
       // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。my の
       // 物理技は A-1 の my_ranks_new で計算される。
       apply_intimidate_entry(
@@ -1344,6 +1377,10 @@ fn partial_act_outcomes(
       if state.my_active < my_protean_locked.length() {
         my_protean_locked[state.my_active] = ""
       }
+      // 再生力: 自分の出ていく slot。相手が skip でも交代で回復する。
+      apply_regenerator_switch_out(
+        my_team, state.my_active, my_megaed, my_hps,
+      )
       // 登場時いかく: 相手が skip でも交代登場で発動する。
       apply_intimidate_entry(
         my_team,
@@ -1368,6 +1405,10 @@ fn partial_act_outcomes(
       if state.opp_active < opp_protean_locked.length() {
         opp_protean_locked[state.opp_active] = ""
       }
+      // 再生力: 相手の出ていく slot。自分が skip でも交代で回復する。
+      apply_regenerator_switch_out(
+        opp_team, state.opp_active, opp_megaed, opp_hps,
+      )
       // 登場時いかく: 相手が skip でも交代登場で発動する。
       apply_intimidate_entry(
         opp_team,

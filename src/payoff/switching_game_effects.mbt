@@ -1394,6 +1394,38 @@ pub fn reset_toxic_counter_on_switch(
 }
 
 ///|
+/// 再生力 (Regenerator). 交代で場を離れるポケモンが、ひんしでなければ最大 HP の
+/// 1/3（切り捨て）を回復する。回復後も `max_hp` は超えない。出てくる側には
+/// 効かない — 呼び出し側が switched-out slot だけに適用する。
+///
+/// Showdown の `onSwitchOut` + `heal(baseMaxhp / 3)` に合わせる:
+/// - HP <= 0（ひんし）では不発。`heal` が fainted で失敗するのと同じ。
+/// - `max_hp / 3` は正の整数除算で切り捨て。最大 HP が 3 未満なら回復量 0。
+/// - 特性が「再生力」以外なら HP も乱数も触らない no-op。
+///
+/// `max_hp` は payoff の HP プール上限（`pokemon.hp`。初期 HP・terminal ratio・
+/// きあいのタスキの満タン判定と同じ）。メガは HP を変えない。`effective_hp`
+/// （Lv50 実数値）は初期 HP より大きく、満タン交代でも回復して比率が 1 を
+/// 超えるため使わない。DP は mega 後実効特性、MC は mega 未モデルで raw ability。
+pub fn apply_regenerator_on_switch_out(
+  ability : String,
+  hps : Array[Int],
+  slot : Int,
+  max_hp : Int,
+) -> Unit {
+  if ability != "再生力" {
+    return
+  }
+  if slot < 0 || slot >= hps.length() {
+    return
+  }
+  if hps[slot] <= 0 {
+    return
+  }
+  add_hp_capped(hps, slot, max_hp / 3, max_hp)
+}
+
+///|
 pub fn is_paralyzed(s : @model.StatusCondition) -> Bool {
   match s {
     @model.Paralyze => true

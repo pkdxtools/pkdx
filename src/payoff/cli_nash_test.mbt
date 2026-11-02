@@ -12,6 +12,7 @@ test "nash_solve_json_matrix_form" {
   assert_true(out.contains("\"row_strategy\":"))
   assert_true(out.contains("\"col_strategy\":"))
   assert_true(out.contains("\"exploitability\":"))
+  assert_true(out.contains("\"nash_solver\":"))
   assert_true(out.contains("\"support\":"))
   assert_true(out.contains("\"labels\":"))
 }
@@ -67,6 +68,10 @@ test "nash_solve_output_json_schema_validates" {
       }
       match m.get("exploitability") {
         Some(Number(_, ..)) => ()
+        _ => assert_true(false)
+      }
+      match m.get("nash_solver") {
+        Some(String(s)) => assert_true(s == "simplex")
         _ => assert_true(false)
       }
       match m.get("support") {
@@ -393,6 +398,250 @@ test "nash_solve_rejects_team_input_as_unsupported" {
   } noraise {
     _ => fail("expected run_nash_solve to raise")
   }
+}
+
+///|
+///|
+fn solve_obj(input : String) -> Map[String, Json] raise @payoff.NashCliError {
+  let out = @payoff.run_nash_solve(input)
+  let parsed = @json.parse(out) catch {
+    _ => abort("nash solve output is not json")
+  }
+  match parsed {
+    Object(m) => m
+    _ => abort("nash solve output is not an object")
+  }
+}
+
+///|
+fn num_field(m : Map[String, Json], key : String) -> Double {
+  match m.get(key) {
+    Some(Number(n, ..)) => n
+    _ => abort("missing number field " + key)
+  }
+}
+
+///|
+fn str_field(m : Map[String, Json], key : String) -> String {
+  match m.get(key) {
+    Some(String(s)) => s
+    _ => abort("missing string field " + key)
+  }
+}
+
+///|
+fn num_array_field(m : Map[String, Json], key : String) -> Array[Double] {
+  match m.get(key) {
+    Some(Array(arr)) => {
+      let out = Array::make(arr.length(), 0.0)
+      for i in 0..<arr.length() {
+        match arr[i] {
+          Number(n, ..) => out[i] = n
+          _ => abort(key + " element is not a number")
+        }
+      }
+      out
+    }
+    _ => abort("missing array field " + key)
+  }
+}
+
+///|
+fn assert_near(got : Double, want : Double) -> Unit raise {
+  assert_true((got - want).abs() < 1.0e-6)
+}
+
+///|
+fn assert_dist(xs : Array[Double]) -> Unit raise {
+  let mut s = 0.0
+  for x in xs {
+    assert_true(x >= -1.0e-12)
+    s = s + x
+  }
+  assert_true((s - 1.0).abs() < 1.0e-6)
+}
+
+///|
+fn assert_pure(xs : Array[Double], idx : Int) -> Unit raise {
+  assert_true(idx >= 0 && idx < xs.length())
+  for i in 0..<xs.length() {
+    let want = if i == idx { 1.0 } else { 0.0 }
+    assert_near(xs[i], want)
+  }
+}
+
+///|
+/// Simplex succeeds on these closed-form games, so `nash_solver` stays
+/// `"simplex"` and the value / equilibrium match the known solution.
+test "nash_solve_simplex_games_keep_known_equilibria" {
+  // Rock-paper-scissors: value 0, uniform 1/3.
+  let rps = solve_obj(janken_json())
+  assert_true(str_field(rps, "nash_solver") == "simplex")
+  assert_near(num_field(rps, "value"), 0.0)
+  assert_true(num_field(rps, "exploitability") < 1.0e-6)
+  let rps_row = num_array_field(rps, "row_strategy")
+  let rps_col = num_array_field(rps, "col_strategy")
+  let third = 1.0 / 3.0
+  for i in 0..<3 {
+    assert_near(rps_row[i], third)
+    assert_near(rps_col[i], third)
+  }
+  // Matching pennies: value 0, uniform 1/2.
+  let pennies = solve_obj("{\"matrix\":[[1,-1],[-1,1]]}")
+  assert_true(str_field(pennies, "nash_solver") == "simplex")
+  assert_near(num_field(pennies, "value"), 0.0)
+  assert_true(num_field(pennies, "exploitability") < 1.0e-6)
+  let pen_row = num_array_field(pennies, "row_strategy")
+  let pen_col = num_array_field(pennies, "col_strategy")
+  assert_near(pen_row[0], 0.5)
+  assert_near(pen_row[1], 0.5)
+  assert_near(pen_col[0], 0.5)
+  assert_near(pen_col[1], 0.5)
+  // 2x2 closed form: v = 2.5, p0 = 0.5, q0 = 0.75.
+  let closed = solve_obj("{\"matrix\":[[3,1],[2,4]]}")
+  assert_true(str_field(closed, "nash_solver") == "simplex")
+  assert_near(num_field(closed, "value"), 2.5)
+  assert_true(num_field(closed, "exploitability") < 1.0e-6)
+  let closed_row = num_array_field(closed, "row_strategy")
+  let closed_col = num_array_field(closed, "col_strategy")
+  assert_near(closed_row[0], 0.5)
+  assert_near(closed_row[1], 0.5)
+  assert_near(closed_col[0], 0.75)
+  assert_near(closed_col[1], 0.25)
+  // Pure saddle at (0, 0), value 2. Reported as simplex: the saddle fast
+  // path lives inside solve_zero_sum.
+  let saddle = solve_obj("{\"matrix\":[[2,3,5],[1,2,4],[0,1,3]]}")
+  assert_true(str_field(saddle, "nash_solver") == "simplex")
+  assert_near(num_field(saddle, "value"), 2.0)
+  assert_true(num_field(saddle, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(saddle, "row_strategy"), 0)
+  assert_pure(num_array_field(saddle, "col_strategy"), 0)
+  // Constant matrix. Every pure profile is an equilibrium; the saddle
+  // detector returns the first row and first column.
+  let flat = solve_obj(
+    "{\"matrix\":[[0.25,0.25,0.25,0.25],[0.25,0.25,0.25,0.25],[0.25,0.25,0.25,0.25],[0.25,0.25,0.25,0.25]]}",
+  )
+  assert_true(str_field(flat, "nash_solver") == "simplex")
+  assert_near(num_field(flat, "value"), 0.25)
+  assert_true(num_field(flat, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(flat, "row_strategy"), 0)
+  assert_pure(num_array_field(flat, "col_strategy"), 0)
+  // Shapley 3x3 is a pure saddle at (0, 0) with value 0.
+  let shapley = solve_obj("{\"matrix\":[[0,0,1],[0,0,-1],[-1,1,0]]}")
+  assert_true(str_field(shapley, "nash_solver") == "simplex")
+  assert_near(num_field(shapley, "value"), 0.0)
+  assert_true(num_field(shapley, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(shapley, "row_strategy"), 0)
+  assert_pure(num_array_field(shapley, "col_strategy"), 0)
+  // Each RPS action duplicated once. Class totals stay 1/3; which copy
+  // carries the mass is not unique.
+  let dup = solve_obj(
+    "{\"matrix\":[[0,0,-1,-1,1,1],[0,0,-1,-1,1,1],[1,1,0,0,-1,-1],[1,1,0,0,-1,-1],[-1,-1,1,1,0,0],[-1,-1,1,1,0,0]]}",
+  )
+  assert_true(str_field(dup, "nash_solver") == "simplex")
+  assert_near(num_field(dup, "value"), 0.0)
+  assert_true(num_field(dup, "exploitability") < 1.0e-6)
+  let dup_row = num_array_field(dup, "row_strategy")
+  let dup_col = num_array_field(dup, "col_strategy")
+  assert_dist(dup_row)
+  assert_dist(dup_col)
+  assert_near(dup_row[0] + dup_row[1], third)
+  assert_near(dup_row[2] + dup_row[3], third)
+  assert_near(dup_row[4] + dup_row[5], third)
+  assert_near(dup_col[0] + dup_col[1], third)
+  assert_near(dup_col[2] + dup_col[3], third)
+  assert_near(dup_col[4] + dup_col[5], third)
+  // Identical rows. Column plays the minimizing entry (index 1, payoff -2).
+  let tied = solve_obj(
+    "{\"matrix\":[[1,-2,3,0],[1,-2,3,0],[1,-2,3,0],[1,-2,3,0]]}",
+  )
+  assert_true(str_field(tied, "nash_solver") == "simplex")
+  assert_near(num_field(tied, "value"), -2.0)
+  assert_true(num_field(tied, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(tied, "row_strategy"), 0)
+  assert_pure(num_array_field(tied, "col_strategy"), 1)
+}
+
+///|
+fn degenerate_60_input(extra : String) -> String {
+  let raw = match
+    @db.read_file("tests/fixtures/nash_simplex_failure_60x60.json") {
+    Some(s) => s
+    None => abort("missing tests/fixtures/nash_simplex_failure_60x60.json")
+  }
+  "{\"matrix\":" + raw + extra + "}"
+}
+
+///|
+test "nash_solve_degenerate_60x60_uses_fictitious_play_fallback" {
+  let m = solve_obj(degenerate_60_input(""))
+  assert_true(str_field(m, "nash_solver") == "fictitious_play")
+  let v = num_field(m, "value")
+  assert_true(v >= -0.23 && v <= 0.28)
+  let expl = num_field(m, "exploitability")
+  assert_true(expl < 0.05)
+  let row = num_array_field(m, "row_strategy")
+  let col = num_array_field(m, "col_strategy")
+  assert_eq(row.length(), 60)
+  assert_eq(col.length(), 60)
+  assert_dist(row)
+  assert_dist(col)
+}
+
+///|
+test "nash_solve_degenerate_60x60_tight_tol_raises_fallback_exhausted" {
+  let input = degenerate_60_input(
+    ",\"nash_solver_config\":{\"tol\":1e-10,\"iterations\":100}",
+  )
+  try @payoff.run_nash_solve(input) catch {
+    NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) => {
+      assert_true(simplex_err.length() > 0)
+      assert_true(fp_expl >= 1.0e-10)
+      assert_true(mwu_expl >= 1.0e-10)
+    }
+    _ => fail("expected NashFallbackExhausted")
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
+}
+
+///|
+fn assert_invalid_config(input : String, needle : String) -> Unit raise {
+  try @payoff.run_nash_solve(input) catch {
+    InvalidJson(msg) => assert_true(msg.contains(needle))
+    _ => fail("expected InvalidJson")
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
+}
+
+///|
+test "nash_solve_rejects_bad_nash_solver_config" {
+  let base = "{\"matrix\":[[0,1],[-1,0]]"
+  assert_invalid_config(
+    base + ",\"nash_solver_config\":{\"tol\":\"loose\"}}",
+    "nash_solver_config.tol must be a number",
+  )
+  assert_invalid_config(
+    base + ",\"nash_solver_config\":{\"tol\":0}}",
+    "nash_solver_config.tol must be > 0",
+  )
+  assert_invalid_config(
+    base + ",\"nash_solver_config\":{\"tol\":-0.1}}",
+    "nash_solver_config.tol must be > 0",
+  )
+  assert_invalid_config(
+    base + ",\"nash_solver_config\":{\"iterations\":1.5}}",
+    "nash_solver_config.iterations must be a positive integer",
+  )
+  assert_invalid_config(
+    base + ",\"nash_solver_config\":{\"iterations\":0}}",
+    "nash_solver_config.iterations must be > 0",
+  )
+  assert_invalid_config(
+    base + ",\"nash_solver_config\":[]}",
+    "nash_solver_config must be an object",
+  )
 }
 
 ///|

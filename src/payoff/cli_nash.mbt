@@ -12,9 +12,14 @@
 /// Solve output JSON schema:
 /// ```
 /// {"value": 0.0, "row_strategy": [...], "col_strategy": [...],
-///  "exploitability": 0.0, "support": {"row": [0,1,2], "col": [0,1,2]},
+///  "exploitability": 0.0, "nash_solver": "simplex",
+///  "support": {"row": [0,1,2], "col": [0,1,2]},
 ///  "labels": ["A","B","C"]}
 /// ```
+///
+/// Optional `nash_solver_config` (`tol`, `iterations`) is the same object
+/// `pkdx select` accepts. It only affects the iterative fallback used when
+/// simplex raises `SimplexFailure`.
 
 ///|
 pub suberror NashCliError {
@@ -348,38 +353,62 @@ fn strategy_to_array(s : @nash.MixedStrategy) -> Array[Double] {
 }
 
 ///|
-/// Run `pkdx nash solve`. Returns a JSON string on success. Raises
-/// `InfeasibleGame` / `UnboundedGame` for degenerate LPs so the caller can exit
-/// non-zero.
+/// Read optional `nash_solver_config` from an already-validated solve payload.
+/// `parse_nash_input` ignores unknown fields, so this second look is what
+/// wires the same knobs `pkdx select` uses into `solve_with_fallback`.
+fn nash_config_of_solve_input(
+  input_json : String,
+) -> NashSolverConfig raise NashCliError {
+  let root = @json.parse(input_json) catch {
+    err => raise InvalidJson(@debug.to_string(err))
+  }
+  match root {
+    Object(obj) => parse_nash_solver_config(obj.get("nash_solver_config"))
+    _ => raise InvalidJson("top-level must be an object")
+  }
+}
+
+///|
+/// Run `pkdx nash solve`. Returns a JSON string on success.
+///
+/// The equilibrium comes from `solve_with_fallback`: simplex first, then
+/// fictitious play, then multiplicative weights, when simplex raises
+/// `SimplexFailure`. `InfeasibleGame` / `UnboundedGame` /
+/// `NashFallbackExhausted` still exit non-zero.
+///
+/// On the simplex path, `exploitability` is recomputed with
+/// `@nash.exploitability` rather than taken from `NashSolverResult`. The
+/// wrapper stores `0.0` there by construction; the historical solve JSON
+/// reports the measured residual, and select's golden files do not go
+/// through this function.
 pub fn run_nash_solve(input_json : String) -> String raise NashCliError {
   let (matrix, labels) = parse_nash_input(input_json)
-  let lp = @nash.solve_zero_sum(matrix) catch {
-    err => raise InnerError(err.to_string())
-  }
-  match lp {
-    Optimal(value~, row_strategy~, col_strategy~) => {
-      let p = strategy_to_array(row_strategy)
-      let q = strategy_to_array(col_strategy)
-      let expl = @nash.exploitability(matrix, row_strategy, col_strategy)
-      let sup_row = support_indices(p, 1.0e-6)
-      let sup_col = support_indices(q, 1.0e-6)
-      let mut out = "{"
-      out = out + "\"value\":" + value.to_string()
-      out = out + ",\"row_strategy\":" + fmt_double_array(p)
-      out = out + ",\"col_strategy\":" + fmt_double_array(q)
-      out = out + ",\"exploitability\":" + expl.to_string()
-      out = out +
-        ",\"support\":{\"row\":" +
-        fmt_int_array(sup_row) +
-        ",\"col\":" +
-        fmt_int_array(sup_col) +
-        "}"
-      out = out + ",\"labels\":" + fmt_string_array(labels)
-      out + "}"
-    }
-    Infeasible => raise InfeasibleGame
-    Unbounded => raise UnboundedGame
-  }
+  let nash_config = nash_config_of_solve_input(input_json)
+  let result = solve_with_fallback(matrix, config=nash_config)
+  let p = strategy_to_array(result.row_strategy)
+  let q = strategy_to_array(result.col_strategy)
+  let expl = @nash.exploitability(
+    matrix,
+    result.row_strategy,
+    result.col_strategy,
+  )
+  let sup_row = support_indices(p, 1.0e-6)
+  let sup_col = support_indices(q, 1.0e-6)
+  let mut out = "{"
+  out = out + "\"value\":" + result.value.to_string()
+  out = out + ",\"row_strategy\":" + fmt_double_array(p)
+  out = out + ",\"col_strategy\":" + fmt_double_array(q)
+  out = out + ",\"exploitability\":" + expl.to_string()
+  out = out +
+    ",\"nash_solver\":\"" + solver_path_string(result.solver_path) + "\""
+  out = out +
+    ",\"support\":{\"row\":" +
+    fmt_int_array(sup_row) +
+    ",\"col\":" +
+    fmt_int_array(sup_col) +
+    "}"
+  out = out + ",\"labels\":" + fmt_string_array(labels)
+  out + "}"
 }
 
 ///|

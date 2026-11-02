@@ -73,7 +73,7 @@ fn set_optional_string(
   value : String,
 ) -> Unit {
   if value.length() > 0 {
-    m[key] = value.to_json()
+    m[key] = Json(value)
   }
 }
 
@@ -81,7 +81,7 @@ fn set_optional_string(
 fn rank_entry(stat_key : String, rank : Int) -> Map[String, Json] {
   let m : Map[String, Json] = Map([])
   if rank != 0 {
-    m[stat_key] = rank.to_json()
+    m[stat_key] = Json(rank)
   }
   m
 }
@@ -109,52 +109,52 @@ pub fn build_damage_calc_entry(
     Status => "def"
   }
   let attacker : Map[String, Json] = {
-    "name": input.attacker.name_ja.to_json(),
-    "level": (50 : Int).to_json(),
-    "ranks": rank_entry(atk_stat_key, input.atk_rank).to_json(),
+    "name": Json(input.attacker.name_ja),
+    "level": Json((50 : Int)),
+    "ranks": Json(rank_entry(atk_stat_key, input.atk_rank)),
   }
   set_optional_string(attacker, "ability", input.atk_ability)
   set_optional_string(attacker, "item", input.atk_item)
   set_optional_string(attacker, "nature", nature_to_jp_opt(input.atk_nature))
   set_optional_string(attacker, "tera_type", input.tera_type)
   let defender : Map[String, Json] = {
-    "name": input.defender.name_ja.to_json(),
-    "level": (50 : Int).to_json(),
-    "hp_stat": result.defender_hp.to_json(),
-    "ranks": rank_entry(def_stat_key, input.def_rank).to_json(),
+    "name": Json(input.defender.name_ja),
+    "level": Json((50 : Int)),
+    "hp_stat": Json(result.defender_hp),
+    "ranks": Json(rank_entry(def_stat_key, input.def_rank)),
   }
   set_optional_string(defender, "ability", input.def_ability)
   set_optional_string(defender, "item", input.def_item)
   set_optional_string(defender, "nature", nature_to_jp_opt(input.def_nature))
   let move_obj : Map[String, Json] = {
-    "name": input.move_.name.to_json(),
-    "type": input.move_.type_.to_json(),
-    "category": @model.category_to_jp(input.move_.category).to_json(),
-    "power": input.move_.power.to_json(),
+    "name": Json(input.move_.name),
+    "type": Json(input.move_.type_),
+    "category": Json(@model.category_to_jp(input.move_.category)),
+    "power": Json(input.move_.power),
   }
-  let conditions : Map[String, Json] = { "crit": input.critical.to_json() }
+  let conditions : Map[String, Json] = { "crit": Json(input.critical) }
   set_optional_string(conditions, "weather", weather_to_jp(input.weather))
   set_optional_string(conditions, "field", field_to_jp(input.field))
   let rolls : Array[Json] = []
   for i = 0; i < 16; i = i + 1 {
-    rolls.push(result.percents[i].to_json())
+    rolls.push(Json(result.percents[i]))
   }
   let entry : Map[String, Json] = {
-    "attacker": attacker.to_json(),
-    "defender": defender.to_json(),
-    "move": move_obj.to_json(),
-    "conditions": conditions.to_json(),
-    "rolls_percent": rolls.to_json(),
-    "min_percent": result.min_percent.to_json(),
-    "max_percent": result.max_percent.to_json(),
+    "attacker": Json(attacker),
+    "defender": Json(defender),
+    "move": Json(move_obj),
+    "conditions": Json(conditions),
+    "rolls_percent": Json(rolls),
+    "min_percent": Json(result.min_percent),
+    "max_percent": Json(result.max_percent),
   }
   set_optional_string(entry, "title", title)
   set_optional_string(entry, "note", note)
   match parse_guaranteed_hits(result.ko_text) {
-    Some(n) => entry["guaranteed_hits"] = n.to_json()
+    Some(n) => entry["guaranteed_hits"] = Json(n)
     None => ()
   }
-  entry.to_json()
+  Json(entry)
 }
 
 ///|
@@ -197,6 +197,6 @@ pub fn append_damage_calc(meta_json : Json, entry : Json) -> Json {
     next.push(e)
   }
   next.push(entry)
-  root["damage_calcs"] = next.to_json()
-  root.to_json()
+  root["damage_calcs"] = Json(next)
+  Json(root)
 }

@@ -65,11 +65,11 @@ setup.sh実行前ではすべてのツールが利用不可。
 ## Architecture
 
 ```
-moon.mod.json              # MoonBit モジュール定義 (deps: moonbitlang/x, mizchi/markdown) — バージョンの SSoT
+moon.mod              # MoonBit モジュール定義 (deps: moonbitlang/x, mizchi/markdown) — バージョンの SSoT
 src/                       # MoonBit CLI ツール (native binary) のソースツリー
   main/                    # エントリポイント + SQLite C-FFI + File I/O FFI
     main.mbt, cwrap.c, sqlite3.c, io_ffi.mbt
-    version.mbt             # 自動生成 (scripts/sync_version.sh → moon.mod.json から同期)
+    version.mbt             # 自動生成 (scripts/sync_version.sh → moon.mod から同期)
   db/                      # DB接続 + クエリ関数
   damage/                  # Gen9ダメージ計算エンジン (4096丸め, 16段階乱数)
   types/                   # 18x18タイプ相性テーブル (ハードコード)
@@ -108,7 +108,7 @@ bin/
   pkdx.cmd                # Windows用ラッパー
 
 scripts/
-  sync_version.sh          # moon.mod.json → version.mbt バージョン同期
+  sync_version.sh          # moon.mod → version.mbt バージョン同期
 
 box/                      # ユーザーデータ出力先（フォーク先でgit管理）
   teams/                   # team-builder出力 (.md)
@@ -202,20 +202,20 @@ bin/pkdx migrate --repo-root .
 
 ## Version Management
 
-バージョンは `moon.mod.json` の `version` フィールドが SSoT。変更時:
+バージョンは `moon.mod` の `version` フィールドが SSoT。変更時:
 
 ```bash
-# 1. moon.mod.json の version を編集
+# 1. moon.mod の version を編集
 # 2. 同期スクリプトを実行
 scripts/sync_version.sh
 # 3. ローカルバイナリをリビルド (必須)
-moon build --target native --release src/main
-# 4. moon.mod.json と version.mbt をコミット
+bash scripts/moon_build_native.sh --release
+# 4. moon.mod と version.mbt をコミット
 ```
 
 Step 3 を飛ばすと、ローカルセッションの `pkdx context --json` (SessionStart hook) が
 `version_drift=true` を返し続ける。バイナリに焼き込まれた `pkdx_version` と
-`moon.mod.json` の `version` を比較して drift を検知している。
+`moon.mod` の `version` を比較して drift を検知している。
 配布バイナリ (GitHub Releases) を使っているユーザーには影響しない。
 
 ### SessionStart で `version_drift_message` を見たとき
@@ -225,7 +225,7 @@ Step 3 を飛ばすと、ローカルセッションの `pkdx context --json` (S
 
 - ローカル pkdx バイナリと repo の version が乖離している事実
 - メッセージに含まれる再ビルド手順 (通常は `./setup.sh` 再実行 or
-  `moon build --target native --release src/main`)
+  `bash scripts/moon_build_native.sh --release`)
 
 drift があるとダメージ計算や migration 等の挙動と SSoT が一致しない可能性がある
 ため、放置せず最初に通知する。
@@ -240,13 +240,13 @@ SessionStart hook (`.claude/settings.json`) から呼ばれる 1-line JSON。
 | `version` | string | 現在の `box/regulation.json` の `version` (例: `"champions"`)。未設定時 `"champions"` |
 | `regulation` | string | 現在の `box/regulation.json` の `regulation` (例: `"M-C"`)。未設定時、または退役した名前 (`M-B` 等) が残っている場合は `"M-C"` (stderr に警告を出して既定へフォールバック) |
 | `pkdx_version` | string | バイナリ build 時に焼き込まれた `version.mbt` の値 |
-| `repo_pkdx_version` | string | `moon.mod.json` の `version` を実行時に読んだ値。読めない場合は `""` |
+| `repo_pkdx_version` | string | `moon.mod` の `version` を実行時に読んだ値。読めない場合は `""` |
 | `version_drift` | bool | `repo_pkdx_version != ""` かつ `repo_pkdx_version != pkdx_version` のとき `true`。`""` 比較は意図的に false 側 (silent) |
 | `version_drift_message` | string | `version_drift=true` のときのみ再ビルド指示文。それ以外は `""` |
 | `items_count` | int | champions.db 内の item 行数。読めない場合 `0` |
 | `champions_pokemon_count` | int | champions.db 内の pokemon 行数。読めない場合 `0` |
 
-`PKDX_REPO_MOON_MOD` 環境変数で `moon.mod.json` のパスを上書き可 (テスト用)。
+`PKDX_REPO_MOON_MOD` 環境変数で `moon.mod` のパスを上書き可 (テスト用)。
 
 ## Reference documents
 

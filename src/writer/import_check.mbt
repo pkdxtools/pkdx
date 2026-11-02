@@ -35,16 +35,16 @@ pub extend ImportCheckResult with Eq::{not_equal, equal}
 ///|
 pub fn import_check_result_to_json(r : ImportCheckResult) -> Json {
   match r {
-    Skip(path) => { "status": "skip", "matched_file": path.to_json() }
+    Skip(path) => { "status": "skip", "matched_file": Json(path) }
     Diff(path, fields) => {
       let fs : Array[Json] = []
       for f in fields {
-        fs.push(f.to_json())
+        fs.push(Json(f))
       }
       {
         "status": "diff",
-        "matched_file": path.to_json(),
-        "differing_fields": fs.to_json(),
+        "matched_file": Json(path),
+        "differing_fields": Json(fs),
       }
     }
     New => { "status": "new", "matched_file": Json::null() }

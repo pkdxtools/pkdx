@@ -5,8 +5,9 @@ set -euo pipefail
 # setup.sh omits this intentionally; invoke this script when a skill that needs a
 # local dev server (e.g. blog skill's preview) reports that bun is missing.
 #
-# Version is pinned to match `site/package.json` @types/bun (SSoT). Override by
-# exporting BUN_VERSION=1.x.y before running.
+# Version is pinned to the bun runtime in `.github/workflows/deploy-pages.yml`
+# (`bun-version`). @types/bun in site/package.json can move independently.
+# Override by exporting BUN_VERSION=1.x.y before running.
 
 BUN_VERSION="${BUN_VERSION:-1.3.12}"
 BUN_INSTALL_DIR="${BUN_INSTALL:-$HOME/.bun}"

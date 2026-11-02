@@ -9,7 +9,7 @@ fn normalize_types(pokemon : Map[String, Json]) -> Array[Json] {
   let out : Array[Json] = []
   fn push_if_string(k : String) -> Unit {
     match pokemon.get(k) {
-      Some(String(s)) => if s.length() > 0 { out.push(s.to_json()) }
+      Some(String(s)) => if s.length() > 0 { out.push(Json(s)) }
       _ => ()
     }
   }
@@ -32,7 +32,7 @@ fn normalize_abilities(pokemon : Map[String, Json]) -> Array[Json] {
     match pokemon.get("abilities") {
       Some(Object(ab)) =>
         match ab.get(k) {
-          Some(String(s)) => if s.length() > 0 { out.push(s.to_json()) }
+          Some(String(s)) => if s.length() > 0 { out.push(Json(s)) }
           _ => ()
         }
       _ => ()
@@ -70,13 +70,13 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
           None => ()
         }
       }
-      pokemon_out["types"] = normalize_types(pokemon).to_json()
+      pokemon_out["types"] = Json(normalize_types(pokemon))
       match pokemon.get("base_stats") {
         Some(v) => pokemon_out["base_stats"] = normalize_stats_to_short(v)
         None => ()
       }
-      pokemon_out["abilities"] = normalize_abilities(pokemon).to_json()
-      out["pokemon"] = pokemon_out.to_json()
+      pokemon_out["abilities"] = Json(normalize_abilities(pokemon))
+      out["pokemon"] = Json(pokemon_out)
     }
     _ => ()
   }
@@ -107,11 +107,11 @@ pub fn migrate_pokemon_meta_v011(input : Json) -> Result[Json, String] {
         Some(v) => build_out["role"] = v
         None => ()
       }
-      out["build"] = build_out.to_json()
+      out["build"] = Json(build_out)
     }
     _ => ()
   }
-  Ok(out.to_json())
+  Ok(Json(out))
 }
 
 ///|
@@ -142,7 +142,7 @@ fn migrate_team_member(m : Json) -> Json {
       out[k] = v
     }
   }
-  out.to_json()
+  Json(out)
 }
 
 ///|
@@ -162,7 +162,7 @@ pub fn migrate_team_meta_v011(input : Json) -> Result[Json, String] {
           for m in members {
             migrated.push(migrate_team_member(m))
           }
-          out["members"] = migrated.to_json()
+          out["members"] = Json(migrated)
         }
         _ => out[k] = v
       }
@@ -170,7 +170,7 @@ pub fn migrate_team_meta_v011(input : Json) -> Result[Json, String] {
       out[k] = v
     }
   }
-  Ok(out.to_json())
+  Ok(Json(out))
 }
 
 ///|

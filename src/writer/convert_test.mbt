@@ -122,7 +122,7 @@ test "migrate_pokemon_meta_v011: single-type pokemon without type2 key" {
     fail("types[] missing")
   }
   @debug.assert_eq(types.length(), 1)
-  @debug.assert_eq(types[0], "でんき".to_json())
+  @debug.assert_eq(types[0], Json("でんき"))
   assert_true(pokemon.get("type1") is None)
   assert_true(pokemon.get("type2") is None)
 }
@@ -196,8 +196,8 @@ test "migrate_pokemon_meta_v011: abilities canonical order with nulls filtered" 
     fail("abilities[] missing")
   }
   @debug.assert_eq(abilities.length(), 2)
-  @debug.assert_eq(abilities[0], "あついしぼう".to_json())
-  @debug.assert_eq(abilities[1], "ちからもち".to_json())
+  @debug.assert_eq(abilities[0], Json("あついしぼう"))
+  @debug.assert_eq(abilities[1], Json("ちからもち"))
 }
 
 ///|
@@ -260,7 +260,7 @@ test "migrate_pokemon_meta_v011: preserves role on new-format input" {
   guard root.get("build") is Some(Object(build)) else {
     fail("build section missing")
   }
-  @debug.assert_eq(build.get("role"), Some("物理アタッカー".to_json()))
+  @debug.assert_eq(build.get("role"), Some(Json("物理アタッカー")))
 }
 
 ///|
@@ -309,14 +309,14 @@ test "migrate_team_meta_v011: members long-key stats are shortened" {
   guard m0.get("base_stats") is Some(Object(bs)) else {
     fail("base_stats not object")
   }
-  @debug.assert_eq(bs.get("h"), Some((108 : Int).to_json()))
-  @debug.assert_eq(bs.get("s"), Some((102 : Int).to_json()))
+  @debug.assert_eq(bs.get("h"), Some(Json((108 : Int))))
+  @debug.assert_eq(bs.get("s"), Some(Json((102 : Int))))
   assert_true(bs.get("hp") is None)
   assert_true(bs.get("spe") is None)
   guard m0.get("stat_points") is Some(Object(sp)) else {
     fail("stat_points not object")
   }
-  @debug.assert_eq(sp.get("s"), Some((252 : Int).to_json()))
+  @debug.assert_eq(sp.get("s"), Some(Json((252 : Int))))
   assert_true(sp.get("spe") is None)
 }
 

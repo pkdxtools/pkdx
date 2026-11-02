@@ -8,13 +8,19 @@ updates:
     commit-message:
       prefix: "ci"
 
-  - package-ecosystem: "npm"
+  - package-ecosystem: "bun"
     directory: "/site"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "site"
+    ignore:
+      # @astrojs/check@0.9.x peers typescript ^5 || ^6. TypeScript 7 makes
+      # astro check crash (`typescript.sys` is undefined in the language server).
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
     groups:
       astro:
         patterns:

@@ -9,8 +9,8 @@
 >
 > Nash ソルバー本体 (`solve_zero_sum` / `simplex` / `fictitious_play` /
 > `mwu`) は mooncakes パッケージ `ushironoko/nash-mbt` として独立配布
-> されており、pkdx は `moon.mod.json` の deps からバージョンを指定して
-> 参照する (現在の pin は `moon.mod.json` を確認)。
+> されており、pkdx は `moon.mod` の deps からバージョンを指定して
+> 参照する (現在の pin は `moon.mod` を確認)。
 
 ## pkdx 固有の使い方
 

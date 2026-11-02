@@ -206,7 +206,7 @@ fi
 # when running `pkdx migrate` with an older release binary.
 if [ "$NEED_DOWNLOAD" = true ] && command -v moon &>/dev/null; then
   echo "  No local build; moon detected. Building from source..."
-  if (cd "$REPO_ROOT" && moon build --target native --release src/main); then
+  if (cd "$REPO_ROOT" && bash scripts/moon_build_native.sh --release); then
     if [ -f "$LOCAL_BUILD" ]; then
       echo "  Local build complete."
       NEED_DOWNLOAD=false
@@ -251,8 +251,8 @@ if [ "$NEED_DOWNLOAD" = true ]; then
       echo "  Downloaded to $BINARY"
     else
       echo "  Warning: No release found. You can build locally instead:"
-      echo "    moon build --target native"
-      echo "  (requires MoonBit toolchain: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash)"
+      echo "    bash scripts/moon_build_native.sh"
+      echo "  (requires MoonBit toolchain: bash scripts/install_moon.sh)"
     fi
   }
 fi
@@ -324,8 +324,8 @@ if [ -f "$REPO_ROOT/pokedex/pokedex.db" ]; then
     echo "" >&2
     echo "  Your pkdx binary predates one or more source migrations." >&2
     echo "  Install the MoonBit toolchain and rebuild from source, then rerun:" >&2
-    echo "    curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash" >&2
-    echo "    moon build --target native --release src/main" >&2
+    echo "    bash scripts/install_moon.sh" >&2
+    echo "    bash scripts/moon_build_native.sh --release" >&2
     echo "    ./setup.sh" >&2
     exit 1
   fi

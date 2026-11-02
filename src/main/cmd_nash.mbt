@@ -8,12 +8,12 @@ fn cmd_nash() -> @admiral.CommandDef {
   let subs : Array[@admiral.CommandDef] = [
     @admiral.command(
       name="solve",
-      description="Solve the Nash equilibrium from a payoff JSON on stdin",
+      description="Solve a rectangular zero-sum Nash equilibrium from a payoff JSON on stdin",
       run=Some(fn(_ctx) { run_nash_solve_cmd() }),
     ),
     @admiral.command(
       name="graph",
-      description="Emit a Graphviz DOT representation of the payoff matrix",
+      description="Emit a Graphviz DOT digraph of a square payoff matrix",
       options=[
         @admiral.string(
           "threshold",
@@ -127,7 +127,7 @@ fn nash_cli_error_message(err : @payoff.NashCliError) -> String {
     UnboundedGame => "game is unbounded"
     InnerError(msg) => "solver error: " + msg
     NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) =>
-      "Nash solver failed: simplex error '" +
+      "Nash solver failed: primary solver error '" +
       simplex_err +
       "', fictitious_play exploitability " +
       fp_expl.to_string() +

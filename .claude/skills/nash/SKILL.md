@@ -65,9 +65,9 @@ pkdx CLI が見つかりません。リポジトリルートで以下を実行:
 |---|------|--------|-----------|
 | 1 | 入力の種類は？ | 入力形式 | 行列を直接入力 (matrix), monocycle character (p, v) リスト (characters) |
 
-**matrix 形式**: n×n の実数行列。対称・反対称を問わない。零和にしたい場合は `A[j,i] = -A[i,j]` を自前で設定するか、monocycle 形式を使う。
+**matrix 形式**: m×n の実数行列（1×N / N×1 を含む）。正方でなくてよい。入力は行プレイヤーの利得で、ソルバは列プレイヤーの利得を `-A` とする零和ゲームとして解く。simplex が iteration limit（`SimplexFailure`）で止まった場合、または有限な行列なのに数値誤差で `InconsistentGame` になった場合は、正方と同じく fictitious play → MWU に fallback する。各行の長さは n で揃える。0 行・0 列の空行列と、行の長さが揃っていない入力はエラー。`labels` の長さは行数 m。m = n のとき、このラベルは列の行動にも同じ順で対応する。m ≠ n のとき、列の行動は `col_strategy` と `support.col` の index で参照する。
 
-**characters 形式**: 各キャラに `label` (名前)、`power` (スカラー p)、`v` (2D ベクトル {x, y})。利得は `A[i,j] = (pᵢ − pⱼ) + vᵢ × vⱼ` で自動生成。
+**characters 形式**: 各キャラに `label` (名前)、`power` (スカラー p)、`v` (2D ベクトル {x, y})。利得は `A[i,j] = (pᵢ − pⱼ) + vᵢ × vⱼ` で自動生成され、キャラ数の正方行列になる。
 
 ### 実行
 
@@ -107,7 +107,7 @@ JSON
 }
 ```
 
-`nash_solver` は解を返した経路 (`simplex` / `fictitious_play` / `mwu`)。simplex が iteration limit で止まった行列は fictitious play に切り替わり、その exploitability が tol 以上なら mwu に進む。tol の既定は 0.05、反復回数の既定は 10000。入力の `nash_solver_config.tol` と `nash_solver_config.iterations` で上書きできる。両方とも tol を超えたときはコマンドが失敗する。pure-saddle は simplex 経路の内側で返り、`nash_solver` は `simplex` のまま。
+`nash_solver` は解を返した経路 (`simplex` / `fictitious_play` / `mwu`)。simplex が iteration limit（`SimplexFailure`）で止まった場合、または有限な行列なのに数値誤差で `InconsistentGame`（col LP unbounded など）になった場合は fictitious play に切り替わり、その exploitability が tol 以上なら mwu に進む。空行列や NaN/Inf は行列構築時に拒否され、fallback しない。tol の既定は 0.05、反復回数の既定は 10000。入力の `nash_solver_config.tol` と `nash_solver_config.iterations` で上書きできる。両方とも tol を超えたときはコマンドが失敗する。pure-saddle は simplex 経路の内側で返り、`nash_solver` は `simplex` のまま。simplex が成功したときの value・戦略・exploitability は変わらない。
 
 ### 結果整形
 
@@ -365,9 +365,11 @@ JSON
 
 3 種類の入力を受け付ける:
 
-1. **matrix 形式**: 既知の利得行列を直接渡す
-2. **characters 形式**: monocycle (p, v) リストから自動生成
+1. **matrix 形式**: 既知の正方利得行列を直接渡す
+2. **characters 形式**: monocycle (p, v) リストから自動生成（正方）
 3. **team + opponent 形式**: `pkdx select` と同じ Combatant JSON。`box/teams/*.meta.json` の `members` をそのまま流せる
+
+matrix / characters 形式は正方だけを受け付ける。DOT はノード集合が 1 つの有向グラフで、辺 `i -> j` のラベルが `A[i, j]`、両端が同じ `labels` を共有する。非正方は行と列で行動集合が違うのでこのグラフにはならない。矩形の零和は `pkdx nash solve` に渡す。team + opponent 形式は `(n+m) × (n+m)` の正方に埋め込んでから描くので、人数が違っても渡せる。
 
 ```bash
 # matrix 形式
@@ -410,7 +412,9 @@ dot -Tpng matchup.dot -o matchup.png
 | `invalid JSON: ...` | 入力 JSON の構文エラー。再入力を依頼 |
 | `missing field: ...` | 必須フィールド不足。仕様を再提示して再入力 |
 | `both matrix and characters provided; pick one` | どちらか一方を削除 |
-| `matrix is not square: NxM` | 正方行列に修正 |
+| `matrix is not square: RxC` | `nash graph` の matrix / characters が非正方。正方にするか、矩形の零和は `nash solve` に渡す |
+| `invalid JSON: matrix rows have inconsistent lengths: ...` | 各行の要素数を揃える |
+| `invalid JSON: matrix must be non-empty` | 0 行または 0 列の行列は受け付けない |
 | `usage does not sum to 1 (got X)` | 使用率を正規化し直す |
 | `game is infeasible` / `unbounded` | 入力が退化 (LP が解けない)。対角/反対称性を確認 |
 

@@ -8,12 +8,21 @@
 /// separately via `silent_dp_fallback_count` (Stage 3).
 ///
 /// Stage 1c: primary simplex with a two-step iterative fallback chain.
-/// On `SimplexFailure`, retry with `fictitious_play`; if its exploitability
-/// still exceeds `config.tol`, retry once more with `mwu` (learning rate
-/// `η = sqrt(ln(max(rows,cols))/iterations)` per Freund & Schapire). When
-/// both iterative learners exceed tol, raise `NashFallbackExhausted` with
-/// the original simplex error and both observed exploitabilities so the CLI
-/// can report how close each approximate solver came.
+/// On `SimplexFailure` or `InconsistentGame`, retry with `fictitious_play`;
+/// if its exploitability still exceeds `config.tol`, retry once more with
+/// `mwu` (learning rate `η = sqrt(ln(max(rows,cols))/iterations)` per Freund
+/// & Schapire). When both iterative learners exceed tol, raise
+/// `NashFallbackExhausted` with the primary solver error and both observed
+/// exploitabilities so the CLI can report how close each approximate solver
+/// came.
+///
+/// `InconsistentGame` is included because a finite zero-sum matrix game
+/// always has a mixed equilibrium (von Neumann). nash-mbt raises it only
+/// when the shift-and-normalize LP contradicts that fact — unbounded or
+/// infeasible status, a non-positive LP sum, or a strategy with NaN / a
+/// large negative weight. Those are numerical failures, same as an
+/// iteration limit. Empty matrices and NaN/Inf never reach this function:
+/// `FiniteMatrix::new` rejects them, and the CLI maps that to `InvalidJson`.
 
 ///|
 pub(all) enum NashSolverPath {
@@ -123,55 +132,72 @@ fn try_mwu(
 }
 
 ///|
+/// Run fictitious play, then MWU, after the primary simplex has already
+/// failed numerically. The first solver whose exploitability is below
+/// `config.tol` wins. If both exceed tol, raise `NashFallbackExhausted`.
+/// `primary_err` is the `Show` text of the error that triggered the chain
+/// (`SimplexFailure` or `InconsistentGame`).
+fn iterative_fallback(
+  matrix : @nash.FiniteMatrix,
+  config : NashSolverConfig,
+  primary_err : String,
+) -> NashSolverResult raise NashCliError {
+  // Fallback 1: fictitious_play.
+  let fp_expl = match try_fictitious(matrix, config.iterations, config.tol) {
+    Ok((p, q, expl)) => {
+      let v = @nash.expected_payoff(p, matrix, q)
+      return {
+        value: v,
+        row_strategy: p,
+        col_strategy: q,
+        exploitability: expl,
+        solver_path: FictitiousPlay,
+      }
+    }
+    Err(expl) => expl
+  }
+  // Fallback 2: mwu.
+  let mwu_expl = match try_mwu(matrix, config.iterations, config.tol) {
+    Ok((p, q, expl)) => {
+      let v = @nash.expected_payoff(p, matrix, q)
+      return {
+        value: v,
+        row_strategy: p,
+        col_strategy: q,
+        exploitability: expl,
+        solver_path: Mwu,
+      }
+    }
+    Err(expl) => expl
+  }
+  raise NashFallbackExhausted(simplex_err=primary_err, fp_expl~, mwu_expl~)
+}
+
+///|
 /// Solve a zero-sum game with the pkdx fallback chain.
 ///
-/// Stage 1c: primary simplex, then a two-step iterative chain on
-/// `SimplexFailure`: `fictitious_play` first, `mwu` second. The first solver
-/// whose exploitability is below `config.tol` wins. If both exceed tol, raise
-/// `NashFallbackExhausted` carrying the original simplex error message and
+/// Primary simplex, then a two-step iterative chain when simplex raises
+/// `SimplexFailure` (iteration limit, or an internal LP-shape error on a
+/// matrix `FiniteMatrix::new` already accepted) or `InconsistentGame`
+/// (numerical infeasible / unbounded / non-probability strategy). The first
+/// solver whose exploitability is below `config.tol` wins. If both exceed
+/// tol, raise `NashFallbackExhausted` carrying the primary error message and
 /// both observed exploitabilities.
+///
+/// A successful simplex returns the same `Optimal` payload as a direct
+/// `solve_zero_sum` call, with `exploitability` fixed at 0 and
+/// `solver_path` `Simplex`. `LpResult::Infeasible` / `Unbounded` stay hard
+/// errors: `solve_zero_sum` does not return them (it raises
+/// `InconsistentGame` instead), so those arms are not a numeric-failure path.
 pub fn solve_with_fallback(
   matrix : @nash.FiniteMatrix,
   config? : NashSolverConfig = NashSolverConfig::default(),
 ) -> NashSolverResult raise NashCliError {
   let lp = @nash.solve_zero_sum(matrix) catch {
-    @nash.SimplexFailure(_) as simplex_err => {
-      // Fallback 1: fictitious_play.
-      let fp_expl = match
-        try_fictitious(matrix, config.iterations, config.tol) {
-        Ok((p, q, expl)) => {
-          let v = @nash.expected_payoff(p, matrix, q)
-          return {
-            value: v,
-            row_strategy: p,
-            col_strategy: q,
-            exploitability: expl,
-            solver_path: FictitiousPlay,
-          }
-        }
-        Err(expl) => expl
-      }
-      // Fallback 2: mwu.
-      let mwu_expl = match try_mwu(matrix, config.iterations, config.tol) {
-        Ok((p, q, expl)) => {
-          let v = @nash.expected_payoff(p, matrix, q)
-          return {
-            value: v,
-            row_strategy: p,
-            col_strategy: q,
-            exploitability: expl,
-            solver_path: Mwu,
-          }
-        }
-        Err(expl) => expl
-      }
-      raise NashFallbackExhausted(
-        simplex_err=simplex_err.to_string(),
-        fp_expl~,
-        mwu_expl~,
-      )
-    }
-    other => raise InnerError(other.to_string())
+    @nash.SimplexFailure(_) as err =>
+      return iterative_fallback(matrix, config, err.to_string())
+    @nash.InconsistentGame(_) as err =>
+      return iterative_fallback(matrix, config, err.to_string())
   }
   match lp {
     Optimal(value~, row_strategy~, col_strategy~) =>

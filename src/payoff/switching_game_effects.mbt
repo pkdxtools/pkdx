@@ -350,26 +350,17 @@ pub fn apply_contact_proc_fanout(
   if @damage.check_def_immunity(defender.ability, resolved_move_type) {
     return [(1.0, state)]
   }
-  match @types.type_from_jp(resolved_move_type) {
-    Some(at) =>
-      match @types.type_from_jp(defender.pokemon.type1) {
-        Some(d1) => {
-          let e1 = @types.get_effectiveness_x4(at, d1)
-          let e2 = if defender.pokemon.type2.length() > 0 {
-            match @types.type_from_jp(defender.pokemon.type2) {
-              Some(d2) => @types.get_effectiveness_x4(at, d2)
-              None => 4
-            }
-          } else {
-            4
-          }
-          if e1 == 0 || e2 == 0 {
-            return [(1.0, state)]
-          }
-        }
-        None => ()
-      }
-    None => ()
+  // タイプ無効は engine と同じ move_effectiveness_slots_x4。
+  // フライングプレスはかくとう無効 (ゴースト) をひこう側が打ち消さない。
+  // フリーズドライのみず上書きもここを通る (無効にはならない)。
+  let (e1, e2) = @damage.move_effectiveness_slots_x4(
+    mv.name,
+    resolved_move_type,
+    defender.pokemon.type1,
+    defender.pokemon.type2,
+  )
+  if e1 == 0 || e2 == 0 {
+    return [(1.0, state)]
   }
   // 各 hit 内で defender の ability proc → item proc の順に独立判定する
   // (Showdown / Gen9 仕様)。両者を一つの categorical roll に畳むと

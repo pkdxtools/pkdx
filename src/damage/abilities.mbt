@@ -269,7 +269,7 @@ pub fn get_def_ability_final(
   }
   match ability {
     "マルチスケイル" => 2048
-    "フィルター" | "ハードロック" =>
+    "フィルター" | "ハードロック" | "プリズムアーマー" =>
       if is_super_effective {
         3072
       } else {

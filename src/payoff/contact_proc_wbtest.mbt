@@ -713,3 +713,52 @@ test "contact_proc_fanout: エレキスキン Normal contact vs ひらいしん 
   @debug.debug_inspect(outcomes.length(), content="1")
   assert_true(approx_eq_cp(outcomes[0].0, 1.0))
 }
+
+///|
+test "contact_proc_fanout: Flying Press vs Ghost is immune (Flying does not hit)" {
+  // フライングプレスは接触技。ゴーストはかくとう無効でダメージ 0。
+  // ひこう相性を足しても無効は残る (Showdown は move.type の runImmunity が先)。
+  // ほのおのからだのやけど fanout を出してはならない。
+  let attacker = cp_combatant(cp_pokemon("attacker", "かくとう", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "ゴースト", ""),
+    ability="ほのおのからだ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = { ..cp_move("フライングプレス"), type_: "かくとう" }
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(),
+    true,
+    0,
+    0,
+    attacker_team,
+    defender_team,
+    mv,
+  )
+  @debug.debug_inspect(outcomes.length(), content="1")
+  assert_true(approx_eq_cp(outcomes[0].0, 1.0))
+}
+
+///|
+test "contact_proc_fanout: Flying Press vs Grass still fans out" {
+  // くさは複合相性 2 倍でダメージが通る。接触 proc は抑制しない。
+  let attacker = cp_combatant(cp_pokemon("attacker", "かくとう", ""))
+  let defender = cp_combatant(
+    cp_pokemon("defender", "くさ", ""),
+    ability="ほのおのからだ",
+  )
+  let attacker_team = [attacker, attacker, attacker]
+  let defender_team = [defender, defender, defender]
+  let mv = { ..cp_move("フライングプレス"), type_: "かくとう" }
+  let outcomes = apply_contact_proc_fanout(
+    cp_state(),
+    true,
+    0,
+    0,
+    attacker_team,
+    defender_team,
+    mv,
+  )
+  @debug.debug_inspect(outcomes.length(), content="2")
+}

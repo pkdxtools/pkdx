@@ -326,8 +326,11 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     effective_power = round5(effective_power, 4915)
   }
 
-  // Type effectiveness (using x4 integer encoding)
-  // フリーズドライのみず 2 倍上書きは move_effectiveness_x4 が担う。
+  // Type effectiveness (using x4 integer encoding).
+  // フリーズドライの上書きとフライングプレスの追加相性タイプ (ひこう) は
+  // effectiveness_slots_x4 が担う。move_type は Weather Ball / Skin 解決後。
+  // STAB・半減実のタイプ一致・タイプ強化道具は move_type のみ (追加タイプは
+  // 相性の積だけに効く)。
   let atk_type_opt = @types.type_from_jp(move_type)
   let def1_opt = @types.type_from_jp(dfn.type1)
   let def2_opt = if dfn.type2.length() > 0 {
@@ -336,14 +339,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
     None
   }
   let (eff1_x4, eff2_x4) = match (atk_type_opt, def1_opt) {
-    (Some(at), Some(d1)) => {
-      let e1 = move_effectiveness_x4(move_name, at, d1)
-      let e2 = match def2_opt {
-        Some(d2) => move_effectiveness_x4(move_name, at, d2)
-        None => 4
-      }
-      (e1, e2)
-    }
+    (Some(at), Some(d1)) => effectiveness_slots_x4(move_name, at, d1, def2_opt)
     _ => (4, 4)
   }
 

@@ -127,7 +127,7 @@ fn nash_cli_error_message(err : @payoff.NashCliError) -> String {
     UnboundedGame => "game is unbounded"
     InnerError(msg) => "solver error: " + msg
     NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) =>
-      "Nash solver failed: simplex error '" +
+      "Nash solver failed: primary solver error '" +
       simplex_err +
       "', fictitious_play exploitability " +
       fp_expl.to_string() +

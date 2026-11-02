@@ -152,3 +152,266 @@ test "fictitious_play fallback succeeds on degenerate 60x60 matrix" {
   }
   assert_true((col_sum - 1.0).abs() < 1.0e-6)
 }
+
+///|
+/// Deterministic value in [-1, 1]. The multipliers stay inside 32-bit `Int`.
+fn det_unit(i : Int, j : Int, seed : Int) -> Double {
+  let mut x = i * 37 + j * 91 + seed * 17 + 123
+  x = x % 997
+  if x < 0 {
+    x = x + 997
+  }
+  x = (x * 131 + seed + 17) % 1000
+  if x < 0 {
+    x = x + 1000
+  }
+  (x - 500).to_double() / 500.0
+}
+
+///|
+/// 16×16 matrix whose entries are `scale * det_unit(i, j, seed)`.
+///
+/// Seed 20 at `scale = 1e-10` is a zero matrix plus 1e-10 noise. The same
+/// pattern at `scale = 1` is an ordinary mixed game that simplex solves, so
+/// the LP failure is the noise scale (entries sit between the simplex pivot
+/// epsilon and the optimality epsilon), not a missing equilibrium.
+fn scaled_noise_matrix(
+  n : Int,
+  seed : Int,
+  scale : Double,
+) -> @nash.FiniteMatrix {
+  let rows = Array::make(n, ([] : Array[Double]))
+  for i in 0..<n {
+    let row = Array::make(n, 0.0)
+    for j in 0..<n {
+      row[j] = scale * det_unit(i, j, seed)
+    }
+    rows[i] = row
+  }
+  match @nash.FiniteMatrix::new(rows) {
+    Ok(m) => m
+    Err(_) => abort("scaled noise matrix was rejected")
+  }
+}
+
+///|
+/// The 16×16 / 1e-10 case `solve_zero_sum` currently reports as
+/// `InconsistentGame("col LP unbounded")`.
+fn inconsistent_noise_matrix_16() -> @nash.FiniteMatrix {
+  scaled_noise_matrix(16, 20, 1.0e-10)
+}
+
+///|
+fn matrix_json(m : @nash.FiniteMatrix, extra : String) -> String {
+  let mut s = "{\"matrix\":["
+  for i in 0..<m.rows() {
+    if i > 0 {
+      s = s + ","
+    }
+    s = s + "["
+    for j in 0..<m.cols() {
+      if j > 0 {
+        s = s + ","
+      }
+      s = s + m.at(i, j).to_string()
+    }
+    s = s + "]"
+  }
+  s + "]" + extra + "}"
+}
+
+///|
+fn assert_prob(xs : Array[Double], n : Int) -> Unit raise {
+  assert_eq(xs.length(), n)
+  let mut sum = 0.0
+  for x in xs {
+    assert_true(x >= 0.0)
+    sum = sum + x
+  }
+  assert_true((sum - 1.0).abs() < 1.0e-6)
+}
+
+///|
+test "scaled noise at O(1) still takes the simplex path" {
+  // Same generator as the InconsistentGame fixture, without the 1e-10 scale.
+  // Locks the claim that this pattern has an equilibrium simplex can return,
+  // and that a successful simplex is still reported as Simplex / expl 0.
+  let m = scaled_noise_matrix(16, 20, 1.0)
+  let result = solve_with_fallback(m)
+  inspect(result.solver_path, content="Simplex")
+  inspect(result.exploitability, content="0")
+  assert_true(!result.value.is_nan())
+  assert_prob(result.row_strategy.to_array(), 16)
+  assert_prob(result.col_strategy.to_array(), 16)
+}
+
+///|
+test "16x16 1e-10 noise: solve_zero_sum raises InconsistentGame col LP unbounded" {
+  // This reproduction depends on nash-mbt 0.1.1's internal epsilons. If it fails after a nash-mbt bump, the fixture is stale rather than a regression, so rebuild a matrix that still reproduces the failure.
+  let m = inconsistent_noise_matrix_16()
+  assert_eq(m.rows(), 16)
+  assert_eq(m.cols(), 16)
+  try {
+    let _ = @nash.solve_zero_sum(m)
+    fail("expected InconsistentGame")
+  } catch {
+    @nash.InconsistentGame(msg) =>
+      assert_true(msg.contains("col LP unbounded"))
+    other => fail("expected InconsistentGame, got " + other.to_string())
+  }
+}
+
+///|
+test "16x16 1e-10 noise: solve_with_fallback accepts fictitious play under tol" {
+  let m = inconsistent_noise_matrix_16()
+  let result = solve_with_fallback(m)
+  inspect(result.solver_path, content="FictitiousPlay")
+  // Default tol is 0.05. Payoffs are O(1e-10), so a real equilibrium is far
+  // below that; require a tight residual so a uniform guess cannot pass.
+  assert_true(result.exploitability < 0.05)
+  assert_true(result.exploitability < 1.0e-9)
+  assert_true(!result.value.is_nan())
+  assert_true(result.value.abs() < 1.0e-8)
+  assert_prob(result.row_strategy.to_array(), 16)
+  assert_prob(result.col_strategy.to_array(), 16)
+}
+
+///|
+/// Payoffs are O(1e-10), and 100 iterations of either learner land near
+/// 1e-11. `tol = 1e-12` is below both, so the chain must raise rather than
+/// return a strategy. The carried error is the original `InconsistentGame`,
+/// not a `SimplexFailure`.
+test "16x16 1e-10 noise: tight tol raises NashFallbackExhausted" {
+  let m = inconsistent_noise_matrix_16()
+  let tight : NashSolverConfig = { tol: 1.0e-12, iterations: 100 }
+  try solve_with_fallback(m, config=tight) catch {
+    NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) => {
+      assert_true(simplex_err.contains("InconsistentGame"))
+      assert_true(simplex_err.contains("col LP unbounded"))
+      assert_true(fp_expl >= 1.0e-12)
+      assert_true(mwu_expl >= 1.0e-12)
+    }
+    _ => fail("expected NashFallbackExhausted, got a different NashCliError")
+  } noraise {
+    _ => fail("expected NashFallbackExhausted but solver returned a strategy")
+  }
+}
+
+///|
+test "nash solve path: 16x16 1e-10 noise falls back with expl < tol" {
+  let input = matrix_json(inconsistent_noise_matrix_16(), "")
+  let out = run_nash_solve(input)
+  let parsed = @json.parse(out) catch {
+    _ => abort("nash solve output is not json")
+  }
+  match parsed {
+    Object(obj) => {
+      match obj.get("nash_solver") {
+        Some(String(s)) => assert_eq(s, "fictitious_play")
+        _ => fail("nash_solver missing")
+      }
+      match obj.get("exploitability") {
+        Some(Number(expl, ..)) => {
+          assert_true(expl < 0.05)
+          assert_true(expl < 1.0e-9)
+        }
+        _ => fail("exploitability missing")
+      }
+      match obj.get("row_strategy") {
+        Some(Array(arr)) => assert_eq(arr.length(), 16)
+        _ => fail("row_strategy missing")
+      }
+      match obj.get("col_strategy") {
+        Some(Array(arr)) => assert_eq(arr.length(), 16)
+        _ => fail("col_strategy missing")
+      }
+    }
+    _ => fail("nash solve output is not an object")
+  }
+}
+
+///|
+test "nash solve path: 16x16 1e-10 noise tight tol raises NashFallbackExhausted" {
+  let input = matrix_json(
+    inconsistent_noise_matrix_16(),
+    ",\"nash_solver_config\":{\"tol\":1e-12,\"iterations\":100}",
+  )
+  try run_nash_solve(input) catch {
+    NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) => {
+      assert_true(simplex_err.contains("col LP unbounded"))
+      assert_true(fp_expl >= 1.0e-12)
+      assert_true(mwu_expl >= 1.0e-12)
+    }
+    _ => fail("expected NashFallbackExhausted, got a different NashCliError")
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
+}
+
+///|
+/// `build_select_result` is the select boundary that calls
+/// `solve_with_fallback`. select's public JSON API builds the payoff from
+/// teams, so the noisy matrix is injected here with an empty roster; the
+/// solver still runs on that matrix and the serialized `nash_solver` tag is
+/// the one `pkdx select` prints.
+test "select path: 16x16 1e-10 noise falls back with expl < tol" {
+  let m = inconsistent_noise_matrix_16()
+  let result = build_select_result(Single, [], [], m, None, None)
+  inspect(result.solver_path, content="FictitiousPlay")
+  assert_true(result.exploitability < 0.05)
+  assert_true(result.exploitability < 1.0e-9)
+  assert_prob(result.row_strategy, 16)
+  assert_prob(result.col_strategy, 16)
+  let json = serialize_select_result(result)
+  assert_true(json.contains("\"nash_solver\":\"fictitious_play\""))
+}
+
+///|
+test "select path: 16x16 1e-10 noise tight tol raises NashFallbackExhausted" {
+  let m = inconsistent_noise_matrix_16()
+  let tight : NashSolverConfig = { tol: 1.0e-12, iterations: 100 }
+  try build_select_result(Single, [], [], m, None, None, nash_config=tight) catch {
+    NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) => {
+      assert_true(simplex_err.contains("col LP unbounded"))
+      assert_true(fp_expl >= 1.0e-12)
+      assert_true(mwu_expl >= 1.0e-12)
+    }
+    _ => fail("expected NashFallbackExhausted, got a different NashCliError")
+  } noraise {
+    _ => fail("expected build_select_result to raise")
+  }
+}
+
+///|
+/// Invalid matrices never become a fallback. `FiniteMatrix::new` rejects
+/// empty input and non-finite entries; the CLI rejects an empty matrix as
+/// `InvalidJson` before `solve_with_fallback`.
+test "empty and non-finite matrices stay hard errors" {
+  match @nash.FiniteMatrix::new([]) {
+    Err(@nash.Empty) => ()
+    Ok(_) => fail("empty matrix was accepted")
+    Err(other) => fail("expected Empty, got " + other.to_string())
+  }
+  // 0/0 and 1/0 are the non-finite values FiniteMatrix::new must reject.
+  // They never reach the fallback chain.
+  let nan_row = [0.0 / 0.0, 0.0]
+  match @nash.FiniteMatrix::new([nan_row, [0.0, 0.0]]) {
+    Err(@nash.NonFinite) => ()
+    Ok(_) => fail("NaN matrix was accepted")
+    Err(_) => fail("expected NonFinite for NaN")
+  }
+  let inf_row = [1.0 / 0.0, 0.0]
+  match @nash.FiniteMatrix::new([inf_row, [0.0, 0.0]]) {
+    Err(@nash.NonFinite) => ()
+    Ok(_) => fail("Inf matrix was accepted")
+    Err(_) => fail("expected NonFinite for Inf")
+  }
+  try run_nash_solve("{\"matrix\":[]}") catch {
+    InvalidJson(msg) => assert_true(msg.contains("non-empty"))
+    NashFallbackExhausted(_) =>
+      fail("empty matrix must not enter the fallback")
+    _ => fail("expected InvalidJson for an empty matrix")
+  } noraise {
+    _ => fail("expected run_nash_solve to raise on an empty matrix")
+  }
+}

@@ -1077,7 +1077,8 @@ fn build_select_result(
   // `solve_with_fallback` raises the same `NashCliError` variants the old
   // direct `solve_zero_sum` callsite mapped to (Infeasible / Unbounded /
   // InnerError), plus `NashFallbackExhausted` when both iterative fallbacks
-  // also exceed `nash_config.tol`.
+  // also exceed `nash_config.tol`. `SimplexFailure` and `InconsistentGame`
+  // both enter that chain; a successful simplex is unchanged.
   let result = solve_with_fallback(matrix, config=nash_config)
   let value = result.value
   let p = strategy_to_array(result.row_strategy)

@@ -107,7 +107,7 @@ JSON
 }
 ```
 
-`nash_solver` は解を返した経路 (`simplex` / `fictitious_play` / `mwu`)。simplex が iteration limit で止まった行列は fictitious play に切り替わり、その exploitability が tol 以上なら mwu に進む。tol の既定は 0.05、反復回数の既定は 10000。入力の `nash_solver_config.tol` と `nash_solver_config.iterations` で上書きできる。両方とも tol を超えたときはコマンドが失敗する。pure-saddle は simplex 経路の内側で返り、`nash_solver` は `simplex` のまま。
+`nash_solver` は解を返した経路 (`simplex` / `fictitious_play` / `mwu`)。simplex が iteration limit（`SimplexFailure`）で止まった場合、または有限な行列なのに数値誤差で `InconsistentGame`（col LP unbounded など）になった場合は fictitious play に切り替わり、その exploitability が tol 以上なら mwu に進む。空行列や NaN/Inf は行列構築時に拒否され、fallback しない。tol の既定は 0.05、反復回数の既定は 10000。入力の `nash_solver_config.tol` と `nash_solver_config.iterations` で上書きできる。両方とも tol を超えたときはコマンドが失敗する。pure-saddle は simplex 経路の内側で返り、`nash_solver` は `simplex` のまま。simplex が成功したときの value・戦略・exploitability は変わらない。
 
 ### 結果整形
 

@@ -29,13 +29,30 @@ test "nash_solve_rejects_both_matrix_and_characters" {
 }
 
 ///|
-test "nash_solve_rejects_non_square" {
-  let bad = "{\"matrix\":[[0,1,-1],[1,0]]}"
-  try @payoff.run_nash_solve(bad) catch {
-    e => assert_true(e is NonSquareMatrix(_, _))
+fn assert_solve_invalid(input : String, needle : String) -> Unit raise {
+  try @payoff.run_nash_solve(input) catch {
+    InvalidJson(msg) => assert_true(msg.contains(needle))
+    _ => fail("expected InvalidJson")
   } noraise {
     _ => fail("expected run_nash_solve to raise")
   }
+}
+
+///|
+test "nash_solve_rejects_ragged_and_empty_matrix" {
+  // Rows of different lengths are not a rectangle.
+  assert_solve_invalid(
+    "{\"matrix\":[[0,1,-1],[1,0]]}",
+    "inconsistent lengths",
+  )
+  assert_solve_invalid(
+    "{\"matrix\":[[1,2],[3,4,5]]}",
+    "inconsistent lengths",
+  )
+  // No rows, a row with no columns, and several empty rows.
+  assert_solve_invalid("{\"matrix\":[]}", "non-empty")
+  assert_solve_invalid("{\"matrix\":[[]]}", "non-empty")
+  assert_solve_invalid("{\"matrix\":[[],[]]}", "non-empty")
 }
 
 ///|
@@ -654,4 +671,156 @@ test "nash_graph_escapes_control_chars_in_labels" {
   assert_true(out.contains("\"A\\nX\""))
   assert_true(out.contains("\"B\\tY\""))
   assert_true(out.contains("\"C\\rZ\""))
+}
+
+///|
+/// 1×N, N×1, and a mixed 2×3 whose equilibrium is unique.
+///
+/// 2×3 matrix `[[3, -1, -3], [-2, 2, 1]]`:
+/// row `p = (1/3, 2/3)` equalizes columns 0 and 2 at `-1/3` and leaves
+/// column 1 at `1`, so the column player drops it. Column
+/// `q = (4/9, 0, 5/9)` equalizes both rows at `-1/3`.
+test "nash_solve_rectangular_known_equilibria" {
+  // 1×3. The row player has one action. The column player minimizes it.
+  let wide_pure = solve_obj("{\"matrix\":[[1,-2,3]]}")
+  assert_true(str_field(wide_pure, "nash_solver") == "simplex")
+  assert_near(num_field(wide_pure, "value"), -2.0)
+  assert_true(num_field(wide_pure, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(wide_pure, "row_strategy"), 0)
+  assert_pure(num_array_field(wide_pure, "col_strategy"), 1)
+  // 3×1. The column player has one action. The row player maximizes it.
+  let tall_pure = solve_obj("{\"matrix\":[[1],[-2],[3]]}")
+  assert_true(str_field(tall_pure, "nash_solver") == "simplex")
+  assert_near(num_field(tall_pure, "value"), 3.0)
+  assert_true(num_field(tall_pure, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(tall_pure, "row_strategy"), 2)
+  assert_pure(num_array_field(tall_pure, "col_strategy"), 0)
+  // Mixed 2×3. See the comment above for the closed form.
+  let wide = solve_obj("{\"matrix\":[[3,-1,-3],[-2,2,1]]}")
+  assert_true(str_field(wide, "nash_solver") == "simplex")
+  assert_near(num_field(wide, "value"), -1.0 / 3.0)
+  assert_true(num_field(wide, "exploitability") < 1.0e-6)
+  let wide_row = num_array_field(wide, "row_strategy")
+  let wide_col = num_array_field(wide, "col_strategy")
+  assert_eq(wide_row.length(), 2)
+  assert_eq(wide_col.length(), 3)
+  assert_near(wide_row[0], 1.0 / 3.0)
+  assert_near(wide_row[1], 2.0 / 3.0)
+  assert_near(wide_col[0], 4.0 / 9.0)
+  assert_near(wide_col[1], 0.0)
+  assert_near(wide_col[2], 5.0 / 9.0)
+  // -Aᵀ is 3×2. The value flips sign and the two strategies swap.
+  let tall = solve_obj("{\"matrix\":[[-3,2],[1,-2],[3,-1]]}")
+  assert_true(str_field(tall, "nash_solver") == "simplex")
+  assert_near(num_field(tall, "value"), 1.0 / 3.0)
+  assert_near(num_field(tall, "value"), -num_field(wide, "value"))
+  assert_true(num_field(tall, "exploitability") < 1.0e-6)
+  let tall_row = num_array_field(tall, "row_strategy")
+  let tall_col = num_array_field(tall, "col_strategy")
+  assert_eq(tall_row.length(), 3)
+  assert_eq(tall_col.length(), 2)
+  for i in 0..<3 {
+    assert_near(tall_row[i], wide_col[i])
+  }
+  for i in 0..<2 {
+    assert_near(tall_col[i], wide_row[i])
+  }
+  // -Aᵀ of the 1×3. Value is +2 and the strategies swap.
+  let flipped_row = solve_obj("{\"matrix\":[[-1],[2],[-3]]}")
+  assert_true(str_field(flipped_row, "nash_solver") == "simplex")
+  assert_near(num_field(flipped_row, "value"), -num_field(wide_pure, "value"))
+  assert_pure(num_array_field(flipped_row, "row_strategy"), 1)
+  assert_pure(num_array_field(flipped_row, "col_strategy"), 0)
+}
+
+///|
+test "nash_solve_rectangular_labels_follow_row_count" {
+  let named = solve_obj(
+    "{\"matrix\":[[3,-1,-3],[-2,2,1]],\"labels\":[\"A\",\"B\"]}",
+  )
+  match named.get("labels") {
+    Some(Array(arr)) => assert_eq(arr.length(), 2)
+    _ => fail("labels missing")
+  }
+  // Default labels are the row indices. A 1×3 game has one label.
+  let bare = solve_obj("{\"matrix\":[[1,-2,3]]}")
+  match bare.get("labels") {
+    Some(Array(arr)) => {
+      assert_eq(arr.length(), 1)
+      match arr[0] {
+        String(s) => assert_true(s == "0")
+        _ => fail("label is not a string")
+      }
+    }
+    _ => fail("labels missing")
+  }
+  let bad = "{\"matrix\":[[3,-1,-3],[-2,2,1]],\"labels\":[\"A\",\"B\",\"C\"]}"
+  try @payoff.run_nash_solve(bad) catch {
+    e => assert_true(e is LabelCountMismatch(2, 3))
+  } noraise {
+    _ => fail("expected run_nash_solve to raise")
+  }
+}
+
+///|
+fn finite_or_abort(data : Array[Array[Double]]) -> @nash.FiniteMatrix {
+  match @nash.FiniteMatrix::new(data) {
+    Ok(m) => m
+    Err(_) => abort("rectangular matrix rejected by FiniteMatrix::new")
+  }
+}
+
+///|
+/// Fictitious play and MWU on the same rectangles the simplex path solves.
+/// Iteration count is past the default fallback budget so the
+/// `O(sqrt(log(n) / T))` MWU gap on these payoff scales stays under the
+/// 0.05 exploitability tolerance `solve_with_fallback` uses.
+fn assert_iterative_value(m : @nash.FiniteMatrix, want : Double) -> Unit raise {
+  let iterations = 100000
+  let (fp_p, fp_q) = @nash.fictitious_play(m, iterations)
+  let fp_v = @nash.expected_payoff(fp_p, m, fp_q)
+  assert_true(@nash.exploitability(m, fp_p, fp_q) < 0.05)
+  assert_true((fp_v - want).abs() < 0.05)
+  let dim = if m.rows() > m.cols() { m.rows() } else { m.cols() }
+  let eta = (@math.ln(dim.to_double()) / iterations.to_double()).sqrt()
+  let (mw_p, mw_q) = @nash.mwu(m, iterations, eta)
+  let mw_v = @nash.expected_payoff(mw_p, m, mw_q)
+  assert_true(@nash.exploitability(m, mw_p, mw_q) < 0.05)
+  assert_true((mw_v - want).abs() < 0.05)
+}
+
+///|
+test "nash_rectangular_fictitious_play_and_mwu_match_value" {
+  assert_iterative_value(finite_or_abort([[1.0, -2.0, 3.0]]), -2.0)
+  assert_iterative_value(finite_or_abort([[1.0], [-2.0], [3.0]]), 3.0)
+  assert_iterative_value(
+    finite_or_abort([[3.0, -1.0, -3.0], [-2.0, 2.0, 1.0]]),
+    -1.0 / 3.0,
+  )
+  assert_iterative_value(
+    finite_or_abort([[-3.0, 2.0], [1.0, -2.0], [3.0, -1.0]]),
+    1.0 / 3.0,
+  )
+}
+
+///|
+test "nash_graph_rejects_non_square_keeps_ragged_invalid" {
+  // A rectangle is a well-formed payoff, but not a one-node-set digraph.
+  try @payoff.run_nash_graph("{\"matrix\":[[1,-2,3]]}", 0.0) catch {
+    e => assert_true(e is NonSquareMatrix(1, 3))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
+  try @payoff.run_nash_graph("{\"matrix\":[[-3,2],[1,-2],[3,-1]]}", 0.0) catch {
+    e => assert_true(e is NonSquareMatrix(3, 2))
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
+  // Ragged input fails shape validation before the square check.
+  try @payoff.run_nash_graph("{\"matrix\":[[0,1,-1],[1,0]]}", 0.0) catch {
+    InvalidJson(msg) => assert_true(msg.contains("inconsistent lengths"))
+    _ => fail("expected InvalidJson for a ragged matrix")
+  } noraise {
+    _ => fail("expected run_nash_graph to raise")
+  }
 }

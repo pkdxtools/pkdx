@@ -401,7 +401,6 @@ test "nash_solve_rejects_team_input_as_unsupported" {
 }
 
 ///|
-///|
 fn solve_obj(input : String) -> Map[String, Json] raise @payoff.NashCliError {
   let out = @payoff.run_nash_solve(input)
   let parsed = @json.parse(out) catch {
@@ -526,13 +525,15 @@ test "nash_solve_simplex_games_keep_known_equilibria" {
   assert_true(num_field(flat, "exploitability") < 1.0e-6)
   assert_pure(num_array_field(flat, "row_strategy"), 0)
   assert_pure(num_array_field(flat, "col_strategy"), 0)
-  // Shapley 3x3 is a pure saddle at (0, 0) with value 0.
-  let shapley = solve_obj("{\"matrix\":[[0,0,1],[0,0,-1],[-1,1,0]]}")
-  assert_true(str_field(shapley, "nash_solver") == "simplex")
-  assert_near(num_field(shapley, "value"), 0.0)
-  assert_true(num_field(shapley, "exploitability") < 1.0e-6)
-  assert_pure(num_array_field(shapley, "row_strategy"), 0)
-  assert_pure(num_array_field(shapley, "col_strategy"), 0)
+  // Pure saddle on this 3×3: value 0 at (row 0, col 0). Every row minimum
+  // is at most 0, row 0's minimum is 0, and column 0's maximum is 0, so
+  // maxmin equals minmax and the saddle fast path returns that pure profile.
+  let zero_saddle = solve_obj("{\"matrix\":[[0,0,1],[0,0,-1],[-1,1,0]]}")
+  assert_true(str_field(zero_saddle, "nash_solver") == "simplex")
+  assert_near(num_field(zero_saddle, "value"), 0.0)
+  assert_true(num_field(zero_saddle, "exploitability") < 1.0e-6)
+  assert_pure(num_array_field(zero_saddle, "row_strategy"), 0)
+  assert_pure(num_array_field(zero_saddle, "col_strategy"), 0)
   // Each RPS action duplicated once. Class totals stay 1/3; which copy
   // carries the mass is not unique.
   let dup = solve_obj(

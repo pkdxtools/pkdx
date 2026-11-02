@@ -1088,6 +1088,15 @@ pub fn team_rollout(
         // Pokemon、DP 側 SwitchingGame の Switch arm と同じ semantics)。
         match ao {
           TmSwitch(i) => {
+            // 再生力: 出ていく slot。DP の Switch arm と同じく active 更新前。
+            // MC は mega 未モデルなので raw ability + pokemon.hp（megaed=false
+            // の DP と一致）。ひんしの死に出しは helper が HP<=0 で不発にする。
+            apply_regenerator_on_switch_out(
+              own[own_active].ability,
+              own_hps,
+              own_active,
+              own[own_active].pokemon.hp,
+            )
             own_status[own_active] = reset_toxic_counter_on_switch(
               own_status[own_active],
             )
@@ -1107,6 +1116,12 @@ pub fn team_rollout(
         }
         match ap {
           TmSwitch(i) => {
+            apply_regenerator_on_switch_out(
+              opp[opp_active].ability,
+              opp_hps,
+              opp_active,
+              opp[opp_active].pokemon.hp,
+            )
             opp_status[opp_active] = reset_toxic_counter_on_switch(
               opp_status[opp_active],
             )

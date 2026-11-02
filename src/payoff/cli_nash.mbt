@@ -19,7 +19,7 @@
 ///
 /// Optional `nash_solver_config` (`tol`, `iterations`) is the same object
 /// `pkdx select` accepts. It only affects the iterative fallback used when
-/// simplex raises `SimplexFailure`.
+/// simplex raises `SimplexFailure` or `InconsistentGame`.
 
 ///|
 pub suberror NashCliError {
@@ -32,9 +32,10 @@ pub suberror NashCliError {
   UnboundedGame
   InnerError(String)
   /// Both iterative fallbacks (fictitious_play and mwu) exceeded `config.tol`
-  /// after the primary simplex raised. Carries the original simplex error
-  /// message and the observed exploitabilities so the CLI can report how
-  /// close each approximate solver came.
+  /// after the primary solver raised `SimplexFailure` or `InconsistentGame`.
+  /// `simplex_err` is that error's `Show` text (the field name predates the
+  /// `InconsistentGame` case) plus the observed exploitabilities, so the CLI
+  /// can report how close each approximate solver came.
   NashFallbackExhausted(
     simplex_err~ : String,
     fp_expl~ : Double,
@@ -373,8 +374,9 @@ fn nash_config_of_solve_input(
 ///
 /// The equilibrium comes from `solve_with_fallback`: simplex first, then
 /// fictitious play, then multiplicative weights, when simplex raises
-/// `SimplexFailure`. `InfeasibleGame` / `UnboundedGame` /
-/// `NashFallbackExhausted` still exit non-zero.
+/// `SimplexFailure` or `InconsistentGame`. `InfeasibleGame` /
+/// `UnboundedGame` / `NashFallbackExhausted` still exit non-zero. Empty
+/// matrices and NaN/Inf are rejected before the solver.
 ///
 /// On the simplex path, `exploitability` is recomputed with
 /// `@nash.exploitability` rather than taken from `NashSolverResult`. The

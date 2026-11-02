@@ -1,10 +1,8 @@
 # pkdx select / Nash ベンチ
 
-ツールチェーン更新後に rebase して再計測予定（現在の数値は暫定）。
+#174（toolchain と依存の更新）と #176（`pkdx nash solve` の fallback）が main に入ったあと、`origin/main`（`18d94d6`）へ rebase して取り直した公式ベースライン。各ケースは別プロセスで複数回実行し、壁時計は中央値を載せる。
 
-この文書の数値は、下の計測環境で release ビルドを 1 回走らせた暫定値である。MoonBit のバージョンが変わると codegen と実行時間が変わる。正式ベースラインは、ツールチェーン更新が main に入ったあとに同じ手順で取り直す。
-
-## 計測環境（暫定）
+## 計測環境
 
 | 項目 | 値 |
 |---|---|
@@ -16,9 +14,11 @@
 | CPU | Intel Xeon, 4 vCPU |
 | MemTotal | 16,387,280 kB |
 | バイナリ | `_build/native/release/build/src/main/main.exe`（`moon build --target native --release src/main`） |
-| 並列 | なし。`select-bench` は in-process（`pkdx select --parallel=1` と同じ呼び出し） |
+| 依存 | `moon.mod`: `moonbitlang/x@0.5.6`, `mizchi/markdown@0.8.4`, `mizchi/admiral@0.1.1`, `ushironoko/nash-mbt@0.1.1` |
+| 並列 | なし。`select-bench` は in-process（`pkdx select --parallel=1` と同じ呼び出し）。4 vCPU は使っていない |
+| 回数 | 1 秒未満のケースは 5 回、それ以外は 3 回。いずれも `--repeats 1` の別プロセス |
 | damage cache | なし（`disk = None`）。SQLite のヒットで時間が揺れない |
-| RSS | GNU time の `Maximum resident set size`（KB）。プロセス起動を含む |
+| RSS | GNU time 1.9 の `Maximum resident set size`（KB）。プロセス起動を含む。表は中央値 |
 
 この計測時の `moon version --all` 全文（パスは実行環境のホーム）:
 
@@ -32,7 +32,7 @@ Feature flags enabled: rr_moon_mod,rr_moon_pkg
 
 `scripts/bench_select.sh` は毎回 `moon version --all` を実行し、各行を `# ` 付きで結果の先頭に書く。TSV の `moonc` 列には 2 番目のフィールド（`v0.10.18+6c83a7f62`）だけを繰り返す。`pkdx select-bench` 自身の TSV は数値のままにして、1 行目がヘッダである前提を壊さない。
 
-`moon 0.1.20261028` / `moonc v0.10.18+6c83a7f62` は `moon.mod.json` を拒否する。計測のときだけ、作業ツリーで `moon fmt` による `moon.mod` 移行と、`.mooncakes/` 内の依存パッケージの同様の移行を行った。その差分はコミットしていない。ソルバの戻り値を変える変更は入っていない。
+Toolchain は `scripts/install_moon.sh`（pin `scripts/moon-version` = `0.10.18+6c83a7f62`）。ビルドは `scripts/moon_build_native.sh --release`。mooncakes の旧 `moon.mod.json` はローカルキャッシュ上だけで `moon tool migrate-manifest` される。ソルバの戻り値を変える変更は、このベースライン取得では入っていない。`dp_nodes` / `dp_lp` / `dp_saddle` は全試行で一致した。
 
 `vm_hwm_kb` 列は -1 になる。`@db.read_file` はファイルサイズで読むため、サイズ 0 の `/proc/self/status` を取れない。ピーク RSS はスクリプトが付ける `gnu_time_max_rss_kb` を使う。
 
@@ -139,34 +139,51 @@ Phase B の screening Nash も fallback しない。bench の `screen_lp` はこ
 | 選出レベルの Nash | 行列 1 枚。成功する 60×60 simplex は数十 ms。反復上限で落ちると fictitious play が `O(iterations × n²)`、既定 10000 回 |
 | ノード内 LP | 行動数 × 行動数。技 2 + 交代だと一辺が数個。60×60 よりずっと小さい |
 
-## 暫定結果
+## ベースライン
 
-release、上の環境。時間は ms。`dp_*` は最終 repeat の 1 回分。RSS は GNU time の KB。
+release、上の環境。時間はプロセス内の `wall_ms`。ばらつきは別プロセス間の最小・最大。`dp_*` は全試行で同一。RSS は GNU time の KB（中央値）。
 
-| case | tier | wall ms | RSS KB | matrix | solver | dp_nodes | dp_hits | dp_lp | dp_saddle | dp_pruned | screen_lp |
-|---|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|
-| nash_rps_3 | smoke | 0.0026 | 3736 | 3×3 | simplex | 0 | 0 | 0 | 0 | 0 | 0 |
-| nash_skew_8 | smoke | 0.014 | 3752 | 8×8 | simplex | 0 | 0 | 0 | 0 | 0 | 0 |
-| nash_skew_20 | default | 0.42 | 3648 | 20×20 | simplex | 0 | 0 | 0 | 0 | 0 | 0 |
-| nash_near_copy_20 | default | 0.36 | 3712 | 20×20 | simplex | 0 | 0 | 0 | 0 | 0 | 0 |
-| nash_skew_60 | default | 30.2 | 3872 | 60×60 | simplex | 0 | 0 | 0 | 0 | 0 | 0 |
-| nash_degenerate_60 | default | 271 | 4084 | 60×60 | fictitious_play | 0 | 0 | 0 | 0 | 0 | 0 |
-| select_3v3_tl1 | smoke | 0.38 | 3816 | 3×3 | simplex | 9 | 0 | 0 | 9 | 0 | 0 |
-| select_screened_3v3 | smoke | 0.33 | 3824 | 2×2 | simplex | 4 | 0 | 0 | 4 | 0 | 1 |
-| select_4v4_tl2 | default | 305 | 3840 | 12×12 | simplex | 3744 | 144 | 16 | 3728 | 0 | 0 |
-| select_status_heavy | default | 526 | 4008 | 12×12 | simplex | 5328 | 234 | 672 | 4656 | 0 | 0 |
-| select_6v6_tl1 | default | 114 | 3932 | 60×60 | simplex | 3600 | 0 | 0 | 3600 | 0 | 0 |
-| select_6v6_screened_small | default | 217 | 4080 | 18×18 | simplex | 324 | 0 | 0 | 324 | 0 | 1 |
-| select_6v6_tl3 | full | 52132 | 4024 | 60×60 | simplex | 875600 | 127600 | 9570 | 866030 | 0 | 0 |
-| select_6v6_screened_prod | full | >180000（打ち切り） | — | — | — | — | — | — | — | — | — |
+| case | n | wall 中央値 ms | min | max | RSS | solver | dp_nodes | dp_lp | dp_saddle |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| nash_rps_3 | 5 | 0.0158 | 0.0099 | 0.0358 | 3708 | simplex | 0 | 0 | 0 |
+| nash_skew_20 | 5 | 0.394 | 0.373 | 0.502 | 3716 | simplex | 0 | 0 | 0 |
+| nash_near_copy_20 | 5 | 0.375 | 0.367 | 0.396 | 3720 | simplex | 0 | 0 | 0 |
+| nash_skew_60 | 3 | 30.53 | 30.20 | 30.80 | 3844 | simplex | 0 | 0 | 0 |
+| nash_degenerate_60 | 3 | 275.0 | 272.6 | 277.0 | 4100 | fictitious_play | 0 | 0 | 0 |
+| select_4v4_tl2 | 3 | 318.9 | 318.4 | 319.0 | 3816 | simplex | 3744 | 16 | 3728 |
+| select_status_heavy | 3 | 548.1 | 545.9 | 548.3 | 3952 | simplex | 5328 | 672 | 4656 |
+| select_6v6_tl1 | 3 | 119.7 | 118.1 | 119.8 | 3888 | simplex | 3600 | 0 | 3600 |
+| select_6v6_screened_small | 3 | 221.5 | 220.7 | 222.9 | 4080 | simplex | 324 | 0 | 324 |
+| select_6v6_tl3 | 3 | 54799 | 54053 | 54865 | 4032 | simplex | 875600 | 9570 | 866030 |
+| select_6v6_screened_prod | 3 | 1023886 | 1008863 | 1034452 | 60832 | simplex | 13260281 | 171298 | 13088983 |
 
-`nash_degenerate_60` の exploitability は `4.7e-4`（tol 0.05 未満）。fictitious play で採用され、MWU には進んでいない。
+`select_6v6_tl3` は鞍点 866030 / 875600 = 98.9%、LP 9570 / 875600 = 1.09%、枝刈り 0、ヒット 127600（ヒット率 12.7%）。`select_6v6_screened_prod` は鞍点 98.7%、LP 1.29%、枝刈り 0、ヒット 3,918,255（ヒット率 22.8%）、`screen_lp = 1`。`nash_degenerate_60` の value は `-0.04246`（以前と同じ）。fictitious play で採用され、MWU には進んでいない。
 
-`select_6v6_screened_small` の位相: screening 182 ms（84%）、nash-scoring 24.6 ms（11%、60×60 の simplex）、dp-refine 10.2 ms（5%）。
+`select_6v6_screened_prod` の 13,260,281 ノードは tl=3 全探索 875,600 の 15.1 倍。時間も 54.8 秒の 18.7 倍（1024 秒）で、refine tl=5 のノード展開が壁時計の本体である。small 形で Phase A が 84% だった比率は、この production 形には当てはまらない。
 
-`select_6v6_screened_prod` は 180 秒で打ち切った。small の screening 182 ms を trials `1000/8` と MC turn `5/1` で伸ばすと Phase A だけでおおよそ 100 秒超になり、refine tl=5 がそれに乗る。位相内訳は取れていない。
+RSS は tl=3 まで約 4 MB。production screening は中央値 60.8 MB。
 
-RSS はどのケースも約 4 MB。876k ノードの tl=3 でも増えていない。このサイズではメモリは支配項ではない。
+### #174 前（1 回、同じ moonc、依存更新前）との差
+
+以前の列は moon `0.1.20261028`、更新前の依存で 1 回だけ測った値。ノード数が一致するものはアルゴリズム出力が動いていない。
+
+| case | before ms | after 中央値 ms | 差 | dp_nodes / lp / saddle |
+|---|---:|---:|---:|---|
+| nash_rps_3 | 0.0026 | 0.0158 | 相対差は大きいが絶対値は 0.01 ms 台。計測ノイズ | 0 / 0 / 0（一致） |
+| nash_skew_20 | 0.42 | 0.394 | −6% | 一致 |
+| nash_near_copy_20 | 0.36 | 0.375 | +4% | 一致 |
+| nash_skew_60 | 30.2 | 30.53 | +1.1% | 一致 |
+| nash_degenerate_60 | 271 | 275.0 | +1.5% | 一致。solver は fictitious_play |
+| select_4v4_tl2 | 305 | 318.9 | +4.6% | 3744 / 16 / 3728（一致） |
+| select_status_heavy | 526 | 548.1 | +4.2% | 5328 / 672 / 4656（一致）。鞍点 87.4%、LP 12.6% |
+| select_6v6_tl1 | 114 | 119.7 | +5.0% | 3600 / 0 / 3600（一致） |
+| select_6v6_screened_small | 217 | 221.5 | +2.1% | 324 / 0 / 324（一致） |
+| select_6v6_tl3 | 52132（52.1 s） | 54799（54.8 s） | +5.1% | 875600 / 9570 / 866030（一致）。鞍点 98.9%、LP 1.09% |
+| select_6v6_screened_prod | 180000 で打ち切り、未完 | 1023886（17.1 min） | 以前は完走していない | 今回初めてノードを記録。鞍点 98.7%、LP 1.29% |
+
+見立て: payoff の DP / MC ソースは `19e5315` から `18d94d6` の間で `cli_nash` 以外変わっていない。moonc も同じ pin。依存は `moonbitlang/x` が 0.4.41 から 0.5.6 になった。1 秒以上のケースは +2〜5% で、ノード数はビット単位で一致する。これは依存ランタイムの定数差と、1 回計測対 3 回中央値の差で説明できる。アルゴリズムの退行ではない。`nash_rps_3` だけ相対差が大きいが、中央値 0.016 ms で、このタイマーの分解能の中に入る。
+
+production screening が「遅くなった」わけではない。以前は 180 秒で殺していた。完走すると 17.1 分で、tl=3 と同じくノードの約 99% が鞍点、LP は約 1.3% である。長い理由は refine turn_limit=5 の展開ノード 1320 万である。
 
 ## 状態異常ケース
 
@@ -185,29 +202,29 @@ RSS はどのケースも約 4 MB。876k ノードの tl=3 でも増えていな
 
 | | plain | status | 比 |
 |---|---:|---:|---:|
-| wall | 305 ms | 526 ms | 1.72× |
+| wall 中央値 | 318.9 ms | 548.1 ms | 1.72× |
 | dp_nodes | 3744 | 5328 | 1.42× |
 | dp_lp | 16 | 672 | 42× |
 | 鞍点の割合 | 99.6% | 87.4% | |
 
-追加の 221 ms は、ノード +1584 と LP +656 の両方に乗っている。LP 回数は大きく増えるが、行動行列が小さいので壁時計はノード展開の方がまだ大きい。こんらん・こおり・メロメロが入ると、同じ形で確率分岐と「鞍点でないノード」が増える。比較は `select_status_heavy` を固定 seed で取り直す。
+追加の 229 ms は、ノード +1584 と LP +656 の両方に乗っている。LP 回数は大きく増えるが、行動行列が小さいので壁時計はノード展開の方がまだ大きい。こんらん・こおり・メロメロが入ると、同じ形で確率分岐と「鞍点でないノード」が増える。比較はこの `select_status_heavy` を固定 seed で取り直す。
 
 ## ボトルネック
 
-1. **turn_limit ≥ 3 の DP ノード展開。** 6v6 tl=3 は 52.1 秒、875,600 ノード。うち鞍点 98.9%（866,030）、LP 1.1%（9,570）、枝刈り 0。ヒット率 `127600 / (875600+127600) = 12.7%`。時間のほとんどは遷移とハッシュマップで、simplex ではない。選出レベルの Nash は 0.005 ms（ミラーで鞍点）。
-2. **auto-upgrade の MC screening。** `pkdx select` の既定 `switching_game`（tl=5）と tl≥4 は screening に入る。production 形は 180 秒で終わらなかった。small 形では壁時計の 84% が Phase A。
+1. **turn_limit ≥ 3 の DP ノード展開。** 6v6 tl=3 は中央値 54.8 秒、875,600 ノード。うち鞍点 98.9%（866,030）、LP 1.09%（9,570）、枝刈り 0。ヒット率 `127600 / (875600+127600) = 12.7%`。時間のほとんどは遷移とハッシュマップで、simplex ではない。
+2. **auto-upgrade の refine（tl=5）。** `pkdx select` の既定 `switching_game`（tl=5）と tl≥4 は screening に入る。production 形は中央値 17.1 分、13,260,281 ノード（鞍点 98.7%、LP 1.29%）。small 形（trials=8、MC tl=1）では Phase A が 84% だったが、production の時間比は tl=3 全探索とノード数にほぼ比例しており、refine の DP が本体である。
 3. **状態異常で鞍点率が落ち、ノード内 LP が増える。** 上の 42×。tl=2 の 4v4 ではまだ壁時計の主因ではない。分岐が増えると 1 と重なる。
-4. **選出レベルの simplex 失敗。** 60×60 の成功例は 30 ms。ピンした退化行列は 271 ms で fictitious play。52 秒の DP や 180 秒超の screening の横では小さい。
+4. **選出レベルの simplex 失敗。** 60×60 の成功例は中央値 30.5 ms。ピンした退化行列は 275 ms で fictitious play。54.8 秒の DP や 17.1 分の screening の横では小さい。
 5. **ノード αβ は既定の窓では動いていない。** 計測した全ケースで `dp_pruned = 0`。子は常に `(-1, +1)` で呼ばれる。β 打ち切りは `lower >= 1` のときだけ。
 
 ## 改善候補
 
-優先度は、この暫定計測で壁時計に効く順。効果は同じフィクスチャを同じ release で取り直したときのオーダー。回帰は勝率（`value`）と選出分布（`row_strategy` / 残る選出）が変わるか。
+優先度は、このベースラインで壁時計に効く順。効果は同じフィクスチャを同じ release で取り直したときのオーダー。回帰は勝率（`value`）と選出分布（`row_strategy` / 残る選出）が変わるか。
 
-1. **screening の Phase A を短くする、または既定で `--parallel=auto` を使う。** 既定の `pkdx select`（tl≥4）が 180 秒を超えている。parallel は既存で bit-exact のテストがある。コア数にほぼ比例して Phase A と Phase C が縮む見込み（4 vCPU なら数分の一）。アルゴリズムは不変なので選出の回帰は低い。RSS はシャード数だけ増える。trials を 1000 から 200 に減らすと Phase A は約 5 倍短いが、足切り順が変わり選出が変わり得る。回帰は中。
+1. **refine（Phase C）と Phase A を `--parallel=auto` で分ける。** production screening は 17.1 分。parallel は既存で bit-exact のテストがある。コア数にほぼ比例してセルループが縮む見込み（4 vCPU なら数分の一、Phase B の 1 回の Nash は残る）。アルゴリズムは不変なので選出の回帰は低い。RSS はシャード数だけ増える。trials を 1000 から 200 に減らすと Phase A は約 5 倍短いが、17 分の本体が Phase C なら全体は少ししか縮まない。足切り順が変わり選出が変わり得る。回帰は中。
 2. **DP の再訪を増やす（状態キーはそのまま）。** tl=3 のヒット率 13%。同じ状態の再計算をハッシュで避ける余地が、展開コストの大半。キーを変えないメモの改善なら `value` はビット一致のままにできる。回帰は低。キーをパックし損ねると別状態が衝突し、勝率が変わる。回帰は高。
 3. **子へ αβ の窓を渡す。** いま枝刈り 0。窓を伝播できれば tl≥3 と状態異常ケースのノードが減る。現状のビット一致は「子が exact」に依存している。窓の誤りは勝率と選出の両方を変える。回帰は高。効果の上限は大きいが、この PR では入れていない。
-4. **状態異常・将来のこんらん / こおり / メロメロの分岐を、キャッシュキーが同じなら畳む。** `select_status_heavy` は LP が 42 倍、壁時計は 1.7 倍。新しい独立な Bernoulli が同程度ずつ乗ると、tl=3 の 52 秒に対してノードと非鞍点 LP がさらに増える。確率を変える実装は勝率の回帰が高い。比較用にこのケースを残す。
-5. **fictitious play を exploitability < tol で早期停止する。** 効くのは simplex が落ちた 60×60 だけで、271 ms が数十 ms になる程度。tol を変えないなら選出は tol 以内の別戦略になり得る。回帰は低〜中。DP / screening の後でよい。
+4. **状態異常・将来のこんらん / こおり / メロメロの分岐を、キャッシュキーが同じなら畳む。** `select_status_heavy` は LP が 42 倍、壁時計は 1.72 倍。新しい独立な Bernoulli が同程度ずつ乗ると、tl=3 の 54.8 秒に対してノードと非鞍点 LP がさらに増える。確率を変える実装は勝率の回帰が高い。比較用にこのケースを残す。
+5. **fictitious play を exploitability < tol で早期停止する。** 効くのは simplex が落ちた 60×60 だけで、275 ms が数十 ms になる程度。tol を変えないなら選出は tol 以内の別戦略になり得る。回帰は低〜中。DP / screening の後でよい。
 
-鞍点 fast path は既に働いている。tl=1 の 3600 ノードはすべて鞍点で LP 0。ノード内 simplex の微最適化は tl=3 の 52 秒をほとんど動かさない。
+鞍点 fast path は既に働いている。tl=1 の 3600 ノードはすべて鞍点で LP 0。ノード内 simplex の微最適化は tl=3 の 54.8 秒をほとんど動かさない。

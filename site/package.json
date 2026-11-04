@@ -13,12 +13,12 @@
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
     "@resvg/resvg-js": "2.6.2",
-    "astro": "7.3.3",
+    "astro": "7.4.4",
     "satori": "0.33.4",
     "zod": "4.5.4"
   },
   "devDependencies": {
-    "@astrojs/check": "0.9.10",
+    "@astrojs/check": "0.9.12",
     "@types/bun": "1.4.0",
     "typescript": "6.0.3"
   }

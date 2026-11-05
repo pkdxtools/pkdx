@@ -348,7 +348,10 @@ pub fn screen_nash_scores(
     _ => raise EmptyCombatants
   }
   let (row_nash, col_nash) = match screen_lp {
-    Optimal(row_strategy~, col_strategy~, ..) => (row_strategy, col_strategy)
+    Optimal(row_strategy~, col_strategy~, ..) => {
+      dp_profile_add(dp_profile_screen_lp)
+      (row_strategy, col_strategy)
+    }
     _ => raise EmptyCombatants
   }
   let row_score = Array::make(size_a, 0.0)

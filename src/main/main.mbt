@@ -207,6 +207,7 @@ fn build_cli() -> @admiral.CliApp {
       cmd_learners(),
       cmd_nash(),
       cmd_select(),
+      cmd_select_bench(),
       cmd_select_shard_internal(),
       cmd_meta_divergence(),
       cmd_migrate(),

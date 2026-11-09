@@ -11,7 +11,7 @@
 ///     かちき の反応。DP / MC とも同じ helper を通る。
 ///   - 相手ダウン技 (なきごえ) → `apply_stat_effects` (target = 1) → 反応。DP は
 ///     `with_post_hit_effects`、MC は `apply_stat_effects` の直接呼び出しで共有。
-///   - 相手ダウン技の複数能力ダウン (くすぐる) は 1 技 1 反応 (Case 6)。
+///   - 相手ダウン技の複数能力ダウン (くすぐる) は下がった能力ごとに 1 反応 (Case 6)。
 
 ///|
 fn dc_tackle() -> @model.Move {
@@ -139,10 +139,11 @@ test "MC no-op: Defiant absent from drop events leaves rollout value bit-exact" 
 
 ///|
 /// **Case 6 (own まけんき × 相手 くすぐる = 2 能力ダウン)**: くすぐる (A-1 / B-1) は
-/// 1 回の技なので反応は 1 回 (攻撃 +2)。1 能力だけ下げる なきごえ (A-1) と同じ
-/// 反応量になるので、DP 値は一致する (own の B-1 は相手が攻撃しないので値に効かない)。
-/// MC も同じ値に収束することを pin する。
-test "select DP/MC parity: Defiant reacts once to opponent's Tickle (2 stats, own side)" {
+/// 両方とも下がるので、下がった能力ごとに反応する (攻撃 +2 が 2 回、A は +3)。1 能力だけ
+/// 下げる なきごえ (A-1) は反応 1 回で A は +1 なので、own の攻撃が強い くすぐる の方が
+/// DP 値は高い (own の B-1 は相手が攻撃しないので値に効かない)。MC も同じ方向に収束する
+/// ことを pin する。
+test "select DP/MC parity: Defiant reacts per lowered stat to opponent's Tickle (2 stats, own side)" {
   let tickle = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
     @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
     @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
@@ -161,8 +162,8 @@ test "select DP/MC parity: Defiant reacts once to opponent's Tickle (2 stats, ow
   let dp_plain = dc_parity_dp(own_plain, opp_tickle, 2)
   // 感度ガード: まけんき の反応で value が動く (A +1 vs A -1)。
   assert_true(dp_tickle - dp_plain > 0.03)
-  // 1 技 1 反応: 2 能力ダウンでも 1 能力ダウン (なきごえ) と同じ value。
-  assert_true((dp_tickle - dp_growl).abs() < 0.000000001)
+  // 能力ごとに反応: くすぐる (A +3) は なきごえ (A +1) より own の攻撃が強く、value が高い。
+  assert_true(dp_tickle - dp_growl > 0.03)
   let mc = dc_parity_mc(own, opp_tickle, 2, 74006UL)
   assert_true((dp_tickle - mc).abs() < 0.03)
 }

@@ -495,11 +495,11 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 
 ### まけんき / かちき (Defiant / Competitive) — DP
 
-相手由来の能力ダウンに反応する特性。反応は 2 経路 (いかく の登場時ダウン / 技 `stat_effects` の相手ダウン) で同じ helper を共有する。ダウン適用は `apply_opp_stat_drop` (実際に下がったかを Bool で返す)、反応は `apply_opp_drop_reaction` (1 つの能力変化イベントにつき 1 回)。
+相手由来の能力ダウンに反応する特性。反応は 2 経路 (いかく の登場時ダウン / 技 `stat_effects` の相手ダウン) で同じ helper を共有する。ダウン適用は `apply_opp_stat_drop` (実際に下がったかを Bool で返す)、反応は `apply_opp_drop_reaction` (実際に下がった能力ごとに 1 回)。
 
-- **発動条件**: 相手由来のダウンイベント (いかく 1 回 / 1 つの技の相手ダウン群) につき 1 回。そのイベント内で**実際に適用された**ダウンが 1 つ以上あれば発動する (能力ごとには発動しない)。ランクが変化しなかったダウン (既に下限・ブロック・反射) は反応の対象にならず、イベント内の全ダウンが不発なら反応もしない。自分の技の自己ダウン (`target = 0`) では発動しない。
+- **発動条件**: 相手由来のダウン (いかく 1 回 / 1 つの技の相手ダウン群) のうち、**実際に適用された**ダウンの能力ごとに 1 回発動する。ランクが変化しなかったダウン (既に下限・ブロック・反射) は反応しない。同じ能力への重複エントリは 1 回に数える。自分の技の自己ダウン (`target = 0`) では発動しない。
 - **反応**: まけんき = 攻撃 (index 0) +2、かちき = 特攻 (index 2) +2。反応の上限は +6 (`clamp_stat_stage`)。
-- **同時に複数能力を下げる技** (くすぐる / なみだめ) は、その技の全ダウンを適用してから **1 回だけ** 発動する (`apply_stat_effects` 1 呼び出し = 1 技 = 1 イベント)。片方だけ下限で下がらなかった場合は、もう片方が下がっていれば 1 回発動する。
+- **同時に複数能力を下げる技** (くすぐる / なみだめ) は、その技の全ダウンを適用してから、下がった能力ごとに 1 回ずつ反応する (`apply_stat_effects` 1 呼び出しで、両方下がれば 2 回)。ダウンの判定は技の開始時点のランクで行う。Showdown の `boost()` は技の能力変化表を開始時点で上限・下限に切り詰めてから適用するため、開始時点で -6 の能力は、先に別能力の反応で持ち上がっても下がらない (例: 特攻 -6 のかちきへのなみだめ → 攻撃 -1 のみ適用・反応 1 回 → 特攻 -4)。反応を全ダウンの後にまとめても、各ダウン直後に反応する Showdown と結果が一致する (±1 のダウン 2 件・反応 +2 の全ランク組を総当たりで確認)。
 - **ランク範囲**: 所持者のランクは実機どおり `[-6, +6]` で追跡する (`clamp_rank_for`)。下限 -6 で止まるため「既に下限なら不発」が実機どおりになる。他特性は従来の `[-2, +2]` (既存挙動は不変)。
 - **対象の相手ダウン技**: `pkdx_patch/005_move_meta_posthit` 収録の `target = 1` 技 (あまえる / いやなおと / こわいかお / しっぽをふる / にらみつける / なきごえ / くすぐる / なみだめ)。表に無い技と、確率付きの追加効果による相手ダウンは未対応。
 - **交代**: 所持者が交代で退場するとランクは 0 に戻る (switch-out リセット)。
@@ -523,7 +523,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 
 - **いかく**: `apply_intimidate_on_entry` を初期 lead 2 コール (`own`/`opp`) と交代 (voluntary / forced) の各 entry で呼ぶ (DP と同じ truth table を共有)。
 - **あまのじゃく**: `apply_stat_effects` を DP と共有 (SSoT)。
-- **まけんき / かちき**: いかく経路 (`apply_intimidate_on_entry`) と相手ダウン技 (`apply_stat_effects`) を DP と共有 (SSoT)。反応は両経路とも `apply_opp_drop_reaction` を 1 イベント 1 回呼ぶ。
+- **まけんき / かちき**: いかく経路 (`apply_intimidate_on_entry`) と相手ダウン技 (`apply_stat_effects`) を DP と共有 (SSoT)。反応は両経路とも `apply_opp_drop_reaction` を、実際に下がった能力ごとに 1 回呼ぶ (いかく は 1 能力なので 1 回)。
 - **ばけのかわ**: `disguise_intact_mc(team, active, busted)` が「ばけのかわ持ち かつ `busted[slot] == false`」で intact 判定。`own_disguise_busted` / `opp_disguise_busted : Array[Bool]` を `team_rollout` ローカルに持ち (slot-bound・戦闘持続、交代非リセット)、damage は同じ `disguise_reduced_mean` を再利用。busted は `res_bust` を返して被弾側配列へ書き戻す。
 - 各特性を `|dp - mc| < 0.15` の value-tol で pin し、非該当チームでの決定性 (no-op) と greedy/damage coherence を感度ガードで確認する。
 
@@ -537,8 +537,8 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `team_monte_carlo_contrary_parity_wbtest.mbt` — Contrary の MC/DP parity
 - `switching_game_disguise_wbtest.mbt` — 初撃ブロック + chip、連続技初段のみ、変化技/タイプ無効で非剥がれ、交代非リセット、`dmg_for_effects` 分離 (反動/ドレイン)、`def_disguise_intact` cache key
 - `team_monte_carlo_disguise_parity_wbtest.mbt` — Disguise の MC/DP parity + busted 配列の戦闘持続
-- `switching_game_defiant_competitive_wbtest.mbt` — まけんき / かちき の反応 (いかく / 相手ダウン技 / 複数ダウン技は 1 技 1 回 / 自傷不発 / 上限 +6 / 下限不発 / 防がれたダウン)、持ち主別 clamp (`clamp_rank_for`)、DP 配線 (交代いかく・連続交代の累積・交代退場リセット)
-- `team_monte_carlo_defiant_competitive_parity_wbtest.mbt` — まけんき / かちき の MC/DP parity (lead いかく・相手ダウン技・複数ダウン技 (くすぐる) は 1 技 1 回・MC no-op)
+- `switching_game_defiant_competitive_wbtest.mbt` — まけんき / かちき の反応 (いかく / 相手ダウン技 / 複数ダウン技は下がった能力ごとに反応 / 開始時点で下限の能力は不変 / 重複エントリは 1 回 / 自傷不発 / 上限 +6 / 下限不発 / 防がれたダウン)、持ち主別 clamp (`clamp_rank_for`)、DP 配線 (交代いかく・連続交代の累積・交代退場リセット・くすぐるで攻撃のみ下限)
+- `team_monte_carlo_defiant_competitive_parity_wbtest.mbt` — まけんき / かちき の MC/DP parity (lead いかく・相手ダウン技・複数ダウン技 (くすぐる) は下がった能力ごとに反応・MC no-op)
 
 ### MVP 対象外 (将来拡張)
 

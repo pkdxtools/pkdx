@@ -1600,10 +1600,14 @@ fn clamp_zero(x : Int) -> Int {
 /// resolved — non-Contrary inputs are bit-identical to the pre-Contrary
 /// behaviour. `defender_ability~` also feeds まけんき / かちき: a drop that
 /// lands on such a holder (`target=1`, `delta < 0` after the Contrary flip)
-/// goes through `apply_opp_stat_drop`. The reaction is once per move, not once
-/// per stat: if at least one of the move's drops landed, `apply_opp_drop_reaction`
-/// runs once after all of them (くすぐる / なみだめ react once). Self drops
-/// (`target=0`) never react.
+/// goes through `apply_opp_stat_drop`. Each stat that landed reacts once
+/// (`apply_opp_drop_reaction`), after all of the move's drops are applied:
+/// くすぐる / なみだめ react twice when both stats land, and repeated entries
+/// for one stat react once. Because the reactions run last, a drop is judged
+/// against the rank at the start of the move, as Showdown's `boost()` does (it
+/// caps the whole table first): a stat already at -6 does not drop even if a
+/// reaction lifted it earlier in the same move. Self drops (`target=0`) never
+/// react.
 ///
 /// Delta is added and clamped via `clamp_rank_for` against the holder's
 /// ability: `[-2, +2]` for ordinary holders, `[-6, +6]` for まけんき / かちき.
@@ -1615,10 +1619,10 @@ fn apply_stat_effects(
   attacker_ability~ : String,
   defender_ability~ : String,
 ) -> Unit {
-  // 1 回の技 = 1 回の能力変化イベント。相手ダウンは全件適用してから、実際に下がった
-  // ものが 1 つ以上あれば反応を 1 回だけ行う (能力ごとには反応しない)。反応は
-  // opp_ranks (= 所持者の ranks) にしか書かず、自己ダウン (self_ranks) とは独立。
-  let mut opp_drop_landed = false
+  // 相手ダウンは全エントリを適用してから、実際に下がった能力ごとに反応を 1 回ずつ行う。
+  // 反応は opp_ranks (= 所持者の ranks) にしか書かず、自己ダウン (self_ranks) とは独立。
+  // landed[stat] は相手の能力 stat が実際に下がったことを表す (重複エントリは 1 回)。
+  let landed : Array[Bool] = Array::make(opp_ranks.length(), false)
   for eff in mv.stat_effects {
     let (ranks, holder_ability) = if eff.target == 0 {
       (self_ranks, attacker_ability)
@@ -1635,15 +1639,17 @@ fn apply_stat_effects(
       }
       if eff.target == 1 && delta < 0 {
         if apply_opp_stat_drop(holder_ability, ranks, eff.stat, delta) {
-          opp_drop_landed = true
+          landed[eff.stat] = true
         }
       } else {
         ranks[eff.stat] = clamp_rank_for(holder_ability, ranks[eff.stat] + delta)
       }
     }
   }
-  if opp_drop_landed {
-    apply_opp_drop_reaction(defender_ability, opp_ranks)
+  for stat in 0..<landed.length() {
+    if landed[stat] {
+      apply_opp_drop_reaction(defender_ability, opp_ranks)
+    }
   }
 }
 

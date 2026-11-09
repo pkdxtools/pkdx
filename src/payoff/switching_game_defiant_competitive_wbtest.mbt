@@ -2,9 +2,12 @@
 /// まけんき (Defiant) / かちき (Competitive) の単体・DP 配線テスト。
 ///
 /// 仕様 (Showdown 準拠):
-///   - 相手由来の能力ダウンイベント (いかく 1 回 / 1 つの技) につき 1 回、まけんきは
-///     攻撃 +2、かちきは特攻 +2（上限 +6）。イベント内で実際に下がった能力が 1 つ
-///     以上あれば発動し、能力ごとには発動しない (くすぐる で 2 能力下がっても 1 回)。
+///   - 相手由来の能力ダウン (いかく / 1 つの技の相手ダウン群) は、実際に下がった
+///     能力ごとに 1 回、まけんきは攻撃 +2、かちきは特攻 +2（上限 +6）。くすぐる で
+///     2 能力とも下がれば 2 回（攻撃 +4）。同じ能力への重複エントリは 1 回。
+///   - ダウンの判定は技の開始時点のランクで行う (Showdown の boost() は技の能力変化
+///     表を開始時点で切り詰める)。開始時点で -6 の能力は、先に別の能力の反応で
+///     持ち上がっても下がらず、反応も起きない。
 ///   - 自分の技の自己ダウン (target = 0) では発動しない。
 ///   - ブロック (クリアボディ等) された、または既に下限でランクが変わらなかった
 ///     ダウンは不発。
@@ -202,9 +205,9 @@ test "かちき: 相手ダウン技 なきごえ (A-1) で特攻 +2、攻撃は 
 
 ///|
 /// **Case 11 (同時に 2 能力を下げる技 / まけんき)**: くすぐる (相手 A-1 / B-1) は
-/// 1 回の技なので、両方のダウンを適用してから反応を 1 回だけ行う。A: -1 (適用) →
-/// 攻撃 +2 で +1。B は反応の対象外なので -1 のまま。能力ごとに反応する実装なら A は +3。
-test "まけんき: くすぐる (A-1/B-1 相手) は 1 回の技で 1 回だけ発動し A は +1" {
+/// 両方とも実際に下がるので、下がった能力ごとに 1 回ずつ反応する (攻撃 +2 が 2 回)。
+/// A: 0 → -1 → 反応で +1 → 反応でさらに +3。B は反応の対象外なので -1 のまま。
+test "まけんき: くすぐる (A-1/B-1 相手) は下がった能力ごとに反応し A は +3" {
   let self_ranks = [0, 0, 0, 0, 0]
   let opp_ranks = [0, 0, 0, 0, 0]
   let mv = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
@@ -219,16 +222,16 @@ test "まけんき: くすぐる (A-1/B-1 相手) は 1 回の技で 1 回だけ
     attacker_ability="",
     defender_ability="まけんき",
   )
-  @debug.assert_eq(opp_ranks[0], 1)
+  @debug.assert_eq(opp_ranks[0], 3)
   @debug.assert_eq(opp_ranks[1], -1)
   @debug.assert_eq(opp_ranks[2], 0)
 }
 
 ///|
 /// **Case 12 (同時に 2 能力を下げる技 / かちき)**: なみだめ (相手 A-1 / C-1) は
-/// 1 回の技なので、両方のダウンを適用してから特攻 +2 を 1 回だけ行う。C: -1 (適用)
-/// → +2 で +1。A は反応の対象外なので -1 のまま。能力ごとに反応する実装なら C は 3。
-test "かちき: なみだめ (A-1/C-1 相手) は 1 回の技で 1 回だけ特攻 +2 — C = 1, A = -1" {
+/// 両方とも実際に下がるので、下がった能力ごとに特攻 +2 を 1 回ずつ行う (2 回)。
+/// C: 0 → 反応で +2 → C-1 で +1 → 反応でさらに +3。A は反応の対象外なので -1 のまま。
+test "かちき: なみだめ (A-1/C-1 相手) は下がった能力ごとに反応 — C = 3, A = -1" {
   let self_ranks = [0, 0, 0, 0, 0]
   let opp_ranks = [0, 0, 0, 0, 0]
   let mv = mk_move("なみだめ", "ノーマル", @model.Status, 0, stat_effects=[
@@ -244,15 +247,15 @@ test "かちき: なみだめ (A-1/C-1 相手) は 1 回の技で 1 回だけ特
     defender_ability="かちき",
   )
   @debug.assert_eq(opp_ranks[0], -1)
-  @debug.assert_eq(opp_ranks[2], 1)
+  @debug.assert_eq(opp_ranks[2], 3)
 }
 
 ///|
-/// **Case 12a (複数ダウン / 片方だけ下限 / まけんき)**: A が既に -6 (下限) の まけんき に
+/// **Case 12a (複数ダウン / 攻撃のみ下限 / まけんき)**: A が既に -6 (下限) の まけんき に
 /// くすぐる。A-1 は適用されず (ランク不変)、B-1 だけが適用される。下がった能力は 1 つ
-/// あるので反応は 1 回: A = -6 + 2 = -4。下がらなかった A-1 では反応しない (試行ごとに
+/// なので反応は 1 回: A = -6 + 2 = -4。下がらなかった A-1 では反応しない (試行ごとに
 /// 反応する実装なら A は -2 になる)。
-test "まけんき: くすぐる で A が下限なら A-1 は不適用、B だけ下がって反応は 1 回 (A = -4)" {
+test "まけんき: くすぐる で攻撃のみ下限なら A-1 は不適用、防御だけ下がって反応は 1 回 (A = -4)" {
   let self_ranks = [0, 0, 0, 0, 0]
   let opp_ranks = [-6, 0, 0, 0, 0]
   let mv = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
@@ -273,9 +276,11 @@ test "まけんき: くすぐる で A が下限なら A-1 は不適用、B だ�
 }
 
 ///|
-/// **Case 12b (複数ダウン / 片方だけ下限 / かちき)**: C が既に -6 (下限) の かちき に
-/// なみだめ。C-1 は適用されず、A-1 だけが適用される。反応は 1 回: 特攻 = -6 + 2 = -4。
-test "かちき: なみだめ で C が下限なら C-1 は不適用、A だけ下がって反応は 1 回 (C = -4)" {
+/// **Case 12b (複数ダウン / 特攻のみ下限 / かちき)**: C が既に -6 (下限) の かちき に
+/// なみだめ。C-1 の判定は技の開始時点の C = -6 で行うので、A-1 の反応で C が -4 に
+/// 上がった後でも C-1 は適用されない (Showdown の getCappedBoost と一致)。A-1 だけが
+/// 適用され、反応は 1 回: 特攻 = -6 + 2 = -4。
+test "かちき: なみだめ で特攻のみ下限なら C-1 は不適用、A だけ下がって反応は 1 回 (C = -4)" {
   let self_ranks = [0, 0, 0, 0, 0]
   let opp_ranks = [0, 0, -6, 0, 0]
   let mv = mk_move("なみだめ", "ノーマル", @model.Status, 0, stat_effects=[
@@ -336,9 +341,10 @@ test "複数ダウンが全部下限なら不発: まけんき / かちき と�
 }
 
 ///|
-/// **Case 12d (反応は技ごと)**: くすぐる を 2 回受けると、技ごとに 1 回ずつ反応する。
-/// 1 回目: A -1 → 反応 +2 で +1。2 回目: A +1 → 0 → 反応 +2 で +2。B は -2。
-test "まけんき: くすぐるを 2 回受けると技ごとに 1 回ずつ反応 (A = +2, B = -2)" {
+/// **Case 12d (反応は下がった能力ごと・技ごと)**: くすぐる を 2 回受けると、毎回 A と B
+/// が下がり、それぞれ 1 回ずつ反応する。1 回目: A は 0 → -1 → +1 → +3、B は -1。
+/// 2 回目: A は 3 → 2 → 4 → 6、B は -1 → -2。
+test "まけんき: くすぐるを 2 回受けると下がった能力ごとに反応 (1 回目 A = +3, 2 回目 A = +6, B = -2)" {
   let self_ranks = [0, 0, 0, 0, 0]
   let opp_ranks = [0, 0, 0, 0, 0]
   let mv = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
@@ -353,7 +359,8 @@ test "まけんき: くすぐるを 2 回受けると技ごとに 1 回ずつ反
     attacker_ability="",
     defender_ability="まけんき",
   )
-  @debug.assert_eq(opp_ranks[0], 1)
+  @debug.assert_eq(opp_ranks[0], 3)
+  @debug.assert_eq(opp_ranks[1], -1)
   apply_stat_effects(
     self_ranks,
     opp_ranks,
@@ -362,8 +369,75 @@ test "まけんき: くすぐるを 2 回受けると技ごとに 1 回ずつ反
     attacker_ability="",
     defender_ability="まけんき",
   )
-  @debug.assert_eq(opp_ranks[0], 2)
+  @debug.assert_eq(opp_ranks[0], 6)
   @debug.assert_eq(opp_ranks[1], -2)
+}
+
+///|
+/// **Case 12e (同じ能力への重複エントリ)**: 同じ能力を 2 エントリで下げる技 (現データには
+/// 無い合成ケース) は、その能力の反応を 1 回に数える (能力ごと)。A: 0 → -1 → -2 と 2 回
+/// 下がり、反応は 1 回 (+2): A = 0。
+test "まけんき: 同じ能力への重複エントリは反応 1 回 (能力ごと、A = 0)" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [0, 0, 0, 0, 0]
+  let mv = mk_move("テスト技", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+  ])
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    true,
+    mv,
+    attacker_ability="",
+    defender_ability="まけんき",
+  )
+  @debug.assert_eq(opp_ranks[0], 0)
+  @debug.assert_eq(opp_ranks[1], 0)
+}
+
+///|
+/// **Case 12f (上限 +6 と複数反応)**: A が +5 のまけんきにくすぐる。A-1 で +4、反応 2 回の
+/// 途中で +6 に達し、それ以上は飽和する。A = 6, B = -1。
+test "まけんき: くすぐる で A +5 からは 2 回反応しても上限 +6 で止まる" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [5, 0, 0, 0, 0]
+  let mv = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    true,
+    mv,
+    attacker_ability="",
+    defender_ability="まけんき",
+  )
+  @debug.assert_eq(opp_ranks[0], 6)
+  @debug.assert_eq(opp_ranks[1], -1)
+}
+
+///|
+/// **Case 12g (下限まで届かない特攻)**: C が -5 のかちきになみだめ。C-1 は開始時点で
+/// -5 → -6 と実際に下がるので適用される。A-1 と C-1 で反応 2 回: C = -5 - 1 + 4 = -2。
+test "かちき: なみだめ で特攻 -5 なら C-1 も下がり、反応 2 回で C = -2" {
+  let self_ranks = [0, 0, 0, 0, 0]
+  let opp_ranks = [0, 0, -5, 0, 0]
+  let mv = mk_move("なみだめ", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 2, delta: -1, target: 1 },
+  ])
+  apply_stat_effects(
+    self_ranks,
+    opp_ranks,
+    true,
+    mv,
+    attacker_ability="",
+    defender_ability="かちき",
+  )
+  @debug.assert_eq(opp_ranks[0], -1)
+  @debug.assert_eq(opp_ranks[2], -2)
 }
 
 ///|
@@ -549,5 +623,42 @@ test "まけんき: 連続交代いかくで A は積み上がり、交代退場
   @debug.assert_eq(s3.opp_active, 1)
   for i in 0..<5 {
     @debug.assert_eq(s3.opp_ranks[i], 0)
+  }
+}
+
+///|
+/// **DP 配線 4 (くすぐる / 攻撃のみ下限)**: 相手 まけんき の攻撃が開始時点で -6 のとき、
+/// 自分の くすぐる で防御だけが下がり、反応は 1 回: 攻撃 = -6 + 2 = -4、防御 = -1。
+/// 相手の技は状態変化のみの無動作なので、ランクは くすぐる の結果だけで決まる。
+test "まけんき: DP くすぐる で攻撃のみ下限なら防御だけ下がり反応は 1 回 (A = -4, B = -1)" {
+  let tickle = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let noop = mk_move("なにもしない", "ノーマル", @model.Status, 0)
+  let tickler = im_combatant(im_pokemon("くすぐる持ち", hp=300), [tickle])
+  let receiver = im_combatant(
+    im_pokemon("まけんき持ち", hp=300),
+    [noop],
+    ability="まけんき",
+  )
+  let s0 = { ..im_state(my_hps=[300, 300, 300], opp_hps=[300, 300, 300]), opp_ranks: [-6, 0, 0, 0, 0] }
+  let outs = transition_with_cache(
+    s0,
+    ActionKind::UseMove(0),
+    ActionKind::UseMove(0),
+    [tickler, tickler, tickler],
+    [receiver, receiver, receiver],
+    new_damage_cache(),
+  )
+  // 同速 (素早さ 100 同士) の同時行動は行動順の 2 通りに 1/2 ずつ分岐する。どちらの順でも
+  // 相手の無動作技はランクを変えないので、くすぐるの結果は同じ。
+  @debug.assert_eq(outs.length(), 2)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (p, s) = outs[i]
+    assert_true((p - 0.5).abs() < 0.000000001)
+    @debug.assert_eq(s.opp_ranks[0], -4)
+    @debug.assert_eq(s.opp_ranks[1], -1)
+    @debug.assert_eq(s.opp_ranks[2], 0)
   }
 }

@@ -77,9 +77,9 @@ pub fn apply_intimidate_on_entry(
 ///
 /// Returns `true` when the drop actually changed the rank. A holder already at
 /// the floor (-6 for まけんき / かちき) does not move, so the drop did not land.
-/// The reaction is not run here. A stat-lowering event (one いかく entry, or one
-/// move's `stat_effects`) reacts once, after all of its drops, and only if at
-/// least one landed: the caller runs `apply_opp_drop_reaction` for that.
+/// The reaction is not run here: the caller runs `apply_opp_drop_reaction` once
+/// per stat that landed (one いかく entry, or the stats of one move's
+/// `stat_effects`, after all of the move's drops).
 pub fn apply_opp_stat_drop(
   owner_ability : String,
   ranks : Array[Int],
@@ -92,16 +92,15 @@ pub fn apply_opp_stat_drop(
 }
 
 ///|
-/// The まけんき / かちき reaction to one opponent-inflicted stat-lowering event.
-/// Call it once per event, after every drop in the event has been applied, and
-/// only when at least one drop landed (`apply_opp_stat_drop` returned `true`):
+/// The まけんき / かちき reaction to one opponent-inflicted stat drop that
+/// landed (`apply_opp_stat_drop` returned `true`). Call it once per lowered
+/// stat, not once per stage:
 ///
 /// - まけんき (Defiant): Attack (index 0) +2.
 /// - かちき (Competitive): Special Attack (index 2) +2.
 ///
-/// The reaction is capped by `clamp_rank_for` at +6. It is once per event, not
-/// once per stat: a move that lowers two stats (くすぐる / なみだめ) reacts once.
-/// Ordinary holders are a no-op.
+/// The reaction is capped by `clamp_rank_for` at +6. A move that lowers two
+/// stats (くすぐる / なみだめ) reacts twice. Ordinary holders are a no-op.
 pub fn apply_opp_drop_reaction(owner_ability : String, ranks : Array[Int]) -> Unit {
   match owner_ability {
     "まけんき" => ranks[0] = clamp_rank_for(owner_ability, ranks[0] + 2)

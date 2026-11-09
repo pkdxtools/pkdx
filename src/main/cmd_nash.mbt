@@ -158,7 +158,7 @@ fn cmd_select() -> @admiral.CommandDef {
       ),
       @admiral.string(
         "parallel",
-        description="Parallel shards. \"auto\" = nproc (Windows clamped to 64). Default \"1\" (in-process, preserves existing test determinism). PKDX_NO_PARALLEL=1 forces 1. wasm builds have no process spawn and stay on this in-process path.",
+        description="Parallel shards. \"auto\" = nproc (Windows clamped to 64). Default \"1\" (in-process, preserves existing test determinism). PKDX_NO_PARALLEL=1 forces 1.",
         default=Some("1"),
       ),
       @admiral.bool(

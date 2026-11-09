@@ -102,3 +102,13 @@ pub fn ability_blocks_intimidate(ability : String) -> Bool {
 pub fn ability_reverses_stat_changes(ability : String) -> Bool {
   ability == "あまのじゃく"
 }
+
+///|
+/// Return `true` when the ability reacts to a stat drop inflicted by the
+/// opponent. まけんき (Defiant) raises Attack by 2, かちき (Competitive) raises
+/// Special Attack by 2, once per opponent-lowered stat that actually landed
+/// (`apply_opp_drop_reaction`). Holders are tracked over the real ±6 stage range
+/// (see `clamp_rank_for`).
+pub fn ability_boosts_on_opp_drop(ability : String) -> Bool {
+  ability == "まけんき" || ability == "かちき"
+}

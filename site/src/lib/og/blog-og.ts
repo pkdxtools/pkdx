@@ -40,6 +40,7 @@ export function buildBlogOgNode(input: BlogOgInput): VNode {
       style: {
         width: SIZE.width,
         height: SIZE.height,
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         background: BG,

@@ -973,7 +973,8 @@ pub fn compute_select_with_team_model(
   child_progress_mode? : String = "off",
   child_progress_every? : Int = 0,
   nash_config? : NashSolverConfig = NashSolverConfig::default(),
-) -> SelectResult raise NashCliError {
+  mc_turn_limit? : Int = MC_TURN_LIMIT,
+) -> (SelectResult, @nash.FiniteMatrix) raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE ||
     opponent.length() != REQUIRED_TEAM_SIZE {
     raise InvalidJson(
@@ -1001,6 +1002,7 @@ pub fn compute_select_with_team_model(
           parallel,
           input_path,
           refine_turn_limit=refine_tl,
+          mc_turn_limit~,
           progress~,
           child_progress_mode~,
           child_progress_every~,
@@ -1017,6 +1019,7 @@ pub fn compute_select_with_team_model(
           seed,
           keep_top,
           refine_turn_limit=refine_tl,
+          mc_turn_limit~,
           disk~,
           progress~,
           dp_log_every~,
@@ -1051,7 +1054,7 @@ pub fn compute_select_with_team_model(
     nash_config~,
   )
   progress(PhaseEnd("select-nash"))
-  result
+  (result, matrix)
 }
 
 ///|
@@ -1180,7 +1183,8 @@ pub fn run_select_typed(
   parallel? : Int = 1,
   child_progress_mode? : String = "off",
   child_progress_every? : Int = 0,
-) -> SelectResult raise NashCliError {
+  emit_matrix_bits? : Bool = false,
+) -> (SelectResult, String) raise NashCliError {
   let root = @json.parse(input_json) catch {
     err => raise InvalidJson(@debug.to_string(err))
   }
@@ -1223,6 +1227,19 @@ pub fn run_select_typed(
     _ => ()
   }
   let nash_config = parse_nash_solver_config(obj.get("nash_solver_config"))
+  let mc_turn_limit = match obj.get("mc_turn_limit") {
+    Some(Number(n, ..)) => {
+      let v = n.to_int()
+      // The shard CLI reads `--mc-turn-limit <= 0` as "use the default", so a
+      // non-positive value would make parallel and in-process results differ.
+      if v <= 0 {
+        raise InvalidJson("mc_turn_limit must be a positive integer")
+      }
+      v
+    }
+    Some(_) => raise InvalidJson("mc_turn_limit must be a number")
+    None => MC_TURN_LIMIT
+  }
   // For the parallel path the children re-read the same raw JSON
   // (`team_payoff_model` is the auto-upgraded form by then, so the
   // worker also runs auto_upgrade and lands on the same params).
@@ -1249,7 +1266,7 @@ pub fn run_select_typed(
       let _ = @db.unlink_file(input_path)
     }
   }
-  let r = compute_select_with_team_model(
+  let (r, matrix) = compute_select_with_team_model(
     team,
     opp,
     format,
@@ -1262,11 +1279,37 @@ pub fn run_select_typed(
     child_progress_mode~,
     child_progress_every~,
     nash_config~,
+    mc_turn_limit~,
   )
+  let bits = if emit_matrix_bits { matrix_bits_json(matrix) } else { "" }
   if input_path.length() > 0 {
     let _ = @db.unlink_file(input_path)
   }
-  r
+  (r, bits)
+}
+
+///|
+/// JSON array of IEEE-754 hex strings, one per payoff cell. Same token as
+/// the shard wire (`format_shard_cell`), so a byte compare of this field
+/// is a bit compare.
+fn matrix_bits_json(m : @nash.FiniteMatrix) -> String {
+  let mut s = "["
+  let nrows = m.rows()
+  let ncols = m.cols()
+  for i in 0..<nrows {
+    if i > 0 {
+      s = s + ","
+    }
+    s = s + "["
+    for j in 0..<ncols {
+      if j > 0 {
+        s = s + ","
+      }
+      s = s + format_shard_cell(m.at(i, j))
+    }
+    s = s + "]"
+  }
+  s + "]"
 }
 
 ///|
@@ -1274,7 +1317,10 @@ pub fn run_select_typed(
 /// `pkdx select` writes to stdout. Field order matches the historical
 /// `run_select` output so downstream consumers and golden tests are
 /// not invalidated by the typed split.
-pub fn serialize_select_result(r : SelectResult) -> String {
+pub fn serialize_select_result(
+  r : SelectResult,
+  matrix_bits? : String = "",
+) -> String {
   let mut out = "{"
   out = out + "\"format\":\"" + format_label(r.format) + "\""
   out = out + ",\"value\":" + r.value.to_string()
@@ -1286,6 +1332,9 @@ pub fn serialize_select_result(r : SelectResult) -> String {
   out = out + ",\"opp_selection_names\":" + fmt_string_2d(r.opp_selection_names)
   out = out + ",\"row_strategy\":" + fmt_double_array(r.row_strategy)
   out = out + ",\"col_strategy\":" + fmt_double_array(r.col_strategy)
+  if matrix_bits.length() > 0 {
+    out = out + ",\"matrix_bits\":" + matrix_bits
+  }
   out + "}"
 }
 
@@ -1301,8 +1350,9 @@ pub fn run_select(
   parallel? : Int = 1,
   child_progress_mode? : String = "off",
   child_progress_every? : Int = 0,
+  emit_matrix_bits? : Bool = false,
 ) -> String raise NashCliError {
-  let r = run_select_typed(
+  let (r, bits) = run_select_typed(
     input_json,
     disk~,
     progress~,
@@ -1310,21 +1360,34 @@ pub fn run_select(
     parallel~,
     child_progress_mode~,
     child_progress_every~,
+    emit_matrix_bits~,
   )
-  serialize_select_result(r)
+  serialize_select_result(r, matrix_bits=bits)
 }
 
 ///|
 /// Render a 2D `Array[Array[Double]]` payoff sub-matrix as JSON. Used by
 /// the `__select-shard` worker to ship its row-range output to the
 /// parent orchestrator.
+fn fmt_shard_double_row(row : Array[Double]) -> String {
+  let mut s = "["
+  for j in 0..<row.length() {
+    if j > 0 {
+      s = s + ","
+    }
+    s = s + format_shard_cell(row[j])
+  }
+  s + "]"
+}
+
+///|
 fn fmt_double_2d(rows : Array[Array[Double]]) -> String {
   let mut s = "["
   for i in 0..<rows.length() {
     if i > 0 {
       s = s + ","
     }
-    s = s + fmt_double_array(rows[i])
+    s = s + fmt_shard_double_row(rows[i])
   }
   s + "]"
 }
@@ -1378,6 +1441,7 @@ pub fn run_select_shard(
   refine_turn_limit_override? : Int? = None,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  rows_csv? : String = "",
 ) -> Unit raise NashCliError {
   let input_json = match @db.read_file(input_path) {
     Some(s) => s
@@ -1433,6 +1497,16 @@ pub fn run_select_shard(
     Some(n) => n
     None => json_refine_tl
   }
+  let row_indices = if rows_csv.length() > 0 {
+    parse_int_csv(rows_csv)
+  } else {
+    let n = if row_end > row_start { row_end - row_start } else { 0 }
+    let xs = Array::make(n, 0)
+    for i in 0..<n {
+      xs[i] = row_start + i
+    }
+    xs
+  }
   // Per-shard cell loop. Unrolled here (instead of delegating to
   // `screen_phase_rows` / `refine_phase_rows`) so the worker can emit a
   // `CellStart` / `CellDone` pair around each per-cell compute. The
@@ -1449,13 +1523,12 @@ pub fn run_select_shard(
       let sel_a = combinations_with_lead(na, k)
       let sel_b = combinations_with_lead(nb, k)
       let size_b = sel_b.length()
-      if row_start < 0 || row_end > sel_a.length() {
-        raise InnerError(@debug.to_string(EmptyCombatants))
-      }
-      let n_rows = if row_end > row_start { row_end - row_start } else { 0 }
-      let out = Array::make(n_rows, ([] : Array[Double]))
-      for i in 0..<n_rows {
-        let i_global = row_start + i
+      let out = Array::make(row_indices.length(), ([] : Array[Double]))
+      for i in 0..<row_indices.length() {
+        let i_global = row_indices[i]
+        if i_global < 0 || i_global >= sel_a.length() {
+          raise InnerError(@debug.to_string(EmptyCombatants))
+        }
         let row = Array::make(size_b, 0.0)
         for j in 0..<size_b {
           progress(
@@ -1491,13 +1564,12 @@ pub fn run_select_shard(
       let sel_a = combinations_with_lead(na, k)
       let sel_b = combinations_with_lead(nb, k)
       let n_cols = col_keep.length()
-      if row_start < 0 || row_end > row_keep.length() {
-        raise InnerError(@debug.to_string(EmptyCombatants))
-      }
-      let n_rows = if row_end > row_start { row_end - row_start } else { 0 }
-      let out = Array::make(n_rows, ([] : Array[Double]))
-      for i in 0..<n_rows {
-        let i_global = row_start + i
+      let out = Array::make(row_indices.length(), ([] : Array[Double]))
+      for i in 0..<row_indices.length() {
+        let i_global = row_indices[i]
+        if i_global < 0 || i_global >= row_keep.length() {
+          raise InnerError(@debug.to_string(EmptyCombatants))
+        }
         let row = Array::make(n_cols, 0.0)
         for j in 0..<n_cols {
           // Coordinates use original-grid indices (row_keep[i_global],
@@ -1543,6 +1615,7 @@ pub fn run_select_shard(
   let mut out = "{"
   out = out + "\"row_start\":" + row_start.to_string()
   out = out + ",\"row_end\":" + row_end.to_string()
+  out = out + ",\"rows\":" + fmt_int_array(row_indices)
   out = out + ",\"matrix\":" + fmt_double_2d(matrix)
   out = out + "}"
   match @db.write_file_str(output_path, out) {

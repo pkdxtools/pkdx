@@ -657,12 +657,9 @@ fn parity_team_json(team : Array[@payoff.Combatant], prefix : String) -> String 
 
 ///|
 /// Parse the worker output JSON `{"row_start":Int, "row_end":Int,
-/// "matrix":[[Double, ...], ...]}` into the matrix payload. The
-/// `parse_shard_output` private helper inside the payoff package is
-/// not visible from this blackbox test file; this is a minimal
-/// inline mirror that aborts loudly on any shape mismatch so a
-/// regression in the worker output schema becomes obvious instead
-/// of silently zero-filling the matrix.
+/// "matrix":[["hex64", ...], ...]}` into the matrix payload. Cells are
+/// IEEE-754 hex strings (see `format_shard_cell`). `parse_shard_cell`
+/// is the same reader the parent uses.
 fn parse_test_shard_matrix(json_text : String) -> Array[Array[Double]] {
   let root = try @json.parse(json_text) catch {
     e => abort("worker output is not valid JSON: " + e.to_string())
@@ -686,8 +683,11 @@ fn parse_test_shard_matrix(json_text : String) -> Array[Array[Double]] {
     let r = Array::make(row.length(), 0.0)
     for j in 0..<row.length() {
       r[j] = match row[j] {
-        Number(d, ..) => d
-        _ => abort("worker output matrix cell must be a number")
+        String(s) =>
+          @payoff.parse_shard_cell("\"" + s + "\"") catch {
+            e => abort("worker output bad cell: " + @debug.to_string(e))
+          }
+        _ => abort("worker output matrix cell must be a hex string")
       }
     }
     out[i] = r

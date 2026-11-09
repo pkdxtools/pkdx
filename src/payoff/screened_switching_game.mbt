@@ -435,12 +435,99 @@ fn shard_row_ranges(total : Int, n_shards : Int) -> Array[(Int, Int)] {
 }
 
 ///|
-/// Parse the JSON written by `pkdx __select-shard` into a row-range
-/// sub-matrix tuple. The schema is `{"row_start":int, "row_end":int,
-/// "matrix":[[double, ...], ...]}` — see `cli_select.mbt::run_select_shard`.
+/// Row indices owned by each shard. The parent stitches by these indices,
+/// so the assembled matrix matches the in-process row order.
+///
+/// Contiguous blocks: the first `total % n_shards` shards receive one extra
+/// row. Shards past the end of the range are empty. Phase A and Phase C
+/// both use this split.
+///
+/// Measured on `select_6v6_screened_prod` (release, 4 vCPU): the 18 refine
+/// rows span 45.3–47.5 s (max/min 1.05) and the 60 screen rows span
+/// 3.17–3.49 s (max/min 1.10). A stride split does not shrink the slowest
+/// shard below the contiguous split, so the blocks stay contiguous.
+fn assign_shard_rows(total : Int, n_shards : Int) -> Array[Array[Int]] {
+  let ranges = shard_row_ranges(total, n_shards)
+  let out = Array::make(ranges.length(), ([] : Array[Int]))
+  for s in 0..<ranges.length() {
+    let (start, end_) = ranges[s]
+    let n = if end_ > start { end_ - start } else { 0 }
+    let rows = Array::make(n, 0)
+    for i in 0..<n {
+      rows[i] = start + i
+    }
+    out[s] = rows
+  }
+  out
+}
+
+///|
+/// 16 lowercase hex digits of a `UInt64`, big-endian nibble order.
+fn u64_to_hex16(n : UInt64) -> String {
+  let bytes = n.to_be_bytes()
+  let mut s = ""
+  for i in 0..<bytes.length() {
+    s = s + bytes[i].to_hex()
+  }
+  s
+}
+
+///|
+/// Inverse of `u64_to_hex16`. Accepts exactly 16 hex digits.
+fn hex16_to_u64(s : String) -> UInt64 raise PayoffError {
+  if s.length() != 16 {
+    raise EmptyCombatants
+  }
+  let mut n : UInt64 = 0UL
+  for ch in s {
+    let v = match ch {
+      '0'..='9' => ch.to_int() - '0'.to_int()
+      'a'..='f' => ch.to_int() - 'a'.to_int() + 10
+      'A'..='F' => ch.to_int() - 'A'.to_int() + 10
+      _ => -1
+    }
+    if v < 0 {
+      raise EmptyCombatants
+    }
+    n = (n << 4) | v.to_uint64()
+  }
+  n
+}
+
+///|
+/// JSON token for one shard-matrix cell. `Double.to_string` prints `-0.0`
+/// as `0`, so the wire is the IEEE-754 bits as a 16-digit hex JSON string.
+/// The matching reader is `decode_shard_json_cell`.
+fn format_shard_cell(x : Double) -> String {
+  "\"" + u64_to_hex16(x.reinterpret_as_uint64()) + "\""
+}
+
+///|
+/// Reader half of `format_shard_cell`. The cell must be a JSON string of
+/// 16 hex digits. A JSON number is rejected: that was the `to_string` path,
+/// which collapses `-0.0` to `+0.0`.
+fn decode_shard_json_cell(cell : Json) -> Double raise PayoffError {
+  match cell {
+    String(s) => hex16_to_u64(s).reinterpret_as_double()
+    _ => raise EmptyCombatants
+  }
+}
+
+///|
+/// Inverse of `format_shard_cell` for a single JSON value.
+pub fn parse_shard_cell(token : String) -> Double raise PayoffError {
+  let root = @json.parse(token) catch { _ => raise EmptyCombatants }
+  decode_shard_json_cell(root)
+}
+
+///|
+/// Parse the JSON written by `pkdx __select-shard`. Schema:
+/// `{"row_start":int,"row_end":int,"rows":[int,...],"matrix":[["hex64",...],...]}`.
+/// `rows[r]` is the matrix row that `matrix[r]` belongs to. When `rows`
+/// is absent, rows are `row_start + r` (contiguous).
 fn parse_shard_output(
   json_text : String,
-) -> (Int, Int, Array[Array[Double]]) raise PayoffError {
+) -> (Array[Int], Array[Array[Double]]) raise PayoffError {
   let root = @json.parse(json_text) catch { _ => raise EmptyCombatants }
   let obj = match root {
     Object(m) => m
@@ -462,10 +549,7 @@ fn parse_shard_output(
           Array(row) => {
             let r = Array::make(row.length(), 0.0)
             for j in 0..<row.length() {
-              r[j] = match row[j] {
-                Number(d, ..) => d
-                _ => raise EmptyCombatants
-              }
+              r[j] = decode_shard_json_cell(row[j])
             }
             r
           }
@@ -476,7 +560,30 @@ fn parse_shard_output(
     }
     _ => raise EmptyCombatants
   }
-  (row_start, row_end, matrix)
+  let rows = match obj.get("rows") {
+    Some(Array(arr)) => {
+      let xs = Array::make(arr.length(), 0)
+      for i in 0..<arr.length() {
+        xs[i] = match arr[i] {
+          Number(n, ..) => n.to_int()
+          _ => raise EmptyCombatants
+        }
+      }
+      xs
+    }
+    _ => {
+      let expect = if row_end > row_start { row_end - row_start } else { 0 }
+      if matrix.length() != expect {
+        raise EmptyCombatants
+      }
+      let xs = Array::make(matrix.length(), 0)
+      for r in 0..<matrix.length() {
+        xs[r] = row_start + r
+      }
+      xs
+    }
+  }
+  (rows, matrix)
 }
 
 ///|
@@ -498,6 +605,7 @@ pub fn build_shard_argv(
   refine_turn_limit : Int,
   progress_mode? : String = "off",
   progress_every? : Int = 0,
+  rows_csv? : String = "",
 ) -> Array[String] {
   let argv = [
     exe_path,
@@ -521,6 +629,10 @@ pub fn build_shard_argv(
     "--refine-turn-limit",
     refine_turn_limit.to_string(),
   ]
+  if rows_csv.length() > 0 {
+    argv.push("--rows")
+    argv.push(rows_csv)
+  }
   if row_keep_csv.length() > 0 {
     argv.push("--row-keep")
     argv.push(row_keep_csv)
@@ -587,7 +699,7 @@ fn run_shards_collect(
   exe_path : String,
   phase : String,
   input_path : String,
-  row_ranges : Array[(Int, Int)],
+  row_groups : Array[Array[Int]],
   row_keep_csv : String,
   col_keep_csv : String,
   out_n_rows : Int,
@@ -597,9 +709,19 @@ fn run_shards_collect(
   progress_mode? : String = "off",
   progress_every? : Int = 0,
 ) -> Array[Array[Double]] raise PayoffError {
-  let n_shards = row_ranges.length()
+  let n_shards = row_groups.length()
   // Per-shard output files. Created up front so we can clean up reliably.
   let output_paths = Array::make(n_shards, "")
+  // Any `raise` below (mkstemp failure, spawn failure, malformed shard
+  // output) must not leave temp files behind. The normal path clears each
+  // entry after unlinking it, so this only unlinks on the error path.
+  errdefer {
+    for p in output_paths {
+      if p.length() > 0 {
+        let _ = @db.unlink_file(p)
+      }
+    }
+  }
   for i in 0..<n_shards {
     let p = @process.mkstemp_file(
       "pkdx_shard_" + phase + "_out_" + i.to_string(),
@@ -615,7 +737,13 @@ fn run_shards_collect(
   // Build per-shard argv.
   let argvs : Array[Array[String]] = Array::make(n_shards, [])
   for i in 0..<n_shards {
-    let (row_start, row_end) = row_ranges[i]
+    let rows_csv = int_array_csv(row_groups[i])
+    let row_start = if row_groups[i].length() == 0 { 0 } else { row_groups[i][0] }
+    let row_end = if row_groups[i].length() == 0 {
+      0
+    } else {
+      row_groups[i][row_groups[i].length() - 1] + 1
+    }
     argvs[i] = build_shard_argv(
       exe_path,
       phase,
@@ -629,6 +757,7 @@ fn run_shards_collect(
       refine_turn_limit,
       progress_mode~,
       progress_every~,
+      rows_csv~,
     )
   }
   let results = @process.run_parallel_shards(argvs, timeout_ms~) catch {
@@ -647,14 +776,32 @@ fn run_shards_collect(
             continue
           }
         }
-        let (row_start, _, matrix) = parse_shard_output(raw)
-        // Stitch: matrix row `r` belongs at global row `row_start + r`.
-        // validate_stitch_index guards against malformed shard output
-        // writing outside the assembled matrix (defence in depth — the
-        // parent owns the wire contract but a future stride scheme or a
-        // corrupted child should not silently corrupt neighbours).
+        let (rows, matrix) = parse_shard_output(raw) catch {
+          _ =>
+            raise ShardError(
+              "shard " + i.to_string() + " wrote a malformed matrix file",
+            )
+        }
+        // The parent chose these rows, so the child must report exactly them.
+        if rows != row_groups[i] {
+          shard_err = Some(
+            "shard " +
+            i.to_string() +
+            " returned rows that differ from its assignment",
+          )
+          continue
+        }
+        // Place each returned row at the index the child reports.
+        if rows.length() != matrix.length() {
+          shard_err = Some(
+            "shard " +
+            i.to_string() +
+            " row index count does not match matrix height",
+          )
+          continue
+        }
         for r in 0..<matrix.length() {
-          let g = row_start + r
+          let g = rows[r]
           match validate_stitch_index(i, g, out_n_rows) {
             Some(msg) => {
               shard_err = Some(msg)
@@ -678,6 +825,7 @@ fn run_shards_collect(
   // unlink failures (e.g. someone else deleted them).
   for i in 0..<n_shards {
     let _ = @db.unlink_file(output_paths[i])
+    output_paths[i] = ""
   }
   match shard_err {
     Some(msg) => raise ShardError(msg)
@@ -752,7 +900,7 @@ pub fn team_payoff_matrix_screened_parallel(
   // ---- Phase A: MC screening fan-out -----------------------------------
   let phase_a_total = size_a * size_b
   progress(PhaseStart("screening", phase_a_total))
-  let ranges_a = shard_row_ranges(size_a, parallel)
+  let ranges_a = assign_shard_rows(size_a, parallel)
   // Per-cell `CellStart` / `CellDone` events are emitted by the *children*
   // directly to their inherited stderr when `child_progress_mode != "off"`.
   // The parent only brackets the phase, since multiple shards interleave
@@ -783,7 +931,7 @@ pub fn team_payoff_matrix_screened_parallel(
   // ---- Phase C: DP refine fan-out ---------------------------------------
   let phase_c_total = row_keep.length() * col_keep.length()
   progress(PhaseStart("dp-refine", phase_c_total))
-  let ranges_c = shard_row_ranges(row_keep.length(), parallel)
+  let ranges_c = assign_shard_rows(row_keep.length(), parallel)
   let row_keep_csv = int_array_csv(row_keep)
   let col_keep_csv = int_array_csv(col_keep)
   let refined = run_shards_collect(

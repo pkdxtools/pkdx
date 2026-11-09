@@ -97,7 +97,18 @@ jobs:
         # `bunx` は runtime fetch (サプライチェーン攻撃の表面積を広げる)。
         # `bun run check` なら `bun install --frozen-lockfile` で node_modules に
         # 固定された astro の binstub が呼ばれる。
-        run: bun run check
+        #
+        # 依存解決の不整合で @astrojs/check が読み込めないと、astro check は例外を
+        # 握りつぶして exit 0 のまま型検査を行わずに終了する (実際に発生した)。
+        # exit code だけでは見逃すため、集計行 `Result (` が出力されたことを確認する。
+        run: |
+          set -eo pipefail
+          log="$(mktemp)"
+          bun run check 2>&1 | tee "$log"
+          if ! grep -Fq 'Result (' "$log"; then
+            echo "::error::astro check printed no 'Result (' summary; the type check did not run."
+            exit 1
+          fi
       - name: Build smoke test (fixtures)
         working-directory: site
         run: bun run smoke

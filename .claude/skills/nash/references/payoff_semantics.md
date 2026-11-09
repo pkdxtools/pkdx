@@ -36,7 +36,7 @@ SwitchingGameState {
 } derive(Show, Eq, Hash)
 ```
 
-`HashMap[SwitchingGameState, Double]` (`StateCache`) に値を memoize。ランクは `[-2, +2]` にクランプして状態爆発を抑える（通常攻略で支配的な範囲を保ちつつ、±2 の飽和で `からをやぶる` 等の混合ランクアップを表現可能）。ランクはダメージ計算（`atk_rank` / `def_rank` 経由で `(2+|r|)/2` / `2/(2+|r|)` の乗数）と先制順序（実効素早さ）に反映される。
+`HashMap[SwitchingGameState, Double]` (`StateCache`) に値を memoize。ランクは `[-2, +2]` にクランプして状態爆発を抑える（通常攻略で支配的な範囲を保ちつつ、±2 の飽和で `からをやぶる` 等の混合ランクアップを表現可能）。例外: まけんき / かちき の所持者のランクだけは実機どおり `[-6, +6]` で追跡する（`clamp_rank_for`、下記「まけんき / かちき」節）。ランクはダメージ計算（`atk_rank` / `def_rank` 経由で `(2+|r|)/2` / `2/(2+|r|)` の乗数）と先制順序（実効素早さ）に反映される。
 
 ### Action space
 
@@ -60,7 +60,7 @@ active 自身が HP=0 の場合は forced switch のみ。
 
 ### 積み技 (ランク補正)
 
-`move.stat_effects` が `[(stat_idx, delta), ...]` の形で載っている技 (DB の `move_meta` テーブルから populate) は、使用者のランクベクトルを `clamp_rank` (`[-2, +2]`) しながら更新する。`pkdx_patch/002_move_meta/data.json` に収録済みの主要な積み技: `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし — 追加は `data.json` に行を 1 つ足して `./setup.sh` を走らせれば反映される。
+`move.stat_effects` が `[(stat_idx, delta), ...]` の形で載っている技 (DB の `move_meta` テーブルから populate) は、使用者のランクベクトルを `clamp_rank_for` (`[-2, +2]`。所持者がまけんき / かちき なら `[-6, +6]`) しながら更新する。`pkdx_patch/002_move_meta/data.json` に収録済みの主要な積み技: `つるぎのまい` (A+2), `りゅうのまい` (A+1/S+1), `めいそう` (C+1/D+1), `わるだくみ` (C+2), `てっぺき` (B+2), `ちょうのまい` (C+1/D+1/S+1), `からをやぶる` (A+2/C+2/S+2/B-1/D-1), `ロックカット` / `こうそくいどう` (S+2)。未登録名はデフォルトで効果なし — 追加は `data.json` に行を 1 つ足して `./setup.sh` を走らせれば反映される。
 
 ### Terminal value
 
@@ -90,7 +90,7 @@ value(state, ..., cache, stats):
 
 ### 計算量・推奨値
 
-実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える。`ValueStats.cached_states` で memoize 済みの固有状態数を取得可能。
+実到達 state は damage が整数刻みで離散化されるため有限。ランク (`my_ranks` / `opp_ranks`) は `[-2, +2]` に丸めて状態空間を抑える（まけんき / かちき の所持者のみ `[-6, +6]`）。`ValueStats.cached_states` で memoize 済みの固有状態数を取得可能。
 
 **状態空間実測** (合成データ、各ポケモン 1 技):
 
@@ -149,7 +149,7 @@ DamageKey { my_attacker : Bool, atk_idx, def_idx, mv_idx, atk_rank, def_rank : I
 - **ValueStats** — state-value memo。`HashMap[SwitchingGameState, Double]` が保持する「state → Nash 値」の hit/miss を記録。
 - **DamageCache** — damage-table memo。`(side, atk_idx, def_idx, mv_idx, atk_rank, def_rank)` をキーに 16-roll 平均ダメージをキャッシュ。1 turn 内の `transition` からも、異なる state からの遷移からも再利用される。
 
-`switching_game_winrate` は両キャッシュを内部で作って捨てる。`switching_game_winrate_stats` は `(Double, ValueStats, DamageCache)` を返し、テスト / 診断でキャッシュ動作を black-box 観測可能。production で `DamageCache` のキー空間は `2 × N_atk × N_def × N_mv × 5 × 5` で上限されるため (ランクは `[-2, +2]` クランプ)、state 数より圧倒的に小さく hit 比率は `misses ≪ hits` になる。
+`switching_game_winrate` は両キャッシュを内部で作って捨てる。`switching_game_winrate_stats` は `(Double, ValueStats, DamageCache)` を返し、テスト / 診断でキャッシュ動作を black-box 観測可能。production で `DamageCache` のキー空間は `2 × N_atk × N_def × N_mv × 5 × 5` で上限されるため (ランクは `[-2, +2]` クランプ。まけんき / かちき の所持者のみ `[-6, +6]` で、その分キー空間はわずかに広がる)、state 数より圧倒的に小さく hit 比率は `misses ≪ hits` になる。
 
 ### CLI 文字列
 
@@ -480,9 +480,10 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
   | びびり (Rattled) | target A **-1** かつ S **+1** (Gen8+ でいかくが Rattled を誘発) |
   | あまのじゃく (Contrary) | 反転 → target A **+1** (`ability_reverses_stat_changes` 判定) |
   | `ability_blocks_intimidate` の 8 種 (どんかん / マイペース / せいしんりょく / きもったま / クリアボディ / かいりきバサミ / しろいけむり / メタルプロテクト) | no-op |
+  | まけんき / かちき | target A **-1** (`apply_opp_stat_drop`)。1 回の能力ダウンイベント (いかく 1 回) で実際に下がったときだけ 1 回反応 (`apply_opp_drop_reaction`): まけんき = 攻撃 **+2** / かちき = 特攻 **+2** (上限 +6) |
   | その他 | target A **-1** |
 
-- 全 write は `clamp_rank` を通り `[-2, +2]` に飽和。相互いかく (両 lead / 相互交代) は entrant を入れ替えた 2 独立コールで解決する。
+- 全 write は `clamp_rank_for` を通る（所持者が まけんき / かちき なら `[-6, +6]`、それ以外は `[-2, +2]` に飽和）。相互いかく (両 lead / 相互交代) は entrant を入れ替えた 2 独立コールで解決する。
 
 ### あまのじゃく (Contrary) — DP
 
@@ -491,6 +492,19 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - 各 effect の `target` で holder を選ぶ: `target == 0` → attacker (自己積み) の ranks と `attacker_ability`、`target == 1 && opp_alive` → defender (相手ダウン) の ranks と `defender_ability`。それ以外の target 値は forward-compat のため無視。
 - holder が `ability_reverses_stat_changes(holder_ability)` を満たすとき `delta` を符号反転してから `clamp_rank`。非 Contrary 入力は反転前と **bit-identical** (両 ability 引数は default なしの必須引数にして、全 call site が解決済み特性を明示する契約)。
 - 効く技: からをやぶる / オーバーヒート / インファイト 等の自己ダウン、あまえる 等の被弾ダウン。いかく反転も同じ `ability_reverses_stat_changes` 判定を entry テーブル側で共有する。
+
+### まけんき / かちき (Defiant / Competitive) — DP
+
+相手由来の能力ダウンに反応する特性。反応は 2 経路 (いかく の登場時ダウン / 技 `stat_effects` の相手ダウン) で同じ helper を共有する。ダウン適用は `apply_opp_stat_drop` (実際に下がったかを Bool で返す)、反応は `apply_opp_drop_reaction` (1 つの能力変化イベントにつき 1 回)。
+
+- **発動条件**: 相手由来のダウンイベント (いかく 1 回 / 1 つの技の相手ダウン群) につき 1 回。そのイベント内で**実際に適用された**ダウンが 1 つ以上あれば発動する (能力ごとには発動しない)。ランクが変化しなかったダウン (既に下限・ブロック・反射) は反応の対象にならず、イベント内の全ダウンが不発なら反応もしない。自分の技の自己ダウン (`target = 0`) では発動しない。
+- **反応**: まけんき = 攻撃 (index 0) +2、かちき = 特攻 (index 2) +2。反応の上限は +6 (`clamp_stat_stage`)。
+- **同時に複数能力を下げる技** (くすぐる / なみだめ) は、その技の全ダウンを適用してから **1 回だけ** 発動する (`apply_stat_effects` 1 呼び出し = 1 技 = 1 イベント)。片方だけ下限で下がらなかった場合は、もう片方が下がっていれば 1 回発動する。
+- **ランク範囲**: 所持者のランクは実機どおり `[-6, +6]` で追跡する (`clamp_rank_for`)。下限 -6 で止まるため「既に下限なら不発」が実機どおりになる。他特性は従来の `[-2, +2]` (既存挙動は不変)。
+- **対象の相手ダウン技**: `pkdx_patch/005_move_meta_posthit` 収録の `target = 1` 技 (あまえる / いやなおと / こわいかお / しっぽをふる / にらみつける / なきごえ / くすぐる / なみだめ)。表に無い技と、確率付きの追加効果による相手ダウンは未対応。
+- **交代**: 所持者が交代で退場するとランクは 0 に戻る (switch-out リセット)。
+- **MC**: 同じ `apply_intimidate_on_entry` / `apply_stat_effects` を呼ぶため、parity は構造的に一致する。
+- **未モデル**: みがわり・しろいきり等による阻止 (payoff 層に身代わり / 場の効果による阻止は無い)。
 
 ### ばけのかわ (Disguise, ミミッキュ専用) — DP
 
@@ -509,6 +523,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 
 - **いかく**: `apply_intimidate_on_entry` を初期 lead 2 コール (`own`/`opp`) と交代 (voluntary / forced) の各 entry で呼ぶ (DP と同じ truth table を共有)。
 - **あまのじゃく**: `apply_stat_effects` を DP と共有 (SSoT)。
+- **まけんき / かちき**: いかく経路 (`apply_intimidate_on_entry`) と相手ダウン技 (`apply_stat_effects`) を DP と共有 (SSoT)。反応は両経路とも `apply_opp_drop_reaction` を 1 イベント 1 回呼ぶ。
 - **ばけのかわ**: `disguise_intact_mc(team, active, busted)` が「ばけのかわ持ち かつ `busted[slot] == false`」で intact 判定。`own_disguise_busted` / `opp_disguise_busted : Array[Bool]` を `team_rollout` ローカルに持ち (slot-bound・戦闘持続、交代非リセット)、damage は同じ `disguise_reduced_mean` を再利用。busted は `res_bust` を返して被弾側配列へ書き戻す。
 - 各特性を `|dp - mc| < 0.15` の value-tol で pin し、非該当チームでの決定性 (no-op) と greedy/damage coherence を感度ガードで確認する。
 
@@ -522,10 +537,11 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `team_monte_carlo_contrary_parity_wbtest.mbt` — Contrary の MC/DP parity
 - `switching_game_disguise_wbtest.mbt` — 初撃ブロック + chip、連続技初段のみ、変化技/タイプ無効で非剥がれ、交代非リセット、`dmg_for_effects` 分離 (反動/ドレイン)、`def_disguise_intact` cache key
 - `team_monte_carlo_disguise_parity_wbtest.mbt` — Disguise の MC/DP parity + busted 配列の戦闘持続
+- `switching_game_defiant_competitive_wbtest.mbt` — まけんき / かちき の反応 (いかく / 相手ダウン技 / 複数ダウン技は 1 技 1 回 / 自傷不発 / 上限 +6 / 下限不発 / 防がれたダウン)、持ち主別 clamp (`clamp_rank_for`)、DP 配線 (交代いかく・連続交代の累積・交代退場リセット)
+- `team_monte_carlo_defiant_competitive_parity_wbtest.mbt` — まけんき / かちき の MC/DP parity (lead いかく・相手ダウン技・複数ダウン技 (くすぐる) は 1 技 1 回・MC no-op)
 
 ### MVP 対象外 (将来拡張)
 
-- まけんき / かちき (Defiant / Competitive) の能力ダウン反応 (いかく被弾等での自己強化)
 - クリアボディ 等による技由来 (非いかく) の能力ダウン無効化 — 既存 MVP scope を継続 (Post-hit 節「MVP 非対応」参照)
 - かたやぶり (Mold Breaker) による ばけのかわ / あまのじゃく の貫通
 - あまのじゃく × はらだいこ — はらだいこ は `move_meta` 未収録のため現状 edge case は発生しない

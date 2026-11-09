@@ -22,7 +22,8 @@
 ///|
 /// Immutable state of a `SwitchingGame`: which Pokemon is active on each
 /// side, HPs for all Pokemon, stat ranks of the current actives (clamped to
-/// `[-2, +2]` per the payoff-layer convention, reset on switch), and turn
+/// `[-2, +2]` per the payoff-layer convention; まけんき / かちき holders use
+/// `[-6, +6]`, see `clamp_rank_for`; reset on switch), and turn
 /// counter. Used as a `HashMap` key for the memoized `value` recursion.
 ///
 /// `my_ranks` / `opp_ranks` have length 5: `[A, B, C, D, S]` (see
@@ -1597,9 +1598,15 @@ fn clamp_zero(x : Int) -> Int {
 /// true, the delta's sign is flipped before clamping. Both arguments are
 /// required (no default) so every call site states which abilities it
 /// resolved — non-Contrary inputs are bit-identical to the pre-Contrary
-/// behaviour.
+/// behaviour. `defender_ability~` also feeds まけんき / かちき: a drop that
+/// lands on such a holder (`target=1`, `delta < 0` after the Contrary flip)
+/// goes through `apply_opp_stat_drop`. The reaction is once per move, not once
+/// per stat: if at least one of the move's drops landed, `apply_opp_drop_reaction`
+/// runs once after all of them (くすぐる / なみだめ react once). Self drops
+/// (`target=0`) never react.
 ///
-/// Delta is added and clamped to `[-2, +2]` via `clamp_rank`.
+/// Delta is added and clamped via `clamp_rank_for` against the holder's
+/// ability: `[-2, +2]` for ordinary holders, `[-6, +6]` for まけんき / かちき.
 fn apply_stat_effects(
   self_ranks : Array[Int],
   opp_ranks : Array[Int],
@@ -1608,6 +1615,10 @@ fn apply_stat_effects(
   attacker_ability~ : String,
   defender_ability~ : String,
 ) -> Unit {
+  // 1 回の技 = 1 回の能力変化イベント。相手ダウンは全件適用してから、実際に下がった
+  // ものが 1 つ以上あれば反応を 1 回だけ行う (能力ごとには反応しない)。反応は
+  // opp_ranks (= 所持者の ranks) にしか書かず、自己ダウン (self_ranks) とは独立。
+  let mut opp_drop_landed = false
   for eff in mv.stat_effects {
     let (ranks, holder_ability) = if eff.target == 0 {
       (self_ranks, attacker_ability)
@@ -1622,8 +1633,17 @@ fn apply_stat_effects(
       } else {
         eff.delta
       }
-      ranks[eff.stat] = clamp_rank(ranks[eff.stat] + delta)
+      if eff.target == 1 && delta < 0 {
+        if apply_opp_stat_drop(holder_ability, ranks, eff.stat, delta) {
+          opp_drop_landed = true
+        }
+      } else {
+        ranks[eff.stat] = clamp_rank_for(holder_ability, ranks[eff.stat] + delta)
+      }
     }
+  }
+  if opp_drop_landed {
+    apply_opp_drop_reaction(defender_ability, opp_ranks)
   }
 }
 

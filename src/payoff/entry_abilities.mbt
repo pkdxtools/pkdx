@@ -11,8 +11,9 @@
 ///|
 /// Apply いかく (Intimidate) at entry time, mutating the rank arrays in
 /// place. Rank arrays follow the module convention `[A, B, C, D, S]`
-/// (index 0 = Attack, 4 = Speed) and every write goes through `clamp_rank`
-/// so ranks stay inside the payoff layer's reduced `[-2, +2]` range.
+/// (index 0 = Attack, 4 = Speed). Writes go through `clamp_rank` (the
+/// payoff layer's reduced `[-2, +2]`), except on a drop target that is
+/// まけんき / かちき: its ranks are tracked over `[-6, +6]` (`clamp_rank_for`).
 ///
 /// Call-site contract:
 ///
@@ -36,7 +37,9 @@
 ///   trigger Rattled).
 /// - あまのじゃく (Contrary): the drop inverts — target A +1.
 /// - `ability_blocks_intimidate` abilities: no-op.
-/// - Anything else: target A -1.
+/// - まけんき / かちき and anything else: target A -1 through
+///   `apply_opp_stat_drop`, then `apply_opp_drop_reaction` once. まけんき
+///   (A +2) / かちき (SpA +2) react only when the drop actually landed.
 pub fn apply_intimidate_on_entry(
   entrant_ability : String,
   target_ability : String,
@@ -57,6 +60,52 @@ pub fn apply_intimidate_on_entry(
     ability if ability_reverses_stat_changes(ability) =>
       target_ranks[0] = clamp_rank(target_ranks[0] + 1)
     ability if ability_blocks_intimidate(ability) => ()
-    _ => target_ranks[0] = clamp_rank(target_ranks[0] - 1)
+    _ => {
+      if apply_opp_stat_drop(target_ability, target_ranks, 0, -1) {
+        apply_opp_drop_reaction(target_ability, target_ranks)
+      }
+    }
+  }
+}
+
+///|
+/// Apply one opponent-inflicted stat drop (`delta` < 0 on `stat`) to the rank
+/// array of its holder (`owner_ability`). The caller has already resolved
+/// blocking, reflection and reversal, so this is a drop that reached the
+/// holder. It is shared by the entry path (いかく) and the post-hit path
+/// (`apply_stat_effects` with `target = 1`), so both paths clamp identically.
+///
+/// Returns `true` when the drop actually changed the rank. A holder already at
+/// the floor (-6 for まけんき / かちき) does not move, so the drop did not land.
+/// The reaction is not run here. A stat-lowering event (one いかく entry, or one
+/// move's `stat_effects`) reacts once, after all of its drops, and only if at
+/// least one landed: the caller runs `apply_opp_drop_reaction` for that.
+pub fn apply_opp_stat_drop(
+  owner_ability : String,
+  ranks : Array[Int],
+  stat : Int,
+  delta : Int,
+) -> Bool {
+  let before = ranks[stat]
+  ranks[stat] = clamp_rank_for(owner_ability, before + delta)
+  ranks[stat] != before
+}
+
+///|
+/// The まけんき / かちき reaction to one opponent-inflicted stat-lowering event.
+/// Call it once per event, after every drop in the event has been applied, and
+/// only when at least one drop landed (`apply_opp_stat_drop` returned `true`):
+///
+/// - まけんき (Defiant): Attack (index 0) +2.
+/// - かちき (Competitive): Special Attack (index 2) +2.
+///
+/// The reaction is capped by `clamp_rank_for` at +6. It is once per event, not
+/// once per stat: a move that lowers two stats (くすぐる / なみだめ) reacts once.
+/// Ordinary holders are a no-op.
+pub fn apply_opp_drop_reaction(owner_ability : String, ranks : Array[Int]) -> Unit {
+  match owner_ability {
+    "まけんき" => ranks[0] = clamp_rank_for(owner_ability, ranks[0] + 2)
+    "かちき" => ranks[2] = clamp_rank_for(owner_ability, ranks[2] + 2)
+    _ => ()
   }
 }

@@ -159,3 +159,34 @@ test "screened_prod JSON matches at parallel 1/2/4" {
     e => abort(@debug.to_string(e))
   }
 }
+
+///|
+test "screened select rejects non-positive mc_turn_limit" {
+  let input = cmp_screened_json(1, "screened_switching_game:8:42:0.3:1", 0)
+  try @payoff.run_select(input, parallel=2) catch {
+    e => assert_true(e is InvalidJson(_))
+  } noraise {
+    _ => fail("expected run_select to raise")
+  }
+}
+
+///|
+/// A shard worker that exits 0 without writing its output must surface as
+/// an error, not as a silently empty matrix. `/bin/true` stands in for the
+/// worker binary; the parent's `PKDX_SELF_EXEC` override is restored after.
+test "parallel screened select raises when shard workers write no output" {
+  if !@db.file_exists("/bin/true") {
+    return
+  }
+  let prev = @env.get_env_var("PKDX_SELF_EXEC")
+  @env.set_env_var("PKDX_SELF_EXEC", "/bin/true")
+  let input = cmp_screened_json(1, "screened_switching_game:8:42:0.3:1", 1)
+  let outcome = try @payoff.run_select(input, parallel=2) catch {
+    _ => "raised"
+  }
+  match prev {
+    Some(p) => @env.set_env_var("PKDX_SELF_EXEC", p)
+    None => @env.set_env_var("PKDX_SELF_EXEC", "")
+  }
+  @debug.assert_eq(outcome, "raised")
+}

@@ -1228,7 +1228,15 @@ pub fn run_select_typed(
   }
   let nash_config = parse_nash_solver_config(obj.get("nash_solver_config"))
   let mc_turn_limit = match obj.get("mc_turn_limit") {
-    Some(Number(n, ..)) => n.to_int()
+    Some(Number(n, ..)) => {
+      let v = n.to_int()
+      // The shard CLI reads `--mc-turn-limit <= 0` as "use the default", so a
+      // non-positive value would make parallel and in-process results differ.
+      if v <= 0 {
+        raise InvalidJson("mc_turn_limit must be a positive integer")
+      }
+      v
+    }
     Some(_) => raise InvalidJson("mc_turn_limit must be a number")
     None => MC_TURN_LIMIT
   }

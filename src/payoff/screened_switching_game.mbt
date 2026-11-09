@@ -712,6 +712,16 @@ fn run_shards_collect(
   let n_shards = row_groups.length()
   // Per-shard output files. Created up front so we can clean up reliably.
   let output_paths = Array::make(n_shards, "")
+  // Any `raise` below (mkstemp failure, spawn failure, malformed shard
+  // output) must not leave temp files behind. The normal path clears each
+  // entry after unlinking it, so this only unlinks on the error path.
+  errdefer {
+    for p in output_paths {
+      if p.length() > 0 {
+        let _ = @db.unlink_file(p)
+      }
+    }
+  }
   for i in 0..<n_shards {
     let p = @process.mkstemp_file(
       "pkdx_shard_" + phase + "_out_" + i.to_string(),
@@ -766,9 +776,22 @@ fn run_shards_collect(
             continue
           }
         }
-        let (rows, matrix) = parse_shard_output(raw)
+        let (rows, matrix) = parse_shard_output(raw) catch {
+          _ =>
+            raise ShardError(
+              "shard " + i.to_string() + " wrote a malformed matrix file",
+            )
+        }
+        // The parent chose these rows, so the child must report exactly them.
+        if rows != row_groups[i] {
+          shard_err = Some(
+            "shard " +
+            i.to_string() +
+            " returned rows that differ from its assignment",
+          )
+          continue
+        }
         // Place each returned row at the index the child reports.
-        // Contiguous and stride assignments both land in index order.
         if rows.length() != matrix.length() {
           shard_err = Some(
             "shard " +
@@ -802,6 +825,7 @@ fn run_shards_collect(
   // unlink failures (e.g. someone else deleted them).
   for i in 0..<n_shards {
     let _ = @db.unlink_file(output_paths[i])
+    output_paths[i] = ""
   }
   match shard_err {
     Some(msg) => raise ShardError(msg)

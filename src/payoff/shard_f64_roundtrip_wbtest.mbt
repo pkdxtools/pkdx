@@ -81,3 +81,55 @@ test "shard double wire roundtrip preserves bits" {
     abort(bad)
   }
 }
+
+///|
+/// True when `parse_shard_cell` raises for `token`.
+fn shard_cell_rejects(token : String) -> Bool {
+  let mut rejected = false
+  let _ = try parse_shard_cell(token) catch {
+    _ => {
+      rejected = true
+      0.0
+    }
+  }
+  rejected
+}
+
+///|
+test "shard double wire keeps NaN and inf bits and rejects malformed cells" {
+  let checks = [
+    ("qNaN", (0x7FF8000000000000UL).reinterpret_as_double()),
+    ("qNaN-payload", (0x7FF8000000000001UL).reinterpret_as_double()),
+    ("-qNaN", (0xFFF8000000000000UL).reinterpret_as_double()),
+    ("+inf", (0x7FF0000000000000UL).reinterpret_as_double()),
+    ("-inf", (0xFFF0000000000000UL).reinterpret_as_double()),
+  ]
+  let mut bad = ""
+  for pair in checks {
+    let (label, x) = pair
+    let msg = shard_bits_mismatch(label, x)
+    if msg.length() > 0 {
+      if bad.length() > 0 {
+        bad = bad + "\n"
+      }
+      bad = bad + msg
+    }
+  }
+  if bad.length() > 0 {
+    abort(bad)
+  }
+  // Only a 16-digit JSON string is a cell. Numbers, wrong lengths and
+  // non-hex digits must all raise instead of decoding to some value.
+  let malformed = [
+    "0.5",
+    "\"\"",
+    "\"3ff000000000000\"",
+    "\"3ff00000000000000\"",
+    "\"3ff000000000000g\"",
+  ]
+  for token in malformed {
+    @debug.assert_eq(shard_cell_rejects(token), true)
+  }
+  // Uppercase hex is accepted and decodes to 1.0.
+  @debug.assert_eq(shard_cell_rejects("\"3FF0000000000000\""), false)
+}

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { z } from 'zod';
+import { z } from 'astro/zod';
 
 const baseStatsSchema = z.object({
   h: z.number(),

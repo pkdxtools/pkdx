@@ -1,5 +1,8 @@
 import { defineCollection } from 'astro:content';
-import { z } from 'zod';
+// zod は astro/zod (astro 同梱の zod) から取る。サイト直下に別バージョンの zod を
+// 置くと、defineCollection の schema 型 (astro 側の BaseSchema) と食い違い、
+// entry.data が unknown になる (zod 4 は _zod.version.minor をリテラル型で持つため)。
+import { z } from 'astro/zod';
 import { globWithPublishedAt } from './loaders/with-published-at';
 
 const CONTENT_ROOT = process.env.CONTENT_ROOT ?? '../box';

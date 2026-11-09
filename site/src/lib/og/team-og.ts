@@ -100,6 +100,7 @@ export function buildTeamOgNode(input: TeamOgInput): VNode {
           position: 'relative',
           width: SIZE.width,
           height: SIZE.height,
+          boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
           padding: '32px 48px',

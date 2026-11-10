@@ -96,6 +96,33 @@ pub fn ability_blocks_intimidate(ability : String) -> Bool {
 }
 
 ///|
+/// Return `true` when the holder's ability nullifies one stat drop that an
+/// opponent's move inflicts on it: a post-hit `stat_effects` entry with
+/// `target = 1` and a negative delta (after the あまのじゃく flip).
+/// `stat` is the rank index (0 = Attack ... 4 = Speed).
+///
+/// Mirrors Showdown's `onTryBoost` for the generic blockers. Clear Body
+/// (クリアボディ), White Smoke (しろいけむり) and Full Metal Body (メタルプロテクト)
+/// share one body: every negative boost from another source is deleted. Hyper
+/// Cutter (かいりきバサミ) deletes only an Attack drop, so it blocks `stat = 0`
+/// alone. Self-inflicted drops (`target = 0`) never reach this predicate, since
+/// Showdown skips the check when `target === source`.
+///
+/// The Intimidate-only blockers (どんかん / マイペース / せいしんりょく /
+/// きもったま) are absent on purpose: Showdown gates them on
+/// `effect.name === 'Intimidate'`, so a move's drop still lands. Guard Dog
+/// (ばんけん) is likewise Intimidate-only and does not appear here.
+pub fn ability_blocks_opp_stat_drop(ability : String, stat : Int) -> Bool {
+  match ability {
+    "クリアボディ" => true
+    "しろいけむり" => true
+    "メタルプロテクト" => true
+    "かいりきバサミ" => stat == 0
+    _ => false
+  }
+}
+
+///|
 /// Return `true` when the ability inverts every stat stage change applied to
 /// the holder. Mirrors あまのじゃく (Contrary): drops become raises and vice
 /// versa. Callers flip the sign of the delta before clamping.

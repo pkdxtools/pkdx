@@ -151,7 +151,9 @@ test "contrary regression: 非あまのじゃく ability では従来結果と�
   )
   @debug.assert_eq(self_a[0], 2)
   @debug.assert_eq(opp_a[0], -2)
-  // あまのじゃく 以外の非空 ability でも同一。
+  // あまのじゃく 以外の非空 ability でも同一。defender は技由来ダウンを防がない
+  // 特性 (もうか) にする。クリアボディ 等のブロックは
+  // switching_game_stat_drop_block_wbtest で pin する。
   let self_b = [0, 0, 0, 0, 0]
   let opp_b = [0, 0, 0, 0, 0]
   apply_stat_effects(
@@ -160,7 +162,7 @@ test "contrary regression: 非あまのじゃく ability では従来結果と�
     true,
     mv,
     attacker_ability="いかく",
-    defender_ability="クリアボディ",
+    defender_ability="もうか",
   )
   @debug.assert_eq(self_b[0], 2)
   @debug.assert_eq(opp_b[0], -2)

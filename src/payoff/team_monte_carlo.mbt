@@ -607,7 +607,9 @@ fn most_likely_variant(r : @model.DamageCalcResult) -> @model.DamageVariant? {
 /// `perform_attack_with` in `monte_carlo.mbt` but free-standing so the team
 /// rollout stays self-contained.
 ///
-/// 戻り値 `(new_hp, dmg_for_effects, disguise_busted)`:
+/// 戻り値 `(new_hp, dmg_for_effects, disguise_busted, immune)`:
+///   - `immune`: 技がタイプ / 特性で無効 (`calc_damage` の `is_immune`)。使用者は崩れ技なら
+///     この leg で崩れ HP を失う (`mc_apply_crash`)。status / 通常ダメージは false。
 ///   - `new_hp`: 解決後の防御側 HP (0 床クランプ)。
 ///   - `dmg_for_effects`: recoil / drain 計算に使う「技が実際に HP へ与えたダメージ」。
 ///     非 ばけのかわ 時は実 dealt (= defender_hp - new_hp) で従来の
@@ -635,13 +637,13 @@ fn team_perform_attack(
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
   def_disguise_intact? : Bool = false,
-) -> (Int, Int, Bool) {
+) -> (Int, Int, Bool, Bool) {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
     // applies `stat_effects` (with opp_alive gating) via
     // `team_apply_post_hit` so both branches share one resolver. ばけのかわ は
     // 変化技では剥がれず chip も無い (dmg_for_effects=0, busted=false)。
-    return (defender_hp, 0, false)
+    return (defender_hp, 0, false, false)
   }
   let atk_rank = match mv.category {
     @model.Physical => atk_ranks[0]
@@ -684,7 +686,7 @@ fn team_perform_attack(
   if r.is_immune {
     // タイプ無効: ばけのかわ は剥がれず chip も無い (DP `compute_damage_variants`
     // の immune 早期 return と一致)。
-    return (defender_hp, 0, false)
+    return (defender_hp, 0, false, true)
   }
   // burn 半減: 従来の単一ロール挙動 (物理 → raw/2) を helper 化。ばけのかわ の
   // chip は特性由来の固定ダメージなので burn 半減しない (later-hits 分にのみ掛ける)。
@@ -727,7 +729,7 @@ fn team_perform_attack(
     } else {
       0
     }
-    return (new_hp, dmg_for_effects, true)
+    return (new_hp, dmg_for_effects, true, false)
   }
   // 非 ばけのかわ: 従来どおり (単一ロール、burn 半減、0 床クランプ)。rng 消費は
   // intact 分岐と同じ 1 回 (`idx`) なので、非 disguise チームの決定性は bit-exact。
@@ -735,7 +737,7 @@ fn team_perform_attack(
   // (= actual dealt = min(dmg, defender_hp)) を dmg_for_effects として返す。
   let dmg = burn_halve(raw)
   let new_hp = if defender_hp - dmg < 0 { 0 } else { defender_hp - dmg }
-  (new_hp, defender_hp - new_hp, false)
+  (new_hp, defender_hp - new_hp, false, false)
 }
 
 ///|
@@ -782,26 +784,26 @@ fn mc_resolve_attempt(
   status : @model.StatusCondition,
   mv_acc : Int,
   rng : @random.Rand,
-) -> (@model.StatusCondition, Bool) {
+) -> (@model.StatusCondition, Bool, Bool) {
   match status {
     @model.Sleep(n) => {
       if n > 0 {
-        return (@model.Sleep(n - 1), false)
+        return (@model.Sleep(n - 1), false, false)
       }
       // Sleep(0): wake up and act subject to accuracy below.
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (@model.None, acts)
+      (@model.None, acts, !acts)
     }
     @model.Paralyze => {
       if rand_bool(rng, PARALYZE_SKIP_RATE) {
-        return (@model.Paralyze, false)
+        return (@model.Paralyze, false, false)
       }
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (@model.Paralyze, acts)
+      (@model.Paralyze, acts, !acts)
     }
     other => {
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (other, acts)
+      (other, acts, !acts)
     }
   }
 }
@@ -1114,12 +1116,14 @@ pub fn team_rollout(
         // circuits UseMove to `acts=false` regardless of status.
         let mut own_attempt_acts = true
         let mut opp_attempt_acts = true
+        let mut own_missed_crash = false
+        let mut opp_missed_crash = false
         match ao {
           TmUseMove(mi) =>
             if own_start_recharging {
               own_attempt_acts = false
             } else {
-              let (st, acts) = mc_resolve_attempt(
+              let (st, acts, missed) = mc_resolve_attempt(
                 own_status[own_active],
                 mc_attempt_accuracy(
                   own[own_active],
@@ -1131,6 +1135,7 @@ pub fn team_rollout(
               )
               own_status[own_active] = st
               own_attempt_acts = acts
+              own_missed_crash = missed && @damage.is_crash_move(own[own_active].moves[mi].name)
             }
           _ => ()
         }
@@ -1139,7 +1144,7 @@ pub fn team_rollout(
             if opp_start_recharging {
               opp_attempt_acts = false
             } else {
-              let (st, acts) = mc_resolve_attempt(
+              let (st, acts, missed) = mc_resolve_attempt(
                 opp_status[opp_active],
                 mc_attempt_accuracy(
                   opp[opp_active],
@@ -1151,6 +1156,7 @@ pub fn team_rollout(
               )
               opp_status[opp_active] = st
               opp_attempt_acts = acts
+              opp_missed_crash = missed && @damage.is_crash_move(opp[opp_active].moves[mi].name)
             }
           _ => ()
         }
@@ -1305,7 +1311,7 @@ pub fn team_rollout(
               let opp_intact = disguise_intact_mc(
                 opp, opp_active, opp_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(own, own_active, own_item_consumed),
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 before,
@@ -1323,6 +1329,9 @@ pub fn team_rollout(
               opp_hps[opp_active] = res_hp
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
+              }
+              if res_immune {
+                mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
               }
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
@@ -1362,6 +1371,12 @@ pub fn team_rollout(
                 opp_blocked_mid_turn = true
               }
             }
+            if own_missed_crash && own_hps[own_active] > 0 {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              if all_ko(own_hps) {
+                return -1.0
+              }
+            }
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
@@ -1378,7 +1393,7 @@ pub fn team_rollout(
               let own_intact = disguise_intact_mc(
                 own, own_active, own_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 consumed_item_view(own, own_active, own_item_consumed),
                 before,
@@ -1396,6 +1411,9 @@ pub fn team_rollout(
               own_hps[own_active] = res_hp
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
+              }
+              if res_immune {
+                mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
               }
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
@@ -1429,6 +1447,12 @@ pub fn team_rollout(
                 return 1.0
               }
             }
+            if opp_missed_crash && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+              if all_ko(opp_hps) {
+                return 1.0
+              }
+            }
           } else {
             let mut own_blocked_mid_turn = false
             // Stage H: Psychic Terrain priority block — opp の priority>0 技は
@@ -1443,7 +1467,7 @@ pub fn team_rollout(
               let own_intact = disguise_intact_mc(
                 own, own_active, own_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 consumed_item_view(own, own_active, own_item_consumed),
                 before,
@@ -1461,6 +1485,9 @@ pub fn team_rollout(
               own_hps[own_active] = res_hp
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
+              }
+              if res_immune {
+                mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
               }
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
@@ -1500,6 +1527,12 @@ pub fn team_rollout(
                 own_blocked_mid_turn = true
               }
             }
+            if opp_missed_crash && opp_hps[opp_active] > 0 {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+              if all_ko(opp_hps) {
+                return 1.0
+              }
+            }
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
               own_attempt_acts &&
@@ -1514,7 +1547,7 @@ pub fn team_rollout(
               let opp_intact = disguise_intact_mc(
                 opp, opp_active, opp_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(own, own_active, own_item_consumed),
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 before,
@@ -1532,6 +1565,9 @@ pub fn team_rollout(
               opp_hps[opp_active] = res_hp
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
+              }
+              if res_immune {
+                mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
               }
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
@@ -1565,6 +1601,12 @@ pub fn team_rollout(
                 return 1.0
               }
             }
+            if own_missed_crash && own_hps[own_active] > 0 && !own_blocked_mid_turn {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              if all_ko(own_hps) {
+                return -1.0
+              }
+            }
           }
         } else if !own_switches {
           let mi_own = match ao {
@@ -1584,7 +1626,7 @@ pub fn team_rollout(
             let opp_intact = disguise_intact_mc(
               opp, opp_active, opp_disguise_busted,
             )
-            let (res_hp, res_eff, res_bust) = team_perform_attack(
+            let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
               consumed_item_view(own, own_active, own_item_consumed),
               consumed_item_view(opp, opp_active, opp_item_consumed),
               before,
@@ -1602,6 +1644,9 @@ pub fn team_rollout(
             opp_hps[opp_active] = res_hp
             if res_bust && opp_active < opp_disguise_busted.length() {
               opp_disguise_busted[opp_active] = true
+            }
+            if res_immune {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
             }
             team_apply_post_hit(
               own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
@@ -1635,6 +1680,12 @@ pub fn team_rollout(
               return 1.0
             }
           }
+          if own_missed_crash && own_hps[own_active] > 0 {
+            mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+            if all_ko(own_hps) {
+              return -1.0
+            }
+          }
         } else if !opp_switches {
           let mi_opp = match ap {
             TmUseMove(i) => i
@@ -1653,7 +1704,7 @@ pub fn team_rollout(
             let own_intact = disguise_intact_mc(
               own, own_active, own_disguise_busted,
             )
-            let (res_hp, res_eff, res_bust) = team_perform_attack(
+            let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
               consumed_item_view(opp, opp_active, opp_item_consumed),
               consumed_item_view(own, own_active, own_item_consumed),
               before,
@@ -1671,6 +1722,9 @@ pub fn team_rollout(
             own_hps[own_active] = res_hp
             if res_bust && own_active < own_disguise_busted.length() {
               own_disguise_busted[own_active] = true
+            }
+            if res_immune {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
             }
             team_apply_post_hit(
               opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
@@ -1700,6 +1754,12 @@ pub fn team_rollout(
             if all_ko(own_hps) {
               return -1.0
             }
+            if all_ko(opp_hps) {
+              return 1.0
+            }
+          }
+          if opp_missed_crash && opp_hps[opp_active] > 0 {
+            mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
             if all_ko(opp_hps) {
               return 1.0
             }

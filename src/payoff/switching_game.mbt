@@ -239,11 +239,16 @@ fn last_resort_barred(
 /// to tick without an act. The `post_status` field carries the active slot's
 /// status after this attempt resolves (pre-EOT-tick), so the caller can
 /// thread it into the resulting next-state.
+///
+/// `miss` is `true` only for the accuracy-miss branch (a move that was used and
+/// missed). Sleep / paralysis skips and recharge leave it `false`, because only
+/// a missed move reaches Showdown's `MoveFail` (the crash of 崩れ技).
 pub(all) struct SideAttempt {
   prob : Double
   acts : Bool
   action : ActionKind
   post_status : @model.StatusCondition
+  miss : Bool
 } derive(Debug)
 
 ///|
@@ -1185,9 +1190,17 @@ fn apply_damage_variants_fanout(
     } else {
       actual_dmg
     }
+    // 崩れ技の免疫 leg (`hits_count = 0` = タイプ / 特性による無効) では使用者が崩れ
+    // HP を失う (Showdown `MoveFail`)。ばけのかわ の初撃ブロックは hits_count=1 の
+    // まま届くので、ここは免疫 leg だけを指す。外れ枝は attempt 段で処理する。
+    let state_crash = if outcome.hits_count == 0 {
+      with_crash_damage(state, attacker_is_me, attacker_slot, attacker_team, attacker_move)
+    } else {
+      state
+    }
     // HP 減算は chip 込みの full damage (outcome.mean_damage) で行う。
     let state_dmg0 = with_hp_damage(
-      state,
+      state_crash,
       target_is_me,
       target_slot,
       outcome.mean_damage,

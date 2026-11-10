@@ -1,0 +1,316 @@
+///|
+/// 崩れ技 (Showdown `hasCrashDamage` + `onMoveFail`) の使用者 HP 消費。
+///
+/// 技が命中しなかった leg (外れ / タイプ・特性で対象が残らない) で、使用者は最大 HP の
+/// 1/2 を失う。Showdown `data/moves.ts` の `onMoveFail` は
+/// `this.damage(source.baseMaxhp / 2, source, source, condition)` を呼ぶ。`spreadDamage`
+/// は `clampIntRange(_, 1)` を通す (`sim/battle.ts:2130`)。その `clampIntRange` は
+/// `Math.floor` の後に下限 1 を掛ける (`lib/utils.ts:320-326`)。したがって消費量は
+/// `max(1, floor(maxHP / 2))`。使用者の HP がこの値以下なら ひんし になる (`sim/pokemon.ts`
+/// の `damage`)。
+///
+/// マジックガードの使用者は消費しない (`ability_blocks_crash_damage`)。Protect はモデル化
+/// していない。
+pub fn crash_hp_loss(mv : @model.Move, user_ability : String, user_max_hp : Int) -> Int {
+  if !@damage.is_crash_move(mv.name) || ability_blocks_crash_damage(user_ability) {
+    return 0
+  }
+  let half = user_max_hp / 2
+  if half > 1 {
+    half
+  } else {
+    1
+  }
+}
+
+///|
+/// The move of a UseMove / Mega action of `team[active]`; `None` for Switch or an
+/// out-of-range index.
+fn action_move_of(
+  team : Array[Combatant],
+  active : Int,
+  action : ActionKind,
+) -> @model.Move? {
+  match action {
+    UseMove(mi) | Mega(mi) =>
+      if active >= 0 &&
+        active < team.length() &&
+        mi >= 0 &&
+        mi < team[active].moves.length() {
+        Some(team[active].moves[mi])
+      } else {
+        None
+      }
+    Switch(_) => None
+  }
+}
+
+///|
+fn is_mega_action(action : ActionKind) -> Bool {
+  match action {
+    Mega(_) => true
+    _ => false
+  }
+}
+
+///|
+/// The crash move of a missed attempt (`SideAttempt.miss`), or `None` when the
+/// attempt did not miss or the move is not a crash move.
+fn missed_crash_move(
+  attempt : SideAttempt,
+  team : Array[Combatant],
+  active : Int,
+) -> @model.Move? {
+  if !attempt.miss {
+    return None
+  }
+  match action_move_of(team, active, attempt.action) {
+    Some(mv) =>
+      if @damage.is_crash_move(mv.name) {
+        Some(mv)
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+/// `true` when either side's attempt missed a crash move. `attempt_turn_with_cache`
+/// routes such attempts to `crash_miss_outcomes`; every other attempt keeps the
+/// existing branches unchanged.
+fn attempt_has_crash_miss(
+  state : SwitchingGameState,
+  ma : SideAttempt,
+  oa : SideAttempt,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+) -> Bool {
+  let my_crash = missed_crash_move(ma, my_team, state.my_active)
+  let opp_crash = missed_crash_move(oa, opp_team, state.opp_active)
+  match (my_crash, opp_crash) {
+    (None, None) => false
+    _ => true
+  }
+}
+
+///|
+/// DP: subtract the crash HP loss of `mv` from the user at `user_slot`. Returns
+/// `state` unchanged for non-crash moves and for Magic Guard users. Shared by the
+/// immune leg (`apply_damage_variants_fanout`) and the missed attempt
+/// (`crash_miss_outcomes`).
+fn with_crash_damage(
+  state : SwitchingGameState,
+  user_is_me : Bool,
+  user_slot : Int,
+  user_team : Array[Combatant],
+  mv : @model.Move,
+) -> SwitchingGameState {
+  if !@damage.is_crash_move(mv.name) ||
+    user_slot < 0 ||
+    user_slot >= user_team.length() {
+    return state
+  }
+  let megaed = if user_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let is_mega = user_slot < megaed.length() && megaed[user_slot]
+  let eff = effective_combatant(user_team[user_slot], is_mega)
+  let loss = crash_hp_loss(mv, eff.ability, effective_hp(eff))
+  if loss > 0 {
+    with_hp_damage(state, user_is_me, user_slot, loss)
+  } else {
+    state
+  }
+}
+
+///|
+/// Speed sign of the two moves of `ma` and `oa` (`move_turn_sign`, the same rule
+/// `transition_with_cache` uses). `+1` = my move first, `-1` = opp first, `0` = tie
+/// or a non-move action.
+fn attempt_turn_sign(
+  state : SwitchingGameState,
+  ma : SideAttempt,
+  oa : SideAttempt,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+) -> Int {
+  match (
+    action_move_of(my_team, state.my_active, ma.action),
+    action_move_of(opp_team, state.opp_active, oa.action),
+  ) {
+    (Some(mv_me), Some(mv_opp)) => {
+      let my_mega = state.my_active < state.my_megaed.length() &&
+        state.my_megaed[state.my_active]
+      let opp_mega = state.opp_active < state.opp_megaed.length() &&
+        state.opp_megaed[state.opp_active]
+      move_turn_sign(
+        my_team[state.my_active],
+        state.my_ranks,
+        mv_me,
+        my_mega || is_mega_action(ma.action),
+        is_paralyzed(state.my_status[state.my_active]),
+        opp_team[state.opp_active],
+        state.opp_ranks,
+        mv_opp,
+        opp_mega || is_mega_action(oa.action),
+        is_paralyzed(state.opp_status[state.opp_active]),
+      )
+    }
+    _ => 0
+  }
+}
+
+///|
+/// Attempt-phase outcomes when a crash move missed (`SideAttempt.miss`) on at least
+/// one side. Showdown runs the crash (`MoveFail`) in the same action slot as the
+/// missed move, so the missed user loses its crash HP:
+///   - before the other side's action when the missed user is faster,
+///   - after it when the missed user is slower (unless a sleep landed on the user
+///     this turn, which cancels the move before `MoveFail`),
+///   - and averaged over both orders on a speed tie (as `transition_with_cache`).
+///     A Switch always resolves before any move, so the missed user comes second.
+///
+/// When both sides fail (miss or skip), nobody else acts and the two crashes commute.
+/// A pair of acting sides cannot carry a miss, so it is delegated unchanged.
+fn crash_miss_outcomes(
+  state : SwitchingGameState,
+  ma : SideAttempt,
+  oa : SideAttempt,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+) -> Array[(Double, SwitchingGameState)] {
+  if ma.acts && oa.acts {
+    return transition_with_cache(
+      state,
+      ma.action,
+      oa.action,
+      my_team,
+      opp_team,
+      dmg_cache,
+    )
+  }
+  let my_crash = missed_crash_move(ma, my_team, state.my_active)
+  let opp_crash = missed_crash_move(oa, opp_team, state.opp_active)
+  if !ma.acts && !oa.acts {
+    let s0 = pass_turn_state(state, ma.post_status, oa.post_status)
+    let s1 = match my_crash {
+      Some(mv) => with_crash_damage(s0, true, s0.my_active, my_team, mv)
+      None => s0
+    }
+    let s2 = match opp_crash {
+      Some(mv) => with_crash_damage(s1, false, s1.opp_active, opp_team, mv)
+      None => s1
+    }
+    return [(1.0, s2)]
+  }
+  // Exactly one side acts; the other side missed or was skipped.
+  let me_acts = ma.acts
+  let acting = if me_acts {
+    ma.action
+  } else {
+    oa.action
+  }
+  let missed_crash = if me_acts {
+    opp_crash
+  } else {
+    my_crash
+  }
+  match missed_crash {
+    None => partial_act_outcomes(state, acting, me_acts, my_team, opp_team, dmg_cache)
+    Some(mv) => {
+      let missed_is_me = !me_acts
+      let slot = if missed_is_me {
+        state.my_active
+      } else {
+        state.opp_active
+      }
+      let team = if missed_is_me {
+        my_team
+      } else {
+        opp_team
+      }
+      let pre_status = if missed_is_me {
+        state.my_status[slot]
+      } else {
+        state.opp_status[slot]
+      }
+      // > 0: the missed user acts first; < 0: second; 0: tie.
+      let missed_first = match acting {
+        Switch(_) => -1
+        UseMove(_) | Mega(_) => {
+          let s = attempt_turn_sign(state, ma, oa, my_team, opp_team)
+          if missed_is_me {
+            s
+          } else {
+            -s
+          }
+        }
+      }
+      let crash_first = fn() {
+        let s0 = with_crash_damage(state, missed_is_me, slot, team, mv)
+        partial_act_outcomes(s0, acting, me_acts, my_team, opp_team, dmg_cache)
+      }
+      let crash_second = fn() {
+        let outs : Array[(Double, SwitchingGameState)] = []
+        for out in partial_act_outcomes(
+          state,
+          acting,
+          me_acts,
+          my_team,
+          opp_team,
+          dmg_cache,
+        ) {
+          let s = out.1
+          let now = if missed_is_me {
+            s.my_status[slot]
+          } else {
+            s.opp_status[slot]
+          }
+          let s1 = if action_blocked_by_fresh_status(pre_status, now) {
+            s
+          } else {
+            with_crash_damage(s, missed_is_me, slot, team, mv)
+          }
+          outs.push((out.0, s1))
+        }
+        outs
+      }
+      if missed_first > 0 {
+        crash_first()
+      } else if missed_first < 0 {
+        crash_second()
+      } else {
+        let outs : Array[(Double, SwitchingGameState)] = []
+        for x in crash_first() {
+          outs.push((0.5 * x.0, x.1))
+        }
+        for x in crash_second() {
+          outs.push((0.5 * x.0, x.1))
+        }
+        outs
+      }
+    }
+  }
+}
+
+///|
+/// MC: subtract the crash HP loss of `mv` from `hps[slot]` in place. `user` is the
+/// raw combatant (MC does not model mega). No-op for non-crash moves and Magic Guard.
+fn mc_apply_crash(
+  hps : Array[Int],
+  slot : Int,
+  user : Combatant,
+  mv : @model.Move,
+) -> Unit {
+  if !@damage.is_crash_move(mv.name) || slot < 0 || slot >= hps.length() {
+    return
+  }
+  let loss = crash_hp_loss(mv, user.ability, effective_hp(user))
+  if loss > 0 {
+    hps[slot] = clamp_zero(hps[slot] - loss)
+  }
+}

@@ -42,6 +42,18 @@ pub fn ability_blocks_leech_seed(ability : String) -> Bool {
 }
 
 ///|
+/// Return `true` when the ability blocks the crash HP loss of a crash move (崩れ
+/// 技, `is_crash_move`). Mirrors Showdown `magicguard.onDamage`: any damage whose
+/// effect is not a `Move` is cancelled, and the crash damage is applied with the
+/// move as its effect's `Condition` wrapper (`dex.conditions.get('High Jump Kick')`),
+/// so マジックガード cancels it. No other damage-blocking ability applies: Sturdy /
+/// Disguise / Ice Face require `effectType === 'Move'`, and Rock Head only blocks
+/// `recoil`.
+pub fn ability_blocks_crash_damage(ability : String) -> Bool {
+  ability == "マジックガード"
+}
+
+///|
 /// Return `true` when the ability reverses a Drain move's heal into damage
 /// against the attacker. Mirrors Liquid Ooze (ヘドロえき) on the defender.
 pub fn ability_reverses_drain(ability : String) -> Bool {

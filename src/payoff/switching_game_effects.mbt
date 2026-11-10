@@ -28,12 +28,12 @@ pub fn per_side_attempt(
   if must_recharge {
     match action {
       UseMove(_) | Mega(_) =>
-        return [{ prob: 1.0, acts: false, action, post_status: status }]
+        return [{ prob: 1.0, acts: false, action, post_status: status, miss: false }]
       Switch(_) => ()
     }
   }
   let acts_only : Array[SideAttempt] = [
-    { prob: 1.0, acts: true, action, post_status: status },
+    { prob: 1.0, acts: true, action, post_status: status, miss: false },
   ]
   match action {
     Switch(_) => acts_only
@@ -49,6 +49,7 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: @model.Sleep(n - 1),
+              miss: false,
             })
           } else {
             // Sleep(0): this turn is the wake-up; act normally afterward.
@@ -58,6 +59,7 @@ pub fn per_side_attempt(
                 acts: true,
                 action,
                 post_status: @model.None,
+                miss: false,
               })
             }
             if acc_miss > 0.0 {
@@ -66,6 +68,7 @@ pub fn per_side_attempt(
                 acts: false,
                 action,
                 post_status: @model.None,
+                miss: true,
               })
             }
           }
@@ -75,6 +78,7 @@ pub fn per_side_attempt(
             acts: false,
             action,
             post_status: @model.Paralyze,
+            miss: false,
           })
           let non_para = 1.0 - PARALYZE_SKIP_RATE
           if acc_hit > 0.0 {
@@ -83,6 +87,7 @@ pub fn per_side_attempt(
               acts: true,
               action,
               post_status: @model.Paralyze,
+              miss: false,
             })
           }
           if acc_miss > 0.0 {
@@ -91,12 +96,13 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: @model.Paralyze,
+              miss: true,
             })
           }
         }
         _ => {
           if acc_hit > 0.0 {
-            outs.push({ prob: acc_hit, acts: true, action, post_status: status })
+            outs.push({ prob: acc_hit, acts: true, action, post_status: status, miss: false })
           }
           if acc_miss > 0.0 {
             outs.push({
@@ -104,6 +110,7 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: status,
+              miss: true,
             })
           }
         }

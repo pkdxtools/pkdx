@@ -277,3 +277,66 @@ test "ability_reverses_stat_changes_other_abilities_return_false" {
   )
   @debug.assert_eq(@payoff.ability_reverses_stat_changes(""), false)
 }
+
+///|
+test "ability_absorb_boost: そうしょく は Attack +1、他の特性は None" {
+  @debug.assert_eq(@payoff.ability_absorb_boost("そうしょく"), Some((0, 1)))
+  @debug.assert_eq(@payoff.ability_absorb_boost("ちょすい"), None)
+  @debug.assert_eq(@payoff.ability_absorb_boost("でんきエンジン"), None)
+  @debug.assert_eq(@payoff.ability_absorb_boost("クリアボディ"), None)
+  @debug.assert_eq(@payoff.ability_absorb_boost(""), None)
+}
+
+///|
+test "ability_absorbs_move: くさ技を相手に向けた時だけ吸収する" {
+  @debug.assert_eq(
+    @payoff.ability_absorbs_move("そうしょく", "リーフブレード", "くさ"),
+    true,
+  )
+  @debug.assert_eq(
+    @payoff.ability_absorbs_move("そうしょく", "ねむりごな", "くさ"),
+    true,
+  )
+  @debug.assert_eq(
+    @payoff.ability_absorbs_move("そうしょく", "たいあたり", "ノーマル"),
+    false,
+  )
+  @debug.assert_eq(
+    @payoff.ability_absorbs_move("ちょすい", "なみのり", "みず"),
+    false,
+  )
+  @debug.assert_eq(@payoff.ability_absorbs_move("", "リーフブレード", "くさ"), false)
+}
+
+///|
+test "ability_absorbs_move: 自分・自分側・フィールドを狙うくさ技は吸収されない" {
+  for name in [
+    "ねをはる",
+    "こうごうせい",
+    "せいちょう",
+    "コットンガード",
+    "ニードルガード",
+    "グラスフィールド",
+    "アロマセラピー",
+    "ジャングルヒール",
+  ] {
+    @debug.assert_eq(@payoff.ability_absorbs_move("そうしょく", name, "くさ"), false)
+  }
+}
+
+///|
+test "ability_tracks_full_stages: まけんき / かちき / そうしょく は ±6 で追跡" {
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("まけんき"), true)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("かちき"), true)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("そうしょく"), true)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("ちょすい"), false)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages(""), false)
+}
+
+///|
+test "clamp_rank_for: そうしょく は +6 まで、通常特性は +2 まで" {
+  @debug.assert_eq(@payoff.clamp_rank_for("そうしょく", 9), 6)
+  @debug.assert_eq(@payoff.clamp_rank_for("そうしょく", -9), -6)
+  @debug.assert_eq(@payoff.clamp_rank_for("", 9), 2)
+  @debug.assert_eq(@payoff.clamp_rank_for("", -9), -2)
+}

@@ -40,10 +40,12 @@ pub fn clamp_stat_stage(r : Int) -> Int {
 /// Clamp a rank write by the holder's ability. Holders of まけんき / かちき
 /// are tracked over the real `[-6, +6]` range, because their reaction fires
 /// only when a drop actually lands: a drop must stop at the real floor for
-/// the "did not land at -6" case to be exact. Every other holder keeps the
-/// reduced `[-2, +2]` range (`clamp_rank`), so existing results are unchanged.
+/// the "did not land at -6" case to be exact. そうしょく holders use the same
+/// range, so the absorb boost stops at +6 as in Showdown. Every other holder
+/// keeps the reduced `[-2, +2]` range (`clamp_rank`), so existing results are
+/// unchanged.
 pub fn clamp_rank_for(owner_ability : String, raw : Int) -> Int {
-  if ability_boosts_on_opp_drop(owner_ability) {
+  if ability_tracks_full_stages(owner_ability) {
     clamp_stat_stage(raw)
   } else {
     clamp_rank(raw)

@@ -9,6 +9,9 @@ on:
       - "moon.mod"
       - "scripts/**"
       - ".github/workflows/moonbit-ci.yml"
+      # Data submodule bumps are gitlink-only diffs. They must be CI-checked too.
+      - "pokedex"
+      - "champout"
   push:
     branches:
       - main
@@ -17,6 +20,9 @@ on:
       - "moon.mod"
       - "scripts/**"
       - ".github/workflows/moonbit-ci.yml"
+      # Data submodule bumps are gitlink-only diffs. They must be CI-checked too.
+      - "pokedex"
+      - "champout"
 
 # Cancel a PR run when a newer commit is pushed to the same ref.
 concurrency:

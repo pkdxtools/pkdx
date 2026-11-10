@@ -323,11 +323,23 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 - ターン開始時に flag が true だった active は、そのターン `UseMove`/`Mega` を `per_side_attempt` で強制 skip。Switch は許可 (switch 時に flag クリア)
 - ターン終了時、**ターン開始時に flag=true だったスロットのみ** flag を false に戻す。ターン途中で新しく立った flag は次ターンに持ち越す
 
+### 相手ダウンの防御特性 (技由来、Showdown `onTryBoost`)
+
+`apply_stat_effects` (`target = 1` かつ `delta < 0`、あまのじゃく反転後) で、所持者の特性が `ability_blocks_opp_stat_drop` を満たすとそのダウンは不発になる。DP (`with_post_hit_effects`) と MC (`team_apply_post_hit`) は同じ関数を通る。
+
+- **クリアボディ / しろいけむり / メタルプロテクト**: 全能力の相手由来ダウンを不発 (Showdown は同一の `onTryBoost` body)
+- **かいりきバサミ**: 攻撃 (index 0) のダウンのみ不発。防御・特攻・特防・素早さのダウンは通る
+- **不発のダウンは rank も反応も変えない**。`landed` が立たないので、まけんき / かちき の反応は起きない (Showdown は `AfterEachBoost` が不発のダウンに対して走らない)
+- **自己ダウン (`target = 0`) は不発にならない**。Showdown は `target === source` で免除する (インファイト の自己 B-1 / D-1 は クリアボディ でも通る)
+- **通す特性**: いかく 専用の防御特性 (どんかん / マイペース / せいしんりょく / きもったま) は Showdown で `effect.name === 'Intimidate'` に限定されるため技由来のダウンは防がない。ばんけん (Guard Dog) も いかく 専用で、技由来のダウンは通る
+- **未対応**: ミラーアーマー (技由来のダウンを使用者へ反射する) は別経路で未モデル (下記「MVP 対象外」)
+- **判定に使う特性**: DP は mega 後の実効特性 (`effective_combatant`)。メタグロス (クリアボディ) はメガ進化で かたいツメ になり、ブロックしなくなる。MC は mega 未モデル (`megaed` 常に false) なので raw の特性で判定する (MC の mega 未モデル化と同じ境界)。いかく の登場時判定も DP は mega 後実効特性
+
 ### MVP 非対応 (将来拡張で検討)
 
 - 確率副次効果 (アイアンテール 10% B-1 等) ― `stat_effects` は常に 100% 発動前提
 - みがわり越しの opp-target stat drop 無効化
-- 特性免疫 (クリアボディ / せいしんりょく / ぼうじん等)
+- 特性免疫 (ぼうじん 等)。技由来の能力ダウンを防ぐ特性は上記「相手ダウンの防御特性」で対応
 - ふきとばし / ほえる / どくどくのトゲ等の相手操作系
 
 ## Multi-hit chance-node integration (Phase 2-D/2-E、#91)
@@ -539,10 +551,11 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `team_monte_carlo_disguise_parity_wbtest.mbt` — Disguise の MC/DP parity + busted 配列の戦闘持続
 - `switching_game_defiant_competitive_wbtest.mbt` — まけんき / かちき の反応 (いかく / 相手ダウン技 / 複数ダウン技は下がった能力ごとに反応 / 開始時点で下限の能力は不変 / 重複エントリは 1 回 / 自傷不発 / 上限 +6 / 下限不発 / 防がれたダウン)、持ち主別 clamp (`clamp_rank_for`)、DP 配線 (交代いかく・連続交代の累積・交代退場リセット・くすぐるで攻撃のみ下限)
 - `team_monte_carlo_defiant_competitive_parity_wbtest.mbt` — まけんき / かちき の MC/DP parity (lead いかく・相手ダウン技・複数ダウン技 (くすぐる) は下がった能力ごとに反応・MC no-op)
+- `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、DP 配線 `with_post_hit_effects`)
+- `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) ブロックの MC/DP parity
 
 ### MVP 対象外 (将来拡張)
 
-- クリアボディ 等による技由来 (非いかく) の能力ダウン無効化 — 既存 MVP scope を継続 (Post-hit 節「MVP 非対応」参照)
 - ミラーアーマーによる技由来 (非いかく) の能力ダウンの反射 — 反射された能力ダウンで まけんき / かちき の使用者が反応する経路を含めて未対応 (いかく の反射は `apply_intimidate_on_entry` で対応済み)
 - かたやぶり (Mold Breaker) による ばけのかわ / あまのじゃく の貫通
 - あまのじゃく × はらだいこ — はらだいこ は `move_meta` 未収録のため現状 edge case は発生しない

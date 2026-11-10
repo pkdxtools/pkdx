@@ -52,7 +52,9 @@ migrate_legacy_manifests() {
 for round in 1 2 3 4 5 6 7 8 9 10; do
   migrate_legacy_manifests
   bash scripts/configure_native_link_flags.sh
-  if moon build --target native "${RELEASE[@]}" src/main; then
+  # The ${arr[@]+...} guard keeps an empty RELEASE array from tripping `set -u`
+  # on bash 3.2, which is the /bin/bash shipped on macOS runners.
+  if moon build --target native ${RELEASE[@]+"${RELEASE[@]}"} src/main; then
     exit 0
   fi
   if [ -z "$(list_legacy_manifests)" ]; then

@@ -354,6 +354,10 @@ fn greedy_team_action(
 /// `applied for both damaging and status moves` — `team_perform_attack` は
 /// status moves で damage を返さないが、本関数の全 phase (stat_effects 〜
 /// weather_set) は damage の有無に依存せず適用される。
+///
+/// `immune=true` (タイプ / 特性で無効な leg) は吸収と同じく早期 return し、自爆
+/// (`self_ko`) だけを適用する。DP `with_immune_effects` と同じ判定 (Protean の記録と
+/// しろいハーブ判定は call site が行う)。
 fn team_apply_post_hit(
   attacker_hps : Array[Int],
   attacker_active : Int,
@@ -374,6 +378,7 @@ fn team_apply_post_hit(
   field_turns_state : Array[Int],
   mv : @model.Move,
   dmg : Int,
+  immune? : Bool = false,
 ) -> Unit {
   // そうしょく: 吸収された技は当たらないため、防御側の A が上がるだけで、以降の効果
   // (stat_effects / recoil / 回復 / 寄生 / ねがいごと / self_ko / recharge) は起きない。
@@ -395,6 +400,16 @@ fn team_apply_post_hit(
           )
         None => ()
       }
+    }
+    return
+  }
+  // タイプ / 特性で無効 (`team_perform_attack` の immune): 技は当たらず
+  // spreadMoveHit に届かない。自己ダウン / 反動 / 回復 / 自己 recharge / 天候・フィールド
+  // 設定は起きない。例外は selfdestruct: 'always' (じばく系 = self_ko) で、対象判定より前に
+  // 使用者が ひんし になる (Showdown battle-actions.ts:564-566)。DP `with_immune_effects` と同じ。
+  if immune {
+    if mv.self_ko {
+      attacker_hps[attacker_active] = 0
     }
     return
   }
@@ -607,7 +622,10 @@ fn most_likely_variant(r : @model.DamageCalcResult) -> @model.DamageVariant? {
 /// `perform_attack_with` in `monte_carlo.mbt` but free-standing so the team
 /// rollout stays self-contained.
 ///
-/// 戻り値 `(new_hp, dmg_for_effects, disguise_busted)`:
+/// 戻り値 `(new_hp, dmg_for_effects, disguise_busted, immune)`:
+///   - `immune`: 技がタイプ / 特性で無効 (`calc_damage` の `is_immune`)。caller は
+///     `team_apply_post_hit` に渡し、自己効果を止める (DP の hits_count=0 leg と同じ)。
+///     status (power<=0) は false。
 ///   - `new_hp`: 解決後の防御側 HP (0 床クランプ)。
 ///   - `dmg_for_effects`: recoil / drain 計算に使う「技が実際に HP へ与えたダメージ」。
 ///     非 ばけのかわ 時は実 dealt (= defender_hp - new_hp) で従来の
@@ -635,13 +653,13 @@ fn team_perform_attack(
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
   def_disguise_intact? : Bool = false,
-) -> (Int, Int, Bool) {
+) -> (Int, Int, Bool, Bool) {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
     // applies `stat_effects` (with opp_alive gating) via
     // `team_apply_post_hit` so both branches share one resolver. ばけのかわ は
     // 変化技では剥がれず chip も無い (dmg_for_effects=0, busted=false)。
-    return (defender_hp, 0, false)
+    return (defender_hp, 0, false, false)
   }
   let atk_rank = match mv.category {
     @model.Physical => atk_ranks[0]
@@ -682,9 +700,10 @@ fn team_perform_attack(
     ),
   )
   if r.is_immune {
-    // タイプ無効: ばけのかわ は剥がれず chip も無い (DP `compute_damage_variants`
-    // の immune 早期 return と一致)。
-    return (defender_hp, 0, false)
+    // タイプ / 特性で無効: ばけのかわ は剥がれず chip も無い (DP `compute_damage_variants`
+    // の immune 早期 return と一致)。自己効果は caller の `team_apply_post_hit`
+    // (immune=true) が止める。
+    return (defender_hp, 0, false, true)
   }
   // burn 半減: 従来の単一ロール挙動 (物理 → raw/2) を helper 化。ばけのかわ の
   // chip は特性由来の固定ダメージなので burn 半減しない (later-hits 分にのみ掛ける)。
@@ -727,7 +746,7 @@ fn team_perform_attack(
     } else {
       0
     }
-    return (new_hp, dmg_for_effects, true)
+    return (new_hp, dmg_for_effects, true, false)
   }
   // 非 ばけのかわ: 従来どおり (単一ロール、burn 半減、0 床クランプ)。rng 消費は
   // intact 分岐と同じ 1 回 (`idx`) なので、非 disguise チームの決定性は bit-exact。
@@ -735,7 +754,7 @@ fn team_perform_attack(
   // (= actual dealt = min(dmg, defender_hp)) を dmg_for_effects として返す。
   let dmg = burn_halve(raw)
   let new_hp = if defender_hp - dmg < 0 { 0 } else { defender_hp - dmg }
-  (new_hp, defender_hp - new_hp, false)
+  (new_hp, defender_hp - new_hp, false, false)
 }
 
 ///|
@@ -828,7 +847,13 @@ fn mc_try_apply_status(
   defender_status_arr : Array[@model.StatusCondition],
   defender_slot : Int,
   field? : @model.Field = @model.Field::None,
+  immune? : Bool = false,
 ) -> Unit {
+  // タイプ / 特性で無効な leg は技が当たらないので状態異常も付与しない (DP の
+  // `apply_damage_variants_fanout` は immune leg で fanout を回さない)。
+  if immune {
+    return
+  }
   // そうしょく: 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ
   // 判定)。Weather は type 解決に効かない (Weather Ball は草タイプにならない)。
   if defender_slot < defender_team.length() &&
@@ -1305,7 +1330,7 @@ pub fn team_rollout(
               let opp_intact = disguise_intact_mc(
                 opp, opp_active, opp_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(own, own_active, own_item_consumed),
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 before,
@@ -1328,7 +1353,7 @@ pub fn team_rollout(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_own, res_eff,
+                mv_own, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1348,6 +1373,7 @@ pub fn team_rollout(
                 opp_status,
                 opp_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1378,7 +1404,7 @@ pub fn team_rollout(
               let own_intact = disguise_intact_mc(
                 own, own_active, own_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 consumed_item_view(own, own_active, own_item_consumed),
                 before,
@@ -1401,7 +1427,7 @@ pub fn team_rollout(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_opp, res_eff,
+                mv_opp, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1421,6 +1447,7 @@ pub fn team_rollout(
                 own_status,
                 own_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1443,7 +1470,7 @@ pub fn team_rollout(
               let own_intact = disguise_intact_mc(
                 own, own_active, own_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 consumed_item_view(own, own_active, own_item_consumed),
                 before,
@@ -1466,7 +1493,7 @@ pub fn team_rollout(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_opp, res_eff,
+                mv_opp, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1486,6 +1513,7 @@ pub fn team_rollout(
                 own_status,
                 own_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1514,7 +1542,7 @@ pub fn team_rollout(
               let opp_intact = disguise_intact_mc(
                 opp, opp_active, opp_disguise_busted,
               )
-              let (res_hp, res_eff, res_bust) = team_perform_attack(
+              let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(own, own_active, own_item_consumed),
                 consumed_item_view(opp, opp_active, opp_item_consumed),
                 before,
@@ -1537,7 +1565,7 @@ pub fn team_rollout(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_own, res_eff,
+                mv_own, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1557,6 +1585,7 @@ pub fn team_rollout(
                 opp_status,
                 opp_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1584,7 +1613,7 @@ pub fn team_rollout(
             let opp_intact = disguise_intact_mc(
               opp, opp_active, opp_disguise_busted,
             )
-            let (res_hp, res_eff, res_bust) = team_perform_attack(
+            let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
               consumed_item_view(own, own_active, own_item_consumed),
               consumed_item_view(opp, opp_active, opp_item_consumed),
               before,
@@ -1607,7 +1636,7 @@ pub fn team_rollout(
               own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
               own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
-              mv_own, res_eff,
+              mv_own, res_eff, immune=res_immune,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1627,6 +1656,7 @@ pub fn team_rollout(
               opp_status,
               opp_active,
               field=field_state[0],
+              immune=res_immune,
             )
             if all_ko(own_hps) {
               return -1.0
@@ -1653,7 +1683,7 @@ pub fn team_rollout(
             let own_intact = disguise_intact_mc(
               own, own_active, own_disguise_busted,
             )
-            let (res_hp, res_eff, res_bust) = team_perform_attack(
+            let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
               consumed_item_view(opp, opp_active, opp_item_consumed),
               consumed_item_view(own, own_active, own_item_consumed),
               before,
@@ -1676,7 +1706,7 @@ pub fn team_rollout(
               opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
               opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
-              mv_opp, res_eff,
+              mv_opp, res_eff, immune=res_immune,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1696,6 +1726,7 @@ pub fn team_rollout(
               own_status,
               own_active,
               field=field_state[0],
+              immune=res_immune,
             )
             if all_ko(own_hps) {
               return -1.0

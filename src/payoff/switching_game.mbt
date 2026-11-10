@@ -59,7 +59,8 @@ pub(all) struct SwitchingGameState {
   opp_must_recharge : Array[Bool]
   // P5 (#97): per-slot held-item consumption flag. Set to `true` once the
   // slot's held item triggers (resist berry weakness reduction, きあいのタスキ
-  // KO survival, フィラのみ HP heal). Persists across switches — a consumed
+  // KO survival, フィラのみ HP heal, しろいハーブ negative-stage reset — see
+  // `held_item_stat_reset.mbt`). Persists across switches — a consumed
   // berry doesn't reappear when the holder switches back in. Length = team
   // size; aligns with my_megaed / my_status indexing.
   my_item_consumed : Array[Bool]
@@ -1322,6 +1323,9 @@ fn with_post_hit_effects(
   let opp_leech_seeded = state.opp_leech_seeded.copy()
   let my_protean_locked = state.my_protean_locked.copy()
   let opp_protean_locked = state.opp_protean_locked.copy()
+  // しろいハーブ (held_item_stat_reset.mbt) の消費フラグ。技の効果の後に両 active を判定する。
+  let my_item_consumed = state.my_item_consumed.copy()
+  let opp_item_consumed = state.opp_item_consumed.copy()
   // Stage 11 (Wish): attacker 側の wish_turns scalar を書き換える可能性があるため
   // ローカルに展開。Wish 以外の経路では unchanged のまま base state を経由して
   // 最終 state にスレッドされる。Wish の発動は attacker_is_me に応じて
@@ -1541,6 +1545,33 @@ fn with_post_hit_effects(
   if mv.recharge && attacker_hps[attacker_active] > 0 {
     attacker_must_recharge[attacker_active] = true
   }
+  // しろいハーブ: 技の効果 (相手ダウン / 自己ダウン / まけんき・かちき の反応) の後に
+  // 両 active を判定する。自己ダウンで負になった技の使用者も、ここで解除される。
+  // self_ko 後に判定するので、技で ひんし になった所持者は消費されない。
+  let attacker_item_consumed = if attacker_is_me {
+    my_item_consumed
+  } else {
+    opp_item_consumed
+  }
+  let defender_item_consumed = if attacker_is_me {
+    opp_item_consumed
+  } else {
+    my_item_consumed
+  }
+  apply_held_item_stat_reset(
+    attacker_team,
+    attacker_active,
+    attacker_hps,
+    attacker_ranks,
+    attacker_item_consumed,
+  )
+  apply_held_item_stat_reset(
+    defender_team,
+    defender_active,
+    defender_hps,
+    defender_ranks,
+    defender_item_consumed,
+  )
   // Stage 5 (healing-moves plan): 天候設定技 (にほんばれ / あまごい /
   // すなあらし / ゆきげしき) の効果を state に反映する。`mv.weather_set` が
   // `Some(w)` なら weather と weather_turns_left を上書き、`None` なら維持。
@@ -1572,6 +1603,8 @@ fn with_post_hit_effects(
     opp_hps,
     my_ranks,
     opp_ranks,
+    my_item_consumed,
+    opp_item_consumed,
     my_must_recharge,
     opp_must_recharge,
     my_status,

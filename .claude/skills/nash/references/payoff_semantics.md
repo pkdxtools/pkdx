@@ -518,6 +518,20 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - **MC**: 同じ `apply_intimidate_on_entry` / `apply_stat_effects` を呼ぶため、parity は構造的に一致する。
 - **未モデル**: みがわり・しろいきり等による阻止 (payoff 層に身代わり / 場の効果による阻止は無い)。
 
+### しろいハーブ (White Herb, 持ち物) — DP / MC
+
+所持者の能力ランクに負のものが 1 つでもあれば、負のランクを全て 0 に戻し、持ち物を消費する (Showdown `whiteherb`、1 戦闘 1 回)。helper は `held_item_stat_reset.mbt` の `apply_held_item_stat_reset` (1 側) / `apply_held_item_stat_reset_pair` (両側)。
+
+- **判定点**: Showdown の `onStart` / `onAnySwitchIn` (登場)、`onAnyAfterMove` (技の後)、`onAnyAfterMega` (メガ)、`onResidual` (残り HP 処理) に対応する。DP は (1) 登場時いかく (lead・交代・死に出し) の直後、(2) 技の効果 (`with_post_hit_effects`、両 active) の直後、(3) メガ直後、(4) `apply_eot` の直後に両 active を判定する。負のランクを生むのは「登場時いかく」と「技の効果」だけで、どちらの直後にも判定があるので、(3) と (4) は実到達では no-op (対応を残すために呼ぶ)。
+- **まけんき / かちき との順序**: 相手ダウンを適用し、反応 (まけんき = 攻撃 +2 / かちき = 特攻 +2) の後に判定する。Showdown の `AfterEachBoost` (反応) が先、`onAnyAfterMove` (しろいハーブ) が後。反応で負でなくなった能力は解除されず、負のまま残った能力だけが 0 に戻る。例: まけんき の所持者が くすぐる (A-1 / B-1) を受けると、下がった能力ごとに 1 回ずつ反応するので A は -1 +2 +2 = +3 となり、負のまま残った B だけが 0 に戻って消費される。なきごえ (A-1) だけなら A は +1 となり、負が無いので消費されない。
+- **不発は判定を起こさない**: クリアボディ 等で不発になったダウンは rank が変わらないので、負のランクは生じず消費もされない。かいりきバサミ で A のダウンだけ不発なら、同じ技の B のダウンは通って解除される。
+- **自己ダウン**: 技の使用者の自己ダウン (インファイト の B-1 / D-1、からをやぶる の反対 等) も、その技の直後に解除される。自己ダウンは まけんき / かちき の反応を起こさない (既存どおり)。
+- **消費状態**: 既存の `my_item_consumed` / `opp_item_consumed` (P5 の per-slot 持ち物消費フラグ) を流用する。しろいハーブ の所持者が消費したときだけ値が変わるので、他の matchup では状態キーも状態数も変わらない。消費後は交代を跨いで持続し、2 回目以降の負のランクは解除されない (1 戦闘 1 回)。
+- **ダメージ計算への影響**: 消費済みの持ち物は DP では `damage_cache_layer` が itemless として扱い、MC では `consumed_item_view` が同じ swap を行う。しろいハーブ自体はダメージ補正を持たないので威力は変わらないが、はたきおとす (相手が持ち物を持つと威力 ×1.5) は消費後は効かなくなる (Showdown と一致)。
+- **ひんし**: hp が 0 の所持者は判定しない (Showdown の `getAllActive` は ひんし を除外する)。技の効果で自分が ひんし になる場合 (自爆 / 自己 KO) は判定されず、消費もされない。
+- **MC**: 同じ helper を技の効果 (6 leg)・登場 (lead / switch)・EOT の後に呼ぶ。MC は mega 未モデルなので (3) のメガ判定は持たない。MC の単一 rollout と DP の値は、parity テストで感度ガード付きに確認する。
+- **未モデル**: なげつける で しろいハーブ を投げたときの効果 (使用者の負のランク解除と持ち物の消失、Showdown の `fling.effect`)。持ち物の移動 (トリック / ついばむ 等) による所持者の変化。
+
 ### ばけのかわ (Disguise, ミミッキュ専用) — DP
 
 - **状態**: `SwitchingGameState` に per-slot `my_disguise_busted : Array[Bool]` / `opp_disguise_busted : Array[Bool]` を追加 (`false` = 未消費 intact、`true` = 剥がれ済み busted)。HP / ランク等と同じく state の一部なので DP cache key に含まれ、intact / busted で別 state として memoize される。書き込みは `with_disguise_busted` が copy-on-write で行い、**交代でリセットしない** (1 戦闘 1 回)。
@@ -551,6 +565,9 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `team_monte_carlo_disguise_parity_wbtest.mbt` — Disguise の MC/DP parity + busted 配列の戦闘持続
 - `switching_game_defiant_competitive_wbtest.mbt` — まけんき / かちき の反応 (いかく / 相手ダウン技 / 複数ダウン技は下がった能力ごとに反応 / 開始時点で下限の能力は不変 / 重複エントリは 1 回 / 自傷不発 / 上限 +6 / 下限不発 / 防がれたダウン)、持ち主別 clamp (`clamp_rank_for`)、DP 配線 (交代いかく・連続交代の累積・交代退場リセット・くすぐるで攻撃のみ下限)
 - `team_monte_carlo_defiant_competitive_parity_wbtest.mbt` — まけんき / かちき の MC/DP parity (lead いかく・相手ダウン技・複数ダウン技 (くすぐる) は下がった能力ごとに反応・MC no-op)
+- `held_item_stat_reset_wbtest.mbt` — しろいハーブ の判定 helper (負のランクを全て 0・正は残す / 消費済み・他の持ち物・ひんし・範囲外は no-op / 両側独立 / 消費済み所持者の itemless view)
+- `switching_game_white_herb_wbtest.mbt` — しろいハーブ の DP 判定点 (なきごえ・自己ダウン・まけんき / かちき の反応後・クリアボディ 不発・いかく (lead / 交代 / partial-act)・ミラーアーマー反射・消費の持続・技の後に後攻が解除後の B で受ける・EOT・メガ直後)
+- `team_monte_carlo_white_herb_parity_wbtest.mbt` — しろいハーブ の MC/DP parity (自己ダウン後の被弾 / 登場時いかく の lead)
 - `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、DP 配線 `with_post_hit_effects`)
 - `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) ブロックの MC/DP parity
 

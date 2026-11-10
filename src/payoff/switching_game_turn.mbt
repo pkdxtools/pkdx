@@ -704,6 +704,14 @@ pub fn transition_with_cache(
       opp_protean_locked_new[state.opp_active] = ""
     }
   }
+  // しろいハーブ: メガ進化の直後に両 active を判定する (Showdown onAnyAfterMega)。
+  // メガはランクを変えないので、実到達では no-op (held_item_stat_reset.mbt 参照)。
+  if my_mega_trigger || opp_mega_trigger {
+    apply_held_item_stat_reset_pair(
+      my_team, state.my_active, my_hps_new, my_ranks_new, my_item_consumed_new,
+      opp_team, state.opp_active, opp_hps_new, opp_ranks_new, opp_item_consumed_new,
+    )
+  }
   let my_mega_used_new = state.my_mega_used || my_mega_trigger
   let opp_mega_used_new = state.opp_mega_used || opp_mega_trigger
   let mut my_active_new = state.my_active
@@ -909,6 +917,12 @@ pub fn transition_with_cache(
     // Any remaining arm is unreachable — treat as a no-op turn advance.
     (_, _) => ()
   }
+  // しろいハーブ: 登場時いかく (Switch arm 内) の直後に両 active を判定する。登場した
+  // 個体は技より前に判定されるので、いかく で下がった能力はこのターンの技に効く前に解除される。
+  apply_held_item_stat_reset_pair(
+    my_team, my_active_new, my_hps_new, my_ranks_new, my_item_consumed_new,
+    opp_team, opp_active_new, opp_hps_new, opp_ranks_new, opp_item_consumed_new,
+  )
   let base_state : SwitchingGameState = {
     my_active: my_active_new,
     opp_active: opp_active_new,
@@ -1458,6 +1472,12 @@ fn partial_act_outcomes(
     }
     (_, _) => ()
   }
+  // しろいハーブ: 登場時いかく / メガ進化の直後に両 active を判定する (transition_with_cache
+  // と同じ位置。ここでは技は撃たれないので、登場・メガの後で判定すれば各判定点を覆う)。
+  apply_held_item_stat_reset_pair(
+    my_team, my_active, my_hps, my_ranks, my_item_consumed,
+    opp_team, opp_active, opp_hps, opp_ranks, opp_item_consumed,
+  )
   let base_state : SwitchingGameState = {
     my_active,
     opp_active,
@@ -2031,6 +2051,11 @@ pub fn switching_game_winrate_stats(
     0,
     state.my_megaed,
     state.my_ranks,
+  )
+  // しろいハーブ: 先発の登場時いかく直後に両 lead を判定する (rank 配列は state 直書き)。
+  apply_held_item_stat_reset_pair(
+    my_team, 0, state.my_hps, state.my_ranks, state.my_item_consumed,
+    opp_team, 0, state.opp_hps, state.opp_ranks, state.opp_item_consumed,
   )
   let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
   let stats = new_stats_with_progress(progress, dp_log_every)

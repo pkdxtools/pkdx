@@ -19,15 +19,19 @@ case "${RUNNER_OS:-$(uname -s)}" in
     STUB_CFLAGS=""
     ;;
   Windows | MINGW* | MSYS* | CYGWIN*)
-    # The Windows build links with the MinGW gcc selected through MOON_CC
-    # (see build-pkdx.yml). That driver ignores the MSVC-only
-    # `#pragma comment(lib, ...)` lines in lib/runtime/*.c, so the system
-    # libraries those lines name are listed here instead:
-    #   io_windows.c, thread_pool.c -> ws2_32
-    #   schannel.c -> secur32, crypt32, bcrypt
-    #   socket.c -> iphlpapi; fs.c -> pathcch; backtrace.c -> dbghelp
-    FLAGS="-LC:/msys64/mingw64/lib -lopenblas -lws2_32 -lbcrypt -lsecur32 -lcrypt32 -liphlpapi -lpathcch -ldbghelp"
-    STUB_CFLAGS="-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/openblas"
+    # Windows x86_64 builds with MSVC (cl.exe / link.exe); moon ignores a
+    # non-cl MOON_CC there and the runtime rejects MinGW gcc. The opaque
+    # cc-link-flags reach the driver as written, so the static OpenBLAS (BLAS +
+    # LAPACK) is passed as a full path to its .lib: cl forwards *.lib inputs to
+    # link.exe. The headers come in via -I. build-pkdx.yml installs the tree
+    # with vcpkg (scripts/windows-blas) and exports PKDX_OPENBLAS_ROOT.
+    : "${PKDX_OPENBLAS_ROOT:?PKDX_OPENBLAS_ROOT must point at the vcpkg x64-windows-static OpenBLAS install (see scripts/windows-blas)}"
+    if [ ! -f "$PKDX_OPENBLAS_ROOT/lib/openblas.lib" ]; then
+      echo "configure_native_link_flags: $PKDX_OPENBLAS_ROOT/lib/openblas.lib not found" >&2
+      exit 1
+    fi
+    FLAGS="$PKDX_OPENBLAS_ROOT/lib/openblas.lib"
+    STUB_CFLAGS="-I$PKDX_OPENBLAS_ROOT/include -I$PKDX_OPENBLAS_ROOT/include/openblas"
     ;;
   *)
     echo "unsupported runner OS: ${RUNNER_OS:-$(uname -s)}" >&2

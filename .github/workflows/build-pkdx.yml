@@ -4,7 +4,7 @@ on:
   push:
     tags: ['v*']
   # Pre-merge validation path: maintainers can dispatch manually on a branch
-  # to exercise the Windows MSYS2/OpenBLAS toolchain before tagging a release.
+  # to exercise the Windows MSVC/OpenBLAS toolchain before tagging a release.
   # The release job is gated to tag pushes so manual runs only build & test.
   workflow_dispatch:
 
@@ -62,71 +62,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev liblapack-dev
 
-      - name: Install BLAS (Windows)
+      - name: Restore OpenBLAS install cache (Windows)
+        # vcpkg builds OpenBLAS from source, which takes a while, so the installed
+        # tree is cached on the pinned manifest and overlay port. save-always keeps
+        # it even when a later step fails; vcpkg records a package as installed only
+        # after its build succeeds, so a partial tree is never reported as complete.
+        if: runner.os == 'Windows'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\blas\installed
+          key: openblas-msvc-x64-windows-static-${{ hashFiles('scripts/windows-blas/**') }}
+          save-always: true
+
+      - name: Install OpenBLAS with LAPACK (Windows, MSVC static)
+        # MSVC target: moon drives cl.exe and link.exe, and the runtime rejects
+        # MinGW gcc, so OpenBLAS must be MSVC-format. The vcpkg overlay in
+        # scripts/windows-blas builds OpenBLAS 0.3.34 with LAPACK (C_LAPACK=ON);
+        # upstream vcpkg disables LAPACK, which numbt needs. The static x64-windows-static
+        # triplet uses /MT, matching moon, so the release stays a single .exe.
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Use MSYS2's MinGW64 packages so OpenBLAS and gcc share the same ABI
-          # without spending release CI time building OpenBLAS from source.
-
-          # The default mirrorlist on the GitHub Actions Windows image rotates
-          # through mirrors including tuna, which has timed out at ~0 B/sec
-          # from Azure runners and aborted the release job mid-database-sync.
-          # Pin to upstream + geographically diverse fallbacks (skipping tuna)
-          # to make this step deterministic.
-          Set-Content -Path C:\msys64\etc\pacman.d\mirrorlist.msys -Encoding ASCII -Value @'
-          Server = https://repo.msys2.org/msys/$arch/
-          Server = https://downloads.sourceforge.net/project/msys2/REPOS/MSYS2/$arch/
-          Server = https://mirror.yandex.ru/mirrors/msys2/msys/$arch/
-          '@
-          Set-Content -Path C:\msys64\etc\pacman.d\mirrorlist.mingw64 -Encoding ASCII -Value @'
-          Server = https://repo.msys2.org/mingw/$repo/
-          Server = https://downloads.sourceforge.net/project/msys2/REPOS/MINGW/$arch/
-          Server = https://mirror.yandex.ru/mirrors/msys2/mingw/$repo/
-          '@
-
-          # Belt-and-braces: even with curated mirrors, a transient blip during
-          # the multi-file sync can still abort pacman. Retry the whole call
-          # before failing the job.
-          $maxAttempts = 3
-          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            C:\msys64\usr\bin\pacman.exe -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-openblas
-            if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -eq $maxAttempts) {
-              Write-Error "pacman failed after $maxAttempts attempts"
-              exit 1
-            }
-            Write-Host "pacman attempt $attempt failed (exit $LASTEXITCODE); retrying in 10s..."
-            Start-Sleep -Seconds 10
-          }
-
-          # Add OpenBLAS DLL dir to PATH for runtime resolution during moon test.
-          Add-Content $env:GITHUB_PATH "C:\msys64\mingw64\bin"
-
-      - name: Configure MoonBit compiler (Windows)
-        # Both variables go to $GITHUB_ENV so the Build and Test steps see them.
-        # This step is Windows-only, so Linux and macOS keep the default backend.
-        #
-        # MOONBIT_NEW_NATIVE=0 is required since moonc 0.10.18. Windows x86_64
-        # otherwise gets direct-object output, which is compiled with the MSVC
-        # toolchain only. That path ignores a non-cl MOON_CC with the warning
-        # "MOON_CC is ignored for Windows MSVC direct object native target", so
-        # cl.exe compiles src/db/cwrap.c and fails on <unistd.h>. With the
-        # variable set to 0, moon emits generated C and compiles it, the runtime
-        # and the C stubs with the MOON_CC driver.
-        #
-        # MOON_CC is the MSYS2 MinGW64 gcc that provides the OpenBLAS import
-        # library (see the BLAS step above). The absolute path keeps resolution
-        # independent of PATH state.
-        #
-        # Keep MOON_CC out of the Linux and macOS legs: MoonBit treats any
-        # present MOON_CC as an explicit override and parses the value, so an
-        # empty string fails with `failed to parse cc from env MOON_CC`.
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          echo "MOONBIT_NEW_NATIVE=0" >> "$GITHUB_ENV"
-          echo "MOON_CC=C:/msys64/mingw64/bin/gcc.exe" >> "$GITHUB_ENV"
+          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT 'vcpkg.exe'
+          & $vcpkg install --triplet x64-windows-static `
+            --overlay-ports=scripts/windows-blas/ports `
+            --x-manifest-root=scripts/windows-blas `
+            --x-install-root=C:\blas\installed
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install openblas failed (exit $LASTEXITCODE)" }
+          $root = 'C:/blas/installed/x64-windows-static'
+          if (-not (Test-Path "$root/lib/openblas.lib")) { throw "openblas.lib not found under $root" }
+          if (-not ((Test-Path "$root/include/cblas.h") -or (Test-Path "$root/include/openblas/cblas.h"))) { throw "cblas.h not found under $root" }
+          Get-ChildItem "$root/lib" | Format-Table Name, Length | Out-String | Write-Host
+          # Exported for the Build and Test steps (configure_native_link_flags.sh).
+          Add-Content -Path $env:GITHUB_ENV -Value "PKDX_OPENBLAS_ROOT=$root"
 
       - name: Build
         # moon_build_native.sh pins the post-update steps: migrate legacy

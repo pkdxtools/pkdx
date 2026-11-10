@@ -1246,13 +1246,23 @@ pub fn apply_eot(
   } else {
     (state.field, 0)
   }
+  // しろいハーブ: 残り HP 処理 (Showdown onResidual)。EOT はランクを変えないので、
+  // 実到達では no-op。判定点の対応を残すために両 active で呼ぶ (held_item_stat_reset.mbt)。
+  let my_ranks = state.my_ranks.copy()
+  let opp_ranks = state.opp_ranks.copy()
+  let my_item_consumed = state.my_item_consumed.copy()
+  let opp_item_consumed = state.opp_item_consumed.copy()
+  apply_held_item_stat_reset_pair(
+    my_team, state.my_active, my_hps, my_ranks, my_item_consumed,
+    opp_team, state.opp_active, opp_hps, opp_ranks, opp_item_consumed,
+  )
   {
     my_active: state.my_active,
     opp_active: state.opp_active,
     my_hps,
     opp_hps,
-    my_ranks: state.my_ranks.copy(),
-    opp_ranks: state.opp_ranks.copy(),
+    my_ranks,
+    opp_ranks,
     my_mega_used: state.my_mega_used,
     opp_mega_used: state.opp_mega_used,
     my_megaed: state.my_megaed.copy(),
@@ -1261,8 +1271,8 @@ pub fn apply_eot(
     opp_status,
     my_must_recharge: state.my_must_recharge.copy(),
     opp_must_recharge: state.opp_must_recharge.copy(),
-    my_item_consumed: state.my_item_consumed.copy(),
-    opp_item_consumed: state.opp_item_consumed.copy(),
+    my_item_consumed,
+    opp_item_consumed,
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_moves_used: state.my_moves_used.copy(),

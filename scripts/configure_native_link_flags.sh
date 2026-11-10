@@ -19,7 +19,14 @@ case "${RUNNER_OS:-$(uname -s)}" in
     STUB_CFLAGS=""
     ;;
   Windows | MINGW* | MSYS* | CYGWIN*)
-    FLAGS="-LC:/msys64/mingw64/lib -lopenblas"
+    # The Windows build links with the MinGW gcc selected through MOON_CC
+    # (see build-pkdx.yml). That driver ignores the MSVC-only
+    # `#pragma comment(lib, ...)` lines in lib/runtime/*.c, so the system
+    # libraries those lines name are listed here instead:
+    #   io_windows.c, thread_pool.c -> ws2_32
+    #   schannel.c -> secur32, crypt32, bcrypt
+    #   socket.c -> iphlpapi; fs.c -> pathcch; backtrace.c -> dbghelp
+    FLAGS="-LC:/msys64/mingw64/lib -lopenblas -lws2_32 -lbcrypt -lsecur32 -lcrypt32 -liphlpapi -lpathcch -ldbghelp"
     STUB_CFLAGS="-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/openblas"
     ;;
   *)

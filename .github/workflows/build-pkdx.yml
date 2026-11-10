@@ -16,9 +16,14 @@ permissions:
 jobs:
   build:
     strategy:
+      # Keep the legs independent. With fail-fast on, one failing OS cancels the
+      # others before they report, which hides their state.
+      fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          # macos-14 was retired on 2026-11-02. macos-15 is the arm64 label
+          # GitHub lists as its replacement.
+          - os: macos-15
             target: darwin-arm64
             binary: pkdx-darwin-arm64
           - os: ubuntu-22.04
@@ -99,20 +104,29 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:\msys64\mingw64\bin"
 
       - name: Configure MoonBit compiler (Windows)
-        # MoonBit's native backend reads MOON_CC for compiler override (NOT the
-        # conventional CC); without it, auto-detection picks cl.exe (MSVC) on
-        # Windows, which would reject the GCC-style `-L/-l` link flags below.
-        # Use the same MSYS2 MinGW64 gcc that provides the OpenBLAS import
-        # library above. Pin the absolute path so resolution does not depend on
-        # PATH state.
-        # Setting MOON_CC must be Windows-only: MoonBit treats any present
-        # MOON_CC as an explicit override and parses the value, so an empty
-        # string trips `failed to parse cc from env MOON_CC` on Linux/macOS.
-        # Writing to $GITHUB_ENV from a runner.os == 'Windows' step keeps the
-        # variable absent on the other matrix legs.
+        # Both variables go to $GITHUB_ENV so the Build and Test steps see them.
+        # This step is Windows-only, so Linux and macOS keep the default backend.
+        #
+        # MOONBIT_NEW_NATIVE=0 is required since moonc 0.10.18. Windows x86_64
+        # otherwise gets direct-object output, which is compiled with the MSVC
+        # toolchain only. That path ignores a non-cl MOON_CC with the warning
+        # "MOON_CC is ignored for Windows MSVC direct object native target", so
+        # cl.exe compiles src/db/cwrap.c and fails on <unistd.h>. With the
+        # variable set to 0, moon emits generated C and compiles it, the runtime
+        # and the C stubs with the MOON_CC driver.
+        #
+        # MOON_CC is the MSYS2 MinGW64 gcc that provides the OpenBLAS import
+        # library (see the BLAS step above). The absolute path keeps resolution
+        # independent of PATH state.
+        #
+        # Keep MOON_CC out of the Linux and macOS legs: MoonBit treats any
+        # present MOON_CC as an explicit override and parses the value, so an
+        # empty string fails with `failed to parse cc from env MOON_CC`.
         if: runner.os == 'Windows'
         shell: bash
-        run: echo "MOON_CC=C:/msys64/mingw64/bin/gcc.exe" >> "$GITHUB_ENV"
+        run: |
+          echo "MOONBIT_NEW_NATIVE=0" >> "$GITHUB_ENV"
+          echo "MOON_CC=C:/msys64/mingw64/bin/gcc.exe" >> "$GITHUB_ENV"
 
       - name: Build
         # moon_build_native.sh pins the post-update steps: migrate legacy

@@ -64,25 +64,31 @@ jobs:
 
       - name: Restore OpenBLAS install cache (Windows)
         # vcpkg builds OpenBLAS from source, which takes a while, so the installed
-        # tree is cached on the pinned manifest and overlay port. save-always keeps
-        # it even when a later step fails; vcpkg records a package as installed only
-        # after its build succeeds, so a partial tree is never reported as complete.
+        # tree is cached on the pinned manifest and overlay port. The save step below
+        # runs right after a successful install, so a later failure keeps the cache.
         if: runner.os == 'Windows'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: openblas-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: C:\blas\installed
           key: openblas-msvc-x64-windows-static-${{ hashFiles('scripts/windows-blas/**') }}
-          save-always: true
 
       - name: Install OpenBLAS with LAPACK (Windows, MSVC static)
         # MSVC target: moon drives cl.exe and link.exe, and the runtime rejects
         # MinGW gcc, so OpenBLAS must be MSVC-format. The vcpkg overlay in
         # scripts/windows-blas builds OpenBLAS 0.3.34 with LAPACK (C_LAPACK=ON);
-        # upstream vcpkg disables LAPACK, which numbt needs. The static x64-windows-static
-        # triplet uses /MT, matching moon, so the release stays a single .exe.
+        # upstream vcpkg disables LAPACK, which numbt needs. The static
+        # x64-windows-static triplet uses /MT, matching moon, so the release stays a
+        # single .exe.
+        id: openblas-install
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # The runner's vcpkg clone does not contain the pinned baseline, so fetch
+          # that commit (vcpkg resolves versions/baseline.json and host ports from it).
+          $baseline = (Get-Content -Raw scripts/windows-blas/vcpkg.json | ConvertFrom-Json).'builtin-baseline'
+          git -C $env:VCPKG_INSTALLATION_ROOT fetch --depth=1 https://github.com/microsoft/vcpkg.git $baseline
+          if ($LASTEXITCODE -ne 0) { throw "git fetch of the vcpkg baseline $baseline failed" }
           $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT 'vcpkg.exe'
           & $vcpkg install --triplet x64-windows-static `
             --overlay-ports=scripts/windows-blas/ports `
@@ -95,6 +101,15 @@ jobs:
           Get-ChildItem "$root/lib" | Format-Table Name, Length | Out-String | Write-Host
           # Exported for the Build and Test steps (configure_native_link_flags.sh).
           Add-Content -Path $env:GITHUB_ENV -Value "PKDX_OPENBLAS_ROOT=$root"
+
+      - name: Save OpenBLAS install cache (Windows)
+        # Saved straight after a successful install (not at job end), so a failure in
+        # the Build or Test steps does not discard the OpenBLAS build.
+        if: runner.os == 'Windows' && steps.openblas-install.outcome == 'success' && steps.openblas-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\blas\installed
+          key: ${{ steps.openblas-cache.outputs.cache-primary-key }}
 
       - name: Build
         # moon_build_native.sh pins the post-update steps: migrate legacy

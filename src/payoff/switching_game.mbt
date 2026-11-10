@@ -1162,6 +1162,23 @@ fn apply_damage_variants_fanout(
   let leaves : Array[(Double, SwitchingGameState)] = []
   for i = 0; i < outcomes.length(); i = i + 1 {
     let outcome = outcomes[i]
+    // タイプ / 特性で無効 (`compute_damage_variants` の hits_count=0 sentinel) な leg は
+    // 技が当たらない。自己ダウン / 反動 / 回復 / 自己 recharge / 相手ダウン / 状態異常 /
+    // 接触 proc は起きず、自爆 (self_ko) と Protean 記録だけが残る (`with_immune_effects`)。
+    if outcome.hits_count == 0 {
+      // 崩れ技の免疫 leg は使用者が崩れ HP を失う (Showdown `MoveFail`)。外れ枝は
+      // attempt 段 (`crash_miss_outcomes`) で処理する。`with_crash_damage` は非崩れ技では恒等。
+      let immune_state = with_immune_effects(
+        state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+      )
+      leaves.push((
+        outcome.probability,
+        with_crash_damage(
+          immune_state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+        ),
+      ))
+      continue
+    }
     // ドレイン / 反動 が overkill 分を吸わないように、実 dealt = min(theoretical,
     // pre_dmg_defender_hp) でクランプ。本家挙動 (Showdown / Gen9) は「与えた
     // ダメージ」基準で吸収・反動を計算するため、防御側 HP が技の理論値を
@@ -1190,17 +1207,9 @@ fn apply_damage_variants_fanout(
     } else {
       actual_dmg
     }
-    // 崩れ技の免疫 leg (`hits_count = 0` = タイプ / 特性による無効) では使用者が崩れ
-    // HP を失う (Showdown `MoveFail`)。ばけのかわ の初撃ブロックは hits_count=1 の
-    // まま届くので、ここは免疫 leg だけを指す。外れ枝は attempt 段で処理する。
-    let state_crash = if outcome.hits_count == 0 {
-      with_crash_damage(state, attacker_is_me, attacker_slot, attacker_team, attacker_move)
-    } else {
-      state
-    }
     // HP 減算は chip 込みの full damage (outcome.mean_damage) で行う。
     let state_dmg0 = with_hp_damage(
-      state_crash,
+      state,
       target_is_me,
       target_slot,
       outcome.mean_damage,
@@ -1785,6 +1794,61 @@ fn with_absorb_effects(
     )
   }
   { ..state, my_ranks, opp_ranks, my_protean_locked, opp_protean_locked }
+}
+
+///|
+/// State transition for an immune leg (type or ability immunity; the
+/// `hits_count = 0` sentinel from `compute_damage_variants`). Showdown fails
+/// the move before `spreadMoveHit`: `hitStepTypeImmunity` / `TryHit` remove the
+/// target (battle-actions.ts:705-727), so `runMoveEffects`, `selfDrops` and the
+/// recoil in `hitStepMoveHitLoop` never run. What still happens:
+///
+///   - `selfdestruct: 'always'` (じばく / だいばくはつ = `mv.self_ko`): the user
+///     faints in `useMove` before the target steps (battle-actions.ts:564-566).
+///   - Protean / Libero: `PrepareHit` runs before the steps (:652-654), so the
+///     lock is still recorded.
+///
+/// Not applied: self and opponent stat effects, recoil, healing / drain,
+/// `mustrecharge` (self volatile), self-switch, status, contact and item procs,
+/// and the post-move White Herb check (see payoff_semantics.md). `self_ko` is
+/// the only self-KO flag in `move_meta`, so `ifHit` self-faint moves (e.g.
+/// Memento, Final Gambit) are never reached here.
+fn with_immune_effects(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  attacker_team : Array[Combatant],
+  mv : @model.Move,
+) -> SwitchingGameState {
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  let my_protean_locked = state.my_protean_locked.copy()
+  let opp_protean_locked = state.opp_protean_locked.copy()
+  let attacker_hps = if attacker_is_me { my_hps } else { opp_hps }
+  let attacker_protean = if attacker_is_me {
+    my_protean_locked
+  } else {
+    opp_protean_locked
+  }
+  if attacker_slot < attacker_team.length() {
+    let atk_megaed = if attacker_is_me {
+      state.my_megaed
+    } else {
+      state.opp_megaed
+    }
+    let atk_is_mega = attacker_slot < atk_megaed.length() &&
+      atk_megaed[attacker_slot]
+    record_protean_on_use(
+      effective_combatant(attacker_team[attacker_slot], atk_is_mega),
+      attacker_protean,
+      attacker_slot,
+      mv,
+    )
+  }
+  if mv.self_ko && attacker_slot < attacker_hps.length() {
+    attacker_hps[attacker_slot] = 0
+  }
+  { ..state, my_hps, opp_hps, my_protean_locked, opp_protean_locked }
 }
 
 ///|

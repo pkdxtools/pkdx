@@ -319,6 +319,8 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 5. `self_ko` を常に適用 (`dmg` 無視)
 6. `recharge` は `mv.recharge && attacker 生存` のときのみ `must_recharge[active]=true` を立てる
 
+免疫 leg (タイプ / 特性で無効な技) は 2〜4 と 6 を行わず、5 (`self_ko`) と Protean 記録だけを行う。詳細は下記「タイプ / 特性で無効な技 (immune leg)」。
+
 `must_recharge` の消費規則:
 - ターン開始時に flag が true だった active は、そのターン `UseMove`/`Mega` を `per_side_attempt` で強制 skip。Switch は許可 (switch 時に flag クリア)
 - ターン終了時、**ターン開始時に flag=true だったスロットのみ** flag を false に戻す。ターン途中で新しく立った flag は次ターンに持ち越す
@@ -370,6 +372,20 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
   - むこうみず (Reckless) の崩れ技 ×1.2: Showdown `reckless.onBasePower` は `move.recoil || move.hasCrashDamage`。pkdx の `abilities.mbt` は `is_recoil_move` のみ。ダメージ計算側の別 PR。
   - ちくでん (Volt Absorb) の電気無効: `check_def_immunity` に未収録 (ひらいしん / でんきエンジン は収録済み)。Showdown の `voltabsorb.onTryHit` は null を返すので サンダーダイブ は崩れる。
   - Mind Blown / Steel Beam (DB に無い)、Protect、みがわり、Substitute。
+
+### タイプ / 特性で無効な技 (immune leg) — DP / MC
+
+タイプ相性 0 (例: インファイト → ゴースト) と特性による無効 (`check_def_immunity`: ちょすい / よびみず / もらいび / ひらいしん / でんきエンジン / ふゆう / そうしょく / かんそうはだ) は、DP では `compute_damage_variants` が返す `hits_count = 0` の sentinel、MC では `team_perform_attack` の 4 番目の戻り値 `immune` で判定する。この leg は技が当たらないので、DP は `with_immune_effects`、MC は `team_apply_post_hit(immune=true)` と `mc_try_apply_status(immune=true)` で次の 2 つだけを行う。
+
+- **残るもの**
+  - 自爆 (`self_ko`): じばく / だいばくはつ は `selfdestruct: 'always'`。Showdown の `useMove` は対象判定より前に使用者を ひんし にするので、免疫でも倒れる (`battle-actions.ts:564-566`)。
+  - Protean / Libero の記録: `PrepareHit` は `TryHit` より前に走る (`battle-actions.ts:652-654`)。`data/abilities.ts` の `protean.onPrepareHit` が記録する。
+- **止まるもの**
+  - 自己・相手のランク変化 (`stat_effects` の全件)、反動、回復・ドレイン、自己 `recharge` (はかいこうせん 等)、自己交代、状態異常、接触 proc、道具 proc。Showdown は対象が外れ、`trySpreadMoveHit` が `targets` 空で `moveResult = false` を返すため、`spreadMoveHit` (`runMoveEffects` / `selfDrops` / `secondaries`) に届かない (`battle-actions.ts:676-681`, `:1080-1192`)。反動は `hitStepMoveHitLoop` の中でしか適用されない (`:1040-1042`)。
+  - しろいハーブ の判定: DP は通らず、MC は通る。理由は「しろいハーブ」節の「吸収 / 免疫 leg」。
+- **ifHit の自爆は発動しない**: Memento (おきみやげ) / Final Gambit / Healing Wish (いやしのねがい) / Lunar Dance (みかづきのまい) は `selfdestruct: 'ifHit'` で、`runMoveEffects` の `damage[i] !== false` でしか倒れない (`battle-actions.ts:1342-1344`)。pkdx の `self_ko` は DB (`move_meta`) 上 じばく / だいばくはつ だけなので、この区別を持つ必要はない。
+- **未対応: 先の leg で対象が ひんし になった場合**: 2 本目の leg は攻撃側の HP だけを見て解決される (`switching_game_turn.mbt:469`)。Showdown は `getMoveTargets` が空を返して技を失敗させる (`pokemon.ts:841-862`) ので、Protean 記録も崩れ技も起きない。本変更の対象外。
+- **参照テスト**: `src/payoff/switching_game_immune_wbtest.mbt` (DP、対照・Protean・そうしょく+しろいハーブ を含む)、`src/payoff/team_monte_carlo_immune_parity_wbtest.mbt` (MC と DP/MC parity)。
 
 ### MVP 非対応 (将来拡張で検討)
 
@@ -566,6 +582,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - **ダメージ計算への影響**: 消費済みの持ち物は DP では `damage_cache_layer` が itemless として扱い、MC では `consumed_item_view` が同じ swap を行う。しろいハーブ自体はダメージ補正を持たないので威力は変わらないが、はたきおとす (相手が持ち物を持つと威力 ×1.5) は消費後は効かなくなる (Showdown と一致)。
 - **ひんし**: hp が 0 の所持者は判定しない (Showdown の `getAllActive` は ひんし を除外する)。技の効果で自分が ひんし になる場合 (自爆 / 自己 KO) は判定されず、消費もされない。
 - **MC**: 同じ helper を技の効果 (6 leg)・登場 (lead / switch)・EOT の後に呼ぶ。MC は mega 未モデルなので (3) のメガ判定は持たない。MC の単一 rollout と DP の値は、parity テストで感度ガード付きに確認する。
+- **吸収 / 免疫 leg**: DP は `with_absorb_effects` / `with_immune_effects` の単一 leaf で判定 (2) を通らず、MC は通る。観測できない: この leg は負のランクを作らず、負のランクを作る経路 (登場時いかく・`apply_stat_effects`) は直後に判定されるので、消費前の保持者に解除対象が残らない。
 - **未モデル**: なげつける で しろいハーブ を投げたときの効果 (使用者の負のランク解除と持ち物の消失、Showdown の `fling.effect`)。持ち物の移動 (トリック / ついばむ 等) による所持者の変化。
 
 ### ばけのかわ (Disguise, ミミッキュ専用) — DP

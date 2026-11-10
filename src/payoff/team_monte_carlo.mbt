@@ -354,6 +354,10 @@ fn greedy_team_action(
 /// `applied for both damaging and status moves` — `team_perform_attack` は
 /// status moves で damage を返さないが、本関数の全 phase (stat_effects 〜
 /// weather_set) は damage の有無に依存せず適用される。
+///
+/// `immune=true` (タイプ / 特性で無効な leg) は吸収と同じく早期 return し、自爆
+/// (`self_ko`) だけを適用する。DP `with_immune_effects` と同じ判定 (Protean の記録と
+/// しろいハーブ判定は call site が行う)。
 fn team_apply_post_hit(
   attacker_hps : Array[Int],
   attacker_active : Int,
@@ -374,6 +378,7 @@ fn team_apply_post_hit(
   field_turns_state : Array[Int],
   mv : @model.Move,
   dmg : Int,
+  immune? : Bool = false,
 ) -> Unit {
   // そうしょく: 吸収された技は当たらないため、防御側の A が上がるだけで、以降の効果
   // (stat_effects / recoil / 回復 / 寄生 / ねがいごと / self_ko / recharge) は起きない。
@@ -395,6 +400,16 @@ fn team_apply_post_hit(
           )
         None => ()
       }
+    }
+    return
+  }
+  // タイプ / 特性で無効 (`team_perform_attack` の immune): 技は当たらず
+  // spreadMoveHit に届かない。自己ダウン / 反動 / 回復 / 自己 recharge / 天候・フィールド
+  // 設定は起きない。例外は selfdestruct: 'always' (じばく系 = self_ko) で、対象判定より前に
+  // 使用者が ひんし になる (Showdown battle-actions.ts:564-566)。DP `with_immune_effects` と同じ。
+  if immune {
+    if mv.self_ko {
+      attacker_hps[attacker_active] = 0
     }
     return
   }
@@ -608,8 +623,9 @@ fn most_likely_variant(r : @model.DamageCalcResult) -> @model.DamageVariant? {
 /// rollout stays self-contained.
 ///
 /// 戻り値 `(new_hp, dmg_for_effects, disguise_busted, immune)`:
-///   - `immune`: 技がタイプ / 特性で無効 (`calc_damage` の `is_immune`)。使用者は崩れ技なら
-///     この leg で崩れ HP を失う (`mc_apply_crash`)。status / 通常ダメージは false。
+///   - `immune`: 技がタイプ / 特性で無効 (`calc_damage` の `is_immune`)。caller は
+///     `team_apply_post_hit` に渡し、自己効果を止める (DP の hits_count=0 leg と同じ)。
+///     崩れ技の使用者はこの leg で崩れ HP を失う (`mc_apply_crash`)。status (power<=0) は false。
 ///   - `new_hp`: 解決後の防御側 HP (0 床クランプ)。
 ///   - `dmg_for_effects`: recoil / drain 計算に使う「技が実際に HP へ与えたダメージ」。
 ///     非 ばけのかわ 時は実 dealt (= defender_hp - new_hp) で従来の
@@ -684,8 +700,9 @@ fn team_perform_attack(
     ),
   )
   if r.is_immune {
-    // タイプ無効: ばけのかわ は剥がれず chip も無い (DP `compute_damage_variants`
-    // の immune 早期 return と一致)。
+    // タイプ / 特性で無効: ばけのかわ は剥がれず chip も無い (DP `compute_damage_variants`
+    // の immune 早期 return と一致)。自己効果は caller の `team_apply_post_hit`
+    // (immune=true) が止める。
     return (defender_hp, 0, false, true)
   }
   // burn 半減: 従来の単一ロール挙動 (物理 → raw/2) を helper 化。ばけのかわ の
@@ -830,7 +847,13 @@ fn mc_try_apply_status(
   defender_status_arr : Array[@model.StatusCondition],
   defender_slot : Int,
   field? : @model.Field = @model.Field::None,
+  immune? : Bool = false,
 ) -> Unit {
+  // タイプ / 特性で無効な leg は技が当たらないので状態異常も付与しない (DP の
+  // `apply_damage_variants_fanout` は immune leg で fanout を回さない)。
+  if immune {
+    return
+  }
   // そうしょく: 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ
   // 判定)。Weather は type 解決に効かない (Weather Ball は草タイプにならない)。
   if defender_slot < defender_team.length() &&
@@ -1337,7 +1360,7 @@ pub fn team_rollout(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_own, res_eff,
+                mv_own, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1357,6 +1380,7 @@ pub fn team_rollout(
                 opp_status,
                 opp_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1419,7 +1443,7 @@ pub fn team_rollout(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_opp, res_eff,
+                mv_opp, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1439,6 +1463,7 @@ pub fn team_rollout(
                 own_status,
                 own_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1493,7 +1518,7 @@ pub fn team_rollout(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_opp, res_eff,
+                mv_opp, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1513,6 +1538,7 @@ pub fn team_rollout(
                 own_status,
                 own_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1573,7 +1599,7 @@ pub fn team_rollout(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
-                mv_own, res_eff,
+                mv_own, res_eff, immune=res_immune,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1593,6 +1619,7 @@ pub fn team_rollout(
                 opp_status,
                 opp_active,
                 field=field_state[0],
+                immune=res_immune,
               )
               if all_ko(own_hps) {
                 return -1.0
@@ -1652,7 +1679,7 @@ pub fn team_rollout(
               own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
               own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
-              mv_own, res_eff,
+              mv_own, res_eff, immune=res_immune,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1672,6 +1699,7 @@ pub fn team_rollout(
               opp_status,
               opp_active,
               field=field_state[0],
+              immune=res_immune,
             )
             if all_ko(own_hps) {
               return -1.0
@@ -1730,7 +1758,7 @@ pub fn team_rollout(
               opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
               opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
-              mv_opp, res_eff,
+              mv_opp, res_eff, immune=res_immune,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1750,6 +1778,7 @@ pub fn team_rollout(
               own_status,
               own_active,
               field=field_state[0],
+              immune=res_immune,
             )
             if all_ko(own_hps) {
               return -1.0

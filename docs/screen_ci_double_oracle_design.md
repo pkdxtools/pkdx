@@ -1,6 +1,6 @@
 # 設計メモ: 信頼区間で打ち切る screening と double oracle
 
-コードはまだ変えない。#174 マージ後に、並列化メモ（`docs/screen_parallel_design.md`）と一緒に実装する想定。既定の `pkdx select` の選出 JSON は変えない。新しい設定を付けたときだけ、試行を早く止め、double oracle で落とした選出を戻す。
+コードはまだ変えない。並列化は #189 で main に入った（状況は `docs/screen_parallel_design.md` の表）。この打ち切りは並列とは別に実装する想定で、まだ入っていない。既定の `pkdx select` の選出 JSON は変えない。新しい設定を付けたときだけ、試行を早く止め、double oracle で落とした選出を戻す。
 
 ## 狙い
 

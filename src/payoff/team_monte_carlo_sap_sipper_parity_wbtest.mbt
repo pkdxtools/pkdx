@@ -201,3 +201,33 @@ test "select DP/MC parity: Sap Sipper absorbs own Leaf Blade (no damage roll)" {
   let dp_plain = sapmc_dp(own, opp_plain, 2)
   assert_true(dp_plain - dp_sap_2 > 0.03)
 }
+
+///|
+/// **Case 6 (MC の瀕死の防御側)**: HP 0 の そうしょく は吸収されても A が上がらない
+/// (DP の `with_absorb_effects` と同じ判定)。
+test "MC: 瀕死の防御側は吸収されても防御側の A が上がらない" {
+  let wood = mk_move("ウッドハンマー", "くさ", @model.Physical, 120)
+  let defender_ranks = [0, 0, 0, 0, 0]
+  team_apply_post_hit(
+    [100],
+    0,
+    [0, 0, 0, 0, 0],
+    [false],
+    [@model.None],
+    [-1],
+    [sapmc_attacker()],
+    [0],
+    0,
+    defender_ranks,
+    [false],
+    [sapmc_holder("そうしょく")],
+    [false],
+    [@model.Weather::None],
+    [0],
+    [@model.Field::None],
+    [0],
+    wood,
+    60,
+  )
+  @debug.assert_eq(defender_ranks[0], 0)
+}

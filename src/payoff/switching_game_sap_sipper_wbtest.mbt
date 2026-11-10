@@ -366,3 +366,19 @@ test "そうしょく: 命中 75 の状態技も 1 ターンで単一 leaf (外�
   )
   @debug.assert_eq(plain_outs.length(), 2)
 }
+
+///|
+/// **Case 17 (瀕死の防御側)**: HP 0 の そうしょく は技の対象にならず、A は上がらない。
+/// 技は当たらないので HP / 効果も起きない。
+test "そうしょく: 瀕死の防御側は吸収されても A が上がらない" {
+  let s = sap_one_leaf(
+    { ..im_state(), opp_hps: [0, 100, 100] },
+    true,
+    sap_team(sap_leaf_blade()),
+    sap_holder_team(),
+    sap_leaf_blade(),
+    60,
+  )
+  @debug.assert_eq(s.opp_ranks[0], 0)
+  @debug.assert_eq(s.opp_hps[0], 0)
+}

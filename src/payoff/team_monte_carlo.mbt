@@ -385,13 +385,16 @@ fn team_apply_post_hit(
   )
   let absorb_ability = defender_team[defender_active].ability
   if ability_absorbs_move(absorb_ability, mv.name, absorb_type) {
-    match ability_absorb_boost(absorb_ability) {
-      Some((stat, delta)) =>
-        defender_ranks[stat] = clamp_rank_for(
-          absorb_ability,
-          defender_ranks[stat] + delta,
-        )
-      None => ()
+    // A fainted holder gains no boost (see `with_absorb_effects` on the DP side).
+    if defender_hps[defender_active] > 0 {
+      match ability_absorb_boost(absorb_ability) {
+        Some((stat, delta)) =>
+          defender_ranks[stat] = clamp_rank_for(
+            absorb_ability,
+            defender_ranks[stat] + delta,
+          )
+        None => ()
+      }
     }
     return
   }

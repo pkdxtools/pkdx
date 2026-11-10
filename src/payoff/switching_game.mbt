@@ -1704,10 +1704,17 @@ fn with_absorb_effects(
     defender_team,
   )
   let holder_ranks = if holder_is_me { my_ranks } else { opp_ranks }
-  match ability_absorb_boost(holder_ability) {
-    Some((stat, delta)) =>
-      holder_ranks[stat] = clamp_rank_for(holder_ability, holder_ranks[stat] + delta)
-    None => ()
+  let holder_hps = if holder_is_me { state.my_hps } else { state.opp_hps }
+  // A holder that has already fainted is not a valid target (Showdown fails
+  // the move before `onTryHit`), so it gains no boost.
+  let holder_alive = defender_slot < holder_hps.length() &&
+    holder_hps[defender_slot] > 0
+  if holder_alive {
+    match ability_absorb_boost(holder_ability) {
+      Some((stat, delta)) =>
+        holder_ranks[stat] = clamp_rank_for(holder_ability, holder_ranks[stat] + delta)
+      None => ()
+    }
   }
   let my_protean_locked = state.my_protean_locked.copy()
   let opp_protean_locked = state.opp_protean_locked.copy()

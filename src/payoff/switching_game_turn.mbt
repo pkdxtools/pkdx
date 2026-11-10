@@ -1104,6 +1104,49 @@ fn action_accuracy(
 }
 
 ///|
+/// Accuracy of `action` for the attempt-phase split (`per_side_attempt`). A move
+/// that the defender absorbs (そうしょく) is never subject to the accuracy roll:
+/// Showdown runs `TryHit` (where the absorb happens) before `Accuracy`. Its
+/// accuracy is therefore fixed at 100, so the split has no miss branch and the
+/// absorb happens once. Every other action keeps `action_accuracy`.
+fn attempt_accuracy(
+  state : SwitchingGameState,
+  action : ActionKind,
+  attacker_is_me : Bool,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+) -> Int {
+  let attacker_active = if attacker_is_me {
+    state.my_active
+  } else {
+    state.opp_active
+  }
+  let defender_active = if attacker_is_me {
+    state.opp_active
+  } else {
+    state.my_active
+  }
+  let absorbed = match action {
+    Switch(_) => false
+    UseMove(mi) | Mega(mi) =>
+      move_absorbed_by_holder(
+        state,
+        attacker_is_me,
+        attacker_active,
+        defender_active,
+        attacker_team,
+        defender_team,
+        attacker_team[attacker_active].moves[mi],
+      )
+  }
+  if absorbed {
+    100
+  } else {
+    action_accuracy(action, attacker_active, attacker_team)
+  }
+}
+
+///|
 /// Apply a pre-turn status override to an active slot — used by
 /// `attempt_turn_with_cache` to thread sleep-wake / sleep-tick / paralysis
 /// through to the next state. Returns a fresh status array copy.
@@ -1202,8 +1245,8 @@ pub fn attempt_turn_with_cache(
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
 ) -> Array[(Double, SwitchingGameState)] {
-  let my_acc = action_accuracy(my_action, state.my_active, my_team)
-  let opp_acc = action_accuracy(opp_action, state.opp_active, opp_team)
+  let my_acc = attempt_accuracy(state, my_action, true, my_team, opp_team)
+  let opp_acc = attempt_accuracy(state, opp_action, false, opp_team, my_team)
   let my_attempts = per_side_attempt(
     state.my_status[state.my_active],
     state.my_must_recharge[state.my_active],

@@ -375,6 +375,26 @@ fn team_apply_post_hit(
   mv : @model.Move,
   dmg : Int,
 ) -> Unit {
+  // そうしょく: 吸収された技は当たらないため、防御側の A が上がるだけで、以降の効果
+  // (stat_effects / recoil / 回復 / 寄生 / ねがいごと / self_ko / recharge) は起きない。
+  // Protean の記録は呼び出し側 (`record_protean_lock`) が行う (DP と同じ)。
+  let absorb_type = @damage.resolve_effective_move_type(
+    mv,
+    weather_state[0],
+    attacker_team[attacker_active].ability,
+  )
+  let absorb_ability = defender_team[defender_active].ability
+  if ability_absorbs_move(absorb_ability, mv.name, absorb_type) {
+    match ability_absorb_boost(absorb_ability) {
+      Some((stat, delta)) =>
+        defender_ranks[stat] = clamp_rank_for(
+          absorb_ability,
+          defender_ranks[stat] + delta,
+        )
+      None => ()
+    }
+    return
+  }
   let opp_alive = defender_hps[defender_active] > 0
   // raw ability で足りる: あまのじゃく を持つ mega form は存在しないため raw =
   // mega 後実効と常に一致し、drain 経路の defender_ability raw 慣例とも整合する。
@@ -729,6 +749,28 @@ fn rand_bool(rng : @random.Rand, p : Double) -> Bool {
 }
 
 ///|
+/// Accuracy fed to the MC attempt roll. A move the defender absorbs (そうしょく)
+/// is not subject to the roll (Showdown `TryHit` precedes `Accuracy`), so its
+/// accuracy is 100. Mirrors `attempt_accuracy` on the DP side.
+fn mc_attempt_accuracy(
+  attacker : Combatant,
+  mv : @model.Move,
+  defender : Combatant,
+  weather : @model.Weather,
+) -> Int {
+  let move_type = @damage.resolve_effective_move_type(
+    mv,
+    weather,
+    attacker.ability,
+  )
+  if ability_absorbs_move(defender.ability, mv.name, move_type) {
+    100
+  } else {
+    mv.accuracy
+  }
+}
+
+///|
 /// Resolve a single attack attempt for `me` in the MC rollout, respecting
 /// paralysis (12.5% failure), sleep (skip + counter decrement / wake-up),
 /// and move accuracy. Returns the new status of `me` and whether the action
@@ -784,6 +826,16 @@ fn mc_try_apply_status(
   defender_slot : Int,
   field? : @model.Field = @model.Field::None,
 ) -> Unit {
+  // そうしょく: 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ
+  // 判定)。Weather は type 解決に効かない (Weather Ball は草タイプにならない)。
+  if defender_slot < defender_team.length() &&
+    ability_absorbs_move(
+      defender_team[defender_slot].ability,
+      mv.name,
+      @damage.resolve_effective_move_type(mv, @model.Weather::None, ""),
+    ) {
+    return
+  }
   let eff = match mv.status_effect {
     None => return
     Some(x) => x
@@ -1057,7 +1109,12 @@ pub fn team_rollout(
             } else {
               let (st, acts) = mc_resolve_attempt(
                 own_status[own_active],
-                own[own_active].moves[mi].accuracy,
+                mc_attempt_accuracy(
+                  own[own_active],
+                  own[own_active].moves[mi],
+                  opp[opp_active],
+                  weather_state[0],
+                ),
                 rng,
               )
               own_status[own_active] = st
@@ -1072,7 +1129,12 @@ pub fn team_rollout(
             } else {
               let (st, acts) = mc_resolve_attempt(
                 opp_status[opp_active],
-                opp[opp_active].moves[mi].accuracy,
+                mc_attempt_accuracy(
+                  opp[opp_active],
+                  opp[opp_active].moves[mi],
+                  own[own_active],
+                  weather_state[0],
+                ),
                 rng,
               )
               opp_status[opp_active] = st

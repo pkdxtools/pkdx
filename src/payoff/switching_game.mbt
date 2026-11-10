@@ -1108,6 +1108,34 @@ fn apply_damage_variants_fanout(
   let target_is_me = !attacker_is_me
   let target_slot = defender_active
   let attacker_slot = attacker_active
+  // そうしょく: 防御側が技を吸収すると、技は当たらず (HP / 状態異常 / 自己効果 /
+  // 接触 proc なし) 防御側の A が +1 される。命中判定より前に起きるので、outcomes
+  // の分布によらず単一 leaf (確率 1.0) を返す。`attempt_turn_with_cache` が同じ
+  // 判定で命中率を 100 に固定するため、ここでは外れ枝が来ない。
+  if move_absorbed_by_holder(
+    state,
+    attacker_is_me,
+    attacker_slot,
+    target_slot,
+    attacker_team,
+    defender_team,
+    attacker_move,
+  ) {
+    return [
+      (
+        1.0,
+        with_absorb_effects(
+          state,
+          attacker_is_me,
+          attacker_slot,
+          target_slot,
+          attacker_team,
+          defender_team,
+          attacker_move,
+        ),
+      ),
+    ]
+  }
   // ばけのかわ: 被弾側 slot が intact なら (a) 初段被弾を無効化して chip で剥がす、
   // (b) reflect / 通常技いずれも outcome.mean_damage は既に「初段減算 + chip」
   // 済みで届く (compute_damage_variants / outcomes_from_calc_result の transform)。
@@ -1525,15 +1553,7 @@ fn with_post_hit_effects(
     opp_protean_locked
   }
   if attacker_active < attacker_team.length() {
-    if (
-        atk_eff.ability == "へんげんじざい" ||
-        atk_eff.ability == "リベロ"
-      ) &&
-      atk_eff.tera_type == "" &&
-      attacker_active < attacker_protean.length() &&
-      attacker_protean[attacker_active] == "" {
-      attacker_protean[attacker_active] = mv.type_
-    }
+    record_protean_on_use(atk_eff, attacker_protean, attacker_active, mv)
   }
   if mv.self_ko {
     attacker_hps[attacker_active] = 0
@@ -1587,6 +1607,131 @@ fn with_post_hit_effects(
     field: new_field,
     field_turns_left: new_field_turns,
   }
+}
+
+///|
+/// Protean / Libero: the user's type becomes the type of the move it uses,
+/// once per switch-in (`locked[active]` keeps the first type). `atk_eff` is the
+/// effective combatant (mega-resolved); a Terastallized user keeps its type.
+/// Shared by the normal post-hit path and the absorb path: Protean fires when
+/// the move is used (Showdown `PrepareHit`, before `TryHit`), so an absorbed
+/// move still sets the lock.
+fn record_protean_on_use(
+  atk_eff : Combatant,
+  locked : Array[String],
+  attacker_active : Int,
+  mv : @model.Move,
+) -> Unit {
+  if (
+      atk_eff.ability == "へんげんじざい" ||
+      atk_eff.ability == "リベロ"
+    ) &&
+    atk_eff.tera_type == "" &&
+    attacker_active < locked.length() &&
+    locked[attacker_active] == "" {
+    locked[attacker_active] = mv.type_
+  }
+}
+
+///|
+/// The ability that acts for the holder at `slot`: the mega-resolved ability
+/// when that slot has mega-evolved, otherwise the raw ability (the convention
+/// `with_post_hit_effects` uses for the defender).
+fn holder_ability_of(
+  state : SwitchingGameState,
+  holder_is_me : Bool,
+  slot : Int,
+  holder_team : Array[Combatant],
+) -> String {
+  let megaed = if holder_is_me { state.my_megaed } else { state.opp_megaed }
+  if slot < megaed.length() && megaed[slot] {
+    effective_combatant(holder_team[slot], true).ability
+  } else {
+    holder_team[slot].ability
+  }
+}
+
+///|
+/// そうしょく (Sap Sipper) absorption check: does the defender at `defender_slot`
+/// absorb `mv` from the attacker at `attacker_slot`? The move type is the same
+/// pre-immunity chain the engine uses (`resolve_effective_move_type`). Covers
+/// damaging and status moves alike, since Showdown's `onTryHit` runs for both.
+fn move_absorbed_by_holder(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  defender_slot : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+  mv : @model.Move,
+) -> Bool {
+  let holder_ability = holder_ability_of(
+    state,
+    !attacker_is_me,
+    defender_slot,
+    defender_team,
+  )
+  let move_type = @damage.resolve_effective_move_type(
+    mv,
+    state.weather,
+    attacker_team[attacker_slot].ability,
+  )
+  ability_absorbs_move(holder_ability, mv.name, move_type)
+}
+
+///|
+/// State transition for an absorbed move (`move_absorbed_by_holder` is true).
+/// The move never reaches the holder, so no HP change, status, self or opponent
+/// stat effect, recoil, drain, recharge, self-KO, or contact / item proc happens.
+/// The holder's Attack rises by `ability_absorb_boost` (capped at +6 by
+/// `clamp_rank_for`). The attacker's Protean / Libero lock is still recorded.
+fn with_absorb_effects(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  defender_slot : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+  mv : @model.Move,
+) -> SwitchingGameState {
+  let my_ranks = state.my_ranks.copy()
+  let opp_ranks = state.opp_ranks.copy()
+  let holder_is_me = !attacker_is_me
+  let holder_ability = holder_ability_of(
+    state,
+    holder_is_me,
+    defender_slot,
+    defender_team,
+  )
+  let holder_ranks = if holder_is_me { my_ranks } else { opp_ranks }
+  match ability_absorb_boost(holder_ability) {
+    Some((stat, delta)) =>
+      holder_ranks[stat] = clamp_rank_for(holder_ability, holder_ranks[stat] + delta)
+    None => ()
+  }
+  let my_protean_locked = state.my_protean_locked.copy()
+  let opp_protean_locked = state.opp_protean_locked.copy()
+  let attacker_protean = if attacker_is_me {
+    my_protean_locked
+  } else {
+    opp_protean_locked
+  }
+  if attacker_slot < attacker_team.length() {
+    let atk_megaed = if attacker_is_me {
+      state.my_megaed
+    } else {
+      state.opp_megaed
+    }
+    let atk_is_mega = attacker_slot < atk_megaed.length() &&
+      atk_megaed[attacker_slot]
+    record_protean_on_use(
+      effective_combatant(attacker_team[attacker_slot], atk_is_mega),
+      attacker_protean,
+      attacker_slot,
+      mv,
+    )
+  }
+  { ..state, my_ranks, opp_ranks, my_protean_locked, opp_protean_locked }
 }
 
 ///|

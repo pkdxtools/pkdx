@@ -335,6 +335,20 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 - **未対応**: ミラーアーマー (技由来のダウンを使用者へ反射する) は別経路で未モデル (下記「MVP 対象外」)
 - **判定に使う特性**: DP は mega 後の実効特性 (`effective_combatant`)。メタグロス (クリアボディ) はメガ進化で かたいツメ になり、ブロックしなくなる。MC は mega 未モデル (`megaed` 常に false) なので raw の特性で判定する (MC の mega 未モデル化と同じ境界)。いかく の登場時判定も DP は mega 後実効特性
 
+### そうしょく (Sap Sipper) の吸収 — DP / MC
+
+Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃・変化) が所持者を狙うと、技は当たらず、所持者の A が +1 される (+6 で頭打ち。吸収自体は起きる)。`ability_absorb_boost` が `(A, +1)`、`ability_absorbs_move` が吸収判定を返す。DP は `apply_damage_variants_fanout` 冒頭で `with_absorb_effects` の単一 leaf を返し、`attempt_accuracy` が命中率を 100 にする。MC は `team_apply_post_hit` (A +1 だけ行って return)、`mc_try_apply_status` (状態付与をしない)、`mc_attempt_accuracy` (命中 100) で同じ判定を行う。
+
+- **吸収される技**: 防御側の特性 (DP は mega 後の実効特性) が そうしょく、技の解決タイプ (`resolve_effective_move_type`、engine と同じ前段) がくさ、かつ技が相手を狙う。ダメージ技と変化技の両方が対象 (Showdown の `onTryHit` は両方で走る)。
+- **吸収されない技** (`is_grass_non_foe_target_move`、`src/damage/move_flags.mbt`): 自分・自分側・フィールド・味方に作用するくさ技。ねをはる / こうごうせい / せいちょう / コットンガード / ニードルガード (自分)、グラスフィールド (フィールド)、アロマセラピー (てもち)、ジャングルヒール (自分と味方)。出典は champions `move.target` の 7 (自分) / 10 (フィールド全体) と、説明文の味方・てもちへの作用。`pokedex.db` には target 列がないため、同じ名前表で判定する。
+- **吸収時に起きないこと**: HP 変化、状態異常、寄生、回復、ねがいごと、反動、自爆、recharge、相手ダウン、使用者の自己ダウン、接触 proc、道具 proc。Showdown は吸収で `targets` が空になり、`selfDrops` (`spreadMoveHit` の段) まで進まないため、リーフストーム の自己とくこう -2 も起きない。
+- **Protean / Libero**: 吸収された技でもタイプ固定は記録する。Showdown は `PrepareHit` を `trySpreadMoveHit` の moveSteps (TryHit を含む) より前に実行する。
+- **命中**: 吸収は命中判定より前に起きる (Gen 9 の moveSteps は Invulnerability → TryHit → TypeImmunity → TryImmunity → Accuracy)。そのため命中率が低い状態技 (ねむりごな 75 等) でも外れ枝は無く、単一 leaf (確率 1.0) になる。
+- **ランク範囲**: そうしょく の所持者は ±6 で追跡する (`ability_tracks_full_stages` → `clamp_rank_for`)。通常特性の ±2 で丸めると、+1 の頭打ちが +2 になってしまう。
+- **あまのじゃく**: 所持者は特性を 1 つしか持たないため、所持者側の反転は起きない。使用者があまのじゃくでも吸収された技は自己効果を出さないので、反転対象がない (`switching_game_sap_sipper_wbtest.mbt` で確認)。
+- **かたやぶり**: 未対応 (下記「MVP 対象外」)。そうしょく は破壊可能 (breakable) 特性だが、かたやぶり は pkdx でモデルしていない。
+- **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。
+
 ### MVP 非対応 (将来拡張で検討)
 
 - 確率副次効果 (アイアンテール 10% B-1 等) ― `stat_effects` は常に 100% 発動前提
@@ -553,6 +567,8 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `team_monte_carlo_defiant_competitive_parity_wbtest.mbt` — まけんき / かちき の MC/DP parity (lead いかく・相手ダウン技・複数ダウン技 (くすぐる) は下がった能力ごとに反応・MC no-op)
 - `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、DP 配線 `with_post_hit_effects`)
 - `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) ブロックの MC/DP parity
+- `switching_game_sap_sipper_wbtest.mbt` — そうしょく の吸収 (くさ攻撃 / 状態 / やどりぎのタネ / 相手素早さダウン / リーフストーム の自己ダウン不発 / 自分狙いのくさ技は非吸収 / グラスフィールド / くさ以外は通常 / A +6 頭打ち / ±6 積み上がり / Protean 固定 / 持ち主の技は非吸収 / 命中 100 の固定 / 1 ターン解決で単一 leaf)
+- `team_monte_carlo_sap_sipper_parity_wbtest.mbt` — そうしょく の MC 経路 (post-hit / 状態付与 / 命中) と、乱数の入らない matchup での DP/MC parity (horizon 2 / 3)
 
 ### MVP 対象外 (将来拡張)
 

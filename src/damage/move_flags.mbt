@@ -177,6 +177,28 @@ pub fn is_contact_move(name : String) -> Bool {
 }
 
 ///|
+/// くさタイプの技のうち、ターゲットに相手ポケモンを含まないもの (自分 / 自分側 /
+/// 味方 / フィールドに作用する)。DB の表記 (`pokedex.db` `local_waza`) で列挙する。
+/// 出典: champions `move.target` (7 = 自分、10 = フィールド全体) が付く
+/// こうごうせい / せいちょう / ねをはる / コットンガード / ニードルガード /
+/// グラスフィールド、および説明文に味方・てもちへの作用が書かれている
+/// アロマセラピー (てもちのすべてのポケモン) / ジャングルヒール (じぶんとばにいる
+/// みかた)。そうしょく (Sap Sipper) は自分を狙う技だけを吸収するので、これらは対象外。
+let grass_non_foe_target_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  [
+    "こうごうせい", "せいちょう", "ねをはる", "コットンガード",
+    "ニードルガード", "グラスフィールド", "アロマセラピー", "ジャングルヒール",
+  ].iter(),
+)
+
+///|
+/// `true` when the Grass-type move `name` never targets the opposing Pokémon
+/// (see `grass_non_foe_target_moves`). The caller checks the move type itself.
+pub fn is_grass_non_foe_target_move(name : String) -> Bool {
+  grass_non_foe_target_moves.contains(name)
+}
+
+///|
 /// Resolve the move's effective contact flag, honoring `force_contact` from
 /// `StatResolution` (シェルアームズ 物理モード等の動的接触判定) over the
 /// static `is_contact_move` table. Shared by the damage engine and the

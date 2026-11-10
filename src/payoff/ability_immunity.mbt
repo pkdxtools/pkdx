@@ -139,3 +139,54 @@ pub fn ability_reverses_stat_changes(ability : String) -> Bool {
 pub fn ability_boosts_on_opp_drop(ability : String) -> Bool {
   ability == "まけんき" || ability == "かちき"
 }
+
+///|
+/// Return the stat boost the holder gains when it absorbs a move aimed at it,
+/// as `(stat, delta)` with `stat` the rank index (0 = Attack), or `None` for
+/// every other holder. そうしょく (Sap Sipper) raises Attack by 1. Showdown runs
+/// it as `onTryHit` (`this.boost({ atk: 1 })`), which precedes the accuracy roll
+/// in Gen 9, so the boost does not depend on accuracy. At +6 the holder still
+/// absorbs; only the boost is lost.
+pub fn ability_absorb_boost(ability : String) -> (Int, Int)? {
+  match ability {
+    "そうしょく" => Some((0, 1))
+    _ => None
+  }
+}
+
+///|
+/// Return `true` when the holder absorbs the move `move_name` (resolved type
+/// `move_type`) that is aimed at it. An absorbed move does no damage and has no
+/// secondary, status, or self effect, and the holder gets `ability_absorb_boost`.
+/// Only holders with an absorb boost qualify, so the other immunity abilities
+/// keep their existing path. Type matching is the damage engine's
+/// `check_def_immunity` (single source of truth). Non-foe Grass moves
+/// (`is_grass_non_foe_target_move`: ねをはる / グラスフィールド ...) never reach the
+/// holder and are excluded.
+pub fn ability_absorbs_move(
+  ability : String,
+  move_name : String,
+  move_type : String,
+) -> Bool {
+  match ability_absorb_boost(ability) {
+    Some(_) =>
+      @damage.check_def_immunity(ability, move_type) &&
+        !@damage.is_grass_non_foe_target_move(move_name)
+    None => false
+  }
+}
+
+///|
+/// Return `true` when the holder's ranks are tracked over the real ±6 stage
+/// range (see `clamp_rank_for`) rather than the payoff layer's reduced ±2:
+/// まけんき / かちき (the reaction needs the true floor) and そうしょく (its +1 must
+/// stop at +6, not at +2).
+pub fn ability_tracks_full_stages(ability : String) -> Bool {
+  if ability_boosts_on_opp_drop(ability) {
+    return true
+  }
+  match ability_absorb_boost(ability) {
+    Some(_) => true
+    None => false
+  }
+}

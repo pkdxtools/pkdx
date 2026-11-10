@@ -347,6 +347,7 @@ Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃
 - **ランク範囲**: そうしょく の所持者は ±6 で追跡する (`ability_tracks_full_stages` → `clamp_rank_for`)。通常特性の ±2 で丸めると、+1 の頭打ちが +2 になってしまう。
 - **あまのじゃく**: 所持者は特性を 1 つしか持たないため、所持者側の反転は起きない。使用者があまのじゃくでも吸収された技は自己効果を出さないので、反転対象がない (`switching_game_sap_sipper_wbtest.mbt` で確認)。
 - **かたやぶり**: 未対応 (下記「MVP 対象外」)。そうしょく は破壊可能 (breakable) 特性だが、かたやぶり は pkdx でモデルしていない。
+- **瀕死の保持者**: 保持者が瀕死 (HP 0) なら A は上がらない (Showdown は瀕死の対象に技が通らない)。DP (`with_absorb_effects`) と MC (`team_apply_post_hit`) の両方で、生存時のみ A +1 を適用する。
 - **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。
 
 ### MVP 非対応 (将来拡張で検討)

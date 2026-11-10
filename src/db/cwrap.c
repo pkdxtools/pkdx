@@ -3,9 +3,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
 #ifdef _WIN32
+/* The Windows native target builds with MSVC (cl.exe / clang-cl), which has
+   no <unistd.h>. Its CRT exposes the POSIX helpers under underscore names:
+   _unlink (io.h), _mkdir (direct.h), _stat (sys/stat.h). Every other
+   POSIX-only call in this file (write, getpid, clock_gettime) lives in an
+   #else branch. */
 #include <windows.h>
+#include <direct.h>
+#include <io.h>
+#else
+#include <unistd.h>
 #endif
 
 /* ---- UTF-8 -> UTF-16 conversion for Japanese text ---- */
@@ -531,7 +539,7 @@ moonbit_string_t pkdx_read_stdin(void) {
 }
 
 #ifdef _WIN32
-#define PKDX_MKDIR(p) mkdir(p)
+#define PKDX_MKDIR(p) _mkdir(p)
 #define PKDX_IS_SEP(c) ((c) == '/' || (c) == '\\')
 #else
 #define PKDX_MKDIR(p) mkdir(p, 0755)
@@ -631,8 +639,13 @@ moonbit_string_t pkdx_read_file(const uint8_t *path) {
 
 MOONBIT_FFI_EXPORT
 int32_t pkdx_file_exists(const uint8_t *path) {
+#ifdef _WIN32
+    struct _stat st;
+    return _stat((const char *)path, &st) == 0 ? 1 : 0;
+#else
     struct stat st;
     return stat((const char *)path, &st) == 0 ? 1 : 0;
+#endif
 }
 
 MOONBIT_FFI_EXPORT
@@ -646,9 +659,21 @@ void pkdx_println(const uint8_t *msg) {
    per-phase timings without being affected by wall-clock adjustments. */
 MOONBIT_FFI_EXPORT
 int64_t pkdx_monotonic_ns(void) {
+#ifdef _WIN32
+    /* clock_gettime(CLOCK_MONOTONIC) is POSIX-only; QueryPerformanceCounter is
+       the monotonic source on Windows. Divide before scaling to nanoseconds so
+       counter * 1e9 cannot overflow int64 on long-running hosts. */
+    LARGE_INTEGER freq, counter;
+    if (!QueryPerformanceFrequency(&freq) || freq.QuadPart <= 0) return 0;
+    QueryPerformanceCounter(&counter);
+    int64_t f = (int64_t)freq.QuadPart;
+    int64_t c = (int64_t)counter.QuadPart;
+    return (c / f) * 1000000000LL + ((c % f) * 1000000000LL) / f;
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+#endif
 }
 
 /* Current process ID. Embedded in progress trace events so analysis can
@@ -668,7 +693,11 @@ int32_t pkdx_pid(void) {
    failure. Treats ENOENT as success so tests can call cleanup blindly. */
 MOONBIT_FFI_EXPORT
 int32_t pkdx_unlink_file(const uint8_t *path) {
+#ifdef _WIN32
+    int rc = _unlink((const char *)path);
+#else
     int rc = unlink((const char *)path);
+#endif
     if (rc == 0) return 0;
     if (errno == ENOENT) return 0;
     return errno;

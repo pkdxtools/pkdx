@@ -159,10 +159,10 @@ ls box/teams/*.meta.json
 
 #### モデル選択肢 (`team_payoff_model` フィールド)
 
-- `"switching_game"` (既定) — 交代込み extensive-form ゲーム木。DP turn_limit=5 既定 (先制技 / ランク補正技に対応)。長期戦評価が必要なら `"switching_game:<N>"` で turn_limit を上書き可
+- `"switching_game"` (既定) — 交代込み extensive-form ゲーム木。DP turn_limit=5 既定 (先制技 / ランク補正技に対応)。ただし turn_limit=5 は自動昇格閾値 (`N >= 4`) 以上のため、実行時は下記「CLI 側の自動フォールバック」により screening 版に置き換わる。長期戦評価が必要なら `"switching_game:<N>"` で turn_limit を上書き可
 - `"screened_switching_game:<trials>:<seed>:<keep_top>"` — MC で選出行列を screening (rollout turn_limit=5)、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP (refine turn_limit=5 既定)。例: `"screened_switching_game:1000:42:0.3"`。パラメータを細かくチューニングしたいときだけ明示指定する
 
-**CLI 側の自動フォールバック**: `switching_game:<N>` で `N >= 5` のとき、`pkdx select` は内部で `ScreenedSwitchingGame(trials=1000, seed=42, keep_top=0.3, refine_turn_limit=N)` に自動昇格する。skill 側で screening をどう使うか判断する必要はなく、常に `switching_game:<N>` で turn_limit だけ指定すればよい。明示的に `screened_switching_game:...` を書いた場合はそのまま使われる。
+**CLI 側の自動フォールバック**: `switching_game:<N>` で `N >= 4` のとき、`pkdx select` は内部で `ScreenedSwitchingGame(trials=1000, seed=42, keep_top=0.3, refine_turn_limit=N)` に自動昇格する。skill 側で screening をどう使うか判断する必要はなく、常に `switching_game:<N>` で turn_limit だけ指定すればよい。明示的に `screened_switching_game:...` を書いた場合はそのまま使われる。
 
 詳細は `references/payoff_semantics.md`。
 
@@ -186,7 +186,7 @@ ls box/teams/*.meta.json
 
 **エンコード**:
 
-- 基本は `"switching_game:<N>"` を組み立てるだけでよい。`N >= 5` のとき CLI が内部で screening 版に自動昇格するので、skill 側で `screened_switching_game:...` を構築する必要はない
+- 基本は `"switching_game:<N>"` を組み立てるだけでよい。`N >= 4` のとき CLI が内部で screening 版に自動昇格するので、skill 側で `screened_switching_game:...` を構築する必要はない
 - screening パラメータ (`trials`/`seed`/`keep_top`) をユーザーが明示的に変更したい場合のみ `"screened_switching_game:<trials>:<seed>:<keep_top>:<N>"` を直接指定する
 
 ### 実行

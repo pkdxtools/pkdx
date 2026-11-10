@@ -287,15 +287,15 @@ screening は **MC phase に 3,600 cells × N trials の rollout オーバヘッ
 { "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "screened_switching_game:1000:42:0.3" }
 ```
 
-`team_payoff_model` が未指定の場合は既定で `SwitchingGame` (DP turn_limit=`DP_TURN_LIMIT`=5)。`payoff_model` / `pairwise:*` / `best1v1` / `nash_responses` / `monte_carlo:*` は全て**廃止済み**で、渡すと `InvalidJson` となる。DP turn_limit は `switching_game:<N>` および `screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>` で上書き可能。MC screening rollout の turn_limit は定数 (`MC_TURN_LIMIT` = 5)。
+`team_payoff_model` が未指定の場合は既定で `SwitchingGame` (DP turn_limit=`DP_TURN_LIMIT`=5)。ただし 5 は自動昇格閾値 4 以上のため、実行時は下記 Auto-screening により `ScreenedSwitchingGame` に置き換わる。`payoff_model` / `pairwise:*` / `best1v1` / `nash_responses` / `monte_carlo:*` は全て**廃止済み**で、渡すと `InvalidJson` となる。DP turn_limit は `switching_game:<N>` および `screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>` で上書き可能。MC screening rollout の turn_limit は定数 (`MC_TURN_LIMIT` = 5)。
 
 ### Auto-screening (CLI 内部処理)
 
-`run_select` は parse 結果を `auto_upgrade_team_model` に通してから DP に渡す。`SwitchingGame(N)` で `N >= AUTO_SCREEN_TURN_LIMIT` (= 5) のケースは自動で `ScreenedSwitchingGame(AUTO_SCREEN_TRIALS=1000, AUTO_SCREEN_SEED=42, AUTO_SCREEN_KEEP_TOP=0.3, refine_turn_limit=N)` に置き換わる。
+`run_select` は parse 結果を `auto_upgrade_team_model` に通してから DP に渡す。`SwitchingGame(N)` で `N >= AUTO_SCREEN_TURN_LIMIT` (= 4) のケースは自動で `ScreenedSwitchingGame(AUTO_SCREEN_TRIALS=1000, AUTO_SCREEN_SEED=42, AUTO_SCREEN_KEEP_TOP=0.3, refine_turn_limit=N)` に置き換わる。
 
 - skill 側は turn_limit だけを考えて `switching_game:<N>` を組み立てればよく、screening を使うかどうかの判断は CLI が担う
 - `screened_switching_game:...` を明示したケースは `auto_upgrade_team_model` の match が外れてパススルーするため、ユーザー指定の `trials` / `seed` / `keep_top` / `refine_turn_limit` がそのまま使われる
-- `switching_game:3` / `switching_game:4` のように閾値未満の turn_limit は従来どおり pure SwitchingGame で動く
+- 閾値未満 (N ≤ 3) の turn_limit、例えば `switching_game:3` は従来どおり pure SwitchingGame で動く
 - 既定パラメータ (1000/42/0.3) は `src/payoff/semantics.mbt` の定数で集約管理。調整したい場合はここを書き換える
 
 ## Post-hit side effects (Phase 2-4)

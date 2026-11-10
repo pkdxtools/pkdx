@@ -2,6 +2,8 @@
 
 #174（toolchain と依存の更新）と #176（`pkdx nash solve` の fallback）が main に入ったあと、`origin/main`（`18d94d6`）へ rebase して取り直した公式ベースライン。各ケースは別プロセスで複数回実行し、壁時計は中央値を載せる。
 
+その後 `origin/main`（`41f2996`、#189 の `pkdx select --parallel` を含む）を merge した。下の表は `18d94d6` での計測値のまま。merge 後の quick 再確認は「再確認（41f2996 取り込み後）」節。
+
 ## 計測環境
 
 | 項目 | 値 |
@@ -14,11 +16,11 @@
 | CPU | Intel Xeon, 4 vCPU |
 | MemTotal | 16,387,280 kB |
 | バイナリ | `_build/native/release/build/src/main/main.exe`（`moon build --target native --release src/main`） |
-| 依存 | `moon.mod`: `moonbitlang/x@0.5.6`, `mizchi/markdown@0.8.4`, `mizchi/admiral@0.1.1`, `ushironoko/nash-mbt@0.1.1` |
-| 並列 | なし。`select-bench` は in-process（`pkdx select --parallel=1` と同じ呼び出し）。4 vCPU は使っていない |
-| 回数 | 1 秒未満のケースは 5 回、それ以外は 3 回。いずれも `--repeats 1` の別プロセス |
+| 依存 | `moon.mod`: `moonbitlang/x@0.5.6`, `mizchi/markdown@0.8.4`, `mizchi/jsonschema@0.8.1`, `mizchi/admiral@0.1.1`, `ushironoko/nash-mbt@0.1.1` |
+| 並列 | なし。`select-bench` は in-process（`pkdx select --parallel=1` と同じ呼び出し）で、`--parallel` は付けない。`pkdx select --parallel` 自体は #189 で main に入った（bench の対象外）。4 vCPU は使っていない |
+| 回数 | 最初のプロセスの壁時計が 1 秒未満のケースは 5 プロセス、それ以外は 3 プロセス。各プロセスは `--repeats 1`。表の壁時計はプロセス間の中央値、min / max もプロセス間。`scripts/bench_select.sh` の既定（`-p auto`、`-n 1`）がこの手順 |
 | damage cache | なし（`disk = None`）。SQLite のヒットで時間が揺れない |
-| RSS | GNU time 1.9 の `Maximum resident set size`（KB）。プロセス起動を含む。表は中央値 |
+| RSS | GNU time 1.9 の `Maximum resident set size`（KB）。プロセス起動を含む。表は中央値。GNU time（`/usr/bin/time -v`）が無い環境では、スクリプトの RSS 列は `-` になる（壁時計と値は出る） |
 
 この計測時の `moon version --all` 全文（パスは実行環境のホーム）:
 
@@ -47,10 +49,12 @@ bash scripts/bench_select.sh -t smoke     # テストと同じ小さいケース
 bash scripts/bench_select.sh -t default   # 中規模 + 状態異常ペア + 60 選出の浅い DP
 bash scripts/bench_select.sh -t full      # 6v6 tl=3 と、auto-upgrade と同じ screening 形。長い
 bash scripts/bench_select.sh -c nash_rps_3
-bash scripts/bench_select.sh -c select_status_heavy -n 1
+bash scripts/bench_select.sh -c select_status_heavy -p 1   # 1 プロセスだけ（確認用）
 ```
 
-スクリプトはケースごとにプロセスを分け、TSV に GNU time の max RSS と `moonc` 版を足す。結果を残すときは標準出力をそのまま保存する。先頭の `# moon version --all:` ブロックが `moon version --all` の全文で、表の `moonc` 列がコンパイラ版（例: `v0.10.18+6c83a7f62`）である。
+`-p` はケースあたりのプロセス数。既定 `auto` は最初のプロセスの壁時計が 1 秒未満なら 5、それ以外は 3。`-n` は 1 プロセス内の反復回数（既定 1）。どちらも数値を変えるのは回数だけで、solver の結果は変わらない。
+
+スクリプトはケースごとにプロセスを分け、TSV の末尾に `wall_ms_max`（プロセス間の最大）、`procs`（プロセス数）、GNU time の max RSS（中央値）と `moonc` 版を足す。`wall_ms_median` / `wall_ms_min` はプロセス間の中央値と最小。`value` / `solver` / `dp_*` などの決定的な列は 1 つ目のプロセスの値で、2 つ目以降と違えば stderr に警告を出す。結果を残すときは標準出力をそのまま保存する。先頭の `# moon version --all:` ブロックが `moon version --all` の全文で、表の `moonc` 列がコンパイラ版（例: `v0.10.18+6c83a7f62`）である。
 
 ```bash
 bash scripts/bench_select.sh -t default | tee /tmp/pkdx_select_bench.tsv
@@ -79,17 +83,17 @@ pkdx select
         → ScreenedSwitchingGame(1000, 42, 0.3, n)
       明示 screened_switching_game:... はそのまま
     compute_select_with_team_model
-      parallel > 1 かつ screened
+      parallel > 1 かつ screened かつ input_path 非空   # #189
         → team_payoff_matrix_screened_parallel（子プロセス。bit-exact）
       screened
         → team_payoff_matrix_screened
-      それ以外
+      それ以外（SwitchingGame を含む。--parallel を付けても in-process）
         → team_payoff_matrix_switching
     build_select_result
       → solve_with_fallback   # 選出行列の 1 回だけ
 ```
 
-`AUTO_SCREEN_TURN_LIMIT` は `src/payoff/semantics.mbt` で **4**。skill 文書の「N ≥ 5 で昇格」とは一致していない。コードが正。
+`AUTO_SCREEN_TURN_LIMIT` は `src/payoff/semantics.mbt` で **4**。skill 文書（`.claude/skills/nash/SKILL.md`、`references/payoff_semantics.md`）の「N ≥ 5 で昇格」とは一致していない。コードが正。skill 側の修正はこの PR の範囲外。
 
 ### 選出行列の作り方
 
@@ -100,7 +104,7 @@ pkdx select
 `ScreenedSwitchingGame`（`team_payoff_matrix_screened`）:
 
 1. `keep_top >= 1` なら screening をスキップし、上の full DP に落ちる。
-2. Phase A `screening`。全セルを `team_monte_carlo_value`。seed は `mc_seed XOR cell_idx`。MC の turn_limit は `MC_TURN_LIMIT = 5`（CLI から上書きできない。bench の small ケースだけ関数引数で 1 にしている）。
+2. Phase A `screening`。全セルを `team_monte_carlo_value`。seed は `mc_seed XOR cell_idx`。MC の turn_limit は既定 `MC_TURN_LIMIT = 5`。入力 JSON の `mc_turn_limit` で上書きできる（`pkdx select` に対応する CLI フラグは無い）。bench の small ケースだけ関数引数で 1 にしている。
 3. Phase B `nash-scoring`。`@nash.solve_zero_sum` を **1 回**。fallback はない。失敗は `EmptyCombatants`。Nash 戦略で行・列をスコアし、`ceil(n * keep_top)` を残す。
 4. Phase C `dp-refine`。残った部分行列だけ `switching_game_winrate`。refine turn_limit はモデルの第 4 引数。
 
@@ -181,9 +185,39 @@ RSS は tl=3 まで約 4 MB。production screening は中央値 60.8 MB。
 | select_6v6_tl3 | 52132（52.1 s） | 54799（54.8 s） | +5.1% | 875600 / 9570 / 866030（一致）。鞍点 98.9%、LP 1.09% |
 | select_6v6_screened_prod | 180000 で打ち切り、未完 | 1023886（17.1 min） | 以前は完走していない | 今回初めてノードを記録。鞍点 98.7%、LP 1.29% |
 
-見立て: payoff の DP / MC ソースは `19e5315` から `18d94d6` の間で `cli_nash` 以外変わっていない。moonc も同じ pin。依存は `moonbitlang/x` が 0.4.41 から 0.5.6 になった。1 秒以上のケースは +2〜5% で、ノード数はビット単位で一致する。これは依存ランタイムの定数差と、1 回計測対 3 回中央値の差で説明できる。アルゴリズムの退行ではない。`nash_rps_3` だけ相対差が大きいが、中央値 0.016 ms で、このタイマーの分解能の中に入る。
+見立て: payoff の DP / MC ソースは `19e5315` から `18d94d6` の間で `cli_nash` 以外変わっていない。moonc も同じ pin。依存は `moonbitlang/x` が 0.4.41 から 0.5.6 になった。差は −6%〜+5.1% の範囲にあり（`nash_rps_3` を除く）、ノード数はすべてビット単位で一致する。`nash_skew_20` の −6% と他の + 側の差は、1 回計測対 3 回中央値のばらつきの範囲で、アルゴリズムの退行ではないと見ている。`nash_rps_3` は相対差が大きいが、中央値 0.016 ms で、このタイマーの分解能の中に入る。
 
 production screening が「遅くなった」わけではない。以前は 180 秒で殺していた。完走すると 17.1 分で、tl=3 と同じくノードの約 99% が鞍点、LP は約 1.3% である。長い理由は refine turn_limit=5 の展開ノード 1320 万である。
+
+### 再確認（41f2996 取り込み後）
+
+#189（`pkdx select --parallel`）を含む `origin/main`（`41f2996`）を merge したあとの quick 再確認。`scripts/bench_select.sh -t default` を 1 回実行した。`select_6v6_tl3` と `select_6v6_screened_prod` は時間が長いので今回は対象外。
+
+| 項目 | 値 |
+|---|---|
+| moon / moonc / moonrun | 上と同じ（`moon version --all` の出力は一致） |
+| バイナリ | `moon build --target native --release src/main`（merge コミット） |
+| 環境 | Linux 6.12.113+ x86_64、8 vCPU（他のジョブと共用。load 1〜3）、GNU time なし（RSS 列は `-`） |
+| 回数 | 各ケース 5 プロセス（最初のプロセスが 1 秒未満）。各プロセス `--repeats 1` |
+
+壁時計は上の 4 vCPU の表と比べない。同じケースの壁時計は −9%〜+16% の範囲でずれた（`nash_rps_3` は 0.01 ms 台なので除く）。負荷・CPU 数・プロセス数のどれが効いたかは切り分けていない。見るべきはノード数・solver・value の一致で、表の 6 ケースはすべて一致した。
+
+| case | 中央値 ms | min | max | solver | dp_nodes | dp_lp | dp_saddle | 18d94d6 の dp_nodes / lp / saddle |
+|---|---:|---:|---:|---|---:|---:|---:|---|
+| nash_rps_3 | 0.0121 | 0.0105 | 0.0162 | simplex | 0 | 0 | 0 | 一致（0 / 0 / 0） |
+| nash_skew_8 | 0.0248 | 0.0228 | 0.0347 | simplex | 0 | 0 | 0 | 表なし |
+| select_3v3_tl1 | 0.366 | 0.357 | 0.417 | simplex | 9 | 0 | 9 | 表なし |
+| select_screened_3v3 | 0.339 | 0.329 | 0.550 | simplex | 4 | 0 | 4 | 表なし（screen_lp = 1） |
+| nash_skew_20 | 0.410 | 0.365 | 0.487 | simplex | 0 | 0 | 0 | 一致（0 / 0 / 0） |
+| nash_skew_60 | 33.2 | 32.3 | 42.0 | simplex | 0 | 0 | 0 | 一致（0 / 0 / 0） |
+| nash_near_copy_20 | 0.411 | 0.398 | 0.439 | simplex | 0 | 0 | 0 | 一致（0 / 0 / 0） |
+| nash_degenerate_60 | 250.3 | 244.6 | 268.6 | fictitious_play | 0 | 0 | 0 | 一致。value −0.0424579 |
+| select_4v4_tl2 | 353.5 | 330.4 | 417.5 | simplex | 3744 | 16 | 3728 | 一致（3744 / 16 / 3728） |
+| select_status_heavy | 577.8 | 558.3 | 604.4 | simplex | 5328 | 672 | 4656 | 一致（5328 / 672 / 4656） |
+| select_6v6_tl1 | 127.2 | 126.5 | 127.9 | simplex | 3600 | 0 | 3600 | 一致（3600 / 0 / 3600） |
+| select_6v6_screened_small | 257.3 | 251.5 | 275.8 | simplex | 324 | 0 | 324 | 一致（324 / 0 / 324、screen_lp = 1） |
+
+`select_6v6_screened_small` の中央値は 221.5 ms（18d94d6）から 257.3 ms になった。ノード数は同じ。この差がコードの変化によるものか環境によるものかは、この再確認では分けられていない。
 
 ## 状態異常ケース
 
@@ -221,7 +255,7 @@ production screening が「遅くなった」わけではない。以前は 180 
 
 優先度は、このベースラインで壁時計に効く順。効果は同じフィクスチャを同じ release で取り直したときのオーダー。回帰は勝率（`value`）と選出分布（`row_strategy` / 残る選出）が変わるか。
 
-1. **refine（Phase C）と Phase A を `--parallel=auto` で分ける。** production screening は 17.1 分。parallel は既存で bit-exact のテストがある。コア数にほぼ比例してセルループが縮む見込み（4 vCPU なら数分の一、Phase B の 1 回の Nash は残る）。アルゴリズムは不変なので選出の回帰は低い。RSS はシャード数だけ増える。trials を 1000 から 200 に減らすと Phase A は約 5 倍短いが、17 分の本体が Phase C なら全体は少ししか縮まない。足切り順が変わり選出が変わり得る。回帰は中。
+1. **（#189 で一部実装済み）refine（Phase C）と Phase A の並列。** `pkdx select --parallel=N` は Phase A と Phase C を行シャードに分けて子プロセスで計算する（bit-exact。テストは `parallel_select_test.mbt` ほか）。まだ残っているのは、production 形（`select_6v6_screened_prod`）を `--parallel=auto` で 1 回取ることと、位相タイマー（screening / nash-scoring / dp-refine）を production 形で取ることである。コア数にほぼ比例してセルループが縮む見込みは見積もりで、実測ではない（4 vCPU なら数分の一、Phase B の 1 回の Nash は残る）。行シャードの上限は行数（Phase A は 60、Phase C は残り行数）。アルゴリズムは不変なので選出の回帰は低い。RSS はシャード数だけ増える。trials を 1000 から 200 に減らすと Phase A は約 5 倍短いが、17 分の本体が Phase C なら全体は少ししか縮まない。足切り順が変わり選出が変わり得る。回帰は中。設計は `docs/screen_parallel_design.md`。
 2. **DP の再訪を増やす（状態キーはそのまま）。** tl=3 のヒット率 13%。同じ状態の再計算をハッシュで避ける余地が、展開コストの大半。キーを変えないメモの改善なら `value` はビット一致のままにできる。回帰は低。キーをパックし損ねると別状態が衝突し、勝率が変わる。回帰は高。
 3. **子へ αβ の窓を渡す。** いま枝刈り 0。窓を伝播できれば tl≥3 と状態異常ケースのノードが減る。現状のビット一致は「子が exact」に依存している。窓の誤りは勝率と選出の両方を変える。回帰は高。効果の上限は大きいが、この PR では入れていない。
 4. **状態異常・将来のこんらん / こおり / メロメロの分岐を、キャッシュキーが同じなら畳む。** `select_status_heavy` は LP が 42 倍、壁時計は 1.72 倍。新しい独立な Bernoulli が同程度ずつ乗ると、tl=3 の 54.8 秒に対してノードと非鞍点 LP がさらに増える。確率を変える実装は勝率の回帰が高い。比較用にこのケースを残す。

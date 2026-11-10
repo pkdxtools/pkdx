@@ -1026,6 +1026,10 @@ pub fn team_rollout(
   // switch-in)。MC は mega 未モデルなので mega リセットは無い。
   let own_protean_locked : Array[String] = Array::make(own.length(), "")
   let opp_protean_locked : Array[String] = Array::make(opp.length(), "")
+  // しろいハーブ (held_item_stat_reset.mbt) の消費フラグ。DP の my/opp_item_consumed と
+  // 同じ slot-bound・戦闘持続 semantics (交代で回復しない)。Switch arm ではリセットしない。
+  let own_item_consumed : Array[Bool] = Array::make(own.length(), false)
+  let opp_item_consumed : Array[Bool] = Array::make(opp.length(), false)
   let mut own_active = 0
   let mut opp_active = 0
   // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
@@ -1043,6 +1047,11 @@ pub fn team_rollout(
     own[own_active].ability,
     own_ranks,
     opp_ranks,
+  )
+  // しろいハーブ: 先発の登場時いかく直後に両 lead を判定する (DP の lead 配線と同じ位置)。
+  apply_held_item_stat_reset_pair(
+    own, own_active, own_hps, own_ranks, own_item_consumed,
+    opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
   )
   for _ in 0..<turn_limit {
     let a_own = greedy_team_action(
@@ -1226,6 +1235,12 @@ pub fn team_rollout(
             opp_ranks,
           )
         }
+        // しろいハーブ: 登場時いかく (双方の switch 解決後) の直後に両 active を判定する。
+        // 技 (Step 3) より前なので、いかく で下がったランクはこのターンの技に効く前に解除される。
+        apply_held_item_stat_reset_pair(
+          own, own_active, own_hps, own_ranks, own_item_consumed,
+          opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
+        )
         // Step 3: resolve moves honouring paralysis speed halving and skips.
         if !own_switches && !opp_switches {
           let mi_own = match ao {
@@ -1291,8 +1306,8 @@ pub fn team_rollout(
                 opp, opp_active, opp_disguise_busted,
               )
               let (res_hp, res_eff, res_bust) = team_perform_attack(
-                own[own_active],
-                opp[opp_active],
+                consumed_item_view(own, own_active, own_item_consumed),
+                consumed_item_view(opp, opp_active, opp_item_consumed),
                 before,
                 mv_own,
                 rng,
@@ -1314,6 +1329,10 @@ pub fn team_rollout(
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_own, res_eff,
+              )
+              apply_held_item_stat_reset_pair(
+                own, own_active, own_hps, own_ranks, own_item_consumed,
+                opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
               )
               record_protean_lock(
                 own_protean_locked,
@@ -1360,8 +1379,8 @@ pub fn team_rollout(
                 own, own_active, own_disguise_busted,
               )
               let (res_hp, res_eff, res_bust) = team_perform_attack(
-                opp[opp_active],
-                own[own_active],
+                consumed_item_view(opp, opp_active, opp_item_consumed),
+                consumed_item_view(own, own_active, own_item_consumed),
                 before,
                 mv_opp,
                 rng,
@@ -1383,6 +1402,10 @@ pub fn team_rollout(
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_opp, res_eff,
+              )
+              apply_held_item_stat_reset_pair(
+                own, own_active, own_hps, own_ranks, own_item_consumed,
+                opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
               )
               record_protean_lock(
                 opp_protean_locked,
@@ -1421,8 +1444,8 @@ pub fn team_rollout(
                 own, own_active, own_disguise_busted,
               )
               let (res_hp, res_eff, res_bust) = team_perform_attack(
-                opp[opp_active],
-                own[own_active],
+                consumed_item_view(opp, opp_active, opp_item_consumed),
+                consumed_item_view(own, own_active, own_item_consumed),
                 before,
                 mv_opp,
                 rng,
@@ -1444,6 +1467,10 @@ pub fn team_rollout(
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_opp, res_eff,
+              )
+              apply_held_item_stat_reset_pair(
+                own, own_active, own_hps, own_ranks, own_item_consumed,
+                opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
               )
               record_protean_lock(
                 opp_protean_locked,
@@ -1488,8 +1515,8 @@ pub fn team_rollout(
                 opp, opp_active, opp_disguise_busted,
               )
               let (res_hp, res_eff, res_bust) = team_perform_attack(
-                own[own_active],
-                opp[opp_active],
+                consumed_item_view(own, own_active, own_item_consumed),
+                consumed_item_view(opp, opp_active, opp_item_consumed),
                 before,
                 mv_own,
                 rng,
@@ -1511,6 +1538,10 @@ pub fn team_rollout(
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_own, res_eff,
+              )
+              apply_held_item_stat_reset_pair(
+                own, own_active, own_hps, own_ranks, own_item_consumed,
+                opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
               )
               record_protean_lock(
                 own_protean_locked,
@@ -1554,8 +1585,8 @@ pub fn team_rollout(
               opp, opp_active, opp_disguise_busted,
             )
             let (res_hp, res_eff, res_bust) = team_perform_attack(
-              own[own_active],
-              opp[opp_active],
+              consumed_item_view(own, own_active, own_item_consumed),
+              consumed_item_view(opp, opp_active, opp_item_consumed),
               before,
               mv_own,
               rng,
@@ -1577,6 +1608,10 @@ pub fn team_rollout(
               own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
               mv_own, res_eff,
+            )
+            apply_held_item_stat_reset_pair(
+              own, own_active, own_hps, own_ranks, own_item_consumed,
+              opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
             )
             record_protean_lock(
               own_protean_locked,
@@ -1619,8 +1654,8 @@ pub fn team_rollout(
               own, own_active, own_disguise_busted,
             )
             let (res_hp, res_eff, res_bust) = team_perform_attack(
-              opp[opp_active],
-              own[own_active],
+              consumed_item_view(opp, opp_active, opp_item_consumed),
+              consumed_item_view(own, own_active, own_item_consumed),
               before,
               mv_opp,
               rng,
@@ -1642,6 +1677,10 @@ pub fn team_rollout(
               opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
               mv_opp, res_eff,
+            )
+            apply_held_item_stat_reset_pair(
+              own, own_active, own_hps, own_ranks, own_item_consumed,
+              opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
             )
             record_protean_lock(
               opp_protean_locked,
@@ -1857,6 +1896,12 @@ pub fn team_rollout(
             field_turns_state[0] = dec
           }
         }
+        // しろいハーブ: 残り HP 処理 (Showdown onResidual)。EOT はランクを変えないので
+        // 実到達では no-op。DP の apply_eot と同じ判定点を置く。
+        apply_held_item_stat_reset_pair(
+          own, own_active, own_hps, own_ranks, own_item_consumed,
+          opp, opp_active, opp_hps, opp_ranks, opp_item_consumed,
+        )
 
         if all_ko(own_hps) {
           return -1.0

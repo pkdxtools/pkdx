@@ -1323,37 +1323,47 @@ pub fn attempt_turn_with_cache(
         field_turns_left: state.field_turns_left,
         turn: state.turn,
       }
-      let branch_outs : Array[(Double, SwitchingGameState)] = match
-        (ma.acts, oa.acts) {
-        (true, true) =>
-          transition_with_cache(
-            pre_state,
-            ma.action,
-            oa.action,
-            my_team,
-            opp_team,
-            dmg_cache,
-          )
-        (true, false) =>
-          partial_act_outcomes(
-            pre_state,
-            ma.action,
-            true,
-            my_team,
-            opp_team,
-            dmg_cache,
-          )
-        (false, true) =>
-          partial_act_outcomes(
-            pre_state,
-            oa.action,
-            false,
-            my_team,
-            opp_team,
-            dmg_cache,
-          )
-        (false, false) =>
-          [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
+      let branch_outs : Array[(Double, SwitchingGameState)] = if has_miss_recoil(
+        pre_state,
+        ma,
+        oa,
+        my_team,
+        opp_team,
+      ) {
+        attempt_with_miss_recoil(pre_state, ma, oa, my_team, opp_team, dmg_cache)
+      } else {
+        match
+          (ma.acts, oa.acts) {
+          (true, true) =>
+            transition_with_cache(
+              pre_state,
+              ma.action,
+              oa.action,
+              my_team,
+              opp_team,
+              dmg_cache,
+            )
+          (true, false) =>
+            partial_act_outcomes(
+              pre_state,
+              ma.action,
+              true,
+              my_team,
+              opp_team,
+              dmg_cache,
+            )
+          (false, true) =>
+            partial_act_outcomes(
+              pre_state,
+              oa.action,
+              false,
+              my_team,
+              opp_team,
+              dmg_cache,
+            )
+          (false, false) =>
+            [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
+        }
       }
       for s in branch_outs {
         let (p, ns_pre_eot) = s

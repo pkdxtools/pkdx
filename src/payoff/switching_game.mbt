@@ -239,11 +239,17 @@ fn last_resort_barred(
 /// to tick without an act. The `post_status` field carries the active slot's
 /// status after this attempt resolves (pre-EOT-tick), so the caller can
 /// thread it into the resulting next-state.
+///
+/// `missed` is true only for the accuracy-miss branch of a UseMove / Mega
+/// attempt (`acts = false` because the move missed). Paralysis / sleep skips
+/// and recharge keep it false, so the max-HP recoil of a missed てっていこうせん
+/// (`max_hp_recoil.mbt`) can be told apart from a skipped turn.
 pub(all) struct SideAttempt {
   prob : Double
   acts : Bool
   action : ActionKind
   post_status : @model.StatusCondition
+  missed : Bool
 } derive(Debug)
 
 ///|
@@ -1163,8 +1169,16 @@ fn apply_damage_variants_fanout(
     if outcome.hits_count == 0 {
       leaves.push((
         outcome.probability,
-        with_immune_effects(
-          state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+        // 免疫 (MoveFail) でも てっていこうせん は最大 HP の 1/2 を失う (対象生存時のみ)。
+        with_max_hp_recoil(
+          with_immune_effects(
+            state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+          ),
+          attacker_is_me,
+          attacker_slot,
+          attacker_team,
+          attacker_move,
+          pre_dmg_defender_hp > 0,
         ),
       ))
       continue
@@ -1220,9 +1234,19 @@ fn apply_damage_variants_fanout(
     // self_ko / recharge / stat_effects compound on the variant-specific
     // damage rather than a single mean. State remains immutable; with_-
     // post_hit_effects produces a fresh copy with updated arrays.
-    let state_v = with_post_hit_effects(
+    let state_v0 = with_post_hit_effects(
       state_dmg, attacker_is_me, attacker_slot, target_slot, attacker_team, defender_team,
       attacker_move, dmg_for_effects,
+    )
+    // てっていこうせん の最大 HP 反動: 命中は実ダメージ (dmg_for_effects) > 0 のときだけ
+    // 発動する (Showdown `totalDamage` が真のときのみ `applyRecoilDamage`)。
+    let state_v = with_max_hp_recoil(
+      state_v0,
+      attacker_is_me,
+      attacker_slot,
+      attacker_team,
+      attacker_move,
+      dmg_for_effects > 0,
     )
     let sub = compose_fanouts(state_v, [
       fn(s) {

@@ -47,13 +47,27 @@ let pulse_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
   [
     "はどうだん", "あくのはどう", "みずのはどう", "りゅうのはどう",
     "だいちのはどう", "いやしのはどう", "こんげんのはどう",
-    "てっていこうせん",
   ].iter(),
 )
 
 ///|
 pub fn is_pulse_move(name : String) -> Bool {
   pulse_moves.contains(name)
+}
+
+///|
+/// 命中 / 無効化時に使用者が最大 HP の 1/2 を失う技 (Showdown `mindBlownRecoil`)。
+/// てっていこうせん のみ: Champions `wazainfo_syn.json:13644` "After attacking,
+/// the user takes damage equal to 1/2 of its max HP." / Showdown `data/moves.ts`
+/// steelbeam (`mindBlownRecoil` + `onMoveFail`)。マインドブロウ は Champions 非収録
+/// (`waza.json` available=0) のため含めない。
+let max_hp_recoil_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  ["てっていこうせん"].iter(),
+)
+
+///|
+pub fn is_max_hp_recoil_move(name : String) -> Bool {
+  max_hp_recoil_moves.contains(name)
 }
 
 ///|

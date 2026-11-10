@@ -13,6 +13,7 @@
 ///   - 008-013: champions.db ターゲット (`migrations_champions()` 側で管理)
 ///   - 014:   pokedex.db ターゲット (回復技 / 天候設定技用 m014_move_meta_healing)
 ///   - 015:   pokedex.db ターゲット (フィールド設定技用 m015_move_meta_field)
+///   - 016:   pokedex.db ターゲット (てっていこうせんの誤った自己能力低下を除去 m016_move_meta_steelbeam)
 /// 007 → 014 で番号が飛んでいるのは「pokedex / champions の番号空間を
 /// 共有しつつ、ファイルとしては別 DB を触る」設計を採っているため。新規
 /// pokedex.db migration を追加するときは `migrations_champions()` 末尾より
@@ -28,6 +29,7 @@ pub fn migrations_pokedex() -> Array[Migration] {
     { name: "007_gender_symbol_aliases", run: run_007 },
     { name: "014_move_meta_healing", run: run_014 },
     { name: "015_move_meta_field", run: run_015 },
+    { name: "016_move_meta_steelbeam", run: run_016 },
   ]
 }
 

@@ -363,9 +363,23 @@ Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃
   - 自己・相手のランク変化 (`stat_effects` の全件)、反動、回復・ドレイン、自己 `recharge` (はかいこうせん 等)、自己交代、状態異常、接触 proc、道具 proc。Showdown は対象が外れ、`trySpreadMoveHit` が `targets` 空で `moveResult = false` を返すため、`spreadMoveHit` (`runMoveEffects` / `selfDrops` / `secondaries`) に届かない (`battle-actions.ts:676-681`, `:1080-1192`)。反動は `hitStepMoveHitLoop` の中でしか適用されない (`:1040-1042`)。
   - しろいハーブ の判定: DP は通らず、MC は通る。理由は「しろいハーブ」節の「吸収 / 免疫 leg」。
 - **ifHit の自爆は発動しない**: Memento (おきみやげ) / Final Gambit / Healing Wish (いやしのねがい) / Lunar Dance (みかづきのまい) は `selfdestruct: 'ifHit'` で、`runMoveEffects` の `damage[i] !== false` でしか倒れない (`battle-actions.ts:1342-1344`)。pkdx の `self_ko` は DB (`move_meta`) 上 じばく / だいばくはつ だけなので、この区別を持つ必要はない。
-- **未対応: 崩れ技 (crash)**: `hasCrashDamage` を持つ highjumpkick / jumpkick / supercellslam と、`mindBlownRecoil` を持つ mindblown / steelbeam は `onMoveFail` で使用者にダメージを与える (HJK 系・スーパーセルスラムは最大 HP の 1/2、マインドブロウ・スチールビームは最大 HP の 1/2)。`MoveFail` は `moveResult = false` のとき走るので、免疫でも発動する (`battle-actions.ts:589-596`、`data/moves.ts` の各 `onMoveFail`)。pkdx は外れ・免疫のいずれでも崩れ技をモデルしていない。本変更は崩れ技に触れず、追加もしない。
+- **未対応: 崩れ技 (crash)**: `hasCrashDamage` を持つ highjumpkick / jumpkick / supercellslam は `onMoveFail` で使用者にダメージを与える (最大 HP の 1/2)。`mindBlownRecoil` を持つ mindblown (マインドブロウ、Champions 非収録) も同様。steelbeam (てっていこうせん) は崩れ技ではなく、命中と外れ・免疫の両方で発動する最大 HP 反動として `max_hp_recoil.mbt` で実装済み (下の「てっていこうせん」節)。`MoveFail` は `moveResult = false` のとき走るので、免疫でも発動する (`battle-actions.ts:589-596`、`data/moves.ts` の各 `onMoveFail`)。pkdx は外れ・免疫のいずれでも崩れ技をモデルしていない。本変更は崩れ技に触れず、追加もしない。
 - **未対応: 先の leg で対象が ひんし になった場合**: 2 本目の leg は攻撃側の HP だけを見て解決される (`switching_game_turn.mbt:469`)。Showdown は `getMoveTargets` が空を返して技を失敗させる (`pokemon.ts:841-862`) ので、Protean 記録も崩れ技も起きない。本変更の対象外。
 - **参照テスト**: `src/payoff/switching_game_immune_wbtest.mbt` (DP、対照・Protean・そうしょく+しろいハーブ を含む)、`src/payoff/team_monte_carlo_immune_parity_wbtest.mbt` (MC と DP/MC parity)。
+
+### てっていこうせん (最大 HP 1/2 反動) — DP / MC
+
+- **根拠**: Champions `champout/rom-txt/usa/wazainfo_syn.json:13644` "After attacking, the user takes damage equal to 1/2 of its max HP."。Showdown `data/moves.ts` steelbeam は `mindBlownRecoil: true` と `onMoveFail` (`this.damage(Math.round(source.maxhp / 2), ...)`)。能力変化は無い (旧 `pkdx_patch/005` の自己 Def/SpD -2 は m016 で除去)。
+- **量**: `Math.round(maxhp / 2)`。非負整数では ceil(maxhp / 2) (奇数 151 → 76)。`battle-actions.ts:1438` (`applyRecoilDamage`)。
+- **発動条件** (Showdown の `moveResult` / `totalDamage` に対応):
+  - 命中: 実ダメージ (`dmg_for_effects`) > 0 のとき。`applyRecoilDamage` は `move.totalDamage` が真のときだけ呼ばれる (`battle-actions.ts:1040-1041`、量は `:1438`)。ばけのかわ の初撃ブロックは 0 ダメージなので反動なし。
+  - 免疫 / 外れ (`MoveFail`): 対象が生存しているとき。対象不在 (`!target` は `battle-actions.ts:525`、`!targets.length` は `:574`) は `MoveFail` (`:591`) に届かず反動なし。外れは `per_side_attempt` の `SideAttempt.missed` (命中判定の外れだけ true。麻痺・睡眠の不発は false)。
+  - 行動しない (麻痺・睡眠・反動硬直・ひんし): 技が使われないので反動なし。
+- **マジックガード**: 反動を無効化する。Showdown では `magicguard.onDamage` が `effect.effectType !== 'Move'` で弾き、steelbeam の condition は `effectType: 'Condition'` (`dex-conditions.ts`)。Champions `tokuseiinfo_syn.json:3442` "The Pokémon takes damage only from attacks." と一致。DP は mega 後の実効特性、MC は raw 特性 (MC は mega 未モデル)。
+- **対象外**: Protect / Detect 系 (payoff 層に無い)。Showdown では Protect で `moveResult = false` になり反動は発動する (`moves.ts` の protect `onTryHit` が `NOT_FAIL` (= `''`) を返し、`hitStepTryHitEvent` (`battle-actions.ts:705-713`) で対象が落ちる)。Champions 側の文言は沈黙 (SILENT) のため、Protect を実装するときに同じ扱いにする。
+- **順序**: 反動は使用者の leg の位置 (行動順) で適用する。DP は `attempt_with_miss_recoil` (`max_hp_recoil.mbt`) が外れ leg を行動順に挿入し、同速は両順序を 0.5 ずつ平均する。MC は `team_rollout` Step 3 の各 leg (`own_missed` / `opp_missed`)。相手の leg が先に ひんし にした場合、外れ反動は発動しない (対象不在)。
+- **自己 KO**: HP は 0 床でクランプ。反動は実ダメージ適用の後 (対象の KO が先) に入る。MC は all-KO で即 return する既存 leg と同じ扱い。
+- **参照テスト**: `src/payoff/switching_game_max_hp_recoil_wbtest.mbt` (DP: 命中・奇数丸め・感度・マジックガード・自己 KO・対象不在・免疫・外れの順序・外れ確率・`missed` フラグ)、`src/payoff/team_monte_carlo_max_hp_recoil_parity_wbtest.mbt` (MC leg 単位・ばけのかわ・`mc_resolve_attempt` の `missed`・DP/MC 値の parity)、`src/damage/steelbeam_flags_test.mbt` (メガランチャー対象外・フラグ)、`src/migrate/m016_steelbeam_test.mbt` (データ)。
 
 ### MVP 非対応 (将来拡張で検討)
 

@@ -411,6 +411,14 @@ fn team_apply_post_hit(
     if mv.self_ko {
       attacker_hps[attacker_active] = 0
     }
+    // 免疫 (MoveFail) でも てっていこうせん は最大 HP の 1/2 を失う (対象生存時のみ)。
+    team_apply_max_hp_recoil(
+      attacker_hps,
+      attacker_active,
+      attacker_team,
+      mv,
+      defender_hps[defender_active] > 0,
+    )
     return
   }
   let opp_alive = defender_hps[defender_active] > 0
@@ -432,6 +440,8 @@ fn team_apply_post_hit(
     let new_hp = attacker_hps[attacker_active] - recoil
     attacker_hps[attacker_active] = if new_hp < 0 { 0 } else { new_hp }
   }
+  // てっていこうせん の最大 HP 反動 (命中は実ダメージ > 0 のときだけ発動)。
+  team_apply_max_hp_recoil(attacker_hps, attacker_active, attacker_team, mv, dmg > 0)
   // Stage 13: 回復技 (HealingEffect) を self_ko の **手前** で適用。じばく系 +
   // healing の組合せは現状ゲーム内には無いが、ある場合は self_ko 側 (HP=0 強制
   // 上書き) が後勝ち、という DP 側の順序契約を MC でも維持する。
@@ -801,26 +811,28 @@ fn mc_resolve_attempt(
   status : @model.StatusCondition,
   mv_acc : Int,
   rng : @random.Rand,
-) -> (@model.StatusCondition, Bool) {
+) -> (@model.StatusCondition, Bool, Bool) {
+  // 3 つ目の値 `missed` は命中判定での外れ (acts = false かつ不発ではない)。
+  // 麻痺 / 睡眠の不発は false のまま (DP `SideAttempt.missed` と同じ区別)。
   match status {
     @model.Sleep(n) => {
       if n > 0 {
-        return (@model.Sleep(n - 1), false)
+        return (@model.Sleep(n - 1), false, false)
       }
       // Sleep(0): wake up and act subject to accuracy below.
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (@model.None, acts)
+      (@model.None, acts, !acts)
     }
     @model.Paralyze => {
       if rand_bool(rng, PARALYZE_SKIP_RATE) {
-        return (@model.Paralyze, false)
+        return (@model.Paralyze, false, false)
       }
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (@model.Paralyze, acts)
+      (@model.Paralyze, acts, !acts)
     }
     other => {
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (other, acts)
+      (other, acts, !acts)
     }
   }
 }
@@ -1139,12 +1151,14 @@ pub fn team_rollout(
         // circuits UseMove to `acts=false` regardless of status.
         let mut own_attempt_acts = true
         let mut opp_attempt_acts = true
+        let mut own_missed = false
+        let mut opp_missed = false
         match ao {
           TmUseMove(mi) =>
             if own_start_recharging {
               own_attempt_acts = false
             } else {
-              let (st, acts) = mc_resolve_attempt(
+              let (st, acts, missed) = mc_resolve_attempt(
                 own_status[own_active],
                 mc_attempt_accuracy(
                   own[own_active],
@@ -1156,6 +1170,7 @@ pub fn team_rollout(
               )
               own_status[own_active] = st
               own_attempt_acts = acts
+              own_missed = missed
             }
           _ => ()
         }
@@ -1164,7 +1179,7 @@ pub fn team_rollout(
             if opp_start_recharging {
               opp_attempt_acts = false
             } else {
-              let (st, acts) = mc_resolve_attempt(
+              let (st, acts, missed) = mc_resolve_attempt(
                 opp_status[opp_active],
                 mc_attempt_accuracy(
                   opp[opp_active],
@@ -1176,6 +1191,7 @@ pub fn team_rollout(
               )
               opp_status[opp_active] = st
               opp_attempt_acts = acts
+              opp_missed = missed
             }
           _ => ()
         }
@@ -1388,6 +1404,18 @@ pub fn team_rollout(
                 opp_blocked_mid_turn = true
               }
             }
+            if own_missed && @damage.is_max_hp_recoil_move(mv_own.name) {
+              team_apply_max_hp_recoil(
+                own_hps,
+                own_active,
+                own,
+                mv_own,
+                opp_hps[opp_active] > 0,
+              )
+              if all_ko(own_hps) {
+                return -1.0
+              }
+            }
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
@@ -1452,6 +1480,18 @@ pub fn team_rollout(
               if all_ko(own_hps) {
                 return -1.0
               }
+              if all_ko(opp_hps) {
+                return 1.0
+              }
+            }
+            if opp_missed && @damage.is_max_hp_recoil_move(mv_opp.name) {
+              team_apply_max_hp_recoil(
+                opp_hps,
+                opp_active,
+                opp,
+                mv_opp,
+                own_hps[own_active] > 0,
+              )
               if all_ko(opp_hps) {
                 return 1.0
               }
@@ -1528,6 +1568,18 @@ pub fn team_rollout(
                 own_blocked_mid_turn = true
               }
             }
+            if opp_missed && @damage.is_max_hp_recoil_move(mv_opp.name) {
+              team_apply_max_hp_recoil(
+                opp_hps,
+                opp_active,
+                opp,
+                mv_opp,
+                own_hps[own_active] > 0,
+              )
+              if all_ko(opp_hps) {
+                return 1.0
+              }
+            }
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
               own_attempt_acts &&
@@ -1592,6 +1644,18 @@ pub fn team_rollout(
               }
               if all_ko(opp_hps) {
                 return 1.0
+              }
+            }
+            if own_missed && @damage.is_max_hp_recoil_move(mv_own.name) {
+              team_apply_max_hp_recoil(
+                own_hps,
+                own_active,
+                own,
+                mv_own,
+                opp_hps[opp_active] > 0,
+              )
+              if all_ko(own_hps) {
+                return -1.0
               }
             }
           }
@@ -1665,6 +1729,18 @@ pub fn team_rollout(
               return 1.0
             }
           }
+          if own_missed && @damage.is_max_hp_recoil_move(mv_own.name) {
+            team_apply_max_hp_recoil(
+              own_hps,
+              own_active,
+              own,
+              mv_own,
+              opp_hps[opp_active] > 0,
+            )
+            if all_ko(own_hps) {
+              return -1.0
+            }
+          }
         } else if !opp_switches {
           let mi_opp = match ap {
             TmUseMove(i) => i
@@ -1731,6 +1807,18 @@ pub fn team_rollout(
             if all_ko(own_hps) {
               return -1.0
             }
+            if all_ko(opp_hps) {
+              return 1.0
+            }
+          }
+          if opp_missed && @damage.is_max_hp_recoil_move(mv_opp.name) {
+            team_apply_max_hp_recoil(
+              opp_hps,
+              opp_active,
+              opp,
+              mv_opp,
+              own_hps[own_active] > 0,
+            )
             if all_ko(opp_hps) {
               return 1.0
             }

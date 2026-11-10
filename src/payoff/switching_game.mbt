@@ -1347,13 +1347,28 @@ fn with_post_hit_effects(
   // mega 後実効と常に一致し、drain 経路の defender_ability raw 慣例とも整合する。
   let attacker_ability = attacker_team[attacker_active].ability
   let defender_ability = defender_team[defender_active].ability
+  // 相手ダウン (stat_effects) の防御特性は mega 後の実効特性で判定する。Mega Metagross は
+  // クリアボディ を失い かたいツメ になる (Mega Pinsir は かいりきバサミ を失う)。mega で
+  // なければ raw と同値なので、従来経路と結果は変わらない。
+  let defender_megaed = if attacker_is_me {
+    state.opp_megaed
+  } else {
+    state.my_megaed
+  }
+  let defender_is_mega = defender_active < defender_megaed.length() &&
+    defender_megaed[defender_active]
+  let defender_stat_ability = if defender_is_mega {
+    effective_combatant(defender_team[defender_active], true).ability
+  } else {
+    defender_ability
+  }
   apply_stat_effects(
     attacker_ranks,
     defender_ranks,
     opp_alive,
     mv,
     attacker_ability~,
-    defender_ability~,
+    defender_ability=defender_stat_ability,
   )
   apply_recoil(attacker_hps, attacker_active, mv, dmg)
   // 回復技 (HealingEffect) は self_ko の **手前** で適用する。本家挙動と
@@ -1611,6 +1626,13 @@ fn clamp_zero(x : Int) -> Int {
 ///
 /// Delta is added and clamped via `clamp_rank_for` against the holder's
 /// ability: `[-2, +2]` for ordinary holders, `[-6, +6]` for まけんき / かちき.
+///
+/// An opponent-inflicted drop (`target=1`, `delta<0` after the flip) is first
+/// checked against the holder's block (`ability_blocks_opp_stat_drop`:
+/// クリアボディ / しろいけむり / メタルプロテクト on every stat, かいりきバサミ on
+/// Attack only). A blocked drop changes neither the rank nor the reaction
+/// (`landed` stays false), as Showdown's `onTryBoost` removes it before
+/// `AfterEachBoost` runs. Self drops (`target=0`) are never blocked.
 fn apply_stat_effects(
   self_ranks : Array[Int],
   opp_ranks : Array[Int],
@@ -1638,7 +1660,8 @@ fn apply_stat_effects(
         eff.delta
       }
       if eff.target == 1 && delta < 0 {
-        if apply_opp_stat_drop(holder_ability, ranks, eff.stat, delta) {
+        if !ability_blocks_opp_stat_drop(holder_ability, eff.stat) &&
+          apply_opp_stat_drop(holder_ability, ranks, eff.stat, delta) {
           landed[eff.stat] = true
         }
       } else {

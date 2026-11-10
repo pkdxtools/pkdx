@@ -197,6 +197,71 @@ test "ability_blocks_intimidate_other_abilities_return_false" {
 }
 
 ///|
+/// Clear Body / White Smoke / Full Metal Body block a move's opponent-inflicted
+/// drop on every stat (Showdown `onTryBoost`, one shared body).
+test "ability_blocks_opp_stat_drop_all_stat_blockers_return_true" {
+  for stat in 0..<5 {
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop("クリアボディ", stat),
+      true,
+    )
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop("しろいけむり", stat),
+      true,
+    )
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop("メタルプロテクト", stat),
+      true,
+    )
+  }
+}
+
+///|
+/// Hyper Cutter blocks only the Attack drop (stat 0); Defense / SpA / SpD /
+/// Speed drops from a move still land.
+test "ability_blocks_opp_stat_drop_hyper_cutter_attack_only" {
+  @debug.assert_eq(
+    @payoff.ability_blocks_opp_stat_drop("かいりきバサミ", 0),
+    true,
+  )
+  for stat in 1..<5 {
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop("かいりきバサミ", stat),
+      false,
+    )
+  }
+}
+
+///|
+/// Intimidate-only blockers (Showdown gates them on `effect.name ===
+/// 'Intimidate'`), Guard Dog, and the redirect / reverse / reaction abilities
+/// do not block a move's drop on any stat.
+test "ability_blocks_opp_stat_drop_other_abilities_return_false" {
+  let abilities = [
+    "どんかん",
+    "マイペース",
+    "せいしんりょく",
+    "きもったま",
+    "ばんけん",
+    "ミラーアーマー",
+    "びびり",
+    "あまのじゃく",
+    "まけんき",
+    "かちき",
+    "いかく",
+    "",
+  ]
+  for ability in abilities {
+    for stat in 0..<5 {
+      @debug.assert_eq(
+        @payoff.ability_blocks_opp_stat_drop(ability, stat),
+        false,
+      )
+    }
+  }
+}
+
+///|
 test "ability_reverses_stat_changes_contrary_returns_true" {
   @debug.assert_eq(@payoff.ability_reverses_stat_changes("あまのじゃく"), true)
 }

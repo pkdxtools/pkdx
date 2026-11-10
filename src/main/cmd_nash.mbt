@@ -8,12 +8,12 @@ fn cmd_nash() -> @admiral.CommandDef {
   let subs : Array[@admiral.CommandDef] = [
     @admiral.command(
       name="solve",
-      description="Solve the Nash equilibrium from a payoff JSON on stdin",
+      description="Solve a rectangular zero-sum Nash equilibrium from a payoff JSON on stdin",
       run=Some(fn(_ctx) { run_nash_solve_cmd() }),
     ),
     @admiral.command(
       name="graph",
-      description="Emit a Graphviz DOT representation of the payoff matrix",
+      description="Emit a Graphviz DOT digraph of a square payoff matrix",
       options=[
         @admiral.string(
           "threshold",
@@ -127,7 +127,7 @@ fn nash_cli_error_message(err : @payoff.NashCliError) -> String {
     UnboundedGame => "game is unbounded"
     InnerError(msg) => "solver error: " + msg
     NashFallbackExhausted(simplex_err~, fp_expl~, mwu_expl~) =>
-      "Nash solver failed: simplex error '" +
+      "Nash solver failed: primary solver error '" +
       simplex_err +
       "', fictitious_play exploitability " +
       fp_expl.to_string() +
@@ -160,6 +160,10 @@ fn cmd_select() -> @admiral.CommandDef {
         "parallel",
         description="Parallel shards. \"auto\" = nproc (Windows clamped to 64). Default \"1\" (in-process, preserves existing test determinism). PKDX_NO_PARALLEL=1 forces 1.",
         default=Some("1"),
+      ),
+      @admiral.bool(
+        "matrix-bits",
+        description="Append payoff matrix cells as IEEE-754 hex strings (matrix_bits). Default off; the historical JSON is unchanged.",
       ),
     ],
     run=Some(fn(ctx) { run_select_cmd(ctx) }),
@@ -569,6 +573,11 @@ fn cmd_select_shard_internal() -> @admiral.CommandDef {
         required=true,
       ),
       @admiral.string(
+        "rows",
+        description="CSV of row indices this shard owns. When set, replaces the contiguous [row-start, row-end) slice. The parent stitches by these indices.",
+        default=Some(""),
+      ),
+      @admiral.string(
         "row-keep",
         description="(refine only) CSV of retained row indices from Phase B",
         default=Some(""),
@@ -623,6 +632,7 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
   let row_end = ctx_int(ctx, "row-end")
   let row_keep = ctx_str(ctx, "row-keep")
   let col_keep = ctx_str(ctx, "col-keep")
+  let rows_csv = ctx_str(ctx, "rows")
   let mc_tl_raw = ctx_int(ctx, "mc-turn-limit")
   let refine_tl_raw = ctx_int(ctx, "refine-turn-limit")
   let mc_override = if mc_tl_raw > 0 { Some(mc_tl_raw) } else { None }
@@ -669,6 +679,7 @@ fn run_select_shard_cmd(ctx : @admiral.Context) -> Unit {
     refine_turn_limit_override=refine_override,
     progress~,
     dp_log_every=progress_every,
+    rows_csv~,
   ) catch {
     err => {
       exit_error(nash_cli_error_message(err))
@@ -682,6 +693,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   let mode = ctx_str(ctx, "progress")
   let log_every = ctx_int(ctx, "progress-every")
   let parallel_flag = ctx_str(ctx, "parallel")
+  let emit_matrix_bits = ctx.get_bool("matrix-bits")
   let parallel = @payoff.resolve_parallel(parallel_flag) catch {
     err => {
       exit_error(nash_cli_error_message(err))
@@ -740,7 +752,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
   // is dropped for the parallel path so SQLite write contention does
   // not happen. (The shard worker passes disk=None internally.)
   let parent_disk = if parallel > 1 { None } else { disk }
-  let result = @payoff.run_select_typed(
+  let (result, matrix_bits) = @payoff.run_select_typed(
     raw,
     disk=parent_disk,
     progress~,
@@ -748,6 +760,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
     parallel~,
     child_progress_mode=mode,
     child_progress_every=dp_log_every,
+    emit_matrix_bits~,
   ) catch {
     err => {
       match disk {
@@ -771,7 +784,7 @@ fn run_select_cmd(ctx : @admiral.Context) -> Unit {
     "json" => pkdx_eprintln(@db.to_c_bytes(format_summary_json(result)))
     _ => ()
   }
-  println(@payoff.serialize_select_result(result))
+  println(@payoff.serialize_select_result(result, matrix_bits~))
 }
 
 ///|

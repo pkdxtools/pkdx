@@ -1,7 +1,8 @@
 ///|
 /// Stat-rank change produced by a move. `target` picks whose ranks get the
 /// delta: `0` = self (attacker), `1` = opponent (defender). The `delta` is
-/// added and clamped in `[-2, +2]` by the payoff layer (`clamp_rank`).
+/// added and clamped by the payoff layer (`clamp_rank_for`): `[-2, +2]`, or
+/// `[-6, +6]` for the holder of まけんき / かちき.
 ///
 /// つるぎのまい — `[{stat:0, delta:2, target:0}]` (+2 Atk self)
 /// あまえる     — `[{stat:0, delta:-2, target:1}]` (-2 Atk opp)

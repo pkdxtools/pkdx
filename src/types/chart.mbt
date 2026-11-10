@@ -1,6 +1,9 @@
 ///|
 /// Pokemon type enumeration (Gen6+ 18 types).
-pub enum PokemonType {
+/// `pub(all)` keeps constructors usable outside this package. MoonBit 0.10
+/// treats a plain `pub enum` as readonly, so patterns can match it but
+/// other packages cannot build a value.
+pub(all) enum PokemonType {
   Normal
   Fire
   Water

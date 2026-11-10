@@ -1,0 +1,77 @@
+name: MoonBit CI
+
+on:
+  pull_request:
+    paths:
+      # Manifest is moon.mod (moonc 0.10). There is no moon.mod.json in-repo.
+      # Every moon.pkg lives under src/, so src/** covers the packages.
+      - "src/**"
+      - "moon.mod"
+      - "scripts/**"
+      - ".github/workflows/moonbit-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "moon.mod"
+      - "scripts/**"
+      - ".github/workflows/moonbit-ci.yml"
+
+# Cancel a PR run when a newer commit is pushed to the same ref.
+concurrency:
+  group: moonbit-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  moonbit:
+    name: check and test
+    # Same Ubuntu image as the linux leg of build-pkdx.yml, which is the
+    # job that already runs `moon test --target native`.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Restore MoonBit toolchain cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.moon
+          # OS/arch plus the pinned moonc version (and its checksum list).
+          # A cache hit still runs install_moon.sh, which checks `moonc -v`.
+          key: moon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/moon-version', 'scripts/moon-sha256.txt') }}
+
+      - name: Install MoonBit
+        shell: bash
+        run: |
+          bash scripts/install_moon.sh
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Install BLAS (Linux)
+        # Native tests link OpenBLAS. Same packages as build-pkdx.yml.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev liblapack-dev
+
+      - name: Update dependencies and build
+        # build-pkdx.yml does not call `moon update` directly. It runs
+        # scripts/moon_build_native.sh, which starts with `moon update`,
+        # migrates legacy moon.mod.json / moon.pkg.json in .mooncakes
+        # (moonc 0.10 rejects them), rewrites native link flags, then builds.
+        # `moon check` / `moon test` fail on a fresh checkout without that.
+        shell: bash
+        run: bash scripts/moon_build_native.sh
+
+      - name: Check
+        shell: bash
+        run: |
+          bash scripts/configure_native_link_flags.sh
+          moon check --target native
+
+      - name: Test
+        shell: bash
+        run: |
+          bash scripts/configure_native_link_flags.sh
+          moon test --target native

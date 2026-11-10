@@ -163,7 +163,8 @@ MIT
 | フォーマット | 3v3 シングル | ✅ | 6匹 → 3匹選出 |
 | フォーマット | ダブル (4v4) | ❌ | 未実装 |
 | Nash 計算 | exact LP simplex solver | ✅ | LP simplex (Phase-1/Phase-2 + Bland's rule) で exact Nash 解。pure-saddle fast path で trivial degenerate ケースを sidestep |
-| Nash 計算 | degenerate matrix fallback | ✅ | `pkdx select` と `pkdx nash solve` の両方で、simplex iteration limit を超えた degenerate payoff matrix では fictitious_play (Robinson 1951) → multiplicative weights update (Freund & Schapire 1999) の順で iterative learner に自動 fallback、exploitability < tol (default 0.05 = 5% 勝率) で approximate Nash 採用。出力 JSON の `nash_solver` field で経路 (`"simplex"` / `"fictitious_play"` / `"mwu"`) を確認可能。入力 JSON の `nash_solver_config.tol` / `iterations` で上書き可。pure-saddle は `@nash.solve_zero_sum` 内で解決され、そのときの `nash_solver` は `"simplex"` |
+| Nash 計算 | degenerate matrix fallback | ✅ | `pkdx select` と `pkdx nash solve` の両方で、simplex が iteration limit（`SimplexFailure`）で止まった場合、または有限行列の数値誤差で `InconsistentGame`（例: col LP unbounded）になった場合、fictitious_play (Robinson 1951) → multiplicative weights update (Freund & Schapire 1999) の順で iterative learner に自動 fallback、exploitability < tol (default 0.05 = 5% 勝率) で approximate Nash 採用。空行列・NaN/Inf は行列構築時にエラーのまま。simplex が成功したときの出力は変えない。出力 JSON の `nash_solver` field で経路 (`"simplex"` / `"fictitious_play"` / `"mwu"`) を確認可能。入力 JSON の `nash_solver_config.tol` / `iterations` で上書き可。pure-saddle は `@nash.solve_zero_sum` 内で解決され、そのときの `nash_solver` は `"simplex"` |
+| Nash 計算 | 非正方の利得行列 (m×n) | ✅ | `pkdx nash solve` は 1×N / N×1 を含む矩形の零和利得行列を解く。simplex が成功すればその解を使い、iteration limit（`SimplexFailure`）または有限行列の数値誤差による `InconsistentGame` のときは fictitious play → MWU に fallback する。行の長さが揃わない入力と空行列はエラー。`pkdx nash graph` の matrix / characters は辺 `i → j` を同一ラベル集合上の有向辺として描くため正方のみ。team / opponent 形式は `(n+m)×(n+m)` に埋め込んでから描く |
 | ダメージ計算 | 16段階乱数 / 一致 / 相性 / ランク / 急所 | ✅ | |
 | ダメージ計算 | テラスタル | ✅ | |
 | ダメージ計算 | 天候補正 | ✅ | 晴で炎 1.5x・水 0.5x、雨で水 1.5x・炎 0.5x、砂で岩タイプ防御側 SpD 1.5x、雪で氷タイプ防御側 Def 1.5x。`pkdx damage` 単体 / 状態遷移内 / 回復技 / EOT すべて現在天候を反映 |
@@ -196,7 +197,7 @@ MIT
 | 攻撃技 | 優先度技 (フィールド連動) | ✅ | サイコフィールド中、地上ポケモンへの優先度 > 0 の技を無効化 (技は使用されるが効果が出ない、しんそく等の単体技対象) |
 | 攻撃技 | 2 ターン溜め | ❌ | ソラビ / ロケットずつき / ダイビング等 |
 | 攻撃技 | タイプ相性上書き (フリーズドライ) | ✅ | みずタイプに 2 倍。複合タイプ・抜群判定・半減木の実を含め、SwitchingGame / MC の共通ダメージ計算に反映 |
-| 攻撃技 | タイプ相性上書き (フライングプレス) | ❌ | かくとう・ひこうの複合相性は未実装 |
+| 攻撃技 | タイプ相性上書き (フライングプレス) | ✅ | かくとう×ひこうの積 (Showdown `onEffectiveness`)。抜群判定・半減実は複合後 (ヨプのみは発動、バコウのみは技タイプ不一致で不発)。STAB とタイプ強化はかくとうのみ。解決後の技タイプにもひこうを乗算。ちいさくなるの威力 2 倍・必中は未モデル |
 | 特性 | 接触特性 (defender 側 proc) | ✅ | せいでんき / ほのおのからだ / どくしゅ (30% 各) / ほうし (11/10/9% 毒/まひ/眠) を per-hit で抽選 |
 | 特性 | 多段補正 | ✅ | スキルリンク (固定 5 hit) / おやこあい (2 hit) / じきゅうりょく (per-hit B+1) |
 | 特性 | スキン特性 | ✅ | フェアリースキン / エレキスキン等。技タイプ書換 + ×1.2 + 半減木の実判定に反映 |
@@ -204,7 +205,9 @@ MIT
 | 特性 | あまのじゃく (Contrary) | ✅ | 技の能力変化 (自己積み・相手ダウン) を反転。からをやぶる/オーバーヒート/インファイト 等・いかく反転込み。DP/MC parity |
 | 特性 | ばけのかわ (Disguise) | ✅ | 初撃ダメージ無効 + chip(最大HP/8) で剥がれ。1戦闘1回・交代非回復・連続技初段のみ・反動/ドレインは実ダメージ基準。DP/MC parity |
 | 特性 | へんげんじざい / リベロ | ⚠️ | 場に出て最初に成功した固定タイプ技のタイプへ変化し、その後の攻撃側 STAB・防御側タイプ相性に反映。交代で再発動可能、テラスタル中は発動しない。命中失敗時の発動と、ウェザーボール等の動的な実効タイプへの変化は未対応 |
-| 特性 | 未対応のその他特性 | ❌ | 再生力 / トレース / じゅうなん / まけんき / かちき / かたやぶり |
+| 特性 | 再生力 (Regenerator) | ✅ | 交代で場を離れるとき最大HPの1/3（切り捨て）を回復。最大HPは超えない。ひんしでは不発。交代先には効果なし。メガ後の実効特性で判定。DP/MC parity |
+| 特性 | まけんき / かちき (Defiant / Competitive) | ⚠️ | 相手由来の能力ダウン（いかく / stat_effects 表収録の相手ダウン技: あまえる・いやなおと・こわいかお・しっぽをふる・にらみつける・なきごえ・くすぐる・なみだめ）で、実際に下がった能力ごとに 1 回、まけんき = 攻撃 +2 / かちき = 特攻 +2（上限 +6）。くすぐる・なみだめ は両方下がれば 2 回反応する（同じ能力への重複エントリは 1 回）。ダウンの判定は技の開始時点のランクで行い、開始時点で -6 の能力は下がらず反応もしない（Showdown 準拠）。自分の技の自己ダウン・ブロックされたダウンは不発。所持者のランクは ±6 で追跡。DP/MC parity。未対応: 確率付き追加効果による相手ダウン（表に無い技）、みがわり・しろいきり等による阻止、ミラーアーマーによる技由来ダウンの反射（反射を受けた使用者側の反応を含む） |
+| 特性 | 未対応のその他特性 | ❌ | トレース / じゅうなん / かたやぶり |
 | 持ち物 | 半減木の実 | ✅ | オッカのみ等 17 種 + ホズのみ。効果ばつぐん時 (ホズのみは Normal neutral) に半減 + 1 回消費 |
 | 持ち物 | きあいのタスキ | ✅ | 満タン → KO 級被弾を 1 HP rescue。multi-hit 集計 KO は救済しない |
 | 持ち物 | 回復木の実 | ⚠️ | オボンのみ (1/2 HP 閾値跨ぎ → max HP/4 回復) / フィラのみ (→ max HP/3 回復) に対応。他の混乱実 (ウイ / マゴ等) と混乱実の混乱副作用は未反映 |

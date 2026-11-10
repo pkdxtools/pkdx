@@ -1349,7 +1349,7 @@ fn with_post_hit_effects(
   let my_must_recharge = state.my_must_recharge.copy()
   let opp_must_recharge = state.opp_must_recharge.copy()
   // Stage 7 (Rest): attacker_status は apply_healing で書き換わる可能性が
-  // あるので copy on write。Rest が attacker_status[active] を Sleep(2) で
+  // あるので copy on write。Rest が attacker_status[active] を RestSleep(2) で
   // 上書きする本家挙動を反映する。non-Rest pathways では unchanged のまま
   // 最終 state にスレッドされる。
   let my_status = state.my_status.copy()
@@ -1424,7 +1424,7 @@ fn with_post_hit_effects(
   // 選択できるようにする。FixedFraction では参照されない。
   // Stage 7: attacker_status と attacker_ability を追加で渡す。Rest が
   // ability_blocks_status(SleepKind) を見て免疫 ability の場合は失敗し、
-  // それ以外では attacker_status[active] を Sleep(2) に上書きする。
+  // それ以外では attacker_status[active] を RestSleep(2) に上書きする。
   // Stage 8: dmg と defender_ability を追加で渡す。Drain (ギガドレイン等) が
   // dmg * n / d を吸収し、defender_ability=ヘドロえき なら反転して attacker
   // が damage を受ける。defender_ability は damage 計算で参照される mega 後の

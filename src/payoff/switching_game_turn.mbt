@@ -50,6 +50,7 @@ fn action_blocked_by_fresh_status(
 ) -> Bool {
   match (pre, now) {
     (@model.None, @model.Sleep(_)) => true
+    (@model.None, @model.RestSleep(_)) => true
     _ => false
   }
 }
@@ -470,9 +471,18 @@ fn resolve_moves(
       final_outs.push((p1, clone_state(s1, 1)))
       continue
     }
-    // Second actor newly slept / frozen mid-turn: skip their move.
+    // Second actor newly slept / frozen mid-turn: skip their move. For sleep
+    // this landing turn is the sleeper's first move attempt (sure skip), so
+    // the counter steps down here (`consume_sleep_attempt_on_block`).
     if action_blocked_by_fresh_status(second_pre_status, second_now_status) {
-      final_outs.push((p1, clone_state(s1, 1)))
+      let s2 = clone_state(s1, 1)
+      let consumed = consume_sleep_attempt_on_block(second_now_status)
+      if second_is_me {
+        s2.my_status[second_attacker_active] = consumed
+      } else {
+        s2.opp_status[second_attacker_active] = consumed
+      }
+      final_outs.push((p1, s2))
       continue
     }
     let second_burn = is_burned(second_now_status)

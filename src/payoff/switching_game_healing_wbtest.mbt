@@ -707,14 +707,16 @@ fn mk_rest_move() -> @model.Move {
 
 ///|
 /// Case R-1: HP=1 / status=Burn / ability=normal で Rest を撃つと
-/// HP=max=100 / status=Sleep(2)。Burn が Sleep(2) に上書きされる本家挙動。
-test "apply_healing: Rest from Burn restores HP=max and overwrites status to Sleep(2)" {
+/// HP=max=100 / status=RestSleep(2)。Burn が RestSleep(2) に上書きされる本家挙動。
+/// (眠りの種類は Rest 由来の RestSleep: 2 回目の 1/3 目覚め抽選を持たない。
+/// 旧仕様は Sleep(2) で、Champions 規則の導入に伴い RestSleep(2) に変更。)
+test "apply_healing: Rest from Burn restores HP=max and overwrites status to RestSleep(2)" {
   let hps = [1, 100]
   let status : Array[@model.StatusCondition] = [@model.Burn, @model.None]
   let mv = mk_rest_move()
   apply_healing(mv, 0, hps, 100, @model.Weather::None, status, "", 0, "")
   @debug.assert_eq(hps[0], 100)
-  @debug.assert_eq(status[0], @model.Sleep(2))
+  @debug.assert_eq(status[0], @model.RestSleep(2))
   // 非 active slot は不変。
   @debug.assert_eq(hps[1], 100)
   @debug.assert_eq(status[1], @model.None)
@@ -722,17 +724,17 @@ test "apply_healing: Rest from Burn restores HP=max and overwrites status to Sle
 
 ///|
 /// Case R-2: HP=1 / status=Sleep(0) / ability=normal で Rest を撃つと
-/// HP=max / status=Sleep(2)。Sleep カウンタが 0 (まもなく覚醒) でも Rest で
+/// HP=max / status=RestSleep(2)。Sleep カウンタが 0 (まもなく覚醒) でも Rest で
 /// 2 にリセットされる (本家「Rest は既存 Sleep の残ターンを上書きする」)。
 /// HP=max では Rest が失敗するため、Sleep カウンタリセット観察用には
 /// HP < max のシナリオで pin する。
-test "apply_healing: Rest resets Sleep(0) counter to Sleep(2)" {
+test "apply_healing: Rest resets Sleep(0) counter to RestSleep(2)" {
   let hps = [1]
   let status : Array[@model.StatusCondition] = [@model.Sleep(0)]
   let mv = mk_rest_move()
   apply_healing(mv, 0, hps, 100, @model.Weather::None, status, "", 0, "")
   @debug.assert_eq(hps[0], 100)
-  @debug.assert_eq(status[0], @model.Sleep(2))
+  @debug.assert_eq(status[0], @model.RestSleep(2))
 }
 
 ///|
@@ -831,7 +833,7 @@ test "apply_healing: Rest fails under Sweet Veil (スイートベール)" {
 ///|
 /// Case R-7: ability=マジックガード (Magic Guard) では Rest は失敗しない。
 /// Magic Guard は residual damage を 0 化する特性であって Sleep の付与を
-/// 阻止しないことを境界で pin。HP=max / status=Sleep(2) に遷移する。
+/// 阻止しないことを境界で pin。HP=max / status=RestSleep(2) に遷移する。
 test "apply_healing: Magic Guard does NOT block Rest (Sleep is inflicted)" {
   let hps = [1]
   let status : Array[@model.StatusCondition] = [@model.Burn]
@@ -848,7 +850,7 @@ test "apply_healing: Magic Guard does NOT block Rest (Sleep is inflicted)" {
     "",
   )
   @debug.assert_eq(hps[0], 100)
-  @debug.assert_eq(status[0], @model.Sleep(2))
+  @debug.assert_eq(status[0], @model.RestSleep(2))
 }
 
 // -----------------------------------------------------------------
@@ -928,7 +930,7 @@ test "apply_healing: Rest succeeds on airborne user under Electric Terrain" {
     attacker_grounded=false,
   )
   @debug.assert_eq(hps[0], 100)
-  @debug.assert_eq(status[0], @model.Sleep(2))
+  @debug.assert_eq(status[0], @model.RestSleep(2))
 }
 
 ///|
@@ -953,7 +955,7 @@ test "apply_healing: Rest succeeds on grounded user under Grassy Terrain" {
     attacker_grounded=true,
   )
   @debug.assert_eq(hps[0], 100)
-  @debug.assert_eq(status[0], @model.Sleep(2))
+  @debug.assert_eq(status[0], @model.RestSleep(2))
 }
 
 // =================================================================

@@ -309,7 +309,7 @@ fn status_to_canonical(s : @model.StatusCondition) -> String {
     Burn => "burn"
     Poison => "poison"
     BadPoison(_) => "badpoison"
-    Sleep(_) => "sleep"
+    Sleep(_) | RestSleep(_) => "sleep"
     Drowsy(_) => "drowsy"
   }
 }

@@ -263,6 +263,21 @@ test "crash DP: 遅い使用者は先の相手の眠り技で眠らされると�
 }
 
 ///|
+/// **Case 11c (外れ + 着弾ターンの眠り)**: 遅い使用者の とびひざげり は外れ、崩れは起きないまま
+/// 先の相手の ねむりごな で眠らされる。着弾ターンの眠りの 1 回目は消費されて `Sleep(1)` になる
+/// (`with_landing_sleep_consumed`、`resolve_moves` の landing-turn 消費と同じ。MC の
+/// `*_blocked_mid_turn` も同じ規則)。
+test "crash DP: 外れた崩れの使用者が着弾ターンに眠らされると崩れず Sleep(1) に進む" {
+  let slow = crash_mon("CrashSlow", [crash_hjk_never_hits()], 200, spe=50)
+  let fast_opp = crash_mon("CrashFastSpore", [crash_spore()], 200, spe=150)
+  let outs = crash_turn([slow], [fast_opp], 200)
+  @debug.assert_eq(
+    crash_mass(outs, fn(s) { s.my_hps[0] == 200 && s.my_status[0] == @model.Sleep(1) }),
+    1.0,
+  )
+}
+
+///|
 /// **Case 11b (対照: 速い使用者は眠りより先に崩れる)**: 速い使用者は眠り技より先に行動するので、
 /// 崩れ (200 → 100) が起きる。
 test "crash DP 対照: 速い使用者は相手の眠り技より先に崩れる" {

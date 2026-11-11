@@ -3,6 +3,62 @@
 pub const PARALYZE_SKIP_RATE : Double = 0.125
 
 ///|
+/// ねむり (`Sleep(1)`, the 2nd move attempt after falling asleep) の目覚め確率。
+/// Champions 本文 (help_syn.json:26333): "it will have a 1-in-3 chance of being
+/// cured on its second turn". 3 回目 (`Sleep(0)`) は確定で目覚める。
+pub const SLEEP_SECOND_TURN_WAKE_RATE : Double = 0.3333333333333333
+
+///|
+/// 目覚めて行動する枝 (`wake` の確率で目覚め、その上で命中判定する)。命中は行動、
+/// ハズレは目覚めたまま行動しない (`post_status = None`)。ハズレ枝は技を使ったうえで
+/// 外れた枝なので `miss = true` (崩れ技の外れ判定に使う)。`wake = 1.0` (Sleep(0) /
+/// RestSleep(0)) では従来の確定目覚めと同じ確率 (`1.0 * p` は `p` と一致) になる。
+/// 確率 0 の枝は積まない。
+fn wake_outs(
+  wake : Double,
+  acc_hit : Double,
+  acc_miss : Double,
+  action : ActionKind,
+  outs : Array[SideAttempt],
+) -> Unit {
+  if wake * acc_hit > 0.0 {
+    outs.push({
+      prob: wake * acc_hit,
+      acts: true,
+      action,
+      post_status: @model.None,
+      miss: false,
+    })
+  }
+  if wake * acc_miss > 0.0 {
+    outs.push({
+      prob: wake * acc_miss,
+      acts: false,
+      action,
+      post_status: @model.None,
+      miss: true,
+    })
+  }
+}
+
+///|
+/// 同ターンに後攻が眠らされた (`action_blocked_by_fresh_status`) ときの後攻の
+/// 状態。その後攻の眠りの 1 回目の行動試行は着弾ターンに起きて確定で眠ったまま
+/// なので、カウンタを 1 つ進める (`Sleep(2)` → `Sleep(1)`)。次のターンが 2 回目
+/// (1/3 の目覚め) になる。先攻は行動後に眠るため 1 回目は翌ターン (= 通常の
+/// `Sleep(2)` のまま)。Showdown `slp.onBeforeMove` は後攻の着弾ターンにも走る。
+/// Champions 本文「ねむり状態になってから 1 度目は技が使えない」(jpn help_syn.json:23848)
+/// も行動試行単位と読める。
+pub fn consume_sleep_attempt_on_block(
+  s : @model.StatusCondition,
+) -> @model.StatusCondition {
+  match s {
+    @model.Sleep(n) => if n > 1 { @model.Sleep(n - 1) } else { s }
+    _ => s
+  }
+}
+
+///|
 /// Enumerate the attempt outcomes for a side given its current status, the
 /// declared action, and the move's accuracy (ignored for Switch; 100 for the
 /// selected move if `UseMove`/`Mega`). Outcomes with probability 0 are
@@ -43,7 +99,8 @@ pub fn per_side_attempt(
       let outs : Array[SideAttempt] = []
       match status {
         @model.Sleep(n) =>
-          if n > 0 {
+          if n >= 2 {
+            // 眠り始めの 1 回目 (Sleep(2)) 以降も確定で眠ったまま。
             outs.push({
               prob: 1.0,
               acts: false,
@@ -51,26 +108,38 @@ pub fn per_side_attempt(
               post_status: @model.Sleep(n - 1),
               miss: false,
             })
+          } else if n == 1 {
+            // 2 回目: 2/3 で眠ったまま (Sleep(0) へ)、1/3 で目覚めて行動。
+            outs.push({
+              prob: 1.0 - SLEEP_SECOND_TURN_WAKE_RATE,
+              acts: false,
+              action,
+              post_status: @model.Sleep(0),
+              miss: false,
+            })
+            wake_outs(
+              SLEEP_SECOND_TURN_WAKE_RATE,
+              acc_hit,
+              acc_miss,
+              action,
+              outs,
+            )
           } else {
-            // Sleep(0): this turn is the wake-up; act normally afterward.
-            if acc_hit > 0.0 {
-              outs.push({
-                prob: acc_hit,
-                acts: true,
-                action,
-                post_status: @model.None,
-                miss: false,
-              })
-            }
-            if acc_miss > 0.0 {
-              outs.push({
-                prob: acc_miss,
-                acts: false,
-                action,
-                post_status: @model.None,
-                miss: true,
-              })
-            }
+            // Sleep(0): 3 回目。確定で目覚めて行動 (命中判定あり)。
+            wake_outs(1.0, acc_hit, acc_miss, action, outs)
+          }
+        @model.RestSleep(n) =>
+          // ねむる由来: 1 / 2 回目は確定で眠ったまま、3 回目で目覚める (抽選なし)。
+          if n > 0 {
+            outs.push({
+              prob: 1.0,
+              acts: false,
+              action,
+              post_status: @model.RestSleep(n - 1),
+              miss: false,
+            })
+          } else {
+            wake_outs(1.0, acc_hit, acc_miss, action, outs)
           }
         @model.Paralyze => {
           outs.push({
@@ -1465,6 +1534,7 @@ pub fn is_burned(s : @model.StatusCondition) -> Bool {
 pub fn sleep_turns(s : @model.StatusCondition) -> Int? {
   match s {
     @model.Sleep(n) => Some(n)
+    @model.RestSleep(n) => Some(n)
     _ => None
   }
 }
@@ -1533,7 +1603,7 @@ pub fn sub_hp_floor0(hps : Array[Int], slot : Int, amount : Int) -> Unit {
 ///
 /// 引数 `attacker_status` / `attacker_ability` は段階 7 (Rest) で追加。
 /// Rest は HP を max まで戻すと同時に `attacker_status[active]` を
-/// `Sleep(2)` に **上書き** する本家挙動を持つため、status fanout
+/// `RestSleep(2)` に **上書き** する本家挙動を持つため、status fanout
 /// (`maybe_apply_status_fanout`) を経由できない (fanout は既存 status が
 /// `None` の場合のみ書き換える保護を持っている)。さらに `ふみん` /
 /// `やるき` / `スイートベール` の Sleep 免疫がある attacker では Rest 自体
@@ -1645,14 +1715,15 @@ pub fn apply_healing(
       if attacker_hps[attacker_active_slot] >= attacker_max {
         return
       }
-      // 既存 status を強制的に Sleep(2) で上書き (本家挙動 — Burn / Poison /
-      // Para / 既存 Sleep(残ターン) を Rest が必ず書き換える)。
+      // 既存 status を強制的に RestSleep(2) で上書き (本家挙動 — Burn / Poison /
+      // Para / 既存 Sleep(残ターン) を Rest が必ず書き換える)。Rest 由来は
+      // 2 回目の目覚め抽選を持たない `RestSleep` (3 ターン目まで確定で眠る)。
       // status fanout を経由せず直接書き込むのは、fanout が None 保護を
       // 持っているため (Rest はその保護を bypass する必要がある)。
       // HP も max まで強制リセット (`add_hp_capped` の早期 return を bypass
       // する必要があるため直接代入)。
       attacker_hps[attacker_active_slot] = attacker_max
-      attacker_status[attacker_active_slot] = @model.Sleep(2)
+      attacker_status[attacker_active_slot] = @model.RestSleep(2)
     }
     Some(@model.Drain(n, d)) => {
       // Drain は dmg > 0 のときのみ発動。dmg=0 (タイプ免疫 / 0 ダメ) では

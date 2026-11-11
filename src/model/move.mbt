@@ -38,7 +38,8 @@ pub extend StatEffect with Hash::{hash, hash_combine}
 /// - `Drain(n, d)` — restore `dmg_dealt * n / d` (ギガドレイン = (1, 2)).
 ///   `defender.ability == "ヘドロえき"` reverses the sign (attacker takes
 ///   damage instead) — handled by the payoff layer, not encoded here.
-/// - `Rest` — full HP restore + self-Sleep(2). Fails (no HP / status change)
+/// - `Rest` — full HP restore + self-`RestSleep(2)` (no 1/3 wake check on the
+///   2nd turn). Fails (no HP / status change)
 ///   when the user is already at full HP, mirroring mainline behavior.
 ///   `Sleep` immunity abilities (ふみん / やるき / スイートベール) also
 ///   block the entire effect.

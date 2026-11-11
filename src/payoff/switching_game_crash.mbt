@@ -127,6 +127,26 @@ fn with_crash_damage(
 }
 
 ///|
+/// DP: the missed user was put to sleep by the other side's move this turn
+/// (`action_blocked_by_fresh_status`), so it cannot act and nothing crashes. The
+/// landing turn is still its first sleep attempt, so the counter steps down here
+/// (`consume_sleep_attempt_on_block`). Same rule as `resolve_moves` and the MC
+/// `*_blocked_mid_turn` branch. Returns a fresh copy (turn unchanged).
+fn with_landing_sleep_consumed(
+  state : SwitchingGameState,
+  user_is_me : Bool,
+  user_slot : Int,
+) -> SwitchingGameState {
+  let s = clone_state(state, 0)
+  if user_is_me {
+    s.my_status[user_slot] = consume_sleep_attempt_on_block(s.my_status[user_slot])
+  } else {
+    s.opp_status[user_slot] = consume_sleep_attempt_on_block(s.opp_status[user_slot])
+  }
+  s
+}
+
+///|
 /// Speed sign of the two moves of `ma` and `oa` (`move_turn_sign`, the same rule
 /// `transition_with_cache` uses). `+1` = my move first, `-1` = opp first, `0` = tie
 /// or a non-move action.
@@ -271,7 +291,7 @@ fn crash_miss_outcomes(
             s.opp_status[slot]
           }
           let s1 = if action_blocked_by_fresh_status(pre_status, now) {
-            s
+            with_landing_sleep_consumed(s, missed_is_me, slot)
           } else {
             with_crash_damage(s, missed_is_me, slot, team, mv)
           }

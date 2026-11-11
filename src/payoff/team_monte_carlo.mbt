@@ -344,7 +344,7 @@ fn greedy_team_action(
 /// (1-element 配列で mutable に渡す)。Wish 使用で `[0]` に 2 を書き、EOT で
 /// `tick_and_fire_wish_inplace` が active slot へ向けて発動する。DP 側
 /// (`SwitchingGameState.my_wish_turns : Int`) と同じ slot-bound 仕様。
-/// `attacker_status` は Rest が `Sleep(2)` を上書きするために必要。
+/// `attacker_status` は Rest が `RestSleep(2)` を上書きするために必要。
 /// `defender_megaed` は LeechSeed くさ判定の mega 後 type 解決に渡す
 /// (MC では常に false 固定の dummy 配列だが、シグネチャは DP 側
 /// `effective_combatant` 経路と整合)。MC は attacker mega を解決しないため
@@ -795,8 +795,11 @@ fn mc_attempt_accuracy(
 ///|
 /// Resolve a single attack attempt for `me` in the MC rollout, respecting
 /// paralysis (12.5% failure), sleep (skip + counter decrement / wake-up),
-/// and move accuracy. Returns the new status of `me` and whether the action
-/// executes this turn.
+/// and move accuracy. Returns the new status of `me`, whether the action
+/// executes this turn, and `missed` = the move was used and missed (accuracy
+/// miss). Sleep / paralysis / recharge skips are never `missed` (only a
+/// missed move reaches Showdown's `MoveFail`, the crash of 崩れ技). Mirrors
+/// `SideAttempt.miss` on the DP side.
 fn mc_resolve_attempt(
   status : @model.StatusCondition,
   mv_acc : Int,
@@ -804,10 +807,25 @@ fn mc_resolve_attempt(
 ) -> (@model.StatusCondition, Bool, Bool) {
   match status {
     @model.Sleep(n) => {
-      if n > 0 {
+      if n >= 2 {
         return (@model.Sleep(n - 1), false, false)
       }
-      // Sleep(0): wake up and act subject to accuracy below.
+      if n == 1 {
+        // 2 回目: 1/3 で目覚めて行動 (命中判定あり)、2/3 で眠ったまま。
+        if !rand_bool(rng, SLEEP_SECOND_TURN_WAKE_RATE) {
+          return (@model.Sleep(0), false, false)
+        }
+      }
+      // Sleep(0) (3 回目) と 2 回目の目覚め: 命中判定して行動。命中外れは
+      // 技を使ったうえでの外れ (`missed = true`、崩れ技の判定に使う)。
+      let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
+      (@model.None, acts, !acts)
+    }
+    @model.RestSleep(n) => {
+      if n > 0 {
+        return (@model.RestSleep(n - 1), false, false)
+      }
+      // RestSleep(0): 3 回目。確定で目覚めて行動 (命中判定あり)。
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
       (@model.None, acts, !acts)
     }
@@ -1393,6 +1411,10 @@ pub fn team_rollout(
                   opp_status[opp_active],
                 ) {
                 opp_blocked_mid_turn = true
+                // 着弾ターンが眠りの 1 回目の試行 (DP `transition_with_cache` と同じ)。
+                opp_status[opp_active] = consume_sleep_attempt_on_block(
+                  opp_status[opp_active],
+                )
               }
             }
             if own_missed_crash && own_hps[own_active] > 0 {
@@ -1551,6 +1573,10 @@ pub fn team_rollout(
                   own_status[own_active],
                 ) {
                 own_blocked_mid_turn = true
+                // 着弾ターンが眠りの 1 回目の試行 (DP `transition_with_cache` と同じ)。
+                own_status[own_active] = consume_sleep_attempt_on_block(
+                  own_status[own_active],
+                )
               }
             }
             if opp_missed_crash && opp_hps[opp_active] > 0 {

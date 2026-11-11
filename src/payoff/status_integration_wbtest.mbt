@@ -253,6 +253,8 @@ test "spore (sleep 100%) keeps slow attacker ahead by locking out target" {
   let foe = [mk_int_combatant(fast_hitter, [tackle])]
   let v_with = switching_game_winrate(with_spore, foe, 4)
   let v_without = switching_game_winrate(without_spore, foe, 4)
-  // Sleep locks the fast hitter out for 2 turns — the slow mover benefits.
+  // The fast hitter is the first actor, so the sleep starts on its next attempt:
+  // a sure skip, then a 1/3 wake on the 2nd attempt, then a sure wake (Champions
+  // help_syn.json:26333). The slow mover still benefits on average.
   assert_true(v_with >= v_without - 0.01)
 }

@@ -20,6 +20,15 @@ test "StatusCondition equality: Sleep counter distinguishes variants" {
 }
 
 ///|
+/// Rest 由来の眠り (`RestSleep`) は同じ残カウンタでも通常のねむり (`Sleep`) と
+/// 別状態として扱う (2 回目の目覚め抽選の有無が違うため)。
+test "StatusCondition equality: RestSleep is distinct from Sleep with same counter" {
+  assert_true(RestSleep(2) == RestSleep(2))
+  assert_true(!(RestSleep(2) == Sleep(2)))
+  assert_true(!(RestSleep(1) == Sleep(1)))
+}
+
+///|
 test "StatusKind round trip via from_jp" {
   @debug.debug_inspect(
     status_kind_from_jp("まひ"),

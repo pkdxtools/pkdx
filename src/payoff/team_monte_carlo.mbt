@@ -625,7 +625,7 @@ fn most_likely_variant(r : @model.DamageCalcResult) -> @model.DamageVariant? {
 /// 戻り値 `(new_hp, dmg_for_effects, disguise_busted, immune)`:
 ///   - `immune`: 技がタイプ / 特性で無効 (`calc_damage` の `is_immune`)。caller は
 ///     `team_apply_post_hit` に渡し、自己効果を止める (DP の hits_count=0 leg と同じ)。
-///     status (power<=0) は false。
+///     崩れ技の使用者はこの leg で崩れ HP を失う (`mc_apply_crash`)。status (power<=0) は false。
 ///   - `new_hp`: 解決後の防御側 HP (0 床クランプ)。
 ///   - `dmg_for_effects`: recoil / drain 計算に使う「技が実際に HP へ与えたダメージ」。
 ///     非 ばけのかわ 時は実 dealt (= defender_hp - new_hp) で従来の
@@ -801,26 +801,26 @@ fn mc_resolve_attempt(
   status : @model.StatusCondition,
   mv_acc : Int,
   rng : @random.Rand,
-) -> (@model.StatusCondition, Bool) {
+) -> (@model.StatusCondition, Bool, Bool) {
   match status {
     @model.Sleep(n) => {
       if n > 0 {
-        return (@model.Sleep(n - 1), false)
+        return (@model.Sleep(n - 1), false, false)
       }
       // Sleep(0): wake up and act subject to accuracy below.
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (@model.None, acts)
+      (@model.None, acts, !acts)
     }
     @model.Paralyze => {
       if rand_bool(rng, PARALYZE_SKIP_RATE) {
-        return (@model.Paralyze, false)
+        return (@model.Paralyze, false, false)
       }
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (@model.Paralyze, acts)
+      (@model.Paralyze, acts, !acts)
     }
     other => {
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
-      (other, acts)
+      (other, acts, !acts)
     }
   }
 }
@@ -1139,12 +1139,14 @@ pub fn team_rollout(
         // circuits UseMove to `acts=false` regardless of status.
         let mut own_attempt_acts = true
         let mut opp_attempt_acts = true
+        let mut own_missed_crash = false
+        let mut opp_missed_crash = false
         match ao {
           TmUseMove(mi) =>
             if own_start_recharging {
               own_attempt_acts = false
             } else {
-              let (st, acts) = mc_resolve_attempt(
+              let (st, acts, missed) = mc_resolve_attempt(
                 own_status[own_active],
                 mc_attempt_accuracy(
                   own[own_active],
@@ -1156,6 +1158,7 @@ pub fn team_rollout(
               )
               own_status[own_active] = st
               own_attempt_acts = acts
+              own_missed_crash = missed && @damage.is_crash_move(own[own_active].moves[mi].name)
             }
           _ => ()
         }
@@ -1164,7 +1167,7 @@ pub fn team_rollout(
             if opp_start_recharging {
               opp_attempt_acts = false
             } else {
-              let (st, acts) = mc_resolve_attempt(
+              let (st, acts, missed) = mc_resolve_attempt(
                 opp_status[opp_active],
                 mc_attempt_accuracy(
                   opp[opp_active],
@@ -1176,6 +1179,7 @@ pub fn team_rollout(
               )
               opp_status[opp_active] = st
               opp_attempt_acts = acts
+              opp_missed_crash = missed && @damage.is_crash_move(opp[opp_active].moves[mi].name)
             }
           _ => ()
         }
@@ -1349,6 +1353,9 @@ pub fn team_rollout(
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
               }
+              if res_immune {
+                mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              }
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
@@ -1388,6 +1395,12 @@ pub fn team_rollout(
                 opp_blocked_mid_turn = true
               }
             }
+            if own_missed_crash && own_hps[own_active] > 0 {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              if all_ko(own_hps) {
+                return -1.0
+              }
+            }
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
@@ -1423,6 +1436,9 @@ pub fn team_rollout(
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
               }
+              if res_immune {
+                mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+              }
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
@@ -1452,6 +1468,12 @@ pub fn team_rollout(
               if all_ko(own_hps) {
                 return -1.0
               }
+              if all_ko(opp_hps) {
+                return 1.0
+              }
+            }
+            if opp_missed_crash && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
               if all_ko(opp_hps) {
                 return 1.0
               }
@@ -1488,6 +1510,9 @@ pub fn team_rollout(
               own_hps[own_active] = res_hp
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
+              }
+              if res_immune {
+                mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
               }
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
@@ -1528,6 +1553,12 @@ pub fn team_rollout(
                 own_blocked_mid_turn = true
               }
             }
+            if opp_missed_crash && opp_hps[opp_active] > 0 {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+              if all_ko(opp_hps) {
+                return 1.0
+              }
+            }
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
               own_attempt_acts &&
@@ -1561,6 +1592,9 @@ pub fn team_rollout(
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
               }
+              if res_immune {
+                mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              }
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
@@ -1592,6 +1626,12 @@ pub fn team_rollout(
               }
               if all_ko(opp_hps) {
                 return 1.0
+              }
+            }
+            if own_missed_crash && own_hps[own_active] > 0 && !own_blocked_mid_turn {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              if all_ko(own_hps) {
+                return -1.0
               }
             }
           }
@@ -1632,6 +1672,9 @@ pub fn team_rollout(
             if res_bust && opp_active < opp_disguise_busted.length() {
               opp_disguise_busted[opp_active] = true
             }
+            if res_immune {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+            }
             team_apply_post_hit(
               own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
               own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
@@ -1663,6 +1706,12 @@ pub fn team_rollout(
             }
             if all_ko(opp_hps) {
               return 1.0
+            }
+          }
+          if own_missed_crash && own_hps[own_active] > 0 {
+            mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+            if all_ko(own_hps) {
+              return -1.0
             }
           }
         } else if !opp_switches {
@@ -1702,6 +1751,9 @@ pub fn team_rollout(
             if res_bust && own_active < own_disguise_busted.length() {
               own_disguise_busted[own_active] = true
             }
+            if res_immune {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+            }
             team_apply_post_hit(
               opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
               opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
@@ -1731,6 +1783,12 @@ pub fn team_rollout(
             if all_ko(own_hps) {
               return -1.0
             }
+            if all_ko(opp_hps) {
+              return 1.0
+            }
+          }
+          if opp_missed_crash && opp_hps[opp_active] > 0 {
+            mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
             if all_ko(opp_hps) {
               return 1.0
             }

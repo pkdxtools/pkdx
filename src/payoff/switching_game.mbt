@@ -239,11 +239,16 @@ fn last_resort_barred(
 /// to tick without an act. The `post_status` field carries the active slot's
 /// status after this attempt resolves (pre-EOT-tick), so the caller can
 /// thread it into the resulting next-state.
+///
+/// `miss` is `true` only for the accuracy-miss branch (a move that was used and
+/// missed). Sleep / paralysis skips and recharge leave it `false`, because only
+/// a missed move reaches Showdown's `MoveFail` (the crash of 崩れ技).
 pub(all) struct SideAttempt {
   prob : Double
   acts : Bool
   action : ActionKind
   post_status : @model.StatusCondition
+  miss : Bool
 } derive(Debug)
 
 ///|
@@ -1161,10 +1166,15 @@ fn apply_damage_variants_fanout(
     // 技が当たらない。自己ダウン / 反動 / 回復 / 自己 recharge / 相手ダウン / 状態異常 /
     // 接触 proc は起きず、自爆 (self_ko) と Protean 記録だけが残る (`with_immune_effects`)。
     if outcome.hits_count == 0 {
+      // 崩れ技の免疫 leg は使用者が崩れ HP を失う (Showdown `MoveFail`)。外れ枝は
+      // attempt 段 (`crash_miss_outcomes`) で処理する。`with_crash_damage` は非崩れ技では恒等。
+      let immune_state = with_immune_effects(
+        state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+      )
       leaves.push((
         outcome.probability,
-        with_immune_effects(
-          state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+        with_crash_damage(
+          immune_state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
         ),
       ))
       continue

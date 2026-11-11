@@ -1255,7 +1255,23 @@ fn apply_damage_variants_fanout(
       attacker_move,
       dmg_for_effects > 0,
     )
-    let sub = compose_fanouts(state_v, [
+    // こおり: 与ダメージのある炎タイプの攻撃技は凍った相手を解凍する (本文 help_syn.json:26184
+    // "if it takes damage from a Fire-type move"; Showdown `frz.onDamagingHit`)。状態異常の
+    // 二次効果より前に解凍するので、解凍された相手には同じ技の二次効果が付与できる。
+    // 変化技 (ひのこ系の状態技) とダメージ 0 (ばけのかわ / 無効) では解凍しない。
+    let state_thawed = if dmg_for_effects > 0 &&
+      attacker_move.category != @model.Status &&
+      @damage.resolve_effective_move_type(
+          attacker_move,
+          state.weather,
+          attacker_team[attacker_slot].ability,
+        ) ==
+        "ほのお" {
+      with_thaw(state_v, target_is_me, target_slot)
+    } else {
+      state_v
+    }
+    let sub = compose_fanouts(state_thawed, [
       fn(s) {
         apply_item_pre_damage_proc_fanout(
           s,
@@ -1289,6 +1305,15 @@ fn apply_damage_variants_fanout(
           attacker_move,
           hits_count=outcome.hits_count,
         )
+      },
+      // こおり: 解凍技 (Scald / Scorching Sands 等) は命中後に相手を解凍する。Showdown
+      // `onAfterMoveSecondary` と同順なので、凍っている間は二次効果の状態異常は付かない。
+      fn(s) {
+        if dmg_for_effects > 0 && @damage.is_thaws_target_move(attacker_move.name) {
+          [(1.0, with_thaw(s, target_is_me, target_slot))]
+        } else {
+          [(1.0, s)]
+        }
       },
       fn(s) {
         apply_contact_proc_fanout(

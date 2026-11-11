@@ -431,6 +431,55 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 - **同ターン再眠りの順序近似 (既存、DP / MC 共通)**: 目覚め抽選は `attempt_turn_with_cache` (DP) / 行動試行 (MC) で行動前に pre-turn 適用される。後攻が 2 回目 (1/3) で目覚めた直後に、同ターン先攻の眠らせ技が再び眠らせると、その標的は行動前にブロックされる。本家では先攻の技は眠ったままの標的に失敗し、標的は目覚めて行動する。Sleep(0) の既存挙動と同じ。例: 速い Spore 使いが遅い標的を毎ターン眠らせる fixture は DP / MC ともに標的が 0 回行動する。parity は取れるが期待値は本家とずれる。follow-up として「目覚めを後攻の leg 直前に適用する」順序修正が必要 (DP `transition_with_cache` と MC の mid-turn 2 箇所を同時に変える)。
 - **参照テスト**: `src/payoff/switching_game_sleep_wbtest.mbt` (DP 分布・Rest・あくび・交代・着弾消費)、`src/payoff/team_monte_carlo_sleep_parity_wbtest.mbt` (MC 分布、DP/MC parity、感度ガード)、`src/payoff/team_monte_carlo_test.mbt` (着弾ブロックの MC 回帰)。
 
+### こおり (Champions 規則) — DP / MC
+
+本家テキスト (Champions。`champout/rom-txt/usa/help_syn.json:26184`):
+
+> The Pokémon can't use almost any moves but has a 25% chance of being cured each time it tries to do so. The Pokémon will be cured on its third turn after becoming frozen or if it takes damage from a Fire-type move or certain other moves. Ice-type Pokémon are unaffected.
+
+こおりタイプは凍らない (`help_syn.json:23193` "Ice Types ・ Cannot be frozen")。麻痺の 12.5% は同じ節の `help_syn.json:26071` (「12.5% chance of being unable to use moves」) で、`PARALYZE_SKIP_RATE` の根拠。
+
+**状態表現** (`src/model/status_condition.mbt`):
+
+- `Freeze(n)` — こおり。凍ったまま技を出そうとするたびに試行として数える。`n >= 1`: 25% (`FREEZE_THAW_RATE`) で解凍して行動 (命中判定あり)、75% で `Freeze(n-1)`。`n == 0`: 確定で解凍して行動 (命中判定あり)。付与時は `Freeze(2)`。
+- 3 回の試行で必ず解凍する: 1 回目 1/4、2 回目 3/16、3 回目 9/16 (`switching_game_freeze_wbtest.mbt` の分布テスト)。
+- 解凍技 (defrost) を使う凍った使用者は、乱数なしで行動前に解凍する (命中判定あり、外れても解凍)。対象は本文で「使用者を解凍」と書く フレアドライブ (`wazainfo_syn.json:7480`) / かえんボール (`:13396`) / もえつきる (`:12460`、炎タイプ使用者のみ) / ねっとう (`:9816`) / ねっさのだいち (`:14386`)、本文が黙る シャカシャカほう (`:15924`) は Showdown `flags.defrost` で補う。
+
+**解凍 (こおり → None)**:
+
+- 与ダメージのある 炎タイプ の攻撃技 (変化技は除く) が命中すると、二次効果より前に解凍する。本文 "takes damage from a Fire-type move" / Showdown `frz.onDamagingHit`。ダメージ 0 (ばけのかわ / 無効) では解凍しない。
+- thawsTarget 技 (ねっとう / ねっさのだいち。本文 "Cures the user and target of being frozen"、`:9816` / `:14386`。シャカシャカほう は Showdown 補完) は命中後、二次効果の後に相手を解凍する (Showdown `onAfterMoveSecondary`)。凍っている間は やけど の二次効果が付かない。
+
+**付与**:
+
+- 技の追加効果 `status_effect` (FreezeKind、確率 %)。DB: `pkdx_patch/017_move_meta_freeze/data.json` (m017) が れいとうビーム / ふぶき / れいとうパンチ / こおりのキバ / フリーズドライ を 10% で投入 (本文 `wazainfo_syn.json:636` / `:658` / `:38` / `:8136`。フリーズドライ の `:11178` は凍結に触れないので Showdown の 10% で補う)。
+- **トライアタック は未対応**: 本文 `:2208` "20% chance of leaving the target burned, frozen, or paralyzed" は 3 種を 1/3 ずつ振るが、`status_effect` は単一の種類と整数確率しか持てない (6.67% は表せない)。やけど / まひ の 3 分岐も同様に未モデル。
+- 付与をブロックする条件 (`maybe_apply_status_fanout` / `mc_try_apply_status`): こおりタイプ、ミストフィールド (grounded、既存の `field_blocks_status`)、はれ (`Weather::Sun`)、マグマのよろい (`tokuseiinfo_syn.json:1348` "The Pokémon cannot be frozen.")、りんぷん (`:606` "immune to additional effects from attacks"、`power > 0` の技の追加効果のみ)。エレキフィールドは凍結を止めない (`field_blocks_status`)。既存の状態異常がある相手には付与しない (状態異常は同時に 1 つ)。
+- はれ (Harsh Sunlight、`help_syn.json:27747`) の本文は凍結に触れない。Showdown `sunnyday.onImmunity` (`frz` → false) を採用 (判断事項)。
+- リーフガード (`tokuseiinfo_syn.json:3566`、はれで状態異常を防ぐ)、ぜったいねむり、フラワーベール (ダブル専用) は未モデル。pkdx は他の状態異常にも同じ特性を適用していないため (「特性免疫」は眠りの Rest 経路のみ)。
+
+**試行の数え方と行動時点の解決** (`per_side_attempt` / `mc_resolve_attempt`):
+
+- 凍結の試行は「凍ってから技を出そうとした回数」。先攻が凍らされる場合 (行動後に着弾) は翌ターンが 1 回目。後攻が同ターンに凍らされる場合は、着弾ターンの行動試行が 1 回目 (#203 の眠りと同じ数え方)。この試行の 25% は本文どおり有効。
+- 交代: 凍結カウンタは据え置き (交代は試行ではない)。`Switch` は `Freeze` を進めない。
+- **行動時点の解決** (`freeze_roll_deferred` / `resolve_pending_freeze_attempt`、MC は Step 3): 両者が技を出す場合、相手の技が解凍 (炎の命中 / thawsTarget) か凍結 (こおりの追加効果) をしうるとき、その側の解凍抽選と命中は自分の行動時点で振る。先攻の技の結果 (解凍 / 凍結) が後攻の試行に反映される。遅らせない枝は事前抽選のままで、分布は同一。Showdown `frz.onBeforeMove` が行動時点で走るのと同じ順序。
+- 後攻が凍らされた着弾ターンの試行は 25% の抽選を受ける。眠りの `consume_sleep_attempt_on_block` のように確定で行動を止めない (本文が「試行のたびに 25%」と書くため)。
+
+**Showdown との比較** (`crash-scratch/freeze-showdown/conditions.ts` = `data/conditions.ts` の `frz`):
+
+- 解凍確率: Showdown `frz.onBeforeMove` は `randomChance(1, 5)` = 20%。Champions 本文は 25% なので本文を採る。凍結の 3 ターン目の確定解凍は Showdown に無く本文由来 (Showdown の凍結は解凍されるまで続く)。
+- 解凍技: `onModifyMove` で defrost 技は解凍後に技を出す (Showdown と同じ)。Burn Up は使用者が炎タイプでないと defrost されず、通常の試行になる (下記の未対応)。
+- 炎の命中: `onDamagingHit` (`move.type === 'Fire' && move.category !== 'Status'`) と同じ。Polar Flare の例外 (`polarflare`) は Champions プールに無いので実装していない。
+
+**未対応 / 既知の近似**:
+
+- トライアタック (上記)。フレアドライブ 等の反動は既存の反動モデルのまま。
+- もえつきる を炎タイプでない使用者が使った場合の「失敗」は未モデル (通常の試行として扱い、解凍しない。使用者の技は通常どおり解決)。
+- 凍結の付与源は技の追加効果だけ。やけど / まひ / どく / ひるみ の追加効果は既存どおり未モデル (m017 も こおり 行のみ)。
+- れいとうビーム 等の ふぶき「雪で必中」は未モデル (命中は 70 のまま)。こおりのキバ のひるみ 10% は未モデル。
+- 「行動時点の解決」は凍っている側と凍らせる技の組み合わせだけに適用する。他の経路 (交代 / 行動しない相手) は事前抽選 (分布は同一)。
+- **参照テスト**: `src/payoff/switching_game_freeze_wbtest.mbt` (試行の枝・分布・付与ブロック・解凍・着弾抽選・交代)、`src/payoff/team_monte_carlo_freeze_parity_wbtest.mbt` (MC の枝と真理値表、DP/MC parity と感度ガード)、`src/migrate/m017_freeze_test.mbt` (move_meta 投入の冪等性)。
+
 ### MVP 非対応 (将来拡張で検討)
 
 - 確率副次効果 (アイアンテール 10% B-1 等) ― `stat_effects` は常に 100% 発動前提

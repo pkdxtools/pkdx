@@ -11,12 +11,20 @@
 /// `RestSleep(n)` is the same counter for a sleep started by the move Rest.
 /// It has no 1/3 check: asleep while `n >= 1`, wake and act at `n == 0`
 /// (Champions: "has no chance of being cured until its third turn").
+/// `Freeze(n)` is the こおり counter (help_syn.json:26184). A frozen side's
+/// move attempt is a try: while `n >= 1` it is cured and acts with 25%
+/// (`FREEZE_THAW_RATE`, "has a 25% chance of being cured each time it tries"),
+/// else it stays frozen with `Freeze(n - 1)`; `Freeze(0)` is cured on its
+/// third try ("cured on its third turn after becoming frozen") and acts
+/// (accuracy applies). A defrost move used by the frozen user cures it before
+/// the move (no roll). Ice-type Pokemon cannot be frozen.
 ///
 /// Counter semantics on switch:
 /// - `BadPoison(n)` resets to `BadPoison(0)` (fresh 1/16 on the next tick).
-/// - `Sleep(n)` / `RestSleep(n)` persist unchanged. The counter only moves on
-///   a move attempt by the active sleeper, so a benched sleeper is frozen
-///   (Showdown `slp` behaves the same; Champions text is silent on switching).
+/// - `Sleep(n)` / `RestSleep(n)` / `Freeze(n)` persist unchanged. The counter
+///   only moves on a move attempt by the active sleeper / freezer, so a benched
+///   one is frozen (Showdown `slp` behaves the same; Champions text is silent
+///   on switching).
 /// - `Paralyze` / `Burn` / `Poison` are stateless flags, unchanged by switch.
 pub(all) enum StatusCondition {
   None
@@ -28,6 +36,8 @@ pub(all) enum StatusCondition {
   // 技「ねむる」由来の眠り。カウンタの意味は Sleep と同じだが、2 ターン目の
   // 1/3 の目覚め抽選を持たない (Champions「ねむるは 3 ターン目まで回復しない」)。
   RestSleep(Int)
+  // こおり (Champions "Frozen"). Counter semantics: see the type doc above.
+  Freeze(Int)
   // あくび専用: ねむり予告マーカー。N ターン後の EOT に Sleep(2) へ遷移する。
   // 初期値 `Drowsy(1)`: 付与ターンの EOT で `Drowsy(0)` に、次の EOT で
   // `Sleep(2)` に変わる (合計 1 ターン猶予 = 本家の遅延ねむり)。交代すると
@@ -55,6 +65,8 @@ pub(all) enum StatusKind {
   PoisonKind
   BadPoisonKind
   SleepKind
+  // こおり (Frozen). Counter starts at `Freeze(2)` (see `inflict_status`).
+  FreezeKind
   // あくびが付与する予告状態。直接ねむりを与えず 1 ターン遅延させる。
   DrowsyKind
 } derive(Debug, Eq, Hash)
@@ -78,6 +90,7 @@ pub fn status_kind_from_jp(name : String) -> StatusKind? {
     "どく" => Some(PoisonKind)
     "もうどく" => Some(BadPoisonKind)
     "ねむり" => Some(SleepKind)
+    "こおり" => Some(FreezeKind)
     "あくび" => Some(DrowsyKind)
     _ => None
   }
@@ -95,6 +108,8 @@ pub fn inflict_status(kind : StatusKind) -> StatusCondition {
     PoisonKind => Poison
     BadPoisonKind => BadPoison(0)
     SleepKind => Sleep(2)
+    // こおり: 1 回目と 2 回目の試行は 25% で解凍して行動、3 回目で確定解凍 (Freeze(2) → Freeze(0))。
+    FreezeKind => Freeze(2)
     // あくび付与時は Drowsy(1)。最初の EOT で Drowsy(0)、次の EOT で Sleep(2)。
     DrowsyKind => Drowsy(1)
   }
@@ -117,6 +132,7 @@ pub fn status_condition_from_cli_str(s : String) -> StatusCondition {
     "badpoison" | "bad-poison" | "badly-poisoned" | "もうどく" =>
       BadPoison(0)
     "sleep" | "asleep" | "ねむり" => Sleep(2)
+    "freeze" | "frozen" | "こおり" => Freeze(2)
     "drowsy" | "あくび" => Drowsy(1)
     _ => None
   }
@@ -137,6 +153,8 @@ pub fn immune_to_status(
       type1 == "どく" ||
       type2 == "どく"
     SleepKind => false
+    // こおりは こおりタイプ (本文 help_syn.json:23193 "Ice Types ・ Cannot be frozen") のみ免疫。
+    FreezeKind => type1 == "こおり" || type2 == "こおり"
     // あくびはタイプ免疫なし。ねむり粉系 (ねむりごな等) と異なり草タイプにも
     // 効く。特性免疫 (ふみん/やるき/スイートベール) は別タスクで対応。
     DrowsyKind => false

@@ -33,6 +33,26 @@ pub fn ability_blocks_status(
 }
 
 ///|
+/// Return `true` when the ability stops the defender from being frozen
+/// (こおり). マグマのよろい: "The Pokémon cannot be frozen." (Champions
+/// tokuseiinfo_syn.json:1348). Only the freeze rule is added: the other
+/// status-immunity abilities (ふみん etc.) are not applied to the secondary
+/// fanout in the model, so this is deliberately freeze-specific.
+pub fn ability_blocks_freeze(ability : String) -> Bool {
+  ability == "マグマのよろい"
+}
+
+///|
+/// Return `true` when the defender's ability blocks the additional (secondary)
+/// effects of an attacking damaging move. りんぷん (Shield Dust): "The
+/// Pokémon is immune to additional effects from attacks." (Champions
+/// tokuseiinfo_syn.json:606). Only the freeze secondary is modelled today, so
+/// the caller applies it to freeze-carrying damaging moves.
+pub fn ability_blocks_secondary(ability : String) -> Bool {
+  ability == "りんぷん"
+}
+
+///|
 /// Return `true` when the ability nullifies the LeechSeed end-of-turn tick.
 /// The seed itself can still be planted on a Magic Guard target — mainline
 /// distinguishes "planting" from "ticking" — so callers must apply this

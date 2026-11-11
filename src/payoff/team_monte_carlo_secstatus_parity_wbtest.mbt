@@ -3,7 +3,8 @@
 /// (switching_game_secstatus_wbtest.mbt と対)。
 /// - 分布: `mc_try_apply_status` を seed 固定で大量に回し、二次効果の確率 (10%) が一致する。
 /// - 真理値表: 免疫 (ほのお / でんき / どく / はがね)、既存の状態異常、Misty (grounded)、
-///   りんぷん (ダメージ技のみ)、ダメージ 0 (ばけのかわ の吸収)、ちからずく。
+///   りんぷん (ダメージ技のみ)、HP を減らさない命中 (瀕死)、ちからずく。ばけのかわ の吸収 chip は
+///   HP を減らすので追加効果は付く (Showdown fallback。DP `secondary_gated_move` と同じ規則)。
 /// - parity: 1v1 で DP (`switching_game_winrate`, exact) と MC (`team_monte_carlo_value`,
 ///   rollout 平均) が許容誤差内で一致する。
 /// - 感度ガード: 追加効果のない対照との差が閾値より大きいことを先に確認する (経路が値に効いている)。
@@ -96,7 +97,7 @@ fn sss_freq(
   defender : Array[Combatant],
   trials : Int,
   want : @model.StatusCondition,
-  dmg_for_effects? : Int = 1,
+  hp_lost? : Int = 1,
   attacker_ability? : String = "",
 ) -> Double {
   let mut hits = 0
@@ -109,7 +110,7 @@ fn sss_freq(
       [200],
       st,
       0,
-      dmg_for_effects~,
+      hp_lost~,
       attacker_ability~,
     )
     if st[0] == want {
@@ -195,7 +196,7 @@ test "mc ss: immunities and the existing-status exclusivity hold for the MC roll
 }
 
 ///|
-test "mc ss: Shield Dust blocks a damaging move's secondary only; Sheer Force and dealt=0 drop it" {
+test "mc ss: Shield Dust blocks a damaging move's secondary only; Sheer Force and 0 HP lost drop it; a Disguise chip keeps it" {
   let rng = seeded_rng(20261114UL)
   let fire_punch = sss_move(
     "ほのおのパンチ",
@@ -220,8 +221,10 @@ test "mc ss: Shield Dust blocks a damaging move's secondary only; Sheer Force an
   assert_true(sss_freq(rng, will_o_wisp, shed, 200, @model.Burn) == 1.0)
   // 既定引数 (dmg 1 / 特性なし) は従来どおり付く。
   assert_true(sss_freq(rng, fire_punch, plain, 200, @model.Burn) == 1.0)
-  // ダメージ 0 (ばけのかわ の吸収 chip のみ) は付かない。
-  assert_true(sss_freq(rng, fire_punch, plain, 200, @model.Burn, dmg_for_effects=0) == 0.0)
+  // この命中で相手の HP が減らない (瀕死など) なら付かない。
+  assert_true(sss_freq(rng, fire_punch, plain, 200, @model.Burn, hp_lost=0) == 0.0)
+  // ばけのかわ の吸収 chip (HP 25 減) は付く (Showdown fallback)。
+  assert_true(sss_freq(rng, fire_punch, plain, 200, @model.Burn, hp_lost=25) == 1.0)
   // ちからずく の使用者は追加効果を失う。
   assert_true(
     sss_freq(rng, fire_punch, plain, 200, @model.Burn, attacker_ability="ちからずく") == 0.0,
@@ -308,5 +311,63 @@ test "ss DP/MC parity: a Shield Dust target makes the 30% burn a no-op (equals t
   let mc_control = team_monte_carlo_value(control, shed, 8192, 20261117UL, turn_limit=4)
   assert_true((dp_shed - dp_control).abs() < 1.0e-9)
   assert_true((dp_shed - mc_shed).abs() < 0.02)
+  assert_true((dp_control - mc_control).abs() < 0.02)
+}
+
+///|
+/// ばけのかわ (intact) の対象への 100% まひ (ほっぺすりすり 相当): 吸収 chip で HP が減るので
+/// 追加効果は付く (Showdown fallback)。瀕死の対象と 命中無効 (immune) の leg には付かない。
+test "mc ss: a Disguise chip hit still paralyzes (100%); a fainted target and an immune leg do not" {
+  let rng = seeded_rng(20261120UL)
+  let nuzzle = sss_move(
+    "ほっぺすりすり",
+    "でんき",
+    @model.Physical,
+    20,
+    100,
+    Some((@model.ParalyzeKind, 100)),
+  )
+  let mimikyu = [
+    sss_cmb(sss_pokemon("mimikyu", "ゴースト", "フェアリー", 200, 60), [], "ばけのかわ"),
+  ]
+  assert_true(sss_freq(rng, nuzzle, mimikyu, 200, @model.Paralyze, hp_lost=25) == 1.0)
+  assert_true(sss_freq(rng, nuzzle, mimikyu, 200, @model.Paralyze, hp_lost=0) == 0.0)
+  // 瀕死 (防御側 HP 0) の対象には付かない。
+  let fainted : Array[@model.StatusCondition] = [@model.StatusCondition::None]
+  mc_try_apply_status(rng, nuzzle, mimikyu, [0], fainted, 0, hp_lost=25)
+  @debug.assert_eq(fainted[0], @model.StatusCondition::None)
+  // 命中無効 (immune) の leg には付かない。
+  let immune_st : Array[@model.StatusCondition] = [@model.StatusCondition::None]
+  mc_try_apply_status(rng, nuzzle, mimikyu, [200], immune_st, 0, immune=true, hp_lost=25)
+  @debug.assert_eq(immune_st[0], @model.StatusCondition::None)
+}
+
+///|
+/// ばけのかわ の対象 (ゴースト / フェアリー、ばけのかわ) への 100% まひ 技 (威力 50、STAB なし)。
+/// 初撃は chip のみで、まひ は HP 減少のある命中として付く。まひ は EOT ダメージを持たないので
+/// DP / MC の既知の差 (やけど / どく) は出ない。対照は追加効果のない同技。
+test "ss DP/MC parity: a Disguise target takes a 100% paralysis from a physical hit (chip, then the status)" {
+  let nuzzle = sss_move(
+    "ほっぺすりすり",
+    "でんき",
+    @model.Physical,
+    50,
+    100,
+    Some((@model.ParalyzeKind, 100)),
+  )
+  let no_status = sss_move("ほっぺすりすり", "でんき", @model.Physical, 50, 100, None)
+  let tackle = sss_move("たいあたり", "ノーマル", @model.Physical, 50, 100, None)
+  let mimikyu = [
+    sss_cmb(sss_pokemon("mimikyu", "ゴースト", "フェアリー", 200, 60), [tackle], "ばけのかわ"),
+  ]
+  let burner = [sss_cmb(sss_pokemon("burner", "ノーマル", "", 200, 120), [nuzzle], "")]
+  let control = [sss_cmb(sss_pokemon("control", "ノーマル", "", 200, 120), [no_status], "")]
+  let dp_para = switching_game_winrate(burner, mimikyu, 4)
+  let dp_control = switching_game_winrate(control, mimikyu, 4)
+  let mc_para = team_monte_carlo_value(burner, mimikyu, 8192, 20261121UL, turn_limit=4)
+  let mc_control = team_monte_carlo_value(control, mimikyu, 8192, 20261121UL, turn_limit=4)
+  // 感度ガード: まひの経路が値に効いている (対照との差が閾値より大きい)。
+  assert_true((dp_para - dp_control).abs() > 0.005)
+  assert_true((dp_para - mc_para).abs() < 0.02)
   assert_true((dp_control - mc_control).abs() < 0.02)
 }

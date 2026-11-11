@@ -294,13 +294,17 @@ pub fn secondary_blocked_by_holder(
 }
 
 ///|
-/// 攻撃側の事情で、この技の追加効果 (`status_effect`) が付かない場合に写しを返す (DP)。
+/// 攻撃側の事情と命中結果で、この技の追加効果 (`status_effect`) が付かない場合に写しを返す (DP)。
 /// 返り値は `mv` 自体か、`status_effect = None` にした写し。解凍 (`with_thaw` / thawsTarget)、
 /// 反動、ドレイン、能力変化は対象外で従来どおり。
 /// - 変化技 (`power = 0`): 追加効果ではないので触らない (命中は別経路で抽選済み)。
-/// - `dmg_for_effects <= 0`: 技が HP へダメージを与えていない命中。ばけのかわ が初撃を吸収した
-///   chip だけの命中がこれに当たる。Showdown の secondaries は 0 ダメージの対象に付くが、
-///   本 PR は「ダメージ > 0 のときだけ追加効果」という規則を採る (指示どおり、判断事項)。
+/// - `hp_lost <= 0`: この命中で相手の HP が 1 も減らなかった (瀕死の対象)。タイプ無効 / 特性無効
+///   (`hits_count = 0`) は呼び出し元が先に抜けるので、ここには来ない。`hp_lost` は ばけのかわ の
+///   chip を含む: 初撃吸収の命中は chip (最大 HP / 8) で HP が減るので `hp_lost > 0` となり、
+///   追加効果は付く。Showdown の `disguise.onDamage` は 0 を返すが `spreadMoveHit` は 0 ダメージの
+///   対象を残して secondaries を走らせるため、この規則を採る (Showdown fallback。Champions 本文
+///   tokuseiinfo_syn.json:6600 は chip だけを述べ、追加効果には触れない)。命中で倒れた対象には
+///   `maybe_apply_status_fanout` が HP 0 を見て付与しない。
 /// - ちからずく (Sheer Force) の使用者: 追加効果を失う (`ability_strips_secondaries`)。
 pub fn secondary_gated_move(
   state : SwitchingGameState,
@@ -308,7 +312,7 @@ pub fn secondary_gated_move(
   attacker_slot : Int,
   attacker_team : Array[Combatant],
   mv : @model.Move,
-  dmg_for_effects : Int,
+  hp_lost : Int,
 ) -> @model.Move {
   match mv.status_effect {
     None => return mv
@@ -317,7 +321,7 @@ pub fn secondary_gated_move(
   if mv.power <= 0 {
     return mv
   }
-  if dmg_for_effects <= 0 {
+  if hp_lost <= 0 {
     return { ..mv, status_effect: None }
   }
   if attacker_slot < 0 || attacker_slot >= attacker_team.length() {

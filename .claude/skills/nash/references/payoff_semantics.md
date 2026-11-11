@@ -502,7 +502,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 **判定規則** (DP `maybe_apply_status_fanout` + `secondary_gated_move` / MC `mc_try_apply_status`):
 
 1. 追加効果は命中ごとに独立に抽選する (連続技は hit ごと。既存の per-hit 規則)。
-2. ダメージ > 0 の命中でだけ付く。ばけのかわ が初撃を吸収した chip のみの命中、タイプ免疫による不発、対象が瀕死の命中には付かない (`secondary_gated_move` の `dmg_for_effects`)。
+2. この命中で相手の HP が減ったときだけ付く (`secondary_gated_move` の `hp_lost`。DP は `actual_dmg`、MC は `before - res_hp`)。ばけのかわ が初撃を吸収した命中は chip (最大 HP / 8) で HP が減るので付く (Showdown fallback、判断事項 1)。タイプ免疫と 特性による吸収 (そうしょく) は HP を減らさず、呼び出し元で抜けるので付かない。瀕死の対象 (HP 減少なし) にも付かない。命中で倒れた対象は HP 0 なので `maybe_apply_status_fanout` が付与しない。
 3. 対象が既に状態異常なら付かない (こおり の凍結中も含む)。タイプ免疫。ミストフィールド (grounded) で止まる。エレキフィールドは止めない (既存の `field_blocks_status`)。
 4. りんぷん (ダメージ技のみ) と ちからずく (攻撃側) で止める。マグマのよろい と はれ は こおり だけ止める。
 5. 変化技 (power 0) の状態異常は追加効果ではなく命中後の直接効果で、りんぷん・ちからずく の影響を受けない。
@@ -520,7 +520,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 **判断事項 (Judgment calls)**:
 
-1. **ダメージ > 0 の命中だけ追加効果**。ばけのかわ が吸収した命中は、本 PR の規則では追加効果が付かない (指示どおり)。字面の Showdown では、`battle-actions.ts` の `if (!damage[i] && damage[i] !== 0) targets[i] = false` (追加効果の前) が数値 0 の対象を残すため、ばけのかわ の 0 ダメージでも追加効果が走りうる。本 PR はこの点で Showdown の字面から外れる (要確認)。フリーズ PR (#208) はこの場合にも こおり の追加効果を付けていたので、その挙動は本 PR で変わる (こおり も同じ規則)。
+1. **HP が減った命中だけ追加効果 (ばけのかわ の chip を含む)。Showdown fallback。** Champions 本文 (`tokuseiinfo_syn.json:6600`、LabelName 行、本文は OriginalText の "loses 1/8 of its max HP instead of taking the damage") は chip だけを述べ、追加効果には触れない。字面の Showdown では、`disguise.onDamage` が 0 を返し (`crash-scratch/dl-abilities/abilities.ts:970-976`)、`battle-actions.ts:1146` / `:1164` の `if (!damage[i] && damage[i] !== 0) targets[i] = false` は 0 ダメージの対象を残すので、追加効果は走る。本 PR はこれを採る: ばけのかわ の初撃でも 100% まひの ほっぺすりすり は まひ を入れる。コードを読んだ限り、b102445 (#208) も ばけのかわ の chip で こおり を付けていた (gate なし)。本 PR の gate 追加で一度落ちたため、同じ規則に戻した (こおり も同じ gate)。タイプ免疫・吸収 (そうしょく)・瀕死は HP を減らさないので付かない。
 2. **二ターン技 (とびはねる `:6368`) は 1 ターンの近似で扱う**。pkdx は溜ターンを持たず、二ターン技も 1 ターンの技として解決する (既存)。まひ の追加効果はその命中ターンに付く。
 3. **確率の記述がない技 (でんじほう / ほっぺすりすり / れんごく / キラースピン) は 100%**。本文 "Paralyzes the target." / "Burns the target." / "Poisons targets." を確定と読む (Showdown も chance 100 で一致)。
 4. **ちからずく の威力 1.3 倍は既存の実装のまま全技に掛かる** (`damage/abilities.mbt` `get_atk_ability_final`)。本文は追加効果のある技だけ。本 PR では直さない (既存の入力の出力が変わるため)。
@@ -541,7 +541,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 **既知の DP / MC 差 (本 PR の前から存在し、b102445 と数値が同一であることを確認済み)**: 確率つきの やけど / どく の追加効果で、DP と MC の値が状態によって乖離する。例 (1v1、特殊 威力 70 の技の追加効果を 特殊 威力 70 の相手に、4 ターン。タイプは非 STAB): やけど 30%: DP -0.400 / MC -0.198、どく 30%: DP 0.020 / MC 0.142、まひ 30%: DP -0.839 / MC -0.835。この 1 組の fixture では、終端の EOT ダメージを持つ やけど / どく で差が出て、EOT のないまひでは差が出なかった。物理の相手を使った 他の fixture では、やけど 30% の差が 0.001〜0.074 の範囲だった (威力・相手の攻撃種別で変化)。原因は未特定 (`apply_eot` の位置と終端の HP 比の読み方は両者で同じに見えた)。本 PR の parity テストは DP と MC が一致する形 (物理 威力 50 の相手、特殊 威力 50 の やけど 30%: DP 0.088 / MC 0.087、対照 -0.140 / -0.143) だけを使い、感度ガード (やけど の経路の差 0.23 > 0.005) を置く。
 
-**参照テスト**: `src/payoff/switching_game_secstatus_wbtest.mbt` (付与の確率・免疫・ブロック・ちからずく / ばけのかわ の判定・解凍後の やけど・後攻の半減・りんぷん の e2e)、`src/payoff/team_monte_carlo_secstatus_parity_wbtest.mbt` (MC の分布・真理値表・DP/MC parity と感度ガード)、`src/migrate/m018_status_test.mbt` (投入の内容・既存行・冪等)、`src/db/status_effect_normalize_test.mbt` (DB 経路の正規化)。
+**参照テスト**: `src/payoff/switching_game_secstatus_wbtest.mbt` (付与の確率・免疫・ブロック・ちからずく / ばけのかわ の chip 経路 (まひ 100% / こおり 100%)・タイプ免疫と そうしょく の不発・解凍後の やけど・後攻の半減・りんぷん の e2e)、`src/payoff/team_monte_carlo_secstatus_parity_wbtest.mbt` (MC の分布・真理値表・ばけのかわ の chip・DP/MC parity と感度ガード)、`src/payoff/team_monte_carlo_freeze_parity_wbtest.mbt` (MC の ばけのかわ chip の こおり)、`src/migrate/m018_status_test.mbt` (投入の内容・既存行・冪等)、`src/db/status_effect_normalize_test.mbt` (DB 経路の正規化)。
 
 ### MVP 非対応 (将来拡張で検討)
 

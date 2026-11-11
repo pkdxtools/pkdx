@@ -960,10 +960,10 @@ fn mc_try_apply_status(
   field? : @model.Field = @model.Field::None,
   immune? : Bool = false,
   weather? : @model.Weather = @model.Weather::None,
-  // 攻撃側の事情 (DP `secondary_gated_move` と同じ規則): `dmg_for_effects` は技が HP へ与えた
-  // ダメージ (ばけのかわ の吸収 chip のみなら 0)、`attacker_ability` は攻撃側の特性 (ちからずく)。
-  // 既定値 (1 / "") は従来どおり追加効果が付く。
-  dmg_for_effects? : Int = 1,
+  // 攻撃側の事情と命中結果 (DP `secondary_gated_move` と同じ規則): `hp_lost` は この命中で
+  // 相手の HP が減った量 (ばけのかわ の吸収 chip を含む。0 なら追加効果は付かない)、
+  // `attacker_ability` は攻撃側の特性 (ちからずく)。既定値 (1 / "") は従来どおり付く。
+  hp_lost? : Int = 1,
   attacker_ability? : String = "",
 ) -> Unit {
   // タイプ / 特性で無効な leg は技が当たらないので状態異常も付与しない (DP の
@@ -971,9 +971,8 @@ fn mc_try_apply_status(
   if immune {
     return
   }
-  // 追加効果 (power > 0) は、ダメージを与えた命中で、攻撃側がちからずく でなければ付く。
-  if mv.power > 0 &&
-    (dmg_for_effects <= 0 || ability_strips_secondaries(attacker_ability)) {
+  // 追加効果 (power > 0) は、相手の HP を減らした命中で、攻撃側がちからずく でなければ付く。
+  if mv.power > 0 && (hp_lost <= 0 || ability_strips_secondaries(attacker_ability)) {
     return
   }
   // そうしょく: 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ
@@ -1573,7 +1572,7 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
-                dmg_for_effects=res_eff,
+                hp_lost=before - res_hp,
                 attacker_ability=own[own_active].ability,
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
@@ -1682,7 +1681,7 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
-                dmg_for_effects=res_eff,
+                hp_lost=before - res_hp,
                 attacker_ability=opp[opp_active].ability,
               )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
@@ -1779,7 +1778,7 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
-                dmg_for_effects=res_eff,
+                hp_lost=before - res_hp,
                 attacker_ability=opp[opp_active].ability,
               )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
@@ -1886,7 +1885,7 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
-                dmg_for_effects=res_eff,
+                hp_lost=before - res_hp,
                 attacker_ability=own[own_active].ability,
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
@@ -1977,7 +1976,7 @@ pub fn team_rollout(
               field=field_state[0],
               immune=res_immune,
               weather=weather_state[0],
-              dmg_for_effects=res_eff,
+              hp_lost=before - res_hp,
               attacker_ability=own[own_active].ability,
             )
             mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
@@ -2067,7 +2066,7 @@ pub fn team_rollout(
               field=field_state[0],
               immune=res_immune,
               weather=weather_state[0],
-              dmg_for_effects=res_eff,
+              hp_lost=before - res_hp,
               attacker_ability=opp[opp_active].ability,
             )
             mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)

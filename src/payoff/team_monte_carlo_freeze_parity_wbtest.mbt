@@ -197,6 +197,28 @@ test "mc frz: mc_try_apply_status blocks ice / sun / Magma Armor / Shield Dust, 
 }
 
 ///|
+/// ばけのかわ の吸収 chip (HP 減少あり) では凍結も付く (base b102445 の挙動を戻す。Showdown
+/// fallback)。HP を減らさない命中 (瀕死の対象) では付かない。DP `secondary_gated_move` と同じ規則。
+test "mc frz: a Disguise chip hit (HP lost > 0) still freezes; zero HP lost does not" {
+  let rng = seeded_rng(20261119UL)
+  let ice_beam = frzm_move(
+    "れいとうビーム",
+    "こおり",
+    @model.Special,
+    90,
+    100,
+    Some((@model.FreezeKind, 100)),
+  )
+  let mimikyu = [frzm_cmb(frzm_pokemon("mimikyu", "ゴースト", 200, 60), [], "ばけのかわ")]
+  let mut st : Array[@model.StatusCondition] = [@model.StatusCondition::None]
+  mc_try_apply_status(rng, ice_beam, mimikyu, [200], st, 0, hp_lost=25)
+  @debug.assert_eq(st[0], @model.Freeze(2))
+  st = [@model.StatusCondition::None]
+  mc_try_apply_status(rng, ice_beam, mimikyu, [200], st, 0, hp_lost=0)
+  @debug.assert_eq(st[0], @model.None)
+}
+
+///|
 test "mc frz: a Fire damaging hit thaws only when it deals damage; Fire status and dealt=false do not" {
   let fire = frzm_move("テスト炎技", "ほのお", @model.Physical, 90, 100, None)
   let fire_status = frzm_move("テスト炎変化", "ほのお", @model.Status, 0, 100, None)

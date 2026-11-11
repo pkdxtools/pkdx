@@ -4,8 +4,10 @@
 ///   - 追加効果の確率は技ごとの本文 (wazainfo_syn.json、例: ほのおのパンチ :16 "10% ... burning")。
 ///   - 免疫: ほのお (help_syn.json:22637 "Cannot be burned") / でんき (:22714 "Cannot be paralyzed") /
 ///     どく・はがね (:23003 / :23500 "Cannot be poisoned or badly poisoned")。
-///   - りんぷん (tokuseiinfo_syn.json:606)、ちからずく (:4170)、ばけのかわ の初撃 (chip のみ) は
-///     追加効果を付けない (本 PR の規則。`secondary_gated_move` が SSoT)。
+///   - りんぷん (tokuseiinfo_syn.json:606)、ちからずく (:4170) は追加効果を止める / 失わせる。
+///     ばけのかわ の初撃 (chip のみ) は HP を減らすので追加効果は付く (Showdown fallback。
+///     本文 tokuseiinfo_syn.json:6600 は追加効果に触れない。`secondary_gated_move` が SSoT)。
+///     HP を減らさない命中 (瀕死の対象) と タイプ / 特性による無効は付かない。
 /// 変化技の状態異常 (おにび 等) は命中で決まり、追加効果の抽選を二重にしない (DB 経路の
 /// normalize は database テストで確認)。
 
@@ -417,7 +419,7 @@ test "ss blocker: a fainted target gets no secondary status" {
 }
 
 ///|
-test "ss gate: secondary_gated_move keeps the secondary for a damaging hit, drops it for dealt=0 and Sheer Force" {
+test "ss gate: secondary_gated_move keeps the secondary when HP is lost (Disguise chip), drops it for 0 HP lost and Sheer Force" {
   let fire_punch = ss_move(
     "ほのおのパンチ",
     "ほのお",
@@ -437,12 +439,17 @@ test "ss gate: secondary_gated_move keeps the secondary for a damaging hit, drop
   let base = ss_state(200, 200, @model.None, @model.None)
   let plain = [ss_cmb(ss_pokemon("plain", "ノーマル", "", 200, 60), [fire_punch], "")]
   let sheer = [ss_cmb(ss_pokemon("sheer", "ノーマル", "", 200, 60), [fire_punch], "ちからずく")]
-  // ダメージ > 0 かつ通常特性: 追加効果は残る。
+  // HP を減らした命中 (通常特性): 追加効果は残る。
   @debug.assert_eq(
     secondary_gated_move(base, true, 0, plain, fire_punch, 50).status_effect,
     Some((@model.BurnKind, 10)),
   )
-  // ダメージ 0 (ばけのかわ の吸収 chip のみ): 追加効果は付かない。
+  // ばけのかわ の初撃吸収 (chip 25 = 最大 HP 200 / 8 の HP 減少): 追加効果は残る (Showdown fallback)。
+  @debug.assert_eq(
+    secondary_gated_move(base, true, 0, plain, fire_punch, 25).status_effect,
+    Some((@model.BurnKind, 10)),
+  )
+  // HP を 1 も減らさない命中 (瀕死の対象など): 追加効果は付かない。
   @debug.assert_eq(
     secondary_gated_move(base, true, 0, plain, fire_punch, 0).status_effect,
     None,
@@ -555,4 +562,104 @@ test "ss e2e: a Shield Dust target keeps its HP and gets no burn from a 100% bur
   assert_true(ss_close(ss_opp_mass(outs, fn(s) { s == @model.None }), 1.0))
   // ダメージは通る (追加効果だけが止まる)。
   assert_true(ss_close(ss_mass(outs, fn(s) { s.opp_hps[0] < 200 }), 1.0))
+}
+
+///|
+/// ばけのかわ (intact) の対象へ 100% まひの技 (ほっぺすりすり 相当、でんき 物理)。初撃は chip のみ
+/// (最大 HP / 8 = 25 だけ減り、ばけのかわ は剥がれる) だが、HP が減っているので まひ は必ず付く
+/// (Showdown fallback。`secondary_gated_move` は HP 減少のある命中を通す)。
+test "ss disguise: a 100% paralysis hit (ほっぺすりすり) still paralyzes through an intact Disguise chip" {
+  let nuzzle = ss_move(
+    "ほっぺすりすり",
+    "でんき",
+    @model.Physical,
+    20,
+    100,
+    Some((@model.ParalyzeKind, 100)),
+  )
+  let tackle = ss_move("たいあたり", "ノーマル", @model.Physical, 40, 100, None)
+  let my_team = [ss_cmb(ss_pokemon("pika", "でんき", "", 200, 120), [nuzzle], "")]
+  // actual_stats で HP を 200 に固定する (chip = 200 / 8 = 25 を effective_hp と engine の両方で一致させる)。
+  let mimikyu = { ..ss_cmb(ss_pokemon("mimikyu", "ゴースト", "フェアリー", 200, 60), [tackle], "ばけのかわ"), actual_stats: Some([200, 100, 100, 100, 100, 100]) }
+  let outs = attempt_turn_with_cache(
+    ss_state(200, 200, @model.None, @model.None),
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    [mimikyu],
+    new_damage_cache(),
+  )
+  assert_true(ss_close(ss_opp_mass(outs, fn(s) { s == @model.Paralyze }), 1.0))
+  // chip のみ (200 の 1/8 = 25) が入り、ばけのかわ は剥がれる。
+  assert_true(ss_close(ss_mass(outs, fn(s) { s.opp_hps[0] == 175 }), 1.0))
+  assert_true(ss_close(ss_mass(outs, fn(s) { s.opp_disguise_busted[0] }), 1.0))
+}
+
+///|
+/// ばけのかわ (intact) の対象へ 100% 凍結の技。初撃の chip でも凍結は付く (base b102445 の挙動を
+/// 戻す。Showdown fallback)。対象の方が速いので、凍らせた後の試行は次ターン (frz landing の規則)。
+test "ss disguise: a 100% freeze hit still freezes through an intact Disguise chip" {
+  let ice_hit = ss_move(
+    "こおりのつぶて",
+    "こおり",
+    @model.Physical,
+    40,
+    100,
+    Some((@model.FreezeKind, 100)),
+  )
+  let tackle = ss_move("たいあたり", "ノーマル", @model.Physical, 40, 100, None)
+  let my_team = [ss_cmb(ss_pokemon("ice", "こおり", "", 200, 60), [ice_hit], "")]
+  let opp_team = [
+    ss_cmb(ss_pokemon("mimikyu", "ゴースト", "フェアリー", 200, 120), [tackle], "ばけのかわ"),
+  ]
+  let outs = attempt_turn_with_cache(
+    ss_state(200, 200, @model.None, @model.None),
+    UseMove(0),
+    UseMove(0),
+    my_team,
+    opp_team,
+    new_damage_cache(),
+  )
+  assert_true(ss_close(ss_opp_mass(outs, fn(s) { s == @model.Freeze(2) }), 1.0))
+  assert_true(ss_close(ss_mass(outs, fn(s) { s.opp_disguise_busted[0] }), 1.0))
+}
+
+///|
+/// HP を 1 も減らさない命中には 100% まひも付かない: タイプ無効 (でんき → じめん) と 特性無効
+/// (そうしょく が くさ を吸収、モデル化済みの吸収特性)。どちらも呼び出し元で hits_count = 0 /
+/// `move_absorbed_by_holder` として抜けるため fanout に来ない。対照 (特性なし) は まひ が入る。
+test "ss gate: a type-immune hit and a Sap Sipper absorbed hit give no paralysis" {
+  let nuzzle = ss_move(
+    "ほっぺすりすり",
+    "でんき",
+    @model.Physical,
+    20,
+    100,
+    Some((@model.ParalyzeKind, 100)),
+  )
+  let leaf = ss_move(
+    "はっぱカッター",
+    "くさ",
+    @model.Physical,
+    50,
+    100,
+    Some((@model.ParalyzeKind, 100)),
+  )
+  let tackle = ss_move("たいあたり", "ノーマル", @model.Physical, 40, 100, None)
+  let pika = [ss_cmb(ss_pokemon("pika", "でんき", "", 200, 120), [nuzzle], "")]
+  let leafy = [ss_cmb(ss_pokemon("leafy", "くさ", "", 200, 120), [leaf], "")]
+  let ground = [ss_cmb(ss_pokemon("ground", "じめん", "", 200, 60), [tackle], "")]
+  let sipper = [ss_cmb(ss_pokemon("sipper", "ノーマル", "", 200, 60), [tackle], "そうしょく")]
+  let plain = [ss_cmb(ss_pokemon("plain", "ノーマル", "", 200, 60), [tackle], "")]
+  let st = ss_state(200, 200, @model.None, @model.None)
+  // タイプ無効: でんき の まひ 技は じめん に入らない。
+  let immune = attempt_turn_with_cache(st, UseMove(0), UseMove(0), pika, ground, new_damage_cache())
+  assert_true(ss_close(ss_opp_mass(immune, fn(s) { s == @model.Paralyze }), 0.0))
+  // 吸収: くさ の まひ 技は そうしょく に吸収され、まひ も HP 減少も起きない。
+  let absorbed = attempt_turn_with_cache(st, UseMove(0), UseMove(0), leafy, sipper, new_damage_cache())
+  assert_true(ss_close(ss_opp_mass(absorbed, fn(s) { s == @model.Paralyze }), 0.0))
+  assert_true(ss_close(ss_mass(absorbed, fn(s) { s.opp_hps[0] == 200 }), 1.0))
+  // 対照: 特性なしの相手には同じ くさ の まひ 技が 100% 入る。
+  let control = attempt_turn_with_cache(st, UseMove(0), UseMove(0), leafy, plain, new_damage_cache())
+  assert_true(ss_close(ss_opp_mass(control, fn(s) { s == @model.Paralyze }), 1.0))
 }

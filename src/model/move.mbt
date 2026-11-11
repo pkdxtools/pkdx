@@ -91,8 +91,8 @@ pub extend HealingEffect with Hash::{hash, hash_combine}
 ///     input may still set it below 100 (see payoff_semantics.md).
 ///   - damaging moves with a secondary status (ほのおのパンチ 10% やけど,
 ///     ヘドロばくだん 30% どく 等; こおり: れいとうビーム 10%): the chance is the
-///     per-hit secondary chance, rolled only when the hit deals damage
-///     (`secondary_gated_move`).
+///     per-hit secondary chance, rolled only when the hit reduces the target's HP
+///     (a Disguise chip counts; `secondary_gated_move`).
 ///
 /// Post-hit side-effect fields are covered below. All payoff metadata fields
 /// default to neutral values (`0` / `[]` / `None` / `false` / recoil `(0, 1)`)

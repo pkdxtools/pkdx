@@ -1240,6 +1240,77 @@ fn pass_turn_state(
 }
 
 ///|
+/// メガ進化のターン頭適用。Showdown では megaEvo が独立の行動 (行動順 104、技は 200) として
+/// 技より前に走り、`runMegaEvo` は命中・まひ・ねむり・外れ・免疫・先制 KO のいずれも見ない。
+/// よって使用者の技が行動しない枝でも進化は起きる。両者行動の枝は `transition_with_cache` が
+/// 同じ適用 (mega trigger) を行うので、`attempt_turn_with_cache` は一方または両方が行動しない
+/// 枝でだけこの helper を呼ぶ。適用内容は mega trigger と同じ: `*_megaed` / `*_mega_used` /
+/// Protean ロック解除 / しろいハーブ (onAnyAfterMega、両 active)。Mega 行動が無ければ state を
+/// そのまま返す。
+fn turn_start_mega(
+  state : SwitchingGameState,
+  my_action : ActionKind,
+  opp_action : ActionKind,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+) -> SwitchingGameState {
+  let my_trigger = is_mega_action(my_action)
+  let opp_trigger = is_mega_action(opp_action)
+  if !my_trigger && !opp_trigger {
+    return state
+  }
+  let my_megaed = state.my_megaed.copy()
+  let opp_megaed = state.opp_megaed.copy()
+  let my_protean_locked = state.my_protean_locked.copy()
+  let opp_protean_locked = state.opp_protean_locked.copy()
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
+  let my_ranks = state.my_ranks.copy()
+  let opp_ranks = state.opp_ranks.copy()
+  let my_item_consumed = state.my_item_consumed.copy()
+  let opp_item_consumed = state.opp_item_consumed.copy()
+  if my_trigger {
+    my_megaed[state.my_active] = true
+    if state.my_active < my_protean_locked.length() {
+      my_protean_locked[state.my_active] = ""
+    }
+  }
+  if opp_trigger {
+    opp_megaed[state.opp_active] = true
+    if state.opp_active < opp_protean_locked.length() {
+      opp_protean_locked[state.opp_active] = ""
+    }
+  }
+  apply_held_item_stat_reset_pair(
+    my_team,
+    state.my_active,
+    my_hps,
+    my_ranks,
+    my_item_consumed,
+    opp_team,
+    state.opp_active,
+    opp_hps,
+    opp_ranks,
+    opp_item_consumed,
+  )
+  {
+    ..state,
+    my_hps,
+    opp_hps,
+    my_ranks,
+    opp_ranks,
+    my_megaed,
+    opp_megaed,
+    my_mega_used: state.my_mega_used || my_trigger,
+    opp_mega_used: state.opp_mega_used || opp_trigger,
+    my_protean_locked,
+    opp_protean_locked,
+    my_item_consumed,
+    opp_item_consumed,
+  }
+}
+
+///|
 /// Entry point that composes `per_side_attempt` status-driven fan-out with
 /// `transition_with_cache`. Returns a list of `(prob, next_state)` pairs
 /// summing to 1.0 (modulo floating-point drift).
@@ -1248,7 +1319,9 @@ fn pass_turn_state(
 /// drives resolution (with pre-turn status overrides applied so burn / para
 /// damage-calc helpers see the post-attempt status). For outcomes where one
 /// or both sides skip, `pass_turn_state` / partial-execution arms build the
-/// next state directly.
+/// next state directly. In those skip arms a Mega action still evolves its
+/// user at turn start (`turn_start_mega`), so the Mega flags are applied
+/// before the arm runs.
 ///
 /// **Turn counter contract** (single source of truth): every branch returned
 /// by the four cases below — `transition_with_cache` (both act),
@@ -1333,9 +1406,16 @@ pub fn attempt_turn_with_cache(
         field_turns_left: state.field_turns_left,
         turn: state.turn,
       }
+      // メガ進化はターン頭に起きる。両者行動の枝は transition_with_cache が適用するので
+      // そのまま渡し、それ以外の枝 (非行動側の Mega を含む) は先に `turn_start_mega` で適用する。
+      let mega_pre = if ma.acts && oa.acts {
+        pre_state
+      } else {
+        turn_start_mega(pre_state, ma.action, oa.action, my_team, opp_team)
+      }
       // 崩れ技 / てっていこうせん の外れ (`SideAttempt.miss`) は使用者の HP 消費を含むので専用経路へ。
       let crash_miss = attempt_has_miss_self_loss(
-        pre_state,
+        mega_pre,
         ma,
         oa,
         my_team,
@@ -1344,10 +1424,10 @@ pub fn attempt_turn_with_cache(
       let branch_outs : Array[(Double, SwitchingGameState)] = match
         (ma.acts, oa.acts, crash_miss) {
         (_, _, true) =>
-          miss_self_loss_outcomes(pre_state, ma, oa, my_team, opp_team, dmg_cache)
+          miss_self_loss_outcomes(mega_pre, ma, oa, my_team, opp_team, dmg_cache)
         (true, true, false) =>
           transition_with_cache(
-            pre_state,
+            mega_pre,
             ma.action,
             oa.action,
             my_team,
@@ -1356,7 +1436,7 @@ pub fn attempt_turn_with_cache(
           )
         (true, false, false) =>
           partial_act_outcomes(
-            pre_state,
+            mega_pre,
             ma.action,
             true,
             my_team,
@@ -1365,7 +1445,7 @@ pub fn attempt_turn_with_cache(
           )
         (false, true, false) =>
           partial_act_outcomes(
-            pre_state,
+            mega_pre,
             oa.action,
             false,
             my_team,
@@ -1373,7 +1453,7 @@ pub fn attempt_turn_with_cache(
             dmg_cache,
           )
         (false, false, false) =>
-          [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
+          [(1.0, pass_turn_state(mega_pre, ma.post_status, oa.post_status))]
       }
       for s in branch_outs {
         let (p, ns_pre_eot) = s

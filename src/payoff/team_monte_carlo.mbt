@@ -411,6 +411,14 @@ fn team_apply_post_hit(
     if mv.self_ko {
       attacker_hps[attacker_active] = 0
     }
+    // 免疫 (MoveFail) でも てっていこうせん は最大 HP の 1/2 を失う (対象生存時のみ)。
+    team_apply_max_hp_recoil(
+      attacker_hps,
+      attacker_active,
+      attacker_team,
+      mv,
+      defender_hps[defender_active] > 0,
+    )
     return
   }
   let opp_alive = defender_hps[defender_active] > 0
@@ -432,6 +440,8 @@ fn team_apply_post_hit(
     let new_hp = attacker_hps[attacker_active] - recoil
     attacker_hps[attacker_active] = if new_hp < 0 { 0 } else { new_hp }
   }
+  // てっていこうせん の最大 HP 反動 (命中は実ダメージ > 0 のときだけ発動)。
+  team_apply_max_hp_recoil(attacker_hps, attacker_active, attacker_team, mv, dmg > 0)
   // Stage 13: 回復技 (HealingEffect) を self_ko の **手前** で適用。じばく系 +
   // healing の組合せは現状ゲーム内には無いが、ある場合は self_ko 側 (HP=0 強制
   // 上書き) が後勝ち、という DP 側の順序契約を MC でも維持する。
@@ -1157,8 +1167,8 @@ pub fn team_rollout(
         // circuits UseMove to `acts=false` regardless of status.
         let mut own_attempt_acts = true
         let mut opp_attempt_acts = true
-        let mut own_missed_crash = false
-        let mut opp_missed_crash = false
+        let mut own_missed = false
+        let mut opp_missed = false
         match ao {
           TmUseMove(mi) =>
             if own_start_recharging {
@@ -1176,7 +1186,7 @@ pub fn team_rollout(
               )
               own_status[own_active] = st
               own_attempt_acts = acts
-              own_missed_crash = missed && @damage.is_crash_move(own[own_active].moves[mi].name)
+              own_missed = missed
             }
           _ => ()
         }
@@ -1197,7 +1207,7 @@ pub fn team_rollout(
               )
               opp_status[opp_active] = st
               opp_attempt_acts = acts
-              opp_missed_crash = missed && @damage.is_crash_move(opp[opp_active].moves[mi].name)
+              opp_missed = missed
             }
           _ => ()
         }
@@ -1417,8 +1427,14 @@ pub fn team_rollout(
                 )
               }
             }
-            if own_missed_crash && own_hps[own_active] > 0 {
-              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+            if own_missed && own_hps[own_active] > 0 {
+              mc_apply_miss_self_loss(
+                own_hps,
+                own_active,
+                own,
+                mv_own,
+                opp_hps[opp_active] > 0,
+              )
               if all_ko(own_hps) {
                 return -1.0
               }
@@ -1494,8 +1510,14 @@ pub fn team_rollout(
                 return 1.0
               }
             }
-            if opp_missed_crash && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
-              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+            if opp_missed && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
+              mc_apply_miss_self_loss(
+                opp_hps,
+                opp_active,
+                opp,
+                mv_opp,
+                own_hps[own_active] > 0,
+              )
               if all_ko(opp_hps) {
                 return 1.0
               }
@@ -1579,8 +1601,14 @@ pub fn team_rollout(
                 )
               }
             }
-            if opp_missed_crash && opp_hps[opp_active] > 0 {
-              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+            if opp_missed && opp_hps[opp_active] > 0 {
+              mc_apply_miss_self_loss(
+                opp_hps,
+                opp_active,
+                opp,
+                mv_opp,
+                own_hps[own_active] > 0,
+              )
               if all_ko(opp_hps) {
                 return 1.0
               }
@@ -1654,8 +1682,14 @@ pub fn team_rollout(
                 return 1.0
               }
             }
-            if own_missed_crash && own_hps[own_active] > 0 && !own_blocked_mid_turn {
-              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+            if own_missed && own_hps[own_active] > 0 && !own_blocked_mid_turn {
+              mc_apply_miss_self_loss(
+                own_hps,
+                own_active,
+                own,
+                mv_own,
+                opp_hps[opp_active] > 0,
+              )
               if all_ko(own_hps) {
                 return -1.0
               }
@@ -1734,8 +1768,14 @@ pub fn team_rollout(
               return 1.0
             }
           }
-          if own_missed_crash && own_hps[own_active] > 0 {
-            mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+          if own_missed && own_hps[own_active] > 0 {
+            mc_apply_miss_self_loss(
+              own_hps,
+              own_active,
+              own,
+              mv_own,
+              opp_hps[opp_active] > 0,
+            )
             if all_ko(own_hps) {
               return -1.0
             }
@@ -1813,8 +1853,14 @@ pub fn team_rollout(
               return 1.0
             }
           }
-          if opp_missed_crash && opp_hps[opp_active] > 0 {
-            mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+          if opp_missed && opp_hps[opp_active] > 0 {
+            mc_apply_miss_self_loss(
+              opp_hps,
+              opp_active,
+              opp,
+              mv_opp,
+              own_hps[own_active] > 0,
+            )
             if all_ko(opp_hps) {
               return 1.0
             }

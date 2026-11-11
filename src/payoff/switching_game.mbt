@@ -242,7 +242,8 @@ fn last_resort_barred(
 ///
 /// `miss` is `true` only for the accuracy-miss branch (a move that was used and
 /// missed). Sleep / paralysis skips and recharge leave it `false`, because only
-/// a missed move reaches Showdown's `MoveFail` (the crash of 崩れ技).
+/// a missed move reaches Showdown's `MoveFail` (the crash of 崩れ技 and the
+/// recoil of てっていこうせん).
 pub(all) struct SideAttempt {
   prob : Double
   acts : Bool
@@ -1167,14 +1168,24 @@ fn apply_damage_variants_fanout(
     // 接触 proc は起きず、自爆 (self_ko) と Protean 記録だけが残る (`with_immune_effects`)。
     if outcome.hits_count == 0 {
       // 崩れ技の免疫 leg は使用者が崩れ HP を失う (Showdown `MoveFail`)。外れ枝は
-      // attempt 段 (`crash_miss_outcomes`) で処理する。`with_crash_damage` は非崩れ技では恒等。
+      // attempt 段 (`miss_self_loss_outcomes`) で処理する。`with_crash_damage` と
+      // `with_max_hp_recoil` は互いの技では恒等 (崩れ技 と てっていこうせん は別集合)。
       let immune_state = with_immune_effects(
         state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
       )
       leaves.push((
         outcome.probability,
-        with_crash_damage(
-          immune_state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+        // 免疫 (MoveFail) の使用者 HP 消費: 崩れ技は対象の生死によらず消費する (main)、
+        // てっていこうせん は対象生存時のみ (反動)。どちらも非該当の技では恒等。
+        with_max_hp_recoil(
+          with_crash_damage(
+            immune_state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+          ),
+          attacker_is_me,
+          attacker_slot,
+          attacker_team,
+          attacker_move,
+          pre_dmg_defender_hp > 0,
         ),
       ))
       continue
@@ -1230,9 +1241,19 @@ fn apply_damage_variants_fanout(
     // self_ko / recharge / stat_effects compound on the variant-specific
     // damage rather than a single mean. State remains immutable; with_-
     // post_hit_effects produces a fresh copy with updated arrays.
-    let state_v = with_post_hit_effects(
+    let state_v0 = with_post_hit_effects(
       state_dmg, attacker_is_me, attacker_slot, target_slot, attacker_team, defender_team,
       attacker_move, dmg_for_effects,
+    )
+    // てっていこうせん の最大 HP 反動: 命中は実ダメージ (dmg_for_effects) > 0 のときだけ
+    // 発動する (Showdown `totalDamage` が真のときのみ `applyRecoilDamage`)。
+    let state_v = with_max_hp_recoil(
+      state_v0,
+      attacker_is_me,
+      attacker_slot,
+      attacker_team,
+      attacker_move,
+      dmg_for_effects > 0,
     )
     let sub = compose_fanouts(state_v, [
       fn(s) {

@@ -1,7 +1,7 @@
 ///|
 /// 崩れ技 (Showdown `hasCrashDamage` + `onMoveFail`) の使用者 HP 消費 (DP)。
 ///
-/// 外れ leg は attempt 段 (`attempt_turn_with_cache` → `crash_miss_outcomes`)、免疫 leg は
+/// 外れ leg は attempt 段 (`attempt_turn_with_cache` → `miss_self_loss_outcomes`)、免疫 leg は
 /// `apply_damage_variants_fanout` の hits_count=0 で処理される。最大 HP は `actual_stats`
 /// で 200 に固定し、消費量 100 (= 200/2) を直接確認する。各ケースに対照 (非崩れ技 / 命中 /
 /// マジックガード) を置く。

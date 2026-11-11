@@ -54,9 +54,10 @@ fn is_mega_action(action : ActionKind) -> Bool {
 }
 
 ///|
-/// The crash move of a missed attempt (`SideAttempt.miss`), or `None` when the
-/// attempt did not miss or the move is not a crash move.
-fn missed_crash_move(
+/// The self-loss move of a missed attempt (`SideAttempt.miss`): a 崩れ技 (crash) or a
+/// てっていこうせん (max-HP recoil). `None` when the attempt did not miss or the move has
+/// neither effect. Crash and recoil move lists are disjoint (`move_flags.mbt`).
+fn missed_self_loss_move(
   attempt : SideAttempt,
   team : Array[Combatant],
   active : Int,
@@ -66,7 +67,7 @@ fn missed_crash_move(
   }
   match action_move_of(team, active, attempt.action) {
     Some(mv) =>
-      if @damage.is_crash_move(mv.name) {
+      if @damage.is_crash_move(mv.name) || @damage.is_max_hp_recoil_move(mv.name) {
         Some(mv)
       } else {
         None
@@ -76,21 +77,30 @@ fn missed_crash_move(
 }
 
 ///|
-/// `true` when either side's attempt missed a crash move. `attempt_turn_with_cache`
-/// routes such attempts to `crash_miss_outcomes`; every other attempt keeps the
-/// existing branches unchanged.
-fn attempt_has_crash_miss(
+/// `true` when either side's attempt missed a move with a self-loss (crash or recoil).
+/// `attempt_turn_with_cache` routes such attempts to `miss_self_loss_outcomes`; every
+/// other attempt keeps the existing branches unchanged.
+fn attempt_has_miss_self_loss(
   state : SwitchingGameState,
   ma : SideAttempt,
   oa : SideAttempt,
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
 ) -> Bool {
-  let my_crash = missed_crash_move(ma, my_team, state.my_active)
-  let opp_crash = missed_crash_move(oa, opp_team, state.opp_active)
-  match (my_crash, opp_crash) {
+  let my_loss = missed_self_loss_move(ma, my_team, state.my_active)
+  let opp_loss = missed_self_loss_move(oa, opp_team, state.opp_active)
+  match (my_loss, opp_loss) {
     (None, None) => false
     _ => true
+  }
+}
+
+///|
+/// `true` when a self-loss move is a てっていこうせん (its trigger reads the defender's HP).
+fn loss_is_recoil(loss : @model.Move?) -> Bool {
+  match loss {
+    Some(mv) => @damage.is_max_hp_recoil_move(mv.name)
+    None => false
   }
 }
 
@@ -98,7 +108,7 @@ fn attempt_has_crash_miss(
 /// DP: subtract the crash HP loss of `mv` from the user at `user_slot`. Returns
 /// `state` unchanged for non-crash moves and for Magic Guard users. Shared by the
 /// immune leg (`apply_damage_variants_fanout`) and the missed attempt
-/// (`crash_miss_outcomes`).
+/// (`miss_self_loss_outcomes`).
 fn with_crash_damage(
   state : SwitchingGameState,
   user_is_me : Bool,
@@ -123,6 +133,37 @@ fn with_crash_damage(
     with_hp_damage(state, user_is_me, user_slot, loss)
   } else {
     state
+  }
+}
+
+///|
+/// DP: the self-loss of `mv` (a missed move or an immune leg) for the user at `user_slot`.
+/// 崩れ技 → `with_crash_damage` (no trigger). てっていこうせん → `with_max_hp_recoil`, which
+/// fires only while the defender is alive at this point of the turn (`state`), so the
+/// speed order of the two legs matters. Identity for every other move.
+fn with_miss_self_loss(
+  state : SwitchingGameState,
+  user_is_me : Bool,
+  user_slot : Int,
+  user_team : Array[Combatant],
+  mv : @model.Move,
+) -> SwitchingGameState {
+  if @damage.is_max_hp_recoil_move(mv.name) {
+    let defender_alive = if user_is_me {
+      state.opp_hps[state.opp_active] > 0
+    } else {
+      state.my_hps[state.my_active] > 0
+    }
+    with_max_hp_recoil(
+      state,
+      user_is_me,
+      user_slot,
+      user_team,
+      mv,
+      defender_alive,
+    )
+  } else {
+    with_crash_damage(state, user_is_me, user_slot, user_team, mv)
   }
 }
 
@@ -184,18 +225,20 @@ fn attempt_turn_sign(
 }
 
 ///|
-/// Attempt-phase outcomes when a crash move missed (`SideAttempt.miss`) on at least
-/// one side. Showdown runs the crash (`MoveFail`) in the same action slot as the
-/// missed move, so the missed user loses its crash HP:
+/// Attempt-phase outcomes when a missed move carries a self-loss (`SideAttempt.miss`:
+/// 崩れ技 or てっていこうせん) on at least one side. Showdown runs the MoveFail effect in
+/// the same action slot as the missed move, so the missed user loses its HP:
 ///   - before the other side's action when the missed user is faster,
 ///   - after it when the missed user is slower (unless a sleep landed on the user
 ///     this turn, which cancels the move before `MoveFail`),
 ///   - and averaged over both orders on a speed tie (as `transition_with_cache`).
 ///     A Switch always resolves before any move, so the missed user comes second.
 ///
-/// When both sides fail (miss or skip), nobody else acts and the two crashes commute.
-/// A pair of acting sides cannot carry a miss, so it is delegated unchanged.
-fn crash_miss_outcomes(
+/// When both sides fail (miss or skip), nobody else acts. Two crashes commute (the crash
+/// does not read HP), so a crash-only pair keeps one outcome. A recoil reads whether the
+/// defender is alive, so a pair with a recoil runs both legs in speed order. A pair of
+/// acting sides cannot carry a miss, so it is delegated unchanged.
+fn miss_self_loss_outcomes(
   state : SwitchingGameState,
   ma : SideAttempt,
   oa : SideAttempt,
@@ -213,19 +256,41 @@ fn crash_miss_outcomes(
       dmg_cache,
     )
   }
-  let my_crash = missed_crash_move(ma, my_team, state.my_active)
-  let opp_crash = missed_crash_move(oa, opp_team, state.opp_active)
+  let my_loss = missed_self_loss_move(ma, my_team, state.my_active)
+  let opp_loss = missed_self_loss_move(oa, opp_team, state.opp_active)
   if !ma.acts && !oa.acts {
     let s0 = pass_turn_state(state, ma.post_status, oa.post_status)
-    let s1 = match my_crash {
-      Some(mv) => with_crash_damage(s0, true, s0.my_active, my_team, mv)
-      None => s0
+    if !loss_is_recoil(my_loss) && !loss_is_recoil(opp_loss) {
+      let s1 = match my_loss {
+        Some(mv) => with_crash_damage(s0, true, s0.my_active, my_team, mv)
+        None => s0
+      }
+      let s2 = match opp_loss {
+        Some(mv) => with_crash_damage(s1, false, s1.opp_active, opp_team, mv)
+        None => s1
+      }
+      return [(1.0, s2)]
     }
-    let s2 = match opp_crash {
-      Some(mv) => with_crash_damage(s1, false, s1.opp_active, opp_team, mv)
-      None => s1
+    let me_leg = fn(s : SwitchingGameState) -> SwitchingGameState {
+      match my_loss {
+        Some(mv) => with_miss_self_loss(s, true, s.my_active, my_team, mv)
+        None => s
+      }
     }
-    return [(1.0, s2)]
+    let opp_leg = fn(s : SwitchingGameState) -> SwitchingGameState {
+      match opp_loss {
+        Some(mv) => with_miss_self_loss(s, false, s.opp_active, opp_team, mv)
+        None => s
+      }
+    }
+    let sign = attempt_turn_sign(state, ma, oa, my_team, opp_team)
+    if sign > 0 {
+      return [(1.0, opp_leg(me_leg(s0)))]
+    }
+    if sign < 0 {
+      return [(1.0, me_leg(opp_leg(s0)))]
+    }
+    return [(0.5, opp_leg(me_leg(s0))), (0.5, me_leg(opp_leg(s0)))]
   }
   // Exactly one side acts; the other side missed or was skipped.
   let me_acts = ma.acts
@@ -234,12 +299,12 @@ fn crash_miss_outcomes(
   } else {
     oa.action
   }
-  let missed_crash = if me_acts {
-    opp_crash
+  let missed_loss = if me_acts {
+    opp_loss
   } else {
-    my_crash
+    my_loss
   }
-  match missed_crash {
+  match missed_loss {
     None => partial_act_outcomes(state, acting, me_acts, my_team, opp_team, dmg_cache)
     Some(mv) => {
       let missed_is_me = !me_acts
@@ -270,11 +335,11 @@ fn crash_miss_outcomes(
           }
         }
       }
-      let crash_first = fn() {
-        let s0 = with_crash_damage(state, missed_is_me, slot, team, mv)
+      let loss_first = fn() {
+        let s0 = with_miss_self_loss(state, missed_is_me, slot, team, mv)
         partial_act_outcomes(s0, acting, me_acts, my_team, opp_team, dmg_cache)
       }
-      let crash_second = fn() {
+      let loss_second = fn() {
         let outs : Array[(Double, SwitchingGameState)] = []
         for out in partial_act_outcomes(
           state,
@@ -293,27 +358,48 @@ fn crash_miss_outcomes(
           let s1 = if action_blocked_by_fresh_status(pre_status, now) {
             with_landing_sleep_consumed(s, missed_is_me, slot)
           } else {
-            with_crash_damage(s, missed_is_me, slot, team, mv)
+            with_miss_self_loss(s, missed_is_me, slot, team, mv)
           }
           outs.push((out.0, s1))
         }
         outs
       }
       if missed_first > 0 {
-        crash_first()
+        loss_first()
       } else if missed_first < 0 {
-        crash_second()
+        loss_second()
       } else {
         let outs : Array[(Double, SwitchingGameState)] = []
-        for x in crash_first() {
+        for x in loss_first() {
           outs.push((0.5 * x.0, x.1))
         }
-        for x in crash_second() {
+        for x in loss_second() {
           outs.push((0.5 * x.0, x.1))
         }
         outs
       }
     }
+  }
+}
+
+///|
+/// MC: the self-loss of a missed move `mv` (or an immune leg) for `team[slot]`. 崩れ技 →
+/// `mc_apply_crash` (no trigger); てっていこうせん → `team_apply_max_hp_recoil`, gated by
+/// `defender_alive` (the other side's active HP > 0 at this point of the leg).
+fn mc_apply_miss_self_loss(
+  hps : Array[Int],
+  slot : Int,
+  team : Array[Combatant],
+  mv : @model.Move,
+  defender_alive : Bool,
+) -> Unit {
+  if slot < 0 || slot >= team.length() {
+    return
+  }
+  if @damage.is_max_hp_recoil_move(mv.name) {
+    team_apply_max_hp_recoil(hps, slot, team, mv, defender_alive)
+  } else {
+    mc_apply_crash(hps, slot, team[slot], mv)
   }
 }
 

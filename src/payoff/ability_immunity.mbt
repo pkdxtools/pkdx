@@ -46,10 +46,22 @@ pub fn ability_blocks_freeze(ability : String) -> Bool {
 /// Return `true` when the defender's ability blocks the additional (secondary)
 /// effects of an attacking damaging move. りんぷん (Shield Dust): "The
 /// Pokémon is immune to additional effects from attacks." (Champions
-/// tokuseiinfo_syn.json:606). Only the freeze secondary is modelled today, so
-/// the caller applies it to freeze-carrying damaging moves.
+/// tokuseiinfo_syn.json:606). The caller applies it to every status secondary
+/// of a damaging move (`power > 0`): こおり / やけど / まひ / どく / もうどく.
 pub fn ability_blocks_secondary(ability : String) -> Bool {
   ability == "りんぷん"
+}
+
+///|
+/// Return `true` when the attacker's ability removes the additional (secondary)
+/// effects of its own damaging moves. ちからずく (Sheer Force): "The Pokémon's
+/// moves lose their additional effects, but the power of those moves will be
+/// boosted by 30%." (Champions tokuseiinfo_syn.json:4170). This predicate only
+/// strips the status secondary in the payoff fanouts (`secondary_gated_move` /
+/// `mc_try_apply_status`). The 30% power boost stays in the damage engine
+/// (`get_atk_ability_final`), which applies it to every move (pre-existing).
+pub fn ability_strips_secondaries(ability : String) -> Bool {
+  ability == "ちからずく"
 }
 
 ///|

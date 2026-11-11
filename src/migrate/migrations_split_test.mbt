@@ -28,6 +28,7 @@ test "migrations() is the concatenation of pokedex + champions" {
       #|  "015_move_meta_field",
       #|  "016_move_meta_steelbeam",
       #|  "017_move_meta_freeze",
+      #|  "018_move_meta_status",
       #|  "008_champions_init_schema",
       #|  "009_champions_pokemon",
       #|  "010_champions_moves",
@@ -65,7 +66,7 @@ test "migrations_pokedex hosts the live pokedex-side entries" {
     "001_mega_legendsza", "002_move_meta", "003_mega_forms", "004_move_meta_ailment",
     "005_move_meta_posthit", "006_form_name_aliases", "007_gender_symbol_aliases",
     "014_move_meta_healing", "015_move_meta_field", "016_move_meta_steelbeam",
-    "017_move_meta_freeze",
+    "017_move_meta_freeze", "018_move_meta_status",
   ]
   assert_true(pdx.length() == expected.length())
   for i = 0; i < expected.length(); i = i + 1 {

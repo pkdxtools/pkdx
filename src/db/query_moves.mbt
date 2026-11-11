@@ -257,7 +257,10 @@ fn collect_moves_rows(
       []
     }
     let status_effect = if r.length() > 10 {
-      parse_status_effect(r[9], r[10])
+      normalize_status_effect_chance(
+        @model.category_from_jp(r[2]),
+        parse_status_effect(r[9], r[10]),
+      )
     } else {
       None
     }
@@ -495,6 +498,24 @@ fn parse_status_effect(
 }
 
 ///|
+/// 変化技 (pure status) の `status_effect` 確率を 100 に正規化する (DB 経路の共通処理)。
+/// `move_meta.ailment_chance` は pure status 技では命中率と同値 (おにび 85 / 命中 85、でんじは 90 /
+/// 命中 90、ねむりごな 75 / 命中 75 など。`pkdx_patch/004_move_meta_ailment` の data.json と
+/// champions.db の `move.accuracy` が一致する)。命中は `move.accuracy` で既に抽選されるので、
+/// ここで確率も残すと DP / MC で「命中 × 確率」の二重抽選になる。ダメージ技 (Physical / Special)
+/// の二次効果は ailment_chance が追加効果の確率なので変えない。JSON 入力 (`pkdx select`) の
+/// `status_effect` には適用しない (入力契約は従来どおり、payoff_semantics.md 参照)。
+pub fn normalize_status_effect_chance(
+  category : @model.MoveCategory,
+  status_effect : (@model.StatusKind, Int)?,
+) -> (@model.StatusKind, Int)? {
+  match (category, status_effect) {
+    (@model.Status, Some((kind, _))) => Some((kind, 100))
+    _ => status_effect
+  }
+}
+
+///|
 /// Look up a move by name (Japanese) — single move lookup distinct from the
 /// learnset-oriented `query_moves`. Used by damage CLI and any caller that
 /// only needs the move metadata, not a learnset listing.
@@ -555,7 +576,10 @@ pub fn query_move(
     []
   }
   let status_effect = if r.length() > 9 {
-    parse_status_effect(r[8], r[9])
+    normalize_status_effect_chance(
+      @model.category_from_jp(r[2]),
+      parse_status_effect(r[8], r[9]),
+    )
   } else {
     None
   }

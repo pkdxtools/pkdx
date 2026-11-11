@@ -960,10 +960,19 @@ fn mc_try_apply_status(
   field? : @model.Field = @model.Field::None,
   immune? : Bool = false,
   weather? : @model.Weather = @model.Weather::None,
+  // 攻撃側の事情と命中結果 (DP `secondary_gated_move` と同じ規則): `hp_lost` は この命中で
+  // 相手の HP が減った量 (ばけのかわ の吸収 chip を含む。0 なら追加効果は付かない)、
+  // `attacker_ability` は攻撃側の特性 (ちからずく)。既定値 (1 / "") は従来どおり付く。
+  hp_lost? : Int = 1,
+  attacker_ability? : String = "",
 ) -> Unit {
   // タイプ / 特性で無効な leg は技が当たらないので状態異常も付与しない (DP の
   // `apply_damage_variants_fanout` は immune leg で fanout を回さない)。
   if immune {
+    return
+  }
+  // 追加効果 (power > 0) は、相手の HP を減らした命中で、攻撃側がちからずく でなければ付く。
+  if mv.power > 0 && (hp_lost <= 0 || ability_strips_secondaries(attacker_ability)) {
     return
   }
   // そうしょく: 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ
@@ -994,12 +1003,13 @@ fn mc_try_apply_status(
   if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
     return
   }
-  // こおり: はれ / マグマのよろい / りんぷん (DP `freeze_blocked_by_holder` と同じ規則)。MC は
-  // mega を模さないので raw combatant の特性で判定する。
+  // りんぷん: ダメージ技の追加効果を全 kind で止める。こおり だけ はれ / マグマのよろい も止める
+  // (DP `secondary_blocked_by_holder` と同じ規則)。MC は mega を模さないので raw combatant の特性。
+  if mv.power > 0 && ability_blocks_secondary(c.ability) {
+    return
+  }
   if kind == @model.FreezeKind &&
-    (weather == @model.Weather::Sun ||
-      ability_blocks_freeze(c.ability) ||
-      (mv.power > 0 && ability_blocks_secondary(c.ability))) {
+    (weather == @model.Weather::Sun || ability_blocks_freeze(c.ability)) {
     return
   }
   // Stage H: terrain (Misty / Electric) は grounded defender への状態異常付与を
@@ -1562,6 +1572,8 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
+                hp_lost=before - res_hp,
+                attacker_ability=own[own_active].ability,
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -1669,6 +1681,8 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
+                hp_lost=before - res_hp,
+                attacker_ability=opp[opp_active].ability,
               )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -1764,6 +1778,8 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
+                hp_lost=before - res_hp,
+                attacker_ability=opp[opp_active].ability,
               )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -1869,6 +1885,8 @@ pub fn team_rollout(
                 field=field_state[0],
                 immune=res_immune,
                 weather=weather_state[0],
+                hp_lost=before - res_hp,
+                attacker_ability=own[own_active].ability,
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -1958,6 +1976,8 @@ pub fn team_rollout(
               field=field_state[0],
               immune=res_immune,
               weather=weather_state[0],
+              hp_lost=before - res_hp,
+              attacker_ability=own[own_active].ability,
             )
             mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
@@ -2046,6 +2066,8 @@ pub fn team_rollout(
               field=field_state[0],
               immune=res_immune,
               weather=weather_state[0],
+              hp_lost=before - res_hp,
+              attacker_ability=opp[opp_active].ability,
             )
             mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {

@@ -139,8 +139,11 @@ pub fn apply_atk_ability_power(
       } else {
         move_power
       }
+    // Showdown reckless: `move.recoil || move.hasCrashDamage` で chainModify
+    // ([4915, 4096]) (≒ 1.2x)。崩れ技 (is_crash_move) も対象。てっていこうせん は
+    // Showdown では mindBlownRecoil のみで対象外 (is_max_hp_recoil_move 側)。
     "すてみ" =>
-      if is_recoil_move(move_name) {
+      if is_recoil_move(move_name) || is_crash_move(move_name) {
         move_power * 12 / 10
       } else {
         move_power

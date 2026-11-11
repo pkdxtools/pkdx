@@ -369,7 +369,6 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
 - **既知の差 (DP / MC 共通の既存差分)**: 先の leg で使用者が ひんし になった後、残りの leg の扱いが DP と MC で違う。MC は後の leg を target 生存でゲートする (`own_hps > 0 && opp_hps > 0`)。DP は actor の生存だけを見る (`resolve_moves` の `second_attacker_hps`)。崩れで先行の使用者が ひんし になるケースも、反動による ひんし と同じくこの差分に含まれる。parity テストは相手が行動しない (眠り / 交代) か、後行の使用者が崩れる構成に限っている。
 - **テスト**: `switching_game_crash_wbtest.mbt` (DP: 免疫 / 外れ / マジックガード / 両者外れ / 行動順 / 眠り / 同速の確率質量 など) と `team_monte_carlo_crash_parity_wbtest.mbt` (MC の leg 単位 + DP / MC parity の感度ガード)。
 - **未対応 (open)**:
-  - むこうみず (Reckless) の崩れ技 ×1.2: Showdown `reckless.onBasePower` は `move.recoil || move.hasCrashDamage`。pkdx の `abilities.mbt` は `is_recoil_move` のみ。ダメージ計算側の別 PR。
   - ちくでん (Volt Absorb) の電気無効: `check_def_immunity` に未収録 (ひらいしん / でんきエンジン は収録済み)。Showdown の `voltabsorb.onTryHit` は null を返すので サンダーダイブ は崩れる。
   - Mind Blown / Steel Beam (DB に無い)、Protect、みがわり、Substitute。
 

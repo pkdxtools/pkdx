@@ -6,8 +6,8 @@
 /// on multi-hit moves.
 
 ///|
-test "SCHEMA_VERSION is 6 (bumped for protean lock type in cache key)" {
-  @debug.debug_inspect(@damage_cache.SCHEMA_VERSION, content="6")
+test "SCHEMA_VERSION is 7 (bumped for Reckless crash-move power in cached damage)" {
+  @debug.debug_inspect(@damage_cache.SCHEMA_VERSION, content="7")
 }
 
 ///|

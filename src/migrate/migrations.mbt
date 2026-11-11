@@ -15,6 +15,7 @@
 ///   - 015:   pokedex.db ターゲット (フィールド設定技用 m015_move_meta_field)
 ///   - 016:   pokedex.db ターゲット (てっていこうせんの誤った自己能力低下を除去 m016_move_meta_steelbeam)
 ///   - 017:   pokedex.db ターゲット (こおり の二次効果 move_meta 行 m017_move_meta_freeze)
+///   - 018:   pokedex.db ターゲット (攻撃技の二次 やけど / まひ / どく / もうどく 行 m018_move_meta_status)
 /// 007 → 014 で番号が飛んでいるのは「pokedex / champions の番号空間を
 /// 共有しつつ、ファイルとしては別 DB を触る」設計を採っているため。新規
 /// pokedex.db migration を追加するときは `migrations_champions()` 末尾より
@@ -32,6 +33,7 @@ pub fn migrations_pokedex() -> Array[Migration] {
     { name: "015_move_meta_field", run: run_015 },
     { name: "016_move_meta_steelbeam", run: run_016 },
     { name: "017_move_meta_freeze", run: run_017 },
+    { name: "018_move_meta_status", run: run_018 },
   ]
 }
 

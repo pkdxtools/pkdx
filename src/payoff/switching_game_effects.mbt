@@ -255,20 +255,28 @@ pub fn field_blocks_status(
 }
 
 ///|
-/// こおり付与を止める特性・天候 (ねむり以外の状態異常には未モデルの特性は適用しない)。
-/// - マグマのよろい: "The Pokémon cannot be frozen." (tokuseiinfo_syn.json:1348)。
+/// 追加効果の状態異常 (`kind`) を止める対象側の特性・天候 (DP `maybe_apply_status_fanout` と
+/// MC `mc_try_apply_status` の共通 SSoT)。ねむり / あくび など他の kind には未モデルの特性を
+/// 適用しない (指示どおり、既存の状態異常免疫と同じ範囲に留める)。
+/// - りんぷん (Shield Dust): "immune to additional effects from attacks"
+///   (tokuseiinfo_syn.json:606)。ダメージ技の追加効果 (`power > 0`) を全 kind で止める。
+///   変化技の直接の状態異常は止めない。
+/// - マグマのよろい: "The Pokémon cannot be frozen." (tokuseiinfo_syn.json:1348)。こおり だけ。
 /// - はれ (`Weather::Sun`): 本文 (help_syn.json:27747 Harsh Sunlight) は凍結に触れないので
-///   Showdown `sunnyday.onImmunity` (frz → false) を採用する。グラウンド判定は不要。
-/// - りんぷん: "immune to additional effects from attacks" (tokuseiinfo_syn.json:606)。
-///   追加効果 (ダメージ技の付随) のみを止め、変化技の直接の凍結は止めないので `power > 0` に限る。
-pub fn freeze_blocked_by_holder(
+///   Showdown `sunnyday.onImmunity` (frz → false) を採用する。こおり だけ。
+pub fn secondary_blocked_by_holder(
   state : SwitchingGameState,
   target_is_me : Bool,
   target_slot : Int,
   target_team : Array[Combatant],
+  kind : @model.StatusKind,
   mv : @model.Move,
 ) -> Bool {
-  if state.weather == @model.Weather::Sun {
+  let freeze_only = kind == @model.FreezeKind
+  if mv.power <= 0 && !freeze_only {
+    return false
+  }
+  if freeze_only && state.weather == @model.Weather::Sun {
     return true
   }
   if target_slot < 0 || target_slot >= target_team.length() {
@@ -281,8 +289,51 @@ pub fn freeze_blocked_by_holder(
   }
   let is_mega = target_slot < megaed.length() && megaed[target_slot]
   let ability = effective_combatant(target_team[target_slot], is_mega).ability
-  ability_blocks_freeze(ability) ||
-    (mv.power > 0 && ability_blocks_secondary(ability))
+  (mv.power > 0 && ability_blocks_secondary(ability)) ||
+    (freeze_only && ability_blocks_freeze(ability))
+}
+
+///|
+/// 攻撃側の事情で、この技の追加効果 (`status_effect`) が付かない場合に写しを返す (DP)。
+/// 返り値は `mv` 自体か、`status_effect = None` にした写し。解凍 (`with_thaw` / thawsTarget)、
+/// 反動、ドレイン、能力変化は対象外で従来どおり。
+/// - 変化技 (`power = 0`): 追加効果ではないので触らない (命中は別経路で抽選済み)。
+/// - `dmg_for_effects <= 0`: 技が HP へダメージを与えていない命中。ばけのかわ が初撃を吸収した
+///   chip だけの命中がこれに当たる。Showdown の secondaries は 0 ダメージの対象に付くが、
+///   本 PR は「ダメージ > 0 のときだけ追加効果」という規則を採る (指示どおり、判断事項)。
+/// - ちからずく (Sheer Force) の使用者: 追加効果を失う (`ability_strips_secondaries`)。
+pub fn secondary_gated_move(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  attacker_team : Array[Combatant],
+  mv : @model.Move,
+  dmg_for_effects : Int,
+) -> @model.Move {
+  match mv.status_effect {
+    None => return mv
+    Some(_) => ()
+  }
+  if mv.power <= 0 {
+    return mv
+  }
+  if dmg_for_effects <= 0 {
+    return { ..mv, status_effect: None }
+  }
+  if attacker_slot < 0 || attacker_slot >= attacker_team.length() {
+    return mv
+  }
+  let megaed = if attacker_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let is_mega = attacker_slot < megaed.length() && megaed[attacker_slot]
+  let ability = effective_combatant(attacker_team[attacker_slot], is_mega).ability
+  if ability_strips_secondaries(ability) {
+    return { ..mv, status_effect: None }
+  }
+  mv
 }
 
 ///|
@@ -370,8 +421,15 @@ pub fn maybe_apply_status_fanout(
     ) {
     return [(1.0, state)]
   }
-  if kind == @model.FreezeKind &&
-    freeze_blocked_by_holder(state, target_is_me, target_slot, target_team, mv) {
+  // りんぷん (ダメージ技の追加効果) / マグマのよろい・はれ (こおり): `secondary_blocked_by_holder`。
+  if secondary_blocked_by_holder(
+    state,
+    target_is_me,
+    target_slot,
+    target_team,
+    kind,
+    mv,
+  ) {
     return [(1.0, state)]
   }
   // Stage G-2 / H: terrain blocks status infliction on grounded defenders.

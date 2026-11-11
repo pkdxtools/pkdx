@@ -1218,6 +1218,16 @@ fn apply_damage_variants_fanout(
     } else {
       actual_dmg
     }
+    // 二次状態異常 (追加効果) の写し: ダメージ > 0 の命中でだけ付く (ばけのかわ の吸収 chip
+    // のみの命中は付かない)。ちからずく の使用者は追加効果を失う。`secondary_gated_move` が SSoT。
+    let secondary_move = secondary_gated_move(
+      state,
+      attacker_is_me,
+      attacker_slot,
+      attacker_team,
+      attacker_move,
+      dmg_for_effects,
+    )
     // HP 減算は chip 込みの full damage (outcome.mean_damage) で行う。
     let state_dmg0 = with_hp_damage(
       state,
@@ -1302,7 +1312,7 @@ fn apply_damage_variants_fanout(
           target_is_me,
           target_slot,
           defender_team,
-          attacker_move,
+          secondary_move,
           hits_count=outcome.hits_count,
         )
       },

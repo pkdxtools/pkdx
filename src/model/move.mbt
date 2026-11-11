@@ -83,10 +83,16 @@ pub extend HealingEffect with Hash::{hash, hash_combine}
 ///   self-target and opponent-target entries mix freely; the payoff layer
 ///   routes each entry by its `target` field. Empty for damaging-only moves
 ///   that have no rank side effects.
-/// - `status_effect` — optional `(StatusKind, chance%)` pair for dedicated
-///   status moves (鬼火 = `Some((BurnKind, 85))`, どくどく, ねむりごな等).
-///   Secondary chances on damaging moves (ほのおのパンチ 10%やけど 等) are
-///   not modelled in MVP — only dedicated status moves carry this field.
+/// - `status_effect` — optional `(StatusKind, chance%)` pair. Two uses share
+///   the field, and the chance means something different for each:
+///   - pure status moves (鬼火 = `Some((BurnKind, 100))`, どくどく, ねむりごな等):
+///     the chance is the infliction chance *after* the accuracy roll, so it is
+///     100 when the DB is the source (`normalize_status_effect_chance`). A JSON
+///     input may still set it below 100 (see payoff_semantics.md).
+///   - damaging moves with a secondary status (ほのおのパンチ 10% やけど,
+///     ヘドロばくだん 30% どく 等; こおり: れいとうビーム 10%): the chance is the
+///     per-hit secondary chance, rolled only when the hit deals damage
+///     (`secondary_gated_move`).
 ///
 /// Post-hit side-effect fields are covered below. All payoff metadata fields
 /// default to neutral values (`0` / `[]` / `None` / `false` / recoil `(0, 1)`)

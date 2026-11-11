@@ -93,7 +93,7 @@ fn slm_skips_until_wake(
   let mut st = start
   let mut skips = 0
   for _step in 0..<6 {
-    let (next, acts) = mc_resolve_attempt(st, 100, rng)
+    let (next, acts, _missed) = mc_resolve_attempt(st, 100, rng)
     if acts {
       return skips
     }
@@ -107,11 +107,14 @@ fn slm_skips_until_wake(
 test "mc_resolve_attempt: Sleep(2) is a sure skip; RestSleep(n>0) never wakes early" {
   let rng = seeded_rng(7UL)
   for _i in 0..<200 {
-    let (st, acts) = mc_resolve_attempt(@model.Sleep(2), 100, rng)
+    let (st, acts, missed) = mc_resolve_attempt(@model.Sleep(2), 100, rng)
     assert_false(acts)
+    // A sleep skip never reaches the move, so it is not a miss (no crash).
+    assert_false(missed)
     @debug.assert_eq(st, @model.Sleep(1))
-    let (rst, racts) = mc_resolve_attempt(@model.RestSleep(1), 100, rng)
+    let (rst, racts, rmissed) = mc_resolve_attempt(@model.RestSleep(1), 100, rng)
     assert_false(racts)
+    assert_false(rmissed)
     @debug.assert_eq(rst, @model.RestSleep(0))
   }
 }
@@ -123,7 +126,7 @@ test "mc_resolve_attempt: Sleep(1) wakes on 1/3 of seeded 2nd attempts (distribu
   let mut woke = 0
   let mut acted = 0
   for _i in 0..<n {
-    let (st, acts) = mc_resolve_attempt(@model.Sleep(1), 100, rng)
+    let (st, acts, _missed) = mc_resolve_attempt(@model.Sleep(1), 100, rng)
     if st == @model.None {
       woke += 1
     }
@@ -143,17 +146,25 @@ test "mc_resolve_attempt: Sleep(1) acc=85 -> wake-and-act ~ 1/3*0.85, wake-miss 
   let n = 30000
   let mut acted = 0
   let mut woke_miss = 0
+  let mut missed_n = 0
   for _i in 0..<n {
-    let (st, acts) = mc_resolve_attempt(@model.Sleep(1), 85, rng)
+    let (st, acts, missed) = mc_resolve_attempt(@model.Sleep(1), 85, rng)
     if acts {
       acted += 1
     } else if st == @model.None {
       woke_miss += 1
     }
+    // `missed` (crash flag) is the wake-and-miss branch only: the move was used
+    // and missed. The 2/3 sleep skip (Sleep(0), no move) is never missed.
+    if missed {
+      missed_n += 1
+      assert_true(!acts && st == @model.None)
+    }
   }
   let nf = n.to_double()
   assert_true((acted.to_double() / nf - 0.85 / 3.0).abs() < 0.01)
   assert_true((woke_miss.to_double() / nf - 0.15 / 3.0).abs() < 0.01)
+  @debug.assert_eq(missed_n, woke_miss)
 }
 
 ///|

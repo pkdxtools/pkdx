@@ -10,7 +10,8 @@ pub const SLEEP_SECOND_TURN_WAKE_RATE : Double = 0.3333333333333333
 
 ///|
 /// 目覚めて行動する枝 (`wake` の確率で目覚め、その上で命中判定する)。命中は行動、
-/// ハズレは目覚めたまま行動しない (`post_status = None`)。`wake = 1.0` (Sleep(0) /
+/// ハズレは目覚めたまま行動しない (`post_status = None`)。ハズレ枝は技を使ったうえで
+/// 外れた枝なので `miss = true` (崩れ技の外れ判定に使う)。`wake = 1.0` (Sleep(0) /
 /// RestSleep(0)) では従来の確定目覚めと同じ確率 (`1.0 * p` は `p` と一致) になる。
 /// 確率 0 の枝は積まない。
 fn wake_outs(
@@ -26,6 +27,7 @@ fn wake_outs(
       acts: true,
       action,
       post_status: @model.None,
+      miss: false,
     })
   }
   if wake * acc_miss > 0.0 {
@@ -34,6 +36,7 @@ fn wake_outs(
       acts: false,
       action,
       post_status: @model.None,
+      miss: true,
     })
   }
 }
@@ -81,12 +84,12 @@ pub fn per_side_attempt(
   if must_recharge {
     match action {
       UseMove(_) | Mega(_) =>
-        return [{ prob: 1.0, acts: false, action, post_status: status }]
+        return [{ prob: 1.0, acts: false, action, post_status: status, miss: false }]
       Switch(_) => ()
     }
   }
   let acts_only : Array[SideAttempt] = [
-    { prob: 1.0, acts: true, action, post_status: status },
+    { prob: 1.0, acts: true, action, post_status: status, miss: false },
   ]
   match action {
     Switch(_) => acts_only
@@ -103,6 +106,7 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: @model.Sleep(n - 1),
+              miss: false,
             })
           } else if n == 1 {
             // 2 回目: 2/3 で眠ったまま (Sleep(0) へ)、1/3 で目覚めて行動。
@@ -111,6 +115,7 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: @model.Sleep(0),
+              miss: false,
             })
             wake_outs(
               SLEEP_SECOND_TURN_WAKE_RATE,
@@ -131,6 +136,7 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: @model.RestSleep(n - 1),
+              miss: false,
             })
           } else {
             wake_outs(1.0, acc_hit, acc_miss, action, outs)
@@ -141,6 +147,7 @@ pub fn per_side_attempt(
             acts: false,
             action,
             post_status: @model.Paralyze,
+            miss: false,
           })
           let non_para = 1.0 - PARALYZE_SKIP_RATE
           if acc_hit > 0.0 {
@@ -149,6 +156,7 @@ pub fn per_side_attempt(
               acts: true,
               action,
               post_status: @model.Paralyze,
+              miss: false,
             })
           }
           if acc_miss > 0.0 {
@@ -157,12 +165,13 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: @model.Paralyze,
+              miss: true,
             })
           }
         }
         _ => {
           if acc_hit > 0.0 {
-            outs.push({ prob: acc_hit, acts: true, action, post_status: status })
+            outs.push({ prob: acc_hit, acts: true, action, post_status: status, miss: false })
           }
           if acc_miss > 0.0 {
             outs.push({
@@ -170,6 +179,7 @@ pub fn per_side_attempt(
               acts: false,
               action,
               post_status: status,
+              miss: true,
             })
           }
         }

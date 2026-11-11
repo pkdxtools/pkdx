@@ -1333,9 +1333,19 @@ pub fn attempt_turn_with_cache(
         field_turns_left: state.field_turns_left,
         turn: state.turn,
       }
+      // 崩れ技の外れ (`SideAttempt.miss`) は使用者の崩れ HP 消費を含むので専用経路へ。
+      let crash_miss = attempt_has_crash_miss(
+        pre_state,
+        ma,
+        oa,
+        my_team,
+        opp_team,
+      )
       let branch_outs : Array[(Double, SwitchingGameState)] = match
-        (ma.acts, oa.acts) {
-        (true, true) =>
+        (ma.acts, oa.acts, crash_miss) {
+        (_, _, true) =>
+          crash_miss_outcomes(pre_state, ma, oa, my_team, opp_team, dmg_cache)
+        (true, true, false) =>
           transition_with_cache(
             pre_state,
             ma.action,
@@ -1344,7 +1354,7 @@ pub fn attempt_turn_with_cache(
             opp_team,
             dmg_cache,
           )
-        (true, false) =>
+        (true, false, false) =>
           partial_act_outcomes(
             pre_state,
             ma.action,
@@ -1353,7 +1363,7 @@ pub fn attempt_turn_with_cache(
             opp_team,
             dmg_cache,
           )
-        (false, true) =>
+        (false, true, false) =>
           partial_act_outcomes(
             pre_state,
             oa.action,
@@ -1362,7 +1372,7 @@ pub fn attempt_turn_with_cache(
             opp_team,
             dmg_cache,
           )
-        (false, false) =>
+        (false, false, false) =>
           [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
       }
       for s in branch_outs {

@@ -1,0 +1,7 @@
+[
+  { "name": "れいとうビーム", "ailment_ja": "こおり", "ailment_chance": 10 },
+  { "name": "ふぶき", "ailment_ja": "こおり", "ailment_chance": 10 },
+  { "name": "れいとうパンチ", "ailment_ja": "こおり", "ailment_chance": 10 },
+  { "name": "こおりのキバ", "ailment_ja": "こおり", "ailment_chance": 10 },
+  { "name": "フリーズドライ", "ailment_ja": "こおり", "ailment_chance": 10 }
+]

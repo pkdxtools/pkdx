@@ -814,8 +814,23 @@ fn mc_resolve_attempt(
   status : @model.StatusCondition,
   mv_acc : Int,
   rng : @random.Rand,
+  thaws_user? : Bool = false,
 ) -> (@model.StatusCondition, Bool, Bool) {
   match status {
+    @model.Freeze(n) => {
+      // 解凍技 (defrost) は使用者を行動前に解凍する (乱数なし)。外れても解凍は起きる。
+      if thaws_user {
+        let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
+        return (@model.None, acts, !acts)
+      }
+      // 凍結: 1 / 2 回目 (Freeze(n >= 1)) は 25% で解凍して行動、75% で凍ったまま。
+      // 3 回目 (Freeze(0)) は確定解凍。解凍して行動する枝は命中判定する (DP `per_side_attempt`)。
+      if n >= 1 && !rand_bool(rng, FREEZE_THAW_RATE) {
+        return (@model.Freeze(n - 1), false, false)
+      }
+      let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
+      (@model.None, acts, !acts)
+    }
     @model.Sleep(n) => {
       if n >= 2 {
         return (@model.Sleep(n - 1), false, false)
@@ -854,6 +869,74 @@ fn mc_resolve_attempt(
 }
 
 ///|
+/// MC の こおり 補助: 行動者の解凍技 (defrost) 判定。もえつきる は炎タイプ使用者のみ。
+fn mc_move_thaws_user(c : Combatant, mv : @model.Move) -> Bool {
+  if !@damage.is_defrost_user_move(mv.name) {
+    return false
+  }
+  mv.name != "もえつきる" || c.pokemon.type1 == "ほのお" || c.pokemon.type2 == "ほのお"
+}
+
+///|
+/// MC の こおり 補助: 行動時点へ解凍抽選を遅らせる側 (DP `freeze_roll_deferred` と同じ規則)。
+/// 両者が技を出すことは呼び出し側で保証する。
+fn mc_freeze_deferred(
+  status : @model.StatusCondition,
+  recharging : Bool,
+  thaws_user : Bool,
+  opp_freezes : Bool,
+) -> Bool {
+  if recharging || thaws_user {
+    return false
+  }
+  match status {
+    @model.Freeze(_) => true
+    @model.None => opp_freezes
+    _ => false
+  }
+}
+
+///|
+/// 解凍 (こおり → None)。こおり以外は変えない。
+fn mc_thaw(defender_status : Array[@model.StatusCondition], slot : Int) -> Unit {
+  match defender_status[slot] {
+    @model.Freeze(_) => defender_status[slot] = @model.None
+    _ => ()
+  }
+}
+
+///|
+/// 炎タイプの攻撃技が実ダメージを与えたら凍った相手を解凍 (DP `apply_damage_variants_fanout`
+/// の Fire 解凍と同じ条件。`dealt` は immune / Disguise 破壊の chip を除いた実ダメージ > 0)。
+fn mc_thaw_on_fire_hit(
+  defender_status : Array[@model.StatusCondition],
+  slot : Int,
+  mv : @model.Move,
+  weather : @model.Weather,
+  atk_ability : String,
+  dealt : Bool,
+) -> Unit {
+  if dealt &&
+    mv.category != @model.Status &&
+    @damage.resolve_effective_move_type(mv, weather, atk_ability) == "ほのお" {
+    mc_thaw(defender_status, slot)
+  }
+}
+
+///|
+/// thawsTarget 技 (Scald 等) は命中後、二次効果の後に相手を解凍する (DP の順序と同じ)。
+fn mc_thaw_target_after_secondary(
+  defender_status : Array[@model.StatusCondition],
+  slot : Int,
+  mv : @model.Move,
+  dealt : Bool,
+) -> Unit {
+  if dealt && @damage.is_thaws_target_move(mv.name) {
+    mc_thaw(defender_status, slot)
+  }
+}
+
+///|
 /// MC rollout variant of `maybe_apply_status_fanout` — samples the chance
 /// roll directly. Mutates `defender_status_arr[defender_slot]` in place when
 /// the status lands (ignored when already statused, type immune, fainted, or
@@ -876,6 +959,7 @@ fn mc_try_apply_status(
   defender_slot : Int,
   field? : @model.Field = @model.Field::None,
   immune? : Bool = false,
+  weather? : @model.Weather = @model.Weather::None,
 ) -> Unit {
   // タイプ / 特性で無効な leg は技が当たらないので状態異常も付与しない (DP の
   // `apply_damage_variants_fanout` は immune leg で fanout を回さない)。
@@ -908,6 +992,14 @@ fn mc_try_apply_status(
   }
   let c = defender_team[defender_slot]
   if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
+    return
+  }
+  // こおり: はれ / マグマのよろい / りんぷん (DP `freeze_blocked_by_holder` と同じ規則)。MC は
+  // mega を模さないので raw combatant の特性で判定する。
+  if kind == @model.FreezeKind &&
+    (weather == @model.Weather::Sun ||
+      ability_blocks_freeze(c.ability) ||
+      (mv.power > 0 && ability_blocks_secondary(c.ability))) {
     return
   }
   // Stage H: terrain (Misty / Electric) は grounded defender への状態異常付与を
@@ -1169,10 +1261,49 @@ pub fn team_rollout(
         let mut opp_attempt_acts = true
         let mut own_missed = false
         let mut opp_missed = false
+        // こおり: 両者が技を出し、こちらが凍っている / 相手の技が凍らせうるとき、解凍抽選と命中を
+        // 行動時点 (Step 3) で振る (DP `freeze_roll_deferred` と同じ規則)。ここでは仮の値を置く。
+        let own_thaws = match ao {
+          TmUseMove(mi) => mc_move_thaws_user(own[own_active], own[own_active].moves[mi])
+          _ => false
+        }
+        let opp_thaws = match ap {
+          TmUseMove(mi) => mc_move_thaws_user(opp[opp_active], opp[opp_active].moves[mi])
+          _ => false
+        }
+        let own_pending_on = match (ao, ap) {
+          (TmUseMove(_), TmUseMove(mj)) =>
+            mc_freeze_deferred(
+              own_status[own_active],
+              own_start_recharging,
+              own_thaws,
+              move_can_freeze(opp[opp_active].moves[mj]),
+            )
+          _ => false
+        }
+        let opp_pending_on = match (ao, ap) {
+          (TmUseMove(mi), TmUseMove(_)) =>
+            mc_freeze_deferred(
+              opp_status[opp_active],
+              opp_start_recharging,
+              opp_thaws,
+              move_can_freeze(own[own_active].moves[mi]),
+            )
+          _ => false
+        }
+        let mut own_pending_acc = 100
+        let mut opp_pending_acc = 100
         match ao {
           TmUseMove(mi) =>
             if own_start_recharging {
               own_attempt_acts = false
+            } else if own_pending_on {
+              own_pending_acc = mc_attempt_accuracy(
+                own[own_active],
+                own[own_active].moves[mi],
+                opp[opp_active],
+                weather_state[0],
+              )
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
                 own_status[own_active],
@@ -1183,6 +1314,7 @@ pub fn team_rollout(
                   weather_state[0],
                 ),
                 rng,
+                thaws_user=own_thaws,
               )
               own_status[own_active] = st
               own_attempt_acts = acts
@@ -1194,6 +1326,13 @@ pub fn team_rollout(
           TmUseMove(mi) =>
             if opp_start_recharging {
               opp_attempt_acts = false
+            } else if opp_pending_on {
+              opp_pending_acc = mc_attempt_accuracy(
+                opp[opp_active],
+                opp[opp_active].moves[mi],
+                own[own_active],
+                weather_state[0],
+              )
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
                 opp_status[opp_active],
@@ -1204,6 +1343,7 @@ pub fn team_rollout(
                   weather_state[0],
                 ),
                 rng,
+                thaws_user=opp_thaws,
               )
               opp_status[opp_active] = st
               opp_attempt_acts = acts
@@ -1349,6 +1489,17 @@ pub fn team_rollout(
           let own_pre_status = own_status[own_active]
           let opp_pre_status = opp_status[opp_active]
           if own_first {
+            // こおり: 先攻 (own) の遅らせた試行は行動時点 (ここ) で振る。
+            if own_pending_on {
+              let (st, acts, missed) = mc_resolve_attempt(
+                own_status[own_active],
+                own_pending_acc,
+                rng,
+              )
+              own_status[own_active] = st
+              own_attempt_acts = acts
+              own_missed = missed
+            }
             let mut opp_blocked_mid_turn = false
             // Stage H: Psychic Terrain priority block — own の priority>0 技は
             // grounded な opp に対し無効化 (DP resolve 側 Stage G-3 と一致)。
@@ -1378,6 +1529,7 @@ pub fn team_rollout(
                 def_disguise_intact=opp_intact,
               )
               opp_hps[opp_active] = res_hp
+              mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
               }
@@ -1409,7 +1561,9 @@ pub fn team_rollout(
                 opp_active,
                 field=field_state[0],
                 immune=res_immune,
+                weather=weather_state[0],
               )
+              mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
               }
@@ -1438,6 +1592,17 @@ pub fn team_rollout(
               if all_ko(own_hps) {
                 return -1.0
               }
+            }
+            // こおり: 後攻 (opp) の遅らせた試行は先攻の技の結果を見てから振る。
+            if opp_pending_on && opp_hps[opp_active] > 0 && own_hps[own_active] > 0 {
+              let (st, acts, missed) = mc_resolve_attempt(
+                opp_status[opp_active],
+                opp_pending_acc,
+                rng,
+              )
+              opp_status[opp_active] = st
+              opp_attempt_acts = acts
+              opp_missed = missed
             }
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
@@ -1471,6 +1636,7 @@ pub fn team_rollout(
                 def_disguise_intact=own_intact,
               )
               own_hps[own_active] = res_hp
+              mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
               }
@@ -1502,7 +1668,9 @@ pub fn team_rollout(
                 own_active,
                 field=field_state[0],
                 immune=res_immune,
+                weather=weather_state[0],
               )
+              mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
               }
@@ -1523,6 +1691,17 @@ pub fn team_rollout(
               }
             }
           } else {
+            // こおり: 先攻 (opp) の遅らせた試行は行動時点 (ここ) で振る。
+            if opp_pending_on {
+              let (st, acts, missed) = mc_resolve_attempt(
+                opp_status[opp_active],
+                opp_pending_acc,
+                rng,
+              )
+              opp_status[opp_active] = st
+              opp_attempt_acts = acts
+              opp_missed = missed
+            }
             let mut own_blocked_mid_turn = false
             // Stage H: Psychic Terrain priority block — opp の priority>0 技は
             // grounded な own に対し無効化 (DP resolve 側 Stage G-3 と一致)。
@@ -1552,6 +1731,7 @@ pub fn team_rollout(
                 def_disguise_intact=own_intact,
               )
               own_hps[own_active] = res_hp
+              mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
               }
@@ -1583,7 +1763,9 @@ pub fn team_rollout(
                 own_active,
                 field=field_state[0],
                 immune=res_immune,
+                weather=weather_state[0],
               )
+              mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
               }
@@ -1612,6 +1794,17 @@ pub fn team_rollout(
               if all_ko(opp_hps) {
                 return 1.0
               }
+            }
+            // こおり: 後攻 (own) の遅らせた試行は先攻の技の結果を見てから振る。
+            if own_pending_on && own_hps[own_active] > 0 && opp_hps[opp_active] > 0 {
+              let (st, acts, missed) = mc_resolve_attempt(
+                own_status[own_active],
+                own_pending_acc,
+                rng,
+              )
+              own_status[own_active] = st
+              own_attempt_acts = acts
+              own_missed = missed
             }
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
@@ -1643,6 +1836,7 @@ pub fn team_rollout(
                 def_disguise_intact=opp_intact,
               )
               opp_hps[opp_active] = res_hp
+              mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
               }
@@ -1674,7 +1868,9 @@ pub fn team_rollout(
                 opp_active,
                 field=field_state[0],
                 immune=res_immune,
+                weather=weather_state[0],
               )
+              mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
               }
@@ -1729,6 +1925,7 @@ pub fn team_rollout(
               def_disguise_intact=opp_intact,
             )
             opp_hps[opp_active] = res_hp
+            mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
             if res_bust && opp_active < opp_disguise_busted.length() {
               opp_disguise_busted[opp_active] = true
             }
@@ -1760,7 +1957,9 @@ pub fn team_rollout(
               opp_active,
               field=field_state[0],
               immune=res_immune,
+              weather=weather_state[0],
             )
+            mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
             }
@@ -1814,6 +2013,7 @@ pub fn team_rollout(
               def_disguise_intact=own_intact,
             )
             own_hps[own_active] = res_hp
+            mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
             if res_bust && own_active < own_disguise_busted.length() {
               own_disguise_busted[own_active] = true
             }
@@ -1845,7 +2045,9 @@ pub fn team_rollout(
               own_active,
               field=field_state[0],
               immune=res_immune,
+              weather=weather_state[0],
             )
+            mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
             }

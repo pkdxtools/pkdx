@@ -56,6 +56,165 @@ fn action_blocked_by_fresh_status(
 }
 
 ///|
+/// こおり (Freeze) の技が こおり を付与しうるか (追加効果 `status_effect` が FreezeKind で
+/// chance > 0)。Champions 本文の「凍らせる」技 (れいとうビーム 等) がこれに当たる。
+fn move_can_freeze(mv : @model.Move) -> Bool {
+  match mv.status_effect {
+    Some((@model.FreezeKind, chance)) => chance > 0
+    _ => false
+  }
+}
+
+///|
+/// 行動が解凍技 (defrost) で、かつ使用者が解凍技として扱える (もえつきる は炎タイプ使用者のみ、
+/// Champions 本文 wazainfo_syn.json:12460 "fails unless it is used by a Fire type")。
+/// `per_side_attempt` の `thaws_user` に渡す。Move ではない行動 (Switch) は false。
+fn freeze_move_thaws_user(
+  state : SwitchingGameState,
+  is_me : Bool,
+  team : Array[Combatant],
+  action : ActionKind,
+) -> Bool {
+  let active = if is_me { state.my_active } else { state.opp_active }
+  match action_move_of(team, active, action) {
+    Some(mv) =>
+      if !@damage.is_defrost_user_move(mv.name) {
+        false
+      } else if mv.name == "もえつきる" {
+        let megaed = if is_me { state.my_megaed } else { state.opp_megaed }
+        let is_mega = active < megaed.length() && megaed[active]
+        let eff = effective_combatant(team[active], is_mega)
+        eff.pokemon.type1 == "ほのお" || eff.pokemon.type2 == "ほのお"
+      } else {
+        true
+      }
+    None => false
+  }
+}
+
+///|
+/// こおり の解凍抽選を行動時点へ遅らせるか (DP / MC 共通の規則)。自分が技を出し、相手も技を
+/// 出す (交代ではない) ときに限る。
+/// - 自分が凍っている (解凍技を除く): 相手の技が解凍 (炎の命中 / thawsTarget) しうるので遅らせる。
+/// - 自分が凍っていない: 相手の技が こおり を付与しうる (追加効果) ときだけ遅らせる。
+/// 遅らせた側は行動時点で `per_side_attempt` (解凍抽選 → 命中) を振るので、先攻の技の結果
+/// (解凍・凍結) が後攻の試行に反映される。それ以外は従来どおり事前抽選 (分布は同一)。
+fn freeze_roll_deferred(
+  state : SwitchingGameState,
+  is_me : Bool,
+  action : ActionKind,
+  team : Array[Combatant],
+  opp_action : ActionKind,
+  opp_team : Array[Combatant],
+) -> Bool {
+  let active = if is_me { state.my_active } else { state.opp_active }
+  let opp_active = if is_me { state.opp_active } else { state.my_active }
+  let status = if is_me {
+    state.my_status[active]
+  } else {
+    state.opp_status[active]
+  }
+  let recharge = if is_me {
+    state.my_must_recharge[active]
+  } else {
+    state.opp_must_recharge[active]
+  }
+  let is_move = match action {
+    UseMove(_) | Mega(_) => true
+    Switch(_) => false
+  }
+  let opp_is_move = match opp_action {
+    UseMove(_) | Mega(_) => true
+    Switch(_) => false
+  }
+  if !is_move || !opp_is_move || recharge {
+    return false
+  }
+  if freeze_move_thaws_user(state, is_me, team, action) {
+    return false
+  }
+  match status {
+    @model.Freeze(_) => true
+    @model.None =>
+      match action_move_of(opp_team, opp_active, opp_action) {
+        Some(mv) => move_can_freeze(mv)
+        None => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// `ws` の指定スロットの状態だけを差し替えた workspace (配列は複製)。
+fn ws_with_status(
+  ws : TurnWorkspace,
+  is_me : Bool,
+  slot : Int,
+  st : @model.StatusCondition,
+) -> TurnWorkspace {
+  if is_me {
+    let my_status = ws.my_status.copy()
+    my_status[slot] = st
+    { ..ws, my_status }
+  } else {
+    let opp_status = ws.opp_status.copy()
+    opp_status[slot] = st
+    { ..ws, opp_status }
+  }
+}
+
+///|
+/// こおり の試行を行動時点で解決する (DP)。`ws` は行動者の行動前 workspace (先攻の技の結果を
+/// 反映済み)。解凍抽選 (`per_side_attempt`: 凍っていれば 25% / 3 回目は確定、解凍技なし) と
+/// 命中判定を行い、行動した枝は `resolve_attacker_leg`、行動しなかった枝は状態だけ更新する。
+/// 外れた枝は崩れ技 / てっていこうせん の自傷を行動者に適用する (`with_miss_self_loss`)。
+/// `pre_state` は命中判定の基準 (ターン頭の状態。`attempt_accuracy` と同じ)。
+fn resolve_pending_freeze_attempt(
+  ws : TurnWorkspace,
+  is_me : Bool,
+  mv : @model.Move,
+  mv_idx : Int,
+  mega_now : Bool,
+  def_mega_now : Bool,
+  pre_state : SwitchingGameState,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+) -> Array[(Double, SwitchingGameState)] {
+  let slot = if is_me { ws.my_active } else { ws.opp_active }
+  let user_team = if is_me { my_team } else { opp_team }
+  let status_now = if is_me { ws.my_status[slot] } else { ws.opp_status[slot] }
+  let acc = if is_me {
+    attempt_accuracy(pre_state, UseMove(mv_idx), true, my_team, opp_team)
+  } else {
+    attempt_accuracy(pre_state, UseMove(mv_idx), false, opp_team, my_team)
+  }
+  let result : Array[(Double, SwitchingGameState)] = []
+  for o in per_side_attempt(status_now, false, UseMove(mv_idx), acc) {
+    let s_o = ws_to_state(ws_with_status(ws, is_me, slot, o.post_status), bump_turn=false)
+    if o.acts {
+      // 解凍して命中: 技は通常どおり解決する (解凍後の状態で。こおりの燃焼等は無関係)。
+      for leg in resolve_attacker_leg(
+        ws_from_state(s_o), is_me, mv, mv_idx, mega_now, def_mega_now, false,
+        my_team, opp_team, dmg_cache,
+      ) {
+        let (p, s) = leg
+        result.push((o.prob * p, s))
+      }
+    } else {
+      // 行動しない (凍結の継続 / 解凍した上での外れ)。外れは自傷のみ残す。
+      let s_m = if o.miss {
+        with_miss_self_loss(s_o, is_me, slot, user_team, mv)
+      } else {
+        s_o
+      }
+      result.push((o.prob, s_m))
+    }
+  }
+  result
+}
+
+///|
 /// Snapshot of the mutable per-turn buffers handed off between the first and
 /// second attacker. All arrays are defensively copied on entry; callers treat
 /// `advance_turn` as the only way to freeze this snapshot into a `SwitchingGameState`.
@@ -387,6 +546,8 @@ fn resolve_moves(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
+  my_pending? : Bool = false,
+  opp_pending? : Bool = false,
 ) -> Array[(Double, SwitchingGameState)] {
   let ws = ws_from_state(state)
   if my_mega_now {
@@ -445,10 +606,21 @@ fn resolve_moves(
   }
   // Step 1: first attacker acts. Damage + stat boost applied, then the
   // attacker's status move (if any) fans out onto the second actor.
-  let after_first = resolve_attacker_leg(
-    ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
-    first_pre_burn, my_team, opp_team, dmg_cache,
-  )
+  // こおり: 遅らせた側 (`freeze_roll_deferred`) の試行は行動時点で振る (先攻はこの時点、
+  // 後攻は先攻の技の後)。
+  let first_pending = if my_first { my_pending } else { opp_pending }
+  let second_pending = if my_first { opp_pending } else { my_pending }
+  let after_first = if first_pending {
+    resolve_pending_freeze_attempt(
+      ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
+      state, my_team, opp_team, dmg_cache,
+    )
+  } else {
+    resolve_attacker_leg(
+      ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
+      first_pre_burn, my_team, opp_team, dmg_cache,
+    )
+  }
   // Step 2: for each branch, resolve the second attacker with the potentially
   // updated status (fresh burn halves their physical damage; fresh sleep
   // locks them out entirely).
@@ -469,6 +641,17 @@ fn resolve_moves(
     // Second actor KO'd by first attacker's hit: no second leg, just advance.
     if second_attacker_hps[second_attacker_active] <= 0 {
       final_outs.push((p1, clone_state(s1, 1)))
+      continue
+    }
+    // こおり: 後攻の遅らせた試行 (解凍抽選 + 命中) を先攻の技の結果を見てから振る。
+    if second_pending {
+      for x in resolve_pending_freeze_attempt(
+        ws_from_state(s1), second_is_me, second_move, second_mv_idx,
+        second_mega_now, second_def_mega_now, state, my_team, opp_team, dmg_cache,
+      ) {
+        let (p2, s2) = x
+        final_outs.push((p1 * p2, clone_state(s2, 1)))
+      }
       continue
     }
     // Second actor newly slept / frozen mid-turn: skip their move. For sleep
@@ -670,6 +853,8 @@ pub fn transition_with_cache(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
+  my_pending? : Bool = false,
+  opp_pending? : Bool = false,
 ) -> Array[(Double, SwitchingGameState)] {
   // Normalise `Mega(mi)` into `UseMove(mi)` plus a same-turn mega trigger.
   // This keeps the existing per-pair arms minimal and funnels every damage
@@ -902,14 +1087,14 @@ pub fn transition_with_cache(
         for
           half in resolve_moves(
             state_marked, mi, mj, true, my_mega_now, opp_mega_now, my_team, opp_team,
-            dmg_cache,
+            dmg_cache, my_pending=my_pending, opp_pending=opp_pending,
           ) {
           outs.push((0.5 * half.0, half.1))
         }
         for
           half in resolve_moves(
             state_marked, mi, mj, false, my_mega_now, opp_mega_now, my_team, opp_team,
-            dmg_cache,
+            dmg_cache, my_pending=my_pending, opp_pending=opp_pending,
           ) {
           outs.push((0.5 * half.0, half.1))
         }
@@ -918,7 +1103,7 @@ pub fn transition_with_cache(
         let my_first = s > 0
         return resolve_moves(
           state_marked, mi, mj, my_first, my_mega_now, opp_mega_now, my_team, opp_team,
-          dmg_cache,
+          dmg_cache, my_pending=my_pending, opp_pending=opp_pending,
         )
       }
     }
@@ -1349,20 +1534,87 @@ pub fn attempt_turn_with_cache(
     state.my_must_recharge[state.my_active],
     my_action,
     my_acc,
+    thaws_user=freeze_move_thaws_user(state, true, my_team, my_action),
   )
   let opp_attempts = per_side_attempt(
     state.opp_status[state.opp_active],
     state.opp_must_recharge[state.opp_active],
     opp_action,
     opp_acc,
+    thaws_user=freeze_move_thaws_user(state, false, opp_team, opp_action),
   )
-  let results : Array[(Double, SwitchingGameState)] = []
-  for ma in my_attempts {
-    for oa in opp_attempts {
-      let joint = ma.prob * oa.prob
-      if joint <= 0.0 {
-        continue
+  // こおりの解凍抽選を行動時点へ遅らせる側は「保留」の試行 (`true`) として扱い、
+  // transition 側で振る。相手が行動しない枝では遅らせる意味がないので、保留側は事前抽選の
+  // 試行に戻す (`my_plain` / `opp_plain`)。保留以外の枝の順序は従来と同じ。
+  let my_plain : Array[(SideAttempt, Bool)] = my_attempts.map(fn(a) { (a, false) })
+  let opp_plain : Array[(SideAttempt, Bool)] = opp_attempts.map(fn(a) { (a, false) })
+  let my_entries : Array[(SideAttempt, Bool)] = if freeze_roll_deferred(
+    state, true, my_action, my_team, opp_action, opp_team,
+  ) {
+    [
+      (
+        {
+          prob: 1.0,
+          acts: true,
+          action: my_action,
+          post_status: state.my_status[state.my_active],
+          miss: false,
+        },
+        true,
+      ),
+    ]
+  } else {
+    my_plain
+  }
+  let opp_entries : Array[(SideAttempt, Bool)] = if freeze_roll_deferred(
+    state, false, opp_action, opp_team, my_action, my_team,
+  ) {
+    [
+      (
+        {
+          prob: 1.0,
+          acts: true,
+          action: opp_action,
+          post_status: state.opp_status[state.opp_active],
+          miss: false,
+        },
+        true,
+      ),
+    ]
+  } else {
+    opp_plain
+  }
+  let pairs : Array[(SideAttempt, Bool, SideAttempt, Bool)] = []
+  for ma0_e in my_entries {
+    let (_, ma0_pend) = ma0_e
+    for oa0_e in opp_entries {
+      let (oa0, oa0_pend) = oa0_e
+      let my_set = if ma0_pend && !oa0.acts {
+        my_plain
+      } else {
+        [ma0_e]
       }
+      for ma_e in my_set {
+        let (ma, ma_pend) = ma_e
+        let opp_set = if oa0_pend && !ma.acts {
+          opp_plain
+        } else {
+          [oa0_e]
+        }
+        for oa_e in opp_set {
+          let (oa, oa_pend) = oa_e
+          pairs.push((ma, ma_pend, oa, oa_pend))
+        }
+      }
+    }
+  }
+  let results : Array[(Double, SwitchingGameState)] = []
+  for pr in pairs {
+    let (ma, ma_pend, oa, oa_pend) = pr
+    let joint = ma.prob * oa.prob
+    if joint <= 0.0 {
+      continue
+    }
       // Apply the attempt-phase status overrides to the active slots so
       // downstream damage / action-order logic reads the post-attempt status.
       let pre_state : SwitchingGameState = {
@@ -1433,6 +1685,8 @@ pub fn attempt_turn_with_cache(
             my_team,
             opp_team,
             dmg_cache,
+            my_pending=ma_pend,
+            opp_pending=oa_pend,
           )
         (true, false, false) =>
           partial_act_outcomes(
@@ -1473,7 +1727,6 @@ pub fn attempt_turn_with_cache(
         let ns = apply_eot(ns_recharge_cleared, my_team, opp_team)
         results.push((joint * p, ns))
       }
-    }
   }
   results
 }

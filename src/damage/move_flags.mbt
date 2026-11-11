@@ -275,3 +275,36 @@ let spread_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
 pub fn is_spread_move(name : String) -> Bool {
   spread_moves.contains(name)
 }
+
+///|
+/// こおり (Freeze) の解凍に関わる技名リスト。Champions 本文を優先し、本文が黙る技は
+/// Showdown `data/moves.ts` の `flags.defrost` / `thawsTarget` で補う。
+/// - 使用者の解凍 (defrost): 本文 "Cures the user of being frozen" を持つ フレアドライブ
+///   (help_11_04_01 系 wazainfo_syn.json:7480) / かえんボール (:13396) / もえつきる (:12460,
+///   炎タイプ使用者のみ) / ねっとう (:9816) / ねっさのだいち (:14386)。シャカシャカほう (:15924)
+///   は本文が黙るので Showdown `defrost` で補う。残りは Showdown `defrost` で Champions 外も含む。
+let defrost_user_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  [
+    "かえんぐるま", "せいなるほのお", "フレアドライブ", "かえんボール",
+    "もえつきる", "クロスフレイム", "ねっとう", "ねっさのだいち",
+    "スチームバースト", "シャカシャカほう",
+  ].iter(),
+)
+
+///|
+pub fn is_defrost_user_move(name : String) -> Bool {
+  defrost_user_moves.contains(name)
+}
+
+///|
+/// 命中で相手の こおり を解除する技 (Showdown `thawsTarget` / 本文 "Cures the user and
+/// target of being frozen": ねっとう (:9816) / ねっさのだいち (:14386))。シャカシャカほう は
+/// 本文が黙るので Showdown `thawsTarget` で補う。スチームバースト は Champions 外。
+let thaws_target_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  ["ねっとう", "ねっさのだいち", "スチームバースト", "シャカシャカほう"].iter(),
+)
+
+///|
+pub fn is_thaws_target_move(name : String) -> Bool {
+  thaws_target_moves.contains(name)
+}

@@ -16,9 +16,10 @@
 ///
 /// `select_status_heavy` is the status-branch comparison case: paralysis,
 /// burn, poison, bad poison, sleep, and drowsy (every `StatusKind` the payoff
-/// layer currently applies) at non-trivial accuracy / chance. Confusion,
-/// freeze, and infatuation are not modeled yet; this case is the baseline
-/// those future chance nodes should be compared against. Its pair is
+/// layer applied when this case was written) at non-trivial accuracy / chance.
+/// Confusion and infatuation are not modeled yet. Freeze (こおり) is modeled
+/// since the Champions Frozen rule (`FreezeKind`), but this case does not
+/// carry a freeze move, so it is not part of this baseline. Its pair is
 /// `select_4v4_tl2` (same roster and move powers, `status_effect` cleared).
 ///
 /// In-process `vm_hwm_kb` is the Linux `VmHWM` of the whole process (high

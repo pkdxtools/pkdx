@@ -1,5 +1,7 @@
 ///|
-/// Paralyze: 12.5% chance of full-turn failure (gen7+ freeze/paralysis rate).
+/// Paralyze: 12.5% chance of full-turn failure. This is the Champions paralysis
+/// rate (help_syn.json:26071 "The Pokémon has a 12.5% chance of being unable to
+/// use moves"), not a gen7+ rule.
 pub const PARALYZE_SKIP_RATE : Double = 0.125
 
 ///|
@@ -7,6 +9,12 @@ pub const PARALYZE_SKIP_RATE : Double = 0.125
 /// Champions 本文 (help_syn.json:26333): "it will have a 1-in-3 chance of being
 /// cured on its second turn". 3 回目 (`Sleep(0)`) は確定で目覚める。
 pub const SLEEP_SECOND_TURN_WAKE_RATE : Double = 0.3333333333333333
+
+///|
+/// こおり (`Freeze(n)`, n >= 1) の 1 回の試行での解凍確率。Champions 本文
+/// (help_syn.json:26184): "has a 25% chance of being cured each time it tries to do
+/// so". Showdown `frz.onBeforeMove` の 20% (`randomChance(1, 5)`) とは異なる。
+pub const FREEZE_THAW_RATE : Double = 0.25
 
 ///|
 /// 目覚めて行動する枝 (`wake` の確率で目覚め、その上で命中判定する)。命中は行動、
@@ -80,6 +88,7 @@ pub fn per_side_attempt(
   must_recharge : Bool,
   action : ActionKind,
   accuracy : Int,
+  thaws_user? : Bool = false,
 ) -> Array[SideAttempt] {
   if must_recharge {
     match action {
@@ -139,6 +148,25 @@ pub fn per_side_attempt(
               miss: false,
             })
           } else {
+            wake_outs(1.0, acc_hit, acc_miss, action, outs)
+          }
+        @model.Freeze(n) =>
+          if thaws_user {
+            // 解凍技 (defrost) は使用者を行動前に解凍する (乱数なし)。命中判定あり。
+            // 外れても解凍は起きる (Showdown `onModifyMove` の cure は命中より前)。
+            wake_outs(1.0, acc_hit, acc_miss, action, outs)
+          } else if n >= 1 {
+            // 試行ごとに 25% で解凍して行動 (命中判定あり)、75% で凍ったまま (Freeze(n-1))。
+            outs.push({
+              prob: 1.0 - FREEZE_THAW_RATE,
+              acts: false,
+              action,
+              post_status: @model.Freeze(n - 1),
+              miss: false,
+            })
+            wake_outs(FREEZE_THAW_RATE, acc_hit, acc_miss, action, outs)
+          } else {
+            // Freeze(0): 3 回目の試行で確定解凍して行動 (命中判定あり)。
             wake_outs(1.0, acc_hit, acc_miss, action, outs)
           }
         @model.Paralyze => {
@@ -227,6 +255,74 @@ pub fn field_blocks_status(
 }
 
 ///|
+/// こおり付与を止める特性・天候 (ねむり以外の状態異常には未モデルの特性は適用しない)。
+/// - マグマのよろい: "The Pokémon cannot be frozen." (tokuseiinfo_syn.json:1348)。
+/// - はれ (`Weather::Sun`): 本文 (help_syn.json:27747 Harsh Sunlight) は凍結に触れないので
+///   Showdown `sunnyday.onImmunity` (frz → false) を採用する。グラウンド判定は不要。
+/// - りんぷん: "immune to additional effects from attacks" (tokuseiinfo_syn.json:606)。
+///   追加効果 (ダメージ技の付随) のみを止め、変化技の直接の凍結は止めないので `power > 0` に限る。
+pub fn freeze_blocked_by_holder(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  target_team : Array[Combatant],
+  mv : @model.Move,
+) -> Bool {
+  if state.weather == @model.Weather::Sun {
+    return true
+  }
+  if target_slot < 0 || target_slot >= target_team.length() {
+    return false
+  }
+  let megaed = if target_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let is_mega = target_slot < megaed.length() && megaed[target_slot]
+  let ability = effective_combatant(target_team[target_slot], is_mega).ability
+  ability_blocks_freeze(ability) ||
+    (mv.power > 0 && ability_blocks_secondary(ability))
+}
+
+///|
+/// 解凍 (こおり → None)。対象スロットの状態がこおりでなければ state をそのまま返す。
+pub fn with_thaw(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+) -> SwitchingGameState {
+  let cur = if target_is_me {
+    state.my_status[target_slot]
+  } else {
+    state.opp_status[target_slot]
+  }
+  match cur {
+    @model.Freeze(_) =>
+      if target_is_me {
+        {
+          ..state,
+          my_status: override_active_status(
+            state.my_status,
+            target_slot,
+            @model.None,
+          ),
+        }
+      } else {
+        {
+          ..state,
+          opp_status: override_active_status(
+            state.opp_status,
+            target_slot,
+            @model.None,
+          ),
+        }
+      }
+    _ => state
+  }
+}
+
+///|
 /// Produce probabilistic next-state outcomes for a status-effect fan-out.
 /// Given `state_after_dmg` (already updated for damage and stat boosts) plus
 /// the attacking `move` and the target slot, returns either a single 1.0
@@ -272,6 +368,10 @@ pub fn maybe_apply_status_fanout(
       combatant.pokemon.type1,
       combatant.pokemon.type2,
     ) {
+    return [(1.0, state)]
+  }
+  if kind == @model.FreezeKind &&
+    freeze_blocked_by_holder(state, target_is_me, target_slot, target_team, mv) {
     return [(1.0, state)]
   }
   // Stage G-2 / H: terrain blocks status infliction on grounded defenders.

@@ -352,6 +352,27 @@ Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃
 - **瀕死の保持者**: 保持者が瀕死 (HP 0) なら A は上がらない (Showdown は瀕死の対象に技が通らない)。DP (`with_absorb_effects`) と MC (`team_apply_post_hit`) の両方で、生存時のみ A +1 を適用する。
 - **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。
 
+### 崩れ技 (Crash damage) — DP / MC
+
+Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中しなかった leg で使用者が最大 HP の 1/2 を失う**。対象は `is_crash_move` (`src/damage/move_flags.mbt`) の名前表で、とびひざげり / かかとおとし / サンダーダイブ / とびげり (Past 専用、Champions の技プールには無い)。Mind Blown / Steel Beam は丸め (`Math.round`) と multihit の扱いが違い、pokedex.db にも champions.db にも無いので含めない。DB に crash 列は無い (`move_meta` は `recoil_*` / `self_ko` のみ)。
+
+- **消費量**: `max(1, floor(maxHP / 2))`。Showdown は `this.damage(source.baseMaxhp / 2, …)` を `spreadDamage` の `clampIntRange(_, 1)` に通す (`sim/battle.ts:2130`)。`clampIntRange` は `Math.floor` の後に下限 1 を掛ける (`lib/utils.ts:320-326`)。pkdx は `effective_hp` (実効最大 HP) を使う。Mind Blown / Steel Beam の `Math.round(maxhp / 2)` とは丸めが違う (対象外)。
+- **発生する leg**: (a) 外れ (命中判定の失敗。眠りの目覚め枝で技を使って外れた場合も含む: DP は `wake_outs` の `miss = true`、MC は `mc_resolve_attempt` の `missed`)、(b) タイプ / 特性で無効な leg (免疫 leg、`hits_count = 0`)。どちらも Showdown では対象が空になり `trySpreadMoveHit` が false を返すので、`useMove` の `!moveResult` 分岐 (`battle-actions.ts:589-596`) で `MoveFail` (崩れ) が走る。ゴーストへの とびひざげり、じめんへの サンダーダイブ、ひらいしん / でんきエンジン への サンダーダイブ (`check_def_immunity`) が該当する。
+- **発生しない leg**: 命中 (ダメージを与えた leg)、眠り / まひ / 反動による行動不能 (`per_side_attempt` の skip は `SideAttempt.miss = false`)、再使用 (`must_recharge`)。Protect (未モデル) は含まない。
+- **マジックガード**: 消費 0。Showdown `magicguard.onDamage` は `effect.effectType !== 'Move'` で `false` を返す (`data/abilities.ts:2466-2477`)。崩れのエフェクトは `dex.conditions.get('High Jump Kick')` で作られる `Condition` (`effectType` 既定 `'Condition'`、`sim/dex-data.ts:126`) なので対象になる。`ability_blocks_crash_damage` が唯一の判定。ほかの `onDamage` は崩れを防がない: Sturdy / Disguise / Ice Face は `effectType === 'Move'` 限定、Rock Head は `recoil` 限定 (`abilities.ts:3908`)。
+- **ひんし**: 現 HP ≤ 消費量なら HP 0。反動 (recoil) と同じく HP 0 で表現し、交代は既存の瀕死処理に任せる。HP は `clamp_zero`。
+- **行動順**: 崩れは使用者の行動枠で起きる (`MoveFail` は技の最後)。行動の速い側の崩れは相手の行動より前、遅い側は後。DP は `crash_miss_outcomes` で `move_turn_sign` を使い、同速は両順序の平均 (0.5 / 0.5)。切り替え (Switch) は常に先に解決するので、切り替えの相手がいる外れは崩れが後。MC は Step 3 の `own_first` の順に、各 leg の直後で適用する。
+- **眠りで行動不能になった使用者**: 先に行動した相手の眠り技で眠った場合、崩れは起きない (Showdown は行動そのものが起きない)。DP は `action_blocked_by_fresh_status` (`crash_second` の blocked 枝、`with_landing_sleep_consumed`)、MC は `*_blocked_mid_turn` で判定する。どちらも着弾ターンの眠りの 1 回目を `consume_sleep_attempt_on_block` で消費する (崩れは起きなくても消費は起きる。`resolve_moves` と同じ規則)。
+- **相手 HP への影響**: 崩れは使用者の HP だけを減らす。相手の HP / 状態 / ランクは変えない。
+- **DP の実装位置**: 外れ = `attempt_turn_with_cache` の `(_, _, true)` arm → `miss_self_loss_outcomes` (`SideAttempt.miss` は accuracy miss だけ立つ。てっていこうせん の外れも同じ経路、下記「てっていこうせん」節)。免疫 = `apply_damage_variants_fanout` の `hits_count = 0` leg → `with_crash_damage` (てっていこうせん は `with_max_hp_recoil` を併用、どちらも他方の技では恒等)。崩れ技 / てっていこうせん の外れが無い attempt は従来の arm を通る (`attempt_has_miss_self_loss` が false)。
+- **MC の実装位置**: 外れ = `mc_resolve_attempt` の 3 番目 (`missed`) → 各 leg 直後の `mc_apply_crash`。免疫 = `team_perform_attack` の 4 番目 (`immune`) → leg 内の `mc_apply_crash`。`team_perform_attack` の戻り値は 4 要素。
+- **既知の差 (DP / MC 共通の既存差分)**: 先の leg で使用者が ひんし になった後、残りの leg の扱いが DP と MC で違う。MC は後の leg を target 生存でゲートする (`own_hps > 0 && opp_hps > 0`)。DP は actor の生存だけを見る (`resolve_moves` の `second_attacker_hps`)。崩れで先行の使用者が ひんし になるケースも、反動による ひんし と同じくこの差分に含まれる。parity テストは相手が行動しない (眠り / 交代) か、後行の使用者が崩れる構成に限っている。
+- **テスト**: `switching_game_crash_wbtest.mbt` (DP: 免疫 / 外れ / マジックガード / 両者外れ / 行動順 / 眠り / 同速の確率質量 など) と `team_monte_carlo_crash_parity_wbtest.mbt` (MC の leg 単位 + DP / MC parity の感度ガード)。
+- **未対応 (open)**:
+  - むこうみず (Reckless) の崩れ技 ×1.2: Showdown `reckless.onBasePower` は `move.recoil || move.hasCrashDamage`。pkdx の `abilities.mbt` は `is_recoil_move` のみ。ダメージ計算側の別 PR。
+  - ちくでん (Volt Absorb) の電気無効: `check_def_immunity` に未収録 (ひらいしん / でんきエンジン は収録済み)。Showdown の `voltabsorb.onTryHit` は null を返すので サンダーダイブ は崩れる。
+  - Mind Blown / Steel Beam (DB に無い)、Protect、みがわり、Substitute。
+
 ### タイプ / 特性で無効な技 (immune leg) — DP / MC
 
 タイプ相性 0 (例: インファイト → ゴースト) と特性による無効 (`check_def_immunity`: ちょすい / よびみず / もらいび / ひらいしん / でんきエンジン / ふゆう / そうしょく / かんそうはだ) は、DP では `compute_damage_variants` が返す `hits_count = 0` の sentinel、MC では `team_perform_attack` の 4 番目の戻り値 `immune` で判定する。この leg は技が当たらないので、DP は `with_immune_effects`、MC は `team_apply_post_hit(immune=true)` と `mc_try_apply_status(immune=true)` で次の 2 つだけを行う。
@@ -363,7 +384,6 @@ Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃
   - 自己・相手のランク変化 (`stat_effects` の全件)、反動、回復・ドレイン、自己 `recharge` (はかいこうせん 等)、自己交代、状態異常、接触 proc、道具 proc。Showdown は対象が外れ、`trySpreadMoveHit` が `targets` 空で `moveResult = false` を返すため、`spreadMoveHit` (`runMoveEffects` / `selfDrops` / `secondaries`) に届かない (`battle-actions.ts:676-681`, `:1080-1192`)。反動は `hitStepMoveHitLoop` の中でしか適用されない (`:1040-1042`)。
   - しろいハーブ の判定: DP は通らず、MC は通る。理由は「しろいハーブ」節の「吸収 / 免疫 leg」。
 - **ifHit の自爆は発動しない**: Memento (おきみやげ) / Final Gambit / Healing Wish (いやしのねがい) / Lunar Dance (みかづきのまい) は `selfdestruct: 'ifHit'` で、`runMoveEffects` の `damage[i] !== false` でしか倒れない (`battle-actions.ts:1342-1344`)。pkdx の `self_ko` は DB (`move_meta`) 上 じばく / だいばくはつ だけなので、この区別を持つ必要はない。
-- **未対応: 崩れ技 (crash)**: `hasCrashDamage` を持つ highjumpkick / jumpkick / supercellslam は `onMoveFail` で使用者にダメージを与える (最大 HP の 1/2)。`mindBlownRecoil` を持つ mindblown (マインドブロウ、Champions 非収録) も同様。steelbeam (てっていこうせん) は崩れ技ではなく、命中と外れ・免疫の両方で発動する最大 HP 反動として `max_hp_recoil.mbt` で実装済み (下の「てっていこうせん」節)。`MoveFail` は `moveResult = false` のとき走るので、免疫でも発動する (`battle-actions.ts:589-596`、`data/moves.ts` の各 `onMoveFail`)。pkdx は外れ・免疫のいずれでも崩れ技をモデルしていない。本変更は崩れ技に触れず、追加もしない。
 - **未対応: 先の leg で対象が ひんし になった場合**: 2 本目の leg は攻撃側の HP だけを見て解決される (`switching_game_turn.mbt:469`)。Showdown は `getMoveTargets` が空を返して技を失敗させる (`pokemon.ts:841-862`) ので、Protean 記録も崩れ技も起きない。本変更の対象外。
 - **参照テスト**: `src/payoff/switching_game_immune_wbtest.mbt` (DP、対照・Protean・そうしょく+しろいハーブ を含む)、`src/payoff/team_monte_carlo_immune_parity_wbtest.mbt` (MC と DP/MC parity)。
 
@@ -373,13 +393,44 @@ Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃
 - **量**: `Math.round(maxhp / 2)`。非負整数では ceil(maxhp / 2) (奇数 151 → 76)。`battle-actions.ts:1438` (`applyRecoilDamage`)。
 - **発動条件** (Showdown の `moveResult` / `totalDamage` に対応):
   - 命中: 実ダメージ (`dmg_for_effects`) > 0 のとき。`applyRecoilDamage` は `move.totalDamage` が真のときだけ呼ばれる (`battle-actions.ts:1040-1041`、量は `:1438`)。ばけのかわ の初撃ブロックは 0 ダメージなので反動なし。
-  - 免疫 / 外れ (`MoveFail`): 対象が生存しているとき。対象不在 (`!target` は `battle-actions.ts:525`、`!targets.length` は `:574`) は `MoveFail` (`:591`) に届かず反動なし。外れは `per_side_attempt` の `SideAttempt.missed` (命中判定の外れだけ true。麻痺・睡眠の不発は false)。
-  - 行動しない (麻痺・睡眠・反動硬直・ひんし): 技が使われないので反動なし。
+  - 免疫 / 外れ (`MoveFail`): 対象が生存しているとき。対象不在 (`!target` は `battle-actions.ts:525`、`!targets.length` は `:574`) は `MoveFail` (`:591`) に届かず反動なし。外れは `per_side_attempt` の `SideAttempt.miss` (命中判定の外れだけ true。麻痺・睡眠の不発は false。崩れ技と同じフラグを使う)。
+  - 行動しない (麻痺・睡眠・反動硬直・ひんし): 技が使われないので反動なし。着弾ターンに眠らされた使用者 (`action_blocked_by_fresh_status`) の外れも同じく反動なしで、眠りの 1 回目が消費される (崩れ技と同じ規則。DP は `miss_self_loss_outcomes` の後攻枝、MC は `*_blocked_mid_turn`)。
 - **マジックガード**: 反動を無効化する。Showdown では `magicguard.onDamage` が `effect.effectType !== 'Move'` で弾き、steelbeam の condition は `effectType: 'Condition'` (`dex-conditions.ts`)。Champions `tokuseiinfo_syn.json:3442` "The Pokémon takes damage only from attacks." と一致。DP は mega 後の実効特性、MC は raw 特性 (MC は mega 未モデル)。
 - **対象外**: Protect / Detect 系 (payoff 層に無い)。Showdown では Protect で `moveResult = false` になり反動は発動する (`moves.ts` の protect `onTryHit` が `NOT_FAIL` (= `''`) を返し、`hitStepTryHitEvent` (`battle-actions.ts:705-713`) で対象が落ちる)。Champions 側の文言は沈黙 (SILENT) のため、Protect を実装するときに同じ扱いにする。
-- **順序**: 反動は使用者の leg の位置 (行動順) で適用する。DP は `attempt_with_miss_recoil` (`max_hp_recoil.mbt`) が外れ leg を行動順に挿入し、同速は両順序を 0.5 ずつ平均する。MC は `team_rollout` Step 3 の各 leg (`own_missed` / `opp_missed`)。相手の leg が先に ひんし にした場合、外れ反動は発動しない (対象不在)。
+- **順序**: 反動は使用者の leg の位置 (行動順) で適用する。DP は崩れ技と同じ `miss_self_loss_outcomes` (`switching_game_crash.mbt`) が外れ leg を行動順に挿入し、同速は両順序を 0.5 ずつ平均する。両者とも外した場合、崩れ技同士は順序に依らないが、反動は対象の生死を見るため両 leg を行動順に解決する (先に倒れた側には反動が入らない)。MC は `team_rollout` Step 3 の各 leg (`own_missed` / `opp_missed` → `mc_apply_miss_self_loss`)。
 - **自己 KO**: HP は 0 床でクランプ。反動は実ダメージ適用の後 (対象の KO が先) に入る。MC は all-KO で即 return する既存 leg と同じ扱い。
-- **参照テスト**: `src/payoff/switching_game_max_hp_recoil_wbtest.mbt` (DP: 命中・奇数丸め・感度・マジックガード・自己 KO・対象不在・免疫・外れの順序・外れ確率・`missed` フラグ)、`src/payoff/team_monte_carlo_max_hp_recoil_parity_wbtest.mbt` (MC leg 単位・ばけのかわ・`mc_resolve_attempt` の `missed`・DP/MC 値の parity)、`src/damage/steelbeam_flags_test.mbt` (メガランチャー対象外・フラグ)、`src/migrate/m016_steelbeam_test.mbt` (データ)。
+- **参照テスト**: `src/payoff/switching_game_max_hp_recoil_wbtest.mbt` (DP: 命中・奇数丸め・感度・マジックガード・自己 KO・対象不在・免疫・外れの順序・外れ確率・`miss` フラグ)、`src/payoff/switching_game_miss_self_loss_wbtest.mbt` (DP: 崩れ技とてっていこうせんの同時外し・両者外しの行動順・同速の平均・着弾ターンの眠り)、`src/payoff/team_monte_carlo_max_hp_recoil_parity_wbtest.mbt` (MC leg 単位・ばけのかわ・`mc_resolve_attempt` の `missed`・DP/MC 値の parity・着弾ターンの眠り parity)、`src/damage/steelbeam_flags_test.mbt` (メガランチャー対象外・フラグ)、`src/migrate/m016_steelbeam_test.mbt` (データ)。
+
+### ねむり (Champions 規則) — DP / MC
+
+本家テキスト (Champions。`champout/rom-txt/usa/help_syn.json:26333`):
+
+> After a Pokémon is put to sleep, it will remain asleep on its first turn, it will have a 1-in-3 chance of being cured on its second turn, and it will be cured on its third turn. A Pokémon that used the move Rest has no chance of being cured until its third turn.
+
+JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になってから　１度目は技が使えない。２度目は　１／３の確率で回復する。３度目は　回復する。技ねむるでは　３度目まで回復しない。」 ねむる は `wazainfo_syn.json:2130` "The user falls asleep for 2 turns."、あくび は `wazainfo_syn.json:5264` "Makes the target drowsy."。
+
+**状態表現** (`src/model/status_condition.mbt`):
+
+- `Sleep(n)` — 通常ねむり (ねむり技、あくび経由)。眠ったまま技を出そうとするたびに `n` を 1 減らす。`n >= 2`: 確定で眠ったまま。`n == 1`: 1/3 で目覚めて行動 (命中判定あり)、2/3 で `Sleep(0)`。`n == 0`: 確定で目覚めて行動 (命中判定あり)。
+- `RestSleep(n)` — ねむる 由来。`n >= 1`: 確定で眠ったまま、`n == 0`: 目覚めて行動。2 回目の抽選が無いのが `Sleep` との違い。`apply_healing` (`switching_game_effects.mbt`) が `RestSleep(2)` を直接書く。満タン失敗 / ふみん・やるき・スイートベール / エレキ・ミストの gate は従来どおり。
+- `Drowsy(1)` (あくび) → EOT で `Drowsy(0)` → 次の EOT で `Sleep(2)`。Yawn 由来も通常ねむりの規則に従う。
+
+**試行の数え方** (`per_side_attempt` / `mc_resolve_attempt`):
+
+- 「眠らされてから技を出そうとした回数」を数える。先攻が眠らされる場合 (行動後に着弾) は翌ターンが 1 回目。
+- 後攻が同ターンに眠らされる場合は、着弾ターンの行動 (眠ったまま) が 1 回目になる。`action_blocked_by_fresh_status` の枝で `consume_sleep_attempt_on_block` が `Sleep(2)` を `Sleep(1)` に進める (DP `transition_with_cache` と崩れ外れ時の `crash_second`、MC の mid-turn block 2 箇所)。Showdown `slp.onBeforeMove` が後攻の着弾ターンにも走るのと同じ。
+- 交代: 眠りのカウンタは据え置き (交代は試行ではない。`per_side_attempt` は `Switch` で `Sleep` を進めない)。Champions 本文は交代を扱わないため Showdown に合わせた (`dl-pokemon/pokemon.ts:1530` の `clearVolatile` は boosts / volatiles を消すが status / statusState は残す)。
+- 確率の枝: `Sleep(1)` の目覚め枝は `SLEEP_SECOND_TURN_WAKE_RATE` (= 1/3) × 命中。skip 回数は 1 (確率 1/3) か 2 (確率 2/3)。`RestSleep(2)` は skip 回数 2 固定。
+
+**Showdown との比較** (`dl-conditions/conditions.ts` の `slp`: `startTime = random(2,5)`、`onBeforeMove` で減算、0 で目覚め。Rest は `time = 3` (`dl-moves/moves.ts:14959` 付近) なので 2 skip 後に目覚め、`RestSleep(2)` と一致): Showdown の通常ねむりは skip 回数が 1〜3 の一様分布。Champions 規則では 3 回目が確定目覚めのため skip は最大 2。Yawn は Showdown の volatile が 2 残留で `slp` を付与する (`moves.ts:21133` 付近) ので、付与から 2 ターン目の終わりに眠り、その次の試行が 1 回目 — pkdx の `Drowsy` 経路と一致。
+
+**未対応 / 既知の近似**:
+
+- ねごと / いびき (眠り中に使える技、JP help_syn.json:23848 "いびき　ねごと以外の技が使えない") は未モデル。眠りの行動制限は全技共通。
+- はやおき (Early Bird、`tokuseiinfo_syn.json:1554` "awakens from sleep twice as fast") は未モデル。
+- エレキ / ミストフィールドは眠りの付与のみ阻止 (`help_syn.json:28394` "they cannot fall asleep")。目覚めには影響しない。
+- **同ターン再眠りの順序近似 (既存、DP / MC 共通)**: 目覚め抽選は `attempt_turn_with_cache` (DP) / 行動試行 (MC) で行動前に pre-turn 適用される。後攻が 2 回目 (1/3) で目覚めた直後に、同ターン先攻の眠らせ技が再び眠らせると、その標的は行動前にブロックされる。本家では先攻の技は眠ったままの標的に失敗し、標的は目覚めて行動する。Sleep(0) の既存挙動と同じ。例: 速い Spore 使いが遅い標的を毎ターン眠らせる fixture は DP / MC ともに標的が 0 回行動する。parity は取れるが期待値は本家とずれる。follow-up として「目覚めを後攻の leg 直前に適用する」順序修正が必要 (DP `transition_with_cache` と MC の mid-turn 2 箇所を同時に変える)。
+- **参照テスト**: `src/payoff/switching_game_sleep_wbtest.mbt` (DP 分布・Rest・あくび・交代・着弾消費)、`src/payoff/team_monte_carlo_sleep_parity_wbtest.mbt` (MC 分布、DP/MC parity、感度ガード)、`src/payoff/team_monte_carlo_test.mbt` (着弾ブロックの MC 回帰)。
 
 ### MVP 非対応 (将来拡張で検討)
 

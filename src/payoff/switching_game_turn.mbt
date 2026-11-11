@@ -50,6 +50,7 @@ fn action_blocked_by_fresh_status(
 ) -> Bool {
   match (pre, now) {
     (@model.None, @model.Sleep(_)) => true
+    (@model.None, @model.RestSleep(_)) => true
     _ => false
   }
 }
@@ -470,9 +471,18 @@ fn resolve_moves(
       final_outs.push((p1, clone_state(s1, 1)))
       continue
     }
-    // Second actor newly slept / frozen mid-turn: skip their move.
+    // Second actor newly slept / frozen mid-turn: skip their move. For sleep
+    // this landing turn is the sleeper's first move attempt (sure skip), so
+    // the counter steps down here (`consume_sleep_attempt_on_block`).
     if action_blocked_by_fresh_status(second_pre_status, second_now_status) {
-      final_outs.push((p1, clone_state(s1, 1)))
+      let s2 = clone_state(s1, 1)
+      let consumed = consume_sleep_attempt_on_block(second_now_status)
+      if second_is_me {
+        s2.my_status[second_attacker_active] = consumed
+      } else {
+        s2.opp_status[second_attacker_active] = consumed
+      }
+      final_outs.push((p1, s2))
       continue
     }
     let second_burn = is_burned(second_now_status)
@@ -1323,47 +1333,47 @@ pub fn attempt_turn_with_cache(
         field_turns_left: state.field_turns_left,
         turn: state.turn,
       }
-      let branch_outs : Array[(Double, SwitchingGameState)] = if has_miss_recoil(
+      // 崩れ技 / てっていこうせん の外れ (`SideAttempt.miss`) は使用者の HP 消費を含むので専用経路へ。
+      let crash_miss = attempt_has_miss_self_loss(
         pre_state,
         ma,
         oa,
         my_team,
         opp_team,
-      ) {
-        attempt_with_miss_recoil(pre_state, ma, oa, my_team, opp_team, dmg_cache)
-      } else {
-        match
-          (ma.acts, oa.acts) {
-          (true, true) =>
-            transition_with_cache(
-              pre_state,
-              ma.action,
-              oa.action,
-              my_team,
-              opp_team,
-              dmg_cache,
-            )
-          (true, false) =>
-            partial_act_outcomes(
-              pre_state,
-              ma.action,
-              true,
-              my_team,
-              opp_team,
-              dmg_cache,
-            )
-          (false, true) =>
-            partial_act_outcomes(
-              pre_state,
-              oa.action,
-              false,
-              my_team,
-              opp_team,
-              dmg_cache,
-            )
-          (false, false) =>
-            [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
-        }
+      )
+      let branch_outs : Array[(Double, SwitchingGameState)] = match
+        (ma.acts, oa.acts, crash_miss) {
+        (_, _, true) =>
+          miss_self_loss_outcomes(pre_state, ma, oa, my_team, opp_team, dmg_cache)
+        (true, true, false) =>
+          transition_with_cache(
+            pre_state,
+            ma.action,
+            oa.action,
+            my_team,
+            opp_team,
+            dmg_cache,
+          )
+        (true, false, false) =>
+          partial_act_outcomes(
+            pre_state,
+            ma.action,
+            true,
+            my_team,
+            opp_team,
+            dmg_cache,
+          )
+        (false, true, false) =>
+          partial_act_outcomes(
+            pre_state,
+            oa.action,
+            false,
+            my_team,
+            opp_team,
+            dmg_cache,
+          )
+        (false, false, false) =>
+          [(1.0, pass_turn_state(pre_state, ma.post_status, oa.post_status))]
       }
       for s in branch_outs {
         let (p, ns_pre_eot) = s

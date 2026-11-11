@@ -143,13 +143,20 @@ test "team_rollout: faster Spore prevents slower target from attacking on the tu
   let own = [mk_combatant(own_p, [spore])]
   let opp = [mk_combatant(opp_p, [tackle])]
   let rng = @payoff.seeded_rng(42UL)
-  let v = @payoff.team_rollout(own, opp, rng, turn_limit=3, epsilon=0.0)
-  // With the fix, opp never gets to attack: turn 1 is blocked mid-turn by the
-  // freshly-inflicted Sleep, and turns 2–3 are skipped by the pre-turn sleep
-  // counter decrement. Both sides end at full HP, giving a clean 0.0 draw.
-  // Without the fix, opp's turn-1 tackle resolves before the sleep fan-out
-  // runs, so own takes damage and the rollout value is strictly negative.
+  let v = @payoff.team_rollout(own, opp, rng, turn_limit=1, epsilon=0.0)
+  // With the fix, opp never gets to attack on the landing turn: it is blocked
+  // mid-turn by the freshly-inflicted Sleep. Both sides end at full HP, giving
+  // a clean 0.0 draw. Without the fix, opp's turn-1 tackle resolves before the
+  // sleep fan-out runs, so own takes damage and the value is strictly negative.
+  // (Updated for the Champions sleep rule, help_syn.json:26333: the target is
+  // at Sleep(1) after the landing turn and may wake on its 2nd attempt (1/3),
+  // so the old `turn_limit=3 -> 0.0` pin is no longer deterministic.)
   @debug.assert_eq(v, 0.0)
+  let rng3 = @payoff.seeded_rng(42UL)
+  let v3 = @payoff.team_rollout(own, opp, rng3, turn_limit=3, epsilon=0.0)
+  // Over 3 turns the target can wake on its 2nd attempt (1/3) and hit; the
+  // value is then negative. It can never be positive here.
+  assert_true(v3 <= 0.0)
 }
 
 ///|

@@ -275,13 +275,14 @@ test "MC max-hp recoil: mc_resolve_attempt reports missed only for the accuracy 
   @debug.assert_eq(st_miss, @model.None)
   @debug.assert_eq(acts_miss, false)
   @debug.assert_eq(missed_miss, true)
-  // 睡眠 (Sleep(1)) は不発で、外れではない (missed=false)。
+  // 睡眠 (Sleep(2): 確定の眠り) は不発で、外れではない (missed=false)。
+  // Sleep(1) は 1/3 で目覚めて行動するため、seed に依存する確率的な枝になる (#203 規則)。
   let (st_sleep, acts_sleep, missed_sleep) = mc_resolve_attempt(
-    @model.Sleep(1),
+    @model.Sleep(2),
     100,
     rng,
   )
-  @debug.assert_eq(st_sleep, @model.Sleep(0))
+  @debug.assert_eq(st_sleep, @model.Sleep(1))
   @debug.assert_eq(acts_sleep, false)
   @debug.assert_eq(missed_sleep, false)
 }
@@ -322,4 +323,29 @@ test "select DP/MC parity: Magic Guard keeps the missed てっていこうせん
   let own_base = [mr_user("てっていこうせん", 0, "")]
   let dp_base = switching_game_winrate(own_base, opp, 2)
   assert_true(dp - dp_base > 0.5)
+}
+
+///|
+fn mr_steel_never_hits() -> @model.Move {
+  mk_move("てっていこうせん", "はがね", @model.Special, 140, accuracy=0)
+}
+
+///|
+/// DP / MC parity (着弾ターンの眠り): 遅い てっていこうせん の使用者は先の相手の ねむりごな で
+/// 眠り、外しても反動を受けない (MC は `*_blocked_mid_turn` で反動を止める。DP は
+/// `action_blocked_by_fresh_status` の枝)。反動は 1 回 (200 → 100) しか入らず ひんし にならないので
+/// 値は 0 で一致する。感度: 眠らされない速い使用者は毎ターン反動を受けて 2 ターン目に負ける。
+test "select DP/MC parity: sleep-blocked missed てっていこうせん takes no recoil" {
+  let slow = [crash_mon("SteelSlow", [mr_steel_never_hits()], 200, spe=50)]
+  let fast_spore = [crash_mon("SteelSpore", [crash_spore()], 200, spe=150)]
+  let dp = switching_game_winrate(slow, fast_spore, 2)
+  let mc = team_rollout(slow, fast_spore, seeded_rng(74013UL), turn_limit=2, epsilon=0.0)
+  assert_true((dp - mc).abs() < 0.001)
+  assert_true(dp > -0.5)
+  let fast = [crash_mon("SteelFast", [mr_steel_never_hits()], 200, spe=150)]
+  let splash_foe = [crash_mon("SteelFoe", [crash_splash()], 200)]
+  let dp_fast = switching_game_winrate(fast, splash_foe, 2)
+  let mc_fast = team_rollout(fast, splash_foe, seeded_rng(74013UL), turn_limit=2, epsilon=0.0)
+  assert_true((dp_fast - mc_fast).abs() < 0.001)
+  assert_true(dp_fast < -0.5)
 }

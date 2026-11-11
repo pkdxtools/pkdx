@@ -344,7 +344,7 @@ fn greedy_team_action(
 /// (1-element 配列で mutable に渡す)。Wish 使用で `[0]` に 2 を書き、EOT で
 /// `tick_and_fire_wish_inplace` が active slot へ向けて発動する。DP 側
 /// (`SwitchingGameState.my_wish_turns : Int`) と同じ slot-bound 仕様。
-/// `attacker_status` は Rest が `Sleep(2)` を上書きするために必要。
+/// `attacker_status` は Rest が `RestSleep(2)` を上書きするために必要。
 /// `defender_megaed` は LeechSeed くさ判定の mega 後 type 解決に渡す
 /// (MC では常に false 固定の dummy 配列だが、シグネチャは DP 側
 /// `effective_combatant` 経路と整合)。MC は attacker mega を解決しないため
@@ -635,7 +635,7 @@ fn most_likely_variant(r : @model.DamageCalcResult) -> @model.DamageVariant? {
 /// 戻り値 `(new_hp, dmg_for_effects, disguise_busted, immune)`:
 ///   - `immune`: 技がタイプ / 特性で無効 (`calc_damage` の `is_immune`)。caller は
 ///     `team_apply_post_hit` に渡し、自己効果を止める (DP の hits_count=0 leg と同じ)。
-///     status (power<=0) は false。
+///     崩れ技の使用者はこの leg で崩れ HP を失う (`mc_apply_crash`)。status (power<=0) は false。
 ///   - `new_hp`: 解決後の防御側 HP (0 床クランプ)。
 ///   - `dmg_for_effects`: recoil / drain 計算に使う「技が実際に HP へ与えたダメージ」。
 ///     非 ばけのかわ 時は実 dealt (= defender_hp - new_hp) で従来の
@@ -805,21 +805,37 @@ fn mc_attempt_accuracy(
 ///|
 /// Resolve a single attack attempt for `me` in the MC rollout, respecting
 /// paralysis (12.5% failure), sleep (skip + counter decrement / wake-up),
-/// and move accuracy. Returns the new status of `me` and whether the action
-/// executes this turn.
+/// and move accuracy. Returns the new status of `me`, whether the action
+/// executes this turn, and `missed` = the move was used and missed (accuracy
+/// miss). Sleep / paralysis / recharge skips are never `missed` (only a
+/// missed move reaches Showdown's `MoveFail`, the crash of 崩れ技). Mirrors
+/// `SideAttempt.miss` on the DP side.
 fn mc_resolve_attempt(
   status : @model.StatusCondition,
   mv_acc : Int,
   rng : @random.Rand,
 ) -> (@model.StatusCondition, Bool, Bool) {
-  // 3 つ目の値 `missed` は命中判定での外れ (acts = false かつ不発ではない)。
-  // 麻痺 / 睡眠の不発は false のまま (DP `SideAttempt.missed` と同じ区別)。
   match status {
     @model.Sleep(n) => {
-      if n > 0 {
+      if n >= 2 {
         return (@model.Sleep(n - 1), false, false)
       }
-      // Sleep(0): wake up and act subject to accuracy below.
+      if n == 1 {
+        // 2 回目: 1/3 で目覚めて行動 (命中判定あり)、2/3 で眠ったまま。
+        if !rand_bool(rng, SLEEP_SECOND_TURN_WAKE_RATE) {
+          return (@model.Sleep(0), false, false)
+        }
+      }
+      // Sleep(0) (3 回目) と 2 回目の目覚め: 命中判定して行動。命中外れは
+      // 技を使ったうえでの外れ (`missed = true`、崩れ技の判定に使う)。
+      let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
+      (@model.None, acts, !acts)
+    }
+    @model.RestSleep(n) => {
+      if n > 0 {
+        return (@model.RestSleep(n - 1), false, false)
+      }
+      // RestSleep(0): 3 回目。確定で目覚めて行動 (命中判定あり)。
       let acts = rand_bool(rng, mv_acc.to_double() / 100.0)
       (@model.None, acts, !acts)
     }
@@ -1365,6 +1381,9 @@ pub fn team_rollout(
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
               }
+              if res_immune {
+                mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              }
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
@@ -1402,10 +1421,14 @@ pub fn team_rollout(
                   opp_status[opp_active],
                 ) {
                 opp_blocked_mid_turn = true
+                // 着弾ターンが眠りの 1 回目の試行 (DP `transition_with_cache` と同じ)。
+                opp_status[opp_active] = consume_sleep_attempt_on_block(
+                  opp_status[opp_active],
+                )
               }
             }
-            if own_missed && @damage.is_max_hp_recoil_move(mv_own.name) {
-              team_apply_max_hp_recoil(
+            if own_missed && own_hps[own_active] > 0 {
+              mc_apply_miss_self_loss(
                 own_hps,
                 own_active,
                 own,
@@ -1451,6 +1474,9 @@ pub fn team_rollout(
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
               }
+              if res_immune {
+                mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+              }
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
@@ -1484,8 +1510,8 @@ pub fn team_rollout(
                 return 1.0
               }
             }
-            if opp_missed && @damage.is_max_hp_recoil_move(mv_opp.name) {
-              team_apply_max_hp_recoil(
+            if opp_missed && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
+              mc_apply_miss_self_loss(
                 opp_hps,
                 opp_active,
                 opp,
@@ -1529,6 +1555,9 @@ pub fn team_rollout(
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
               }
+              if res_immune {
+                mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+              }
               team_apply_post_hit(
                 opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
@@ -1566,10 +1595,14 @@ pub fn team_rollout(
                   own_status[own_active],
                 ) {
                 own_blocked_mid_turn = true
+                // 着弾ターンが眠りの 1 回目の試行 (DP `transition_with_cache` と同じ)。
+                own_status[own_active] = consume_sleep_attempt_on_block(
+                  own_status[own_active],
+                )
               }
             }
-            if opp_missed && @damage.is_max_hp_recoil_move(mv_opp.name) {
-              team_apply_max_hp_recoil(
+            if opp_missed && opp_hps[opp_active] > 0 {
+              mc_apply_miss_self_loss(
                 opp_hps,
                 opp_active,
                 opp,
@@ -1613,6 +1646,9 @@ pub fn team_rollout(
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
               }
+              if res_immune {
+                mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+              }
               team_apply_post_hit(
                 own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
@@ -1646,8 +1682,8 @@ pub fn team_rollout(
                 return 1.0
               }
             }
-            if own_missed && @damage.is_max_hp_recoil_move(mv_own.name) {
-              team_apply_max_hp_recoil(
+            if own_missed && own_hps[own_active] > 0 && !own_blocked_mid_turn {
+              mc_apply_miss_self_loss(
                 own_hps,
                 own_active,
                 own,
@@ -1696,6 +1732,9 @@ pub fn team_rollout(
             if res_bust && opp_active < opp_disguise_busted.length() {
               opp_disguise_busted[opp_active] = true
             }
+            if res_immune {
+              mc_apply_crash(own_hps, own_active, own[own_active], mv_own)
+            }
             team_apply_post_hit(
               own_hps, own_active, own_ranks, own_must_recharge, own_status, own_wish_turns,
               own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
@@ -1729,8 +1768,8 @@ pub fn team_rollout(
               return 1.0
             }
           }
-          if own_missed && @damage.is_max_hp_recoil_move(mv_own.name) {
-            team_apply_max_hp_recoil(
+          if own_missed && own_hps[own_active] > 0 {
+            mc_apply_miss_self_loss(
               own_hps,
               own_active,
               own,
@@ -1778,6 +1817,9 @@ pub fn team_rollout(
             if res_bust && own_active < own_disguise_busted.length() {
               own_disguise_busted[own_active] = true
             }
+            if res_immune {
+              mc_apply_crash(opp_hps, opp_active, opp[opp_active], mv_opp)
+            }
             team_apply_post_hit(
               opp_hps, opp_active, opp_ranks, opp_must_recharge, opp_status, opp_wish_turns,
               opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
@@ -1811,8 +1853,8 @@ pub fn team_rollout(
               return 1.0
             }
           }
-          if opp_missed && @damage.is_max_hp_recoil_move(mv_opp.name) {
-            team_apply_max_hp_recoil(
+          if opp_missed && opp_hps[opp_active] > 0 {
+            mc_apply_miss_self_loss(
               opp_hps,
               opp_active,
               opp,

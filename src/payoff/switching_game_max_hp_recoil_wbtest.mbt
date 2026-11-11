@@ -4,7 +4,7 @@
 /// 反動量は Showdown `Math.round(maxhp / 2)` (= (maxhp + 1) / 2)。発動条件:
 /// - 命中: 実ダメージ > 0 (`apply_damage_variants_fanout` の dmg_for_effects)
 /// - 免疫 (`hits_count = 0`): 対象生存時 (`with_immune_effects` の後段)
-/// - 外れ: 対象生存時 (`attempt_with_miss_recoil`)
+/// - 外れ: 対象生存時 (`miss_self_loss_outcomes`)
 /// マジックガードは反動を無効化する。
 ///
 /// 感度ガード: 同じ技・同じ状況で名前だけ別 (`テスト技`) にすると反動が消える。
@@ -229,7 +229,7 @@ test "DP max-hp recoil: Magic Guard also blocks the fail-path recoil" {
 }
 
 ///|
-/// 発動順の検証 (`attempt_with_miss_recoil` を直接呼ぶ): 自分の てっていこうせん が
+/// 発動順の検証 (`miss_self_loss_outcomes` を直接呼ぶ): 自分の てっていこうせん が
 /// 外れ、相手は だいばくはつ (自爆) を使う。相手の自爆で相手が倒れる前に外れ反動が
 /// 解決すれば、対象生存で反動が入る (自分 200 → 100)。相手が先に倒れれば反動なし。
 test "DP max-hp recoil: miss leg resolves in speed order (me faster -> recoil, opp faster -> no target)" {
@@ -246,25 +246,25 @@ test "DP max-hp recoil: miss leg resolves in speed order (me faster -> recoil, o
     acts: false,
     action: UseMove(0),
     post_status: @model.None,
-    missed: true,
+    miss: true,
   }
   let oa : SideAttempt = {
     prob: 1.0,
     acts: true,
     action: UseMove(0),
     post_status: @model.None,
-    missed: false,
+    miss: false,
   }
   let pre = im_state(my_hps=[200, 100, 100], opp_hps=[100, 100, 100])
   // 自分が速い: 外れ反動 (対象 HP 100 > 0) → 自分 100、その後 相手が自爆。
-  let fast = attempt_with_miss_recoil(pre, ma, oa, own_fast, opp, new_damage_cache())
+  let fast = miss_self_loss_outcomes(pre, ma, oa, own_fast, opp, new_damage_cache())
   assert_true(fast.length() > 0)
   for leaf in fast {
     @debug.assert_eq(leaf.1.my_hps[0], 100)
     @debug.assert_eq(leaf.1.opp_hps[0], 0)
   }
   // 相手が速い: 相手が先に自爆 (対象 HP 0) → 自分の外れ反動は発動しない (200 のまま)。
-  let slow = attempt_with_miss_recoil(pre, ma, oa, own_slow, opp, new_damage_cache())
+  let slow = miss_self_loss_outcomes(pre, ma, oa, own_slow, opp, new_damage_cache())
   assert_true(slow.length() > 0)
   for leaf in slow {
     @debug.assert_eq(leaf.1.my_hps[0], 200)
@@ -323,14 +323,14 @@ test "DP max-hp recoil: accuracy miss branch has no recoil under another name" {
 }
 
 ///|
-/// `SideAttempt.missed` は命中判定の外れだけ true。麻痺の不発 (prob 0.125) は false。
-test "per_side_attempt: missed is set only for the accuracy miss, not for a paralysis skip" {
+/// `SideAttempt.miss` は命中判定の外れだけ true。麻痺の不発 (prob 0.125) は false。
+test "per_side_attempt: miss is set only for the accuracy miss, not for a paralysis skip" {
   let outs = per_side_attempt(@model.Paralyze, false, UseMove(0), 50)
-  let skips = outs.filter(a => !a.acts && !a.missed)
+  let skips = outs.filter(a => !a.acts && !a.miss)
   @debug.assert_eq(skips.length(), 1)
   assert_true((skips[0].prob - 0.125).abs() < 0.000000001)
   // 命中判定の外れ: (1 - 0.125) * 0.5 = 0.4375。
-  let misses = outs.filter(a => !a.acts && a.missed)
+  let misses = outs.filter(a => !a.acts && a.miss)
   @debug.assert_eq(misses.length(), 1)
   assert_true((misses[0].prob - 0.4375).abs() < 0.000000001)
 }

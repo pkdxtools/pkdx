@@ -240,16 +240,16 @@ fn last_resort_barred(
 /// status after this attempt resolves (pre-EOT-tick), so the caller can
 /// thread it into the resulting next-state.
 ///
-/// `missed` is true only for the accuracy-miss branch of a UseMove / Mega
-/// attempt (`acts = false` because the move missed). Paralysis / sleep skips
-/// and recharge keep it false, so the max-HP recoil of a missed てっていこうせん
-/// (`max_hp_recoil.mbt`) can be told apart from a skipped turn.
+/// `miss` is `true` only for the accuracy-miss branch (a move that was used and
+/// missed). Sleep / paralysis skips and recharge leave it `false`, because only
+/// a missed move reaches Showdown's `MoveFail` (the crash of 崩れ技 and the
+/// recoil of てっていこうせん).
 pub(all) struct SideAttempt {
   prob : Double
   acts : Bool
   action : ActionKind
   post_status : @model.StatusCondition
-  missed : Bool
+  miss : Bool
 } derive(Debug)
 
 ///|
@@ -1167,12 +1167,19 @@ fn apply_damage_variants_fanout(
     // 技が当たらない。自己ダウン / 反動 / 回復 / 自己 recharge / 相手ダウン / 状態異常 /
     // 接触 proc は起きず、自爆 (self_ko) と Protean 記録だけが残る (`with_immune_effects`)。
     if outcome.hits_count == 0 {
+      // 崩れ技の免疫 leg は使用者が崩れ HP を失う (Showdown `MoveFail`)。外れ枝は
+      // attempt 段 (`miss_self_loss_outcomes`) で処理する。`with_crash_damage` と
+      // `with_max_hp_recoil` は互いの技では恒等 (崩れ技 と てっていこうせん は別集合)。
+      let immune_state = with_immune_effects(
+        state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+      )
       leaves.push((
         outcome.probability,
-        // 免疫 (MoveFail) でも てっていこうせん は最大 HP の 1/2 を失う (対象生存時のみ)。
+        // 免疫 (MoveFail) の使用者 HP 消費: 崩れ技は対象の生死によらず消費する (main)、
+        // てっていこうせん は対象生存時のみ (反動)。どちらも非該当の技では恒等。
         with_max_hp_recoil(
-          with_immune_effects(
-            state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
+          with_crash_damage(
+            immune_state, attacker_is_me, attacker_slot, attacker_team, attacker_move,
           ),
           attacker_is_me,
           attacker_slot,
@@ -1373,7 +1380,7 @@ fn with_post_hit_effects(
   let my_must_recharge = state.my_must_recharge.copy()
   let opp_must_recharge = state.opp_must_recharge.copy()
   // Stage 7 (Rest): attacker_status は apply_healing で書き換わる可能性が
-  // あるので copy on write。Rest が attacker_status[active] を Sleep(2) で
+  // あるので copy on write。Rest が attacker_status[active] を RestSleep(2) で
   // 上書きする本家挙動を反映する。non-Rest pathways では unchanged のまま
   // 最終 state にスレッドされる。
   let my_status = state.my_status.copy()
@@ -1448,7 +1455,7 @@ fn with_post_hit_effects(
   // 選択できるようにする。FixedFraction では参照されない。
   // Stage 7: attacker_status と attacker_ability を追加で渡す。Rest が
   // ability_blocks_status(SleepKind) を見て免疫 ability の場合は失敗し、
-  // それ以外では attacker_status[active] を Sleep(2) に上書きする。
+  // それ以外では attacker_status[active] を RestSleep(2) に上書きする。
   // Stage 8: dmg と defender_ability を追加で渡す。Drain (ギガドレイン等) が
   // dmg * n / d を吸収し、defender_ability=ヘドロえき なら反転して attacker
   // が damage を受ける。defender_ability は damage 計算で参照される mega 後の

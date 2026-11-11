@@ -86,6 +86,21 @@ pub fn is_recoil_move(name : String) -> Bool {
 }
 
 ///|
+/// 崩れ技 (Showdown `hasCrashDamage` + `onMoveFail`): 命中しなかった (外れ / タイプ・
+/// 特性で無効) とき、使用者が最大 HP の 1/2 を失う。対象は data/moves.ts の highjumpkick
+/// (とびひざげり) / jumpkick (とびげり, Past) / axekick (かかとおとし) /
+/// supercellslam (サンダーダイブ)。Mind Blown / Steel Beam は丸め (Math.round) と
+/// multihit の扱いが異なり、pokedex.db にも champions.db にも無いので含めない。
+let crash_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  ["とびひざげり", "とびげり", "かかとおとし", "サンダーダイブ"].iter(),
+)
+
+///|
+pub fn is_crash_move(name : String) -> Bool {
+  crash_moves.contains(name)
+}
+
+///|
 let slash_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
   [
     "いあいぎり", "はっぱカッター", "きりさく", "れんぞくぎり",

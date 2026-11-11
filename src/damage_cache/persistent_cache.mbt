@@ -28,7 +28,13 @@
 /// ロックでダメージが変わる (effective_combatant が type を override)。key
 /// 末尾へ要素を増やすと空値でも全 key 文字列が変わる (trailing `|`) ため、
 /// 旧 v5 entries との混在を避ける一括 invalidate が必要。
-pub const SCHEMA_VERSION : Int = 6
+///
+/// v7: すてみ (Reckless) の 1.2x 対象に崩れ技 (とびひざげり / かかとおとし /
+/// サンダーダイブ) を追加 (Showdown `move.recoil || move.hasCrashDamage`)。
+/// key は不変 (atk_ability = すてみ + 崩れ技) なので v6 entries は旧威力の値が
+/// 残る。v3 と同じ理屈 (値の意味が変わった entries は再利用しない) で一括 invalidate。
+/// pkdx_version (moon.mod) は修正 PR では上がらないため、これが唯一の invalidate 手段。
+pub const SCHEMA_VERSION : Int = 7
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

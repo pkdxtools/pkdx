@@ -1,0 +1,21 @@
+[
+  { "name": "かみつく", "flinch_chance": 30 },
+  { "name": "たきのぼり", "flinch_chance": 20 },
+  { "name": "ゴッドバード", "flinch_chance": 30 },
+  { "name": "いわなだれ", "flinch_chance": 30 },
+  { "name": "いびき", "flinch_chance": 30 },
+  { "name": "じんつうりき", "flinch_chance": 10 },
+  { "name": "あくのはどう", "flinch_chance": 20 },
+  { "name": "エアスラッシュ", "flinch_chance": 30 },
+  { "name": "ドラゴンダイブ", "flinch_chance": 20 },
+  { "name": "かみなりのキバ", "flinch_chance": 10 },
+  { "name": "こおりのキバ", "flinch_chance": 10 },
+  { "name": "ほのおのキバ", "flinch_chance": 10 },
+  { "name": "しねんのずつき", "flinch_chance": 20 },
+  { "name": "アイアンヘッド", "flinch_chance": 20 },
+  { "name": "つららおとし", "flinch_chance": 30 },
+  { "name": "びりびりちくちく", "flinch_chance": 30 },
+  { "name": "ひょうざんおろし", "flinch_chance": 30 },
+  { "name": "３ぼんのや", "flinch_chance": 30 },
+  { "name": "3ぼんのや", "flinch_chance": 30 }
+]

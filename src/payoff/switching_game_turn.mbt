@@ -145,6 +145,90 @@ fn freeze_roll_deferred(
 }
 
 ///|
+/// ひるみ (追加効果 `flinch_chance`) の抽選を行動時点へ遅らせるか。自分が技を出し、相手も技を出す
+/// (交代ではない) ときに、相手の技がひるみを付与しうる (`flinch_chance > 0`) なら遅らせる。
+/// ひるみは後攻の行動を止めるので、後攻の試行 (眠り / 凍結 / まひ / 命中) は先攻の技の結果を見て
+/// から振る必要がある。先攻側は遅らせても分布は変わらない (先攻の試行は他の結果に依存しない)。
+/// 遅らせた側の試行は `resolve_pending_attempt` が行動時点で振る。
+fn flinch_roll_deferred(
+  state : SwitchingGameState,
+  is_me : Bool,
+  action : ActionKind,
+  opp_action : ActionKind,
+  opp_team : Array[Combatant],
+) -> Bool {
+  let active = if is_me { state.my_active } else { state.opp_active }
+  let recharge = if is_me {
+    state.my_must_recharge[active]
+  } else {
+    state.opp_must_recharge[active]
+  }
+  let is_move = match action {
+    UseMove(_) | Mega(_) => true
+    Switch(_) => false
+  }
+  let opp_is_move = match opp_action {
+    UseMove(_) | Mega(_) => true
+    Switch(_) => false
+  }
+  if !is_move || !opp_is_move || recharge {
+    return false
+  }
+  let opp_active = if is_me { state.opp_active } else { state.my_active }
+  match action_move_of(opp_team, opp_active, opp_action) {
+    Some(mv) => mv.flinch_chance > 0
+    None => false
+  }
+}
+
+///|
+/// 行動時点で振る試行 (保留) の判定。こおり (`freeze_roll_deferred`) かひるみ
+/// (`flinch_roll_deferred`) のどちらかで遅らせる。
+fn attempt_roll_deferred(
+  state : SwitchingGameState,
+  is_me : Bool,
+  action : ActionKind,
+  team : Array[Combatant],
+  opp_action : ActionKind,
+  opp_team : Array[Combatant],
+) -> Bool {
+  freeze_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
+  flinch_roll_deferred(state, is_me, action, opp_action, opp_team)
+}
+
+///|
+/// ターン内ひるみフラグを両サイドとも false に戻す (ひるみは持ち越さない)。
+fn clear_turn_flinch(state : SwitchingGameState) -> SwitchingGameState {
+  if !state.my_flinched && !state.opp_flinched {
+    state
+  } else {
+    { ..state, my_flinched: false, opp_flinched: false }
+  }
+}
+
+///|
+/// ふくつのこころ: ひるみで行動を止められた側の素早さランクを +1 する (`clamp_rank_for`)。
+/// 発火条件は `flinched_outcomes` の第 3 要素 (行動前にひるみが効いた枝) に限る。
+fn ws_with_flinch_speed_boost(
+  ws : TurnWorkspace,
+  is_me : Bool,
+  ability : String,
+) -> TurnWorkspace {
+  if !ability_flinch_speed_boost(ability) {
+    return ws
+  }
+  if is_me {
+    let my_ranks = ws.my_ranks.copy()
+    my_ranks[4] = clamp_rank_for(ability, my_ranks[4] + 1)
+    { ..ws, my_ranks }
+  } else {
+    let opp_ranks = ws.opp_ranks.copy()
+    opp_ranks[4] = clamp_rank_for(ability, opp_ranks[4] + 1)
+    { ..ws, opp_ranks }
+  }
+}
+
+///|
 /// `ws` の指定スロットの状態だけを差し替えた workspace (配列は複製)。
 fn ws_with_status(
   ws : TurnWorkspace,
@@ -164,12 +248,15 @@ fn ws_with_status(
 }
 
 ///|
-/// こおり の試行を行動時点で解決する (DP)。`ws` は行動者の行動前 workspace (先攻の技の結果を
-/// 反映済み)。解凍抽選 (`per_side_attempt`: 凍っていれば 25% / 3 回目は確定、解凍技なし) と
-/// 命中判定を行い、行動した枝は `resolve_attacker_leg`、行動しなかった枝は状態だけ更新する。
-/// 外れた枝は崩れ技 / てっていこうせん の自傷を行動者に適用する (`with_miss_self_loss`)。
+/// 保留した試行 (こおり / ひるみ) を行動時点で解決する (DP)。`ws` は行動者の行動前 workspace
+/// (先攻の技の結果を反映済み)。
+/// - ひるみが成立している (`ws` の当該サイドの `*_flinched`): 命中判定なしの `flinched_outcomes`。
+///   行動はしない。ふくつのこころ が発火するなら素早さ +1。
+/// - ひるみなし: 解凍抽選 (`per_side_attempt`: 凍っていれば 25% / 3 回目は確定、defrost 技は
+///   解凍のみ) と命中判定を行い、行動した枝は `resolve_attacker_leg`、行動しなかった枝は状態だけ
+///   更新する。外れた枝は崩れ技 / てっていこうせん の自傷を行動者に適用する (`with_miss_self_loss`)。
 /// `pre_state` は命中判定の基準 (ターン頭の状態。`attempt_accuracy` と同じ)。
-fn resolve_pending_freeze_attempt(
+fn resolve_pending_attempt(
   ws : TurnWorkspace,
   is_me : Bool,
   mv : @model.Move,
@@ -184,13 +271,36 @@ fn resolve_pending_freeze_attempt(
   let slot = if is_me { ws.my_active } else { ws.opp_active }
   let user_team = if is_me { my_team } else { opp_team }
   let status_now = if is_me { ws.my_status[slot] } else { ws.opp_status[slot] }
+  let flinched = if is_me { ws.my_flinched } else { ws.opp_flinched }
+  let thaws = freeze_move_thaws_user(pre_state, is_me, user_team, UseMove(mv_idx))
   let acc = if is_me {
     attempt_accuracy(pre_state, UseMove(mv_idx), true, my_team, opp_team)
   } else {
     attempt_accuracy(pre_state, UseMove(mv_idx), false, opp_team, my_team)
   }
   let result : Array[(Double, SwitchingGameState)] = []
-  for o in per_side_attempt(status_now, false, UseMove(mv_idx), acc) {
+  if flinched {
+    // ひるみ成立: 行動しない (命中判定なし)。眠り / 凍結の継続はひるみより先に効く。
+    let outs = flinched_outcomes(status_now, thaws)
+    for i = 0; i < outs.length(); i = i + 1 {
+      let (p, post, steadfast) = outs[i]
+      let ws_o = ws_with_status(ws, is_me, slot, post)
+      let holder_ability = holder_ability_of(
+        pre_state,
+        is_me,
+        slot,
+        user_team,
+      )
+      let ws_f = if steadfast {
+        ws_with_flinch_speed_boost(ws_o, is_me, holder_ability)
+      } else {
+        ws_o
+      }
+      result.push((p, ws_to_state(ws_f, bump_turn=false)))
+    }
+    return result
+  }
+  for o in per_side_attempt(status_now, false, UseMove(mv_idx), acc, thaws_user=thaws) {
     let s_o = ws_to_state(ws_with_status(ws, is_me, slot, o.post_status), bump_turn=false)
     if o.acts {
       // 解凍して命中: 技は通常どおり解決する (解凍後の状態で。こおりの燃焼等は無関係)。
@@ -240,6 +350,8 @@ priv struct TurnWorkspace {
   // しない (1 戦闘 1 回のみ)。
   my_disguise_busted : Array[Bool]
   opp_disguise_busted : Array[Bool]
+  my_flinched : Bool
+  opp_flinched : Bool
   my_moves_used : Array[Int]
   opp_moves_used : Array[Int]
   // Stage 2 (healing-moves plan): mirror the new state fields so
@@ -284,6 +396,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -321,6 +435,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_item_consumed: ws.opp_item_consumed.copy(),
     my_disguise_busted: ws.my_disguise_busted.copy(),
     opp_disguise_busted: ws.opp_disguise_busted.copy(),
+    my_flinched: ws.my_flinched,
+    opp_flinched: ws.opp_flinched,
     my_moves_used: ws.my_moves_used.copy(),
     opp_moves_used: ws.opp_moves_used.copy(),
     weather: ws.weather,
@@ -611,7 +727,7 @@ fn resolve_moves(
   let first_pending = if my_first { my_pending } else { opp_pending }
   let second_pending = if my_first { opp_pending } else { my_pending }
   let after_first = if first_pending {
-    resolve_pending_freeze_attempt(
+    resolve_pending_attempt(
       ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
       state, my_team, opp_team, dmg_cache,
     )
@@ -645,7 +761,7 @@ fn resolve_moves(
     }
     // こおり: 後攻の遅らせた試行 (解凍抽選 + 命中) を先攻の技の結果を見てから振る。
     if second_pending {
-      for x in resolve_pending_freeze_attempt(
+      for x in resolve_pending_attempt(
         ws_from_state(s1), second_is_me, second_move, second_mv_idx,
         second_mega_now, second_def_mega_now, state, my_team, opp_team, dmg_cache,
       ) {
@@ -679,7 +795,11 @@ fn resolve_moves(
       final_outs.push((p1 * p2, clone_state(s2, 1)))
     }
   }
-  final_outs
+  // ひるみフラグはこのターンの後攻の試行で使い切る。出口でどちらも false に戻す。
+  final_outs.map(fn(x) {
+    let (p, s) = x
+    (p, clear_turn_flinch(s))
+  })
 }
 
 ///|
@@ -710,6 +830,8 @@ fn clone_state(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1140,6 +1262,8 @@ pub fn transition_with_cache(
     // apply_damage_variants_fanout が copy-on-write で行う。
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used: my_moves_used_new,
     opp_moves_used: opp_moves_used_new,
     weather: state.weather,
@@ -1408,6 +1532,8 @@ fn pass_turn_state(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1548,7 +1674,7 @@ pub fn attempt_turn_with_cache(
   // 試行に戻す (`my_plain` / `opp_plain`)。保留以外の枝の順序は従来と同じ。
   let my_plain : Array[(SideAttempt, Bool)] = my_attempts.map(fn(a) { (a, false) })
   let opp_plain : Array[(SideAttempt, Bool)] = opp_attempts.map(fn(a) { (a, false) })
-  let my_entries : Array[(SideAttempt, Bool)] = if freeze_roll_deferred(
+  let my_entries : Array[(SideAttempt, Bool)] = if attempt_roll_deferred(
     state, true, my_action, my_team, opp_action, opp_team,
   ) {
     [
@@ -1566,7 +1692,7 @@ pub fn attempt_turn_with_cache(
   } else {
     my_plain
   }
-  let opp_entries : Array[(SideAttempt, Bool)] = if freeze_roll_deferred(
+  let opp_entries : Array[(SideAttempt, Bool)] = if attempt_roll_deferred(
     state, false, opp_action, opp_team, my_action, my_team,
   ) {
     [
@@ -1644,6 +1770,8 @@ pub fn attempt_turn_with_cache(
         opp_item_consumed: state.opp_item_consumed,
         my_disguise_busted: state.my_disguise_busted,
         opp_disguise_busted: state.opp_disguise_busted,
+        my_flinched: state.my_flinched,
+        opp_flinched: state.opp_flinched,
         my_moves_used: state.my_moves_used,
         opp_moves_used: state.opp_moves_used,
         weather: state.weather,
@@ -1710,7 +1838,8 @@ pub fn attempt_turn_with_cache(
           [(1.0, pass_turn_state(mega_pre, ma.post_status, oa.post_status))]
       }
       for s in branch_outs {
-        let (p, ns_pre_eot) = s
+        let (p, ns_flat) = s
+        let ns_pre_eot = clear_turn_flinch(ns_flat)
         // Consume must_recharge **only for slots that had the flag set at
         // turn start** (they just paid their one-turn penalty). Slots that
         // gained the flag *this turn* via a recharge move (Hyper Beam etc.)
@@ -1895,6 +2024,8 @@ fn partial_act_outcomes(
     // は attack_event の apply_damage_variants_fanout が担う。
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used,
     opp_moves_used,
     weather: state.weather,
@@ -2412,6 +2543,8 @@ pub fn switching_game_winrate_stats(
     opp_item_consumed: Array::make(opp_team.length(), false),
     my_disguise_busted: Array::make(my_team.length(), false),
     opp_disguise_busted: Array::make(opp_team.length(), false),
+    my_flinched: false,
+    opp_flinched: false,
     my_moves_used: Array::make(my_team.length(), 0),
     opp_moves_used: Array::make(opp_team.length(), 0),
     weather: @model.Weather::None,

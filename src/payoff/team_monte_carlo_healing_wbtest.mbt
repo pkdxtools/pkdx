@@ -266,6 +266,7 @@ test "team_apply_post_hit + tick_and_fire_wish_inplace: Wish heals max/2 2 EOT l
     healing: Some(@model.Wish),
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let dummy_combatant : Combatant = {
     pokemon: wisher_p,

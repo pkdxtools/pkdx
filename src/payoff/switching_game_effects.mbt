@@ -314,15 +314,15 @@ pub fn secondary_gated_move(
   mv : @model.Move,
   hp_lost : Int,
 ) -> @model.Move {
-  match mv.status_effect {
-    None => return mv
-    Some(_) => ()
-  }
+  // 変化技 (`power = 0`): 直接の状態異常 (`status_effect`) は追加効果ではないので触らない。
+  // ひるみ (`flinch_chance`) は追加効果なので、変化技に付いていれば落とす (現データには無い)。
   if mv.power <= 0 {
-    return mv
+    return if mv.flinch_chance > 0 { { ..mv, flinch_chance: 0 } } else { mv }
   }
+  // 追加効果 (状態異常 / ひるみ) をすべて落とした写し。
+  let no_secondary = { ..mv, status_effect: None, flinch_chance: 0 }
   if hp_lost <= 0 {
-    return { ..mv, status_effect: None }
+    return no_secondary
   }
   if attacker_slot < 0 || attacker_slot >= attacker_team.length() {
     return mv
@@ -335,9 +335,158 @@ pub fn secondary_gated_move(
   let is_mega = attacker_slot < megaed.length() && megaed[attacker_slot]
   let ability = effective_combatant(attacker_team[attacker_slot], is_mega).ability
   if ability_strips_secondaries(ability) {
-    return { ..mv, status_effect: None }
+    return no_secondary
   }
   mv
+}
+
+///|
+/// ひるみの対象側の特性による遮断 (DP / MC 共通の判定。ability 文字列の SSoT)。
+/// せいしんりょく は ひるみ そのものを受けない。りんぷん はダメージ技の追加効果を全て止める
+/// (`secondary_blocked_by_holder` の状態異常と同じ判定)。
+pub fn flinch_blocked_by_ability(ability : String, mv : @model.Move) -> Bool {
+  ability_blocks_flinch(ability) || (mv.power > 0 && ability_blocks_secondary(ability))
+}
+
+///|
+/// ひるみの対象側の遮断判定 (DP)。メガ後の特性は `effective_combatant` で読む。
+pub fn flinch_blocked_by_holder(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  target_team : Array[Combatant],
+  mv : @model.Move,
+) -> Bool {
+  if target_slot < 0 || target_slot >= target_team.length() {
+    return false
+  }
+  let megaed = if target_is_me { state.my_megaed } else { state.opp_megaed }
+  let is_mega = target_slot < megaed.length() && megaed[target_slot]
+  let ability = effective_combatant(target_team[target_slot], is_mega).ability
+  flinch_blocked_by_ability(ability, mv)
+}
+
+///|
+/// ひるみ成立確率。`chance` (%) の抽選を `hits` 回の独立な命中で行ったときに 1 回以上成立する
+/// 確率 `1 - (1 - p)^hits`。状態異常の `maybe_apply_status_fanout` の多段規則と同じ。
+/// `hits < 1` は 1 回として扱う (命中 0 回 = 免疫 / 外れは呼び出し側が先に抜ける)。
+pub fn flinch_probability(chance : Int, hits : Int) -> Double {
+  if chance <= 0 {
+    return 0.0
+  }
+  let p = if chance >= 100 { 1.0 } else { chance.to_double() / 100.0 }
+  let n = if hits < 1 { 1 } else { hits }
+  let mut q = 1.0
+  for _i = 0; _i < n; _i = _i + 1 {
+    q = q * (1.0 - p)
+  }
+  1.0 - q
+}
+
+///|
+/// 対象側のターン内ひるみフラグを立てる。
+fn with_flinched(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+) -> SwitchingGameState {
+  if target_is_me {
+    { ..state, my_flinched: true }
+  } else {
+    { ..state, opp_flinched: true }
+  }
+}
+
+///|
+/// 追加効果としてのひるみ抽選 (DP `apply_damage_variants_fanout` の post-hit 段)。`mv` は
+/// `secondary_gated_move` 済み (ちからずく / HP 減少なしでは `flinch_chance = 0`)。対象がこの
+/// 命中で生存し、対象の特性で遮断されないときだけ抽選する。成立は命中数 `hits_count` の独立
+/// 抽選 (`flinch_probability`)。成立した枝にだけ対象側の `*_flinched` を立てる。
+///
+/// ひるみは対象がまだ行動していない (後攻) ときにだけ効く。その判定は行動時点で行う:
+/// `flinch_roll_deferred` が後攻の試行を遅らせ、`resolve_pending_attempt` がフラグを読む。
+pub fn maybe_apply_flinch_fanout(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  target_team : Array[Combatant],
+  mv : @model.Move,
+  hits_count? : Int = 1,
+) -> Array[(Double, SwitchingGameState)] {
+  if mv.flinch_chance <= 0 {
+    return [(1.0, state)]
+  }
+  let target_hps = if target_is_me { state.my_hps } else { state.opp_hps }
+  if target_slot < 0 || target_slot >= target_hps.length() {
+    return [(1.0, state)]
+  }
+  if target_hps[target_slot] <= 0 {
+    return [(1.0, state)]
+  }
+  if flinch_blocked_by_holder(state, target_is_me, target_slot, target_team, mv) {
+    return [(1.0, state)]
+  }
+  let p = flinch_probability(mv.flinch_chance, hits_count)
+  if p <= 0.0 {
+    return [(1.0, state)]
+  }
+  if p >= 1.0 {
+    return [(1.0, with_flinched(state, target_is_me))]
+  }
+  [(1.0 - p, state), (p, with_flinched(state, target_is_me))]
+}
+
+///|
+/// ひるみが成立した試行の分布 (DP / MC 共通の SSoT)。ひるみで行動を止められた側について、
+/// 行動前の状態判定を Showdown の優先度順で評価した結果を返す。ひるみで技を出さないので命中判定
+/// は無く、外れ (崩れ技の自傷) も起きない。
+///
+/// 戻り値は (確率, 事後状態, ふくつのこころ が発火するか)。発火 = 行動前にひるみが効いた。
+/// - 眠り (Sleep(n >= 2) / RestSleep(n > 0)) と 凍結 (Freeze(n >= 1), 解凍前): 状態判定で止まり
+///   ひるみは到達しない (発火なし)。Sleep(1) / Freeze(n >= 1) の目覚め / 解凍は到達 (発火)。
+/// - 眠り 3 回目 (Sleep(0) / RestSleep(0)) と Freeze(0): 確定で目覚め / 解凍し、ひるみが効く (発火)。
+/// - defrost 技の使用者 (`thaws_user`): frz は defrost 技の判定を素通りし、ひるみが効く (発火)。
+///   解凍は技の実行時に起きるので、止められた場合は凍ったまま。
+/// - まひ: ひるみ (優先度 8) が まひ (優先度 1) より先に効くので、まひ判定は行わず発火。
+/// - それ以外 (None / やけど / どく / もうどく / あくび予告): 発火。
+///
+/// 根拠 (Showdown `data/conditions.ts`): flinch は onBeforeMovePriority 8 で `runEvent('Flinch')`
+/// を呼び、slp / frz は 10、par は 1、mustrecharge は 11。ふくつのこころ は 'Flinch' event で発火。
+/// Champions 本文には優先度の記述が無いため Showdown に従う。
+pub fn flinched_outcomes(
+  status : @model.StatusCondition,
+  thaws_user : Bool,
+) -> Array[(Double, @model.StatusCondition, Bool)] {
+  match status {
+    @model.Sleep(n) =>
+      if n >= 2 {
+        [(1.0, @model.Sleep(n - 1), false)]
+      } else if n == 1 {
+        [
+          (1.0 - SLEEP_SECOND_TURN_WAKE_RATE, @model.Sleep(0), false),
+          (SLEEP_SECOND_TURN_WAKE_RATE, @model.None, true),
+        ]
+      } else {
+        [(1.0, @model.None, true)]
+      }
+    @model.RestSleep(n) =>
+      if n > 0 {
+        [(1.0, @model.RestSleep(n - 1), false)]
+      } else {
+        [(1.0, @model.None, true)]
+      }
+    @model.Freeze(n) =>
+      if thaws_user {
+        [(1.0, status, true)]
+      } else if n >= 1 {
+        [
+          (1.0 - FREEZE_THAW_RATE, @model.Freeze(n - 1), false),
+          (FREEZE_THAW_RATE, @model.None, true),
+        ]
+      } else {
+        [(1.0, @model.None, true)]
+      }
+    _ => [(1.0, status, true)]
+  }
 }
 
 ///|
@@ -1082,6 +1231,8 @@ fn with_status_set(
     opp_item_consumed: state.opp_item_consumed.copy(),
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1513,6 +1664,8 @@ pub fn apply_eot(
     opp_item_consumed,
     my_disguise_busted: state.my_disguise_busted.copy(),
     opp_disguise_busted: state.opp_disguise_busted.copy(),
+    my_flinched: state.my_flinched,
+    opp_flinched: state.opp_flinched,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: next_weather,

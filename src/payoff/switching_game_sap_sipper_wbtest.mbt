@@ -193,6 +193,7 @@ test "そうしょく: グラスフィールドは吸収されずフィールド
   let terrain = {
     ..mk_move("グラスフィールド", "くさ", @model.Status, 0),
     field_set: Some(@model.Grassy),
+    flinch_chance: 0,
   }
   let s = sap_one_leaf(
     im_state(),

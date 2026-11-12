@@ -65,6 +65,26 @@ pub fn ability_strips_secondaries(ability : String) -> Bool {
 }
 
 ///|
+/// Return `true` when the ability stops the holder from flinching (ひるみ).
+/// せいしんりょく (Inner Focus): "The Pokémon never flinches when attacked and is
+/// unaffected by Intimidate." (Champions tokuseiinfo_syn.json:039). The Intimidate
+/// half is `ability_blocks_intimidate`. Showdown refuses the flinch volatile itself
+/// (`onTryAddVolatile`), so no flinch is applied and ふくつのこころ does not fire.
+pub fn ability_blocks_flinch(ability : String) -> Bool {
+  ability == "せいしんりょく"
+}
+
+///|
+/// Return `true` when the ability raises the holder's Speed by one stage each time
+/// the holder flinches. ふくつのこころ (Steadfast): "When the Pokémon flinches, its
+/// Speed stat is boosted by 1 stage." (Champions tokuseiinfo_syn.json:080). The DP and
+/// MC fire it only when the flinch stops the holder's own action (see
+/// `flinched_outcomes`), matching Showdown's `Flinch` event.
+pub fn ability_flinch_speed_boost(ability : String) -> Bool {
+  ability == "ふくつのこころ"
+}
+
+///|
 /// Return `true` when the ability nullifies the LeechSeed end-of-turn tick.
 /// The seed itself can still be planted on a Magic Guard target — mainline
 /// distinguishes "planting" from "ticking" — so callers must apply this

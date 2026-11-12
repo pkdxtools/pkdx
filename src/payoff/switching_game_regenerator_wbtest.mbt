@@ -82,6 +82,8 @@ fn rg_state(
     opp_item_consumed: [false, false],
     my_disguise_busted: [false, false],
     opp_disguise_busted: [false, false],
+    my_flinched: false,
+    opp_flinched: false,
     my_moves_used: [0, 0],
     opp_moves_used: [0, 0],
     weather: @model.Weather::None,

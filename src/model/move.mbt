@@ -33,7 +33,7 @@ pub extend StatEffect with Hash::{hash, hash_combine}
 /// - `FixedFraction(n, d)` — restore `max_hp * n / d` (じこさいせい = (1, 2))
 /// - `WeatherDependent(default_n, default_d, sunny_n, sunny_d, harsh_n, harsh_d)` —
 ///   pick fraction by current weather (Sun → sunny, Rain/Sand/Snow → harsh,
-///   None → default). つきのひかり / あさのひざし / シンセシス all share
+///   None → default). つきのひかり / あさのひざし / こうごうせい all share
 ///   the (1,2) / (2,3) / (1,4) triple.
 /// - `Drain(n, d)` — restore `dmg_dealt * n / d` (ギガドレイン = (1, 2)).
 ///   `defender.ability == "ヘドロえき"` reverses the sign (attacker takes

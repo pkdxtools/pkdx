@@ -222,5 +222,5 @@ MIT
 | 変化技 | 壁 / 設置技 / 守る | ❌ | |
 | 変化技 | 天候設定技 | ✅ | にほんばれ / あまごい / すなあらし / ゆきげしき、5T 固定。**DB → payoff 接続済み**: `pkdx moves` の JSON が `weather_set` (sun / rain / sand / snow) を出し、`pkdx select` がそれを読む。天候石 (あついいわ等) による持続延長は未対応。Sand 中は chip damage tick (max/16) |
 | 変化技 | フィールド設定技 | ✅ | エレキフィールド / グラスフィールド / ミストフィールド / サイコフィールド、5T 固定。**DB → payoff 接続済み**: `pkdx moves` の JSON が `field_set` (electric / grassy / misty / psychic) を出し、`pkdx select` がそれを読む。グランドコート (持続延長) は未対応 |
-| 変化技 | 回復技 | ✅ | FixedFraction (じこさいせい / なまける / はねやすめ) / WeatherDependent (つきのひかり / あさのひざし / シンセシス、晴=2/3 雨砂雪=1/4 none=1/2) / Drain (ギガドレイン等、ヘドロえき反転) / Rest (Sleep 免疫 ability で失敗 + 満タン時 failure) / PainSplit (いたみわけ) / Wish (ねがいごと、slot bound、T+1 EOT 発動)。**DB → payoff 接続済み**: `pkdx moves` の JSON が `heal_kind` と分数キー (weather は晴れ / 雨・雪・砂の分数も) を出し、`pkdx select` がそれを読む |
+| 変化技 | 回復技 | ✅ | FixedFraction (じこさいせい / なまける / はねやすめ) / WeatherDependent (つきのひかり / あさのひざし / こうごうせい、晴=2/3 雨砂雪=1/4 none=1/2) / Drain (ギガドレイン等、ヘドロえき反転) / Rest (Sleep 免疫 ability で失敗 + 満タン時 failure) / PainSplit (いたみわけ) / Wish (ねがいごと、slot bound、T+1 EOT 発動)。**DB → payoff 接続済み**: `pkdx moves` の JSON が `heal_kind` と分数キー (weather は晴れ / 雨・雪・砂の分数も) を出し、`pkdx select` がそれを読む |
 | 特殊システム | Z 技 / ダイマックス | ❌ | 未実装 |

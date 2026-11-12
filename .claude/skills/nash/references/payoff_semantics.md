@@ -548,15 +548,27 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 ### ひるみ (flinch, Champions 規則) — DP / MC
 
 - 本文: `champout/rom-txt/usa/wazainfo_syn.json` の「N% chance of making the target flinch」(命中ごと)。特性: せいしんりょく は受けない (tokuseiinfo_syn.json:039)。ふくつのこころ はひるみで素早さ +1 (tokuseiinfo_syn.json:080)。りんぷん はダメージ技の追加効果を止め、ちからずく の使用者は追加効果を失う (既存のゲートを流用)。
-- データ: `move_meta.flinch_chance` (m019、19 行 = 18 技 + 表記違い 1 件)。champions 経路は champout の全角 `３ぼんのや`、pokedex 経路は `3ぼんのや` (ASCII) で引くので両方を入れる。ねこだまし (初回行動限定) と はやてがえし (相手の先制技が条件) は行を作らない (見送り)。DB → payoff 接続済み: `pkdx moves` の JSON (`moves_to_json`) は `flinch_chance` を出し (0 の技は省略)、`pkdx select` の `parse_move_json` が同じキーを読む。
+- データ: `move_meta.flinch_chance` (m019、19 行 = 18 技 + 表記違い 1 件)。champions 経路は champout の全角 `３ぼんのや`、pokedex 経路は `3ぼんのや` (ASCII) で引くので両方を入れる。ねこだまし は m019 では行を作らない (初回行動ゲートは m020、下の節)。はやてがえし (相手の先制技が条件) は行を作らない (見送り)。DB → payoff 接続済み: `pkdx moves` の JSON (`moves_to_json`) は `flinch_chance` を出し (0 の技は省略)、`pkdx select` の `parse_move_json` が同じキーを読む。
 - 規則 (DP / MC 共通): 先攻の技が命中して相手の HP が減り、相手が生存すると、命中数ぶんの独立抽選 (`1 - (1 - p)^n`) で `flinch_chance`% 成立する。成立した相手は同ターンの後攻の行動を失う (持ち越さない)。後攻が先に行動している場合は効かない。
 - 行動時点の解決: 相手の技がひるみを付与しうる (`flinch_chance > 0`) ときは、こちらの試行 (眠り / 凍結 / まひ / 命中) を後攻の行動時点で振る (DP `flinch_roll_deferred`、MC `mc_flinch_deferred`、こおり の `freeze_roll_deferred` と同じ仕組み)。ひるみ成立枝は `flinched_outcomes` (DP / MC の SSoT) の分布を使い、命中判定を行わない。
 - 優先度 (Showdown `data/conditions.ts`、Champions 本文は未記載): flinch 8 / slp・frz 10 (先に止まる) / par 1 (ひるみが先、まひ判定はしない) / mustrecharge 11 (リチャージは止まってひるみに到達しない)。defrost 技の使用者はひるみで止まっても凍ったまま (解凍は技の実行時)。ふくつのこころ は行動前にひるみが効いた枝だけ発火 (Showdown `Flinch` event)。せいしんりょく は付与自体を拒否 (`onTryAddVolatile`)。
 - 状態: `SwitchingGameState.my_flinched` / `opp_flinched` (ターン内フラグ、`attempt_turn_with_cache` の出口で必ず false に戻す)。
 - 判断事項: (1) ひるみ率は本文の % だけを使う (Showdown の確率は使わない)。2 ターン技 (ゴッドバード) は命中ターンに付ける 1 ターン近似 (とびはねる と同じ扱い)。(2) 多段技の命中数は DP が `1 - (1 - p)^n`、MC は 1 回として扱う (現データのひるみ技は全て単発)。おやこあい (`multi_hit.mbt` の 2 命中化) の 2 命中目も DP だけ抽選に入り、MC は 1 回 (状態異常の既存の近似と同じ)。(3) ばけのかわ の chip は HP 減少として数える (状態異常と同じ判定)。
-- 未モデル: いびき の「ねむっている間だけ使える」(使用可否は未ゲート。ひるみ率だけ投入)、ドラゴンダイブ のミニマイズ時の威力 2 倍、はやてがえし (条件付き)、ねこだまし (初回限定、見送り)、におい (TOKUSEIINFO_SYN_001: 特性由来の 10% ひるみ、本 PR の仕様外)、てんのめぐみ (追加効果の確率 2 倍、pkdx 全体で未モデル)、3ぼんのや の防御ダウン (既存の `stat_effects` 側の扱い)。
+- 未モデル: いびき の「ねむっている間だけ使える」(使用可否は未ゲート。ひるみ率だけ投入)、ドラゴンダイブ のミニマイズ時の威力 2 倍、はやてがえし (条件付き)、におい (TOKUSEIINFO_SYN_001: 特性由来の 10% ひるみ、本 PR の仕様外)、てんのめぐみ (追加効果の確率 2 倍、pkdx 全体で未モデル)、3ぼんのや の防御ダウン (既存の `stat_effects` 側の扱い)。ねこだまし は次の節。
 - 既知の DP / MC 差 (本 PR で確認、ひるみ以前から存在): DP はダメージを平均値 1 点で扱い、MC は 16 乱数を抽選する。KO の閾値付近では終端値 (全滅 ±1) がずれる。例 (HP 200、たいあたり 60、ひるみなし、4 ターン): DP -1.000 / MC -0.937。parity テストは HP 1000 にして閾値を跨がせない (凍結 parity と同じ方針)。HP 1000、50% ひるみ: DP 0.000 / MC 0.001、対照 (ひるみなし) -0.068 / -0.068。
 - 参照テスト: `src/payoff/switching_game_flinch_wbtest.mbt` (確率・ゲート・ふくつのこころ・眠り / まひ / 凍結 / defrost / リチャージ・持ち越し・SSoT 表・多段確率)、`src/payoff/team_monte_carlo_flinch_parity_wbtest.mbt` (MC の真理値表・分布・DP/MC parity と感度ガード)、`src/migrate/m019_flinch_test.mbt` (投入・既存行・冪等)、`src/db/query_moves_flinch_test.mbt` / `query_moves_flinch_wbtest.mbt` (DB 経路)、`src/payoff/cli_select_flinch_wbtest.mbt` (JSON 入力)。
+
+### ねこだまし (Fake Out, WAZAINFO_SYN_252) — DP / MC
+
+- 本文: `champout/rom-txt/usa/wazainfo_syn.json` 行 4432 (`WAZAINFO_SYN_252`)。"Makes the target flinch. This move fails unless it is the first move used by the user after it enters a battle." `help_syn.json` には該当文が無い。ひるみは「Makes the target flinch」なので確率抽選ではなく、命中すれば既存のひるみ経路で必ず付く (m020 の `flinch_chance` 100)。
+- 状態: `SwitchingGameState.my_fresh` / `opp_fresh` (`Bool?`、サイドごと)。
+  - `None` — select 入力で `my_fresh` / `opp_fresh` を省略した既定。失敗ゲートもひるみも掛けない。技は従来どおりの先制ダメージ技として解決し、`flinch_chance` が 100 でもひるまない。交代しても `None` のまま。既存の select 入力はここへ落ち、行列は変わらない。select は DB から `flinch_chance` も fresh も埋めない (入力 JSON が正)。
+  - `Some(true)` — 登場後の初行動。バトル開始のリードで撃たせるときは呼び出し側が渡す。select は「毎選択がターン 1」とは仮定しない。
+  - `Some(false)` — 登場後に技の行動を使った。ねこだまし は失敗する (ダメージもひるみも無い)。命中した扱いにはしない。
+- 更新: ターン開始値から決める。`None` は何をしても `None`。`Some` は交代で `Some(true)` (そのターンは動かず、次のターンが初行動)、`UseMove` / `Mega` で `Some(false)`。技がひるみ・眠り・まひ・反動・外れで止まっても消費する。本文は "used" としか書かない。この消費位置は Showdown `sim/battle-actions.ts` の `runMove` 先頭 (`activeMoveActions++` が `BeforeMove` より前) に合わせた。交代で 0 に戻すのも同ファイルの `switchIn`。
+- 他のひるみ技は fresh を見ない。せいしんりょく / りんぷん / ちからずく / ふくつのこころ / ひんし / 先攻だけ、は #210 の経路のまま。
+- 見送り: はやてがえし (`WAZAINFO_SYN_918`、相手が先制技を撃とうとしているときだけ成功)。であいがしら (`WAZAINFO_SYN_660`) は同じ "first move" 文を持つがひるみは無く、本変更ではゲートしない。
+- 参照テスト: `src/payoff/switching_game_fake_out_wbtest.mbt`、`src/migrate/m020_fake_out_test.mbt`。
 
 ### MVP 非対応 (将来拡張で検討)
 

@@ -106,7 +106,7 @@ test "m019 flinch: representative moves get the Champions text chance; condition
   assert_true(m019_flinch_of(db, "ほのおのキバ") == Some(10))
   assert_true(m019_flinch_of(db, "アイアンヘッド") == Some(20))
   assert_true(m019_flinch_of(db, "ひょうざんおろし") == Some(30))
-  // 条件付き (ねこだまし: 初回行動限定 / はやてがえし: 相手の先制技が条件) は行を作らない。
+  // m019 は ねこだまし を入れない (失敗ゲート付きの 100% は m020)。はやてがえし も入れない。
   assert_true(m019_flinch_of(db, "ねこだまし") == None)
   assert_true(m019_flinch_of(db, "はやてがえし") == None)
   @db.close(db)

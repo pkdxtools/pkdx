@@ -148,6 +148,12 @@ pub(all) struct SwitchingGameState {
   // ターン外の状態では常に false (DP のキャッシュ鍵もこの前提で同一になる)。
   my_flinched : Bool
   opp_flinched : Bool
+  // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
+  // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
+  // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。
+  // 詳細は fake_out.mbt。
+  my_fresh : Bool?
+  opp_fresh : Bool?
   turn : Int
 } derive(Debug, Eq, Hash)
 

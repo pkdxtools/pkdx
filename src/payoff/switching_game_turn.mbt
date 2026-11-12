@@ -175,8 +175,10 @@ fn flinch_roll_deferred(
     return false
   }
   let opp_active = if is_me { state.opp_active } else { state.my_active }
+  // ひるませる側の fresh。ねこだまし は Some(true) 以外では実効確率 0 なので遅らせない。
+  let flincher_fresh = if is_me { state.opp_fresh } else { state.my_fresh }
   match action_move_of(opp_team, opp_active, opp_action) {
-    Some(mv) => mv.flinch_chance > 0
+    Some(mv) => flinch_chance_if_fresh(mv, flincher_fresh) > 0
     None => false
   }
 }
@@ -352,6 +354,9 @@ priv struct TurnWorkspace {
   opp_disguise_busted : Array[Bool]
   my_flinched : Bool
   opp_flinched : Bool
+  // ターン開始時の ねこだまし 初行動フラグ。行動の成否では途中更新しない。
+  my_fresh : Bool?
+  opp_fresh : Bool?
   my_moves_used : Array[Int]
   opp_moves_used : Array[Int]
   // Stage 2 (healing-moves plan): mirror the new state fields so
@@ -398,6 +403,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -437,6 +444,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_disguise_busted: ws.opp_disguise_busted.copy(),
     my_flinched: ws.my_flinched,
     opp_flinched: ws.opp_flinched,
+    my_fresh: ws.my_fresh,
+    opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
     opp_moves_used: ws.opp_moves_used.copy(),
     weather: ws.weather,
@@ -571,6 +580,12 @@ fn resolve_attacker_leg(
       defender_team_eff[defender_active],
       def_is_mega,
     ) {
+    return [(1.0, pre_damage_state)]
+  }
+  // ねこだまし: 登場後に技を使ったあと (`Some(false)`) は技自体が失敗する。
+  // ダメージもひるみも付けない。`None` は未指定なのでここでは失敗させない。
+  let user_fresh = if attacker_is_me { ws.my_fresh } else { ws.opp_fresh }
+  if fake_out_fails(attacker_move, user_fresh) {
     return [(1.0, pre_damage_state)]
   }
   // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
@@ -832,6 +847,8 @@ fn clone_state(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1220,12 +1237,20 @@ pub fn transition_with_cache(
           ) {
           outs.push((0.5 * half.0, half.1))
         }
-        return outs
+        return settle_fresh_outcomes(
+          outs, state.my_fresh, state.opp_fresh, my_action, opp_action,
+        )
       } else {
         let my_first = s > 0
-        return resolve_moves(
-          state_marked, mi, mj, my_first, my_mega_now, opp_mega_now, my_team, opp_team,
-          dmg_cache, my_pending=my_pending, opp_pending=opp_pending,
+        return settle_fresh_outcomes(
+          resolve_moves(
+            state_marked, mi, mj, my_first, my_mega_now, opp_mega_now, my_team, opp_team,
+            dmg_cache, my_pending=my_pending, opp_pending=opp_pending,
+          ),
+          state.my_fresh,
+          state.opp_fresh,
+          my_action,
+          opp_action,
         )
       }
     }
@@ -1264,6 +1289,8 @@ pub fn transition_with_cache(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
     opp_moves_used: opp_moves_used_new,
     weather: state.weather,
@@ -1278,7 +1305,9 @@ pub fn transition_with_cache(
     field_turns_left: state.field_turns_left,
     turn: state.turn + 1,
   }
-  match attack_event {
+  // fresh はターン開始値から決める。途中のコピーが落としてもここで上書きする。
+  settle_fresh_outcomes(
+    match attack_event {
     None => [(1.0, base_state)]
     Some((attacker_is_me, target_slot, used_move, mv_idx)) => {
       let attacker_slot = target_active(base_state, attacker_is_me)
@@ -1314,7 +1343,28 @@ pub fn transition_with_cache(
           defender_team_eff[target_slot],
           defender_mega,
         ) {
-        return [(1.0, base_state)]
+        return settle_fresh_outcomes(
+          [(1.0, base_state)],
+          state.my_fresh,
+          state.opp_fresh,
+          my_action,
+          opp_action,
+        )
+      }
+      // ねこだまし は登場後の初行動でなければ失敗する。交代入れの相手にも当たせない。
+      let user_fresh = if attacker_is_me {
+        base_state.my_fresh
+      } else {
+        base_state.opp_fresh
+      }
+      if fake_out_fails(used_move, user_fresh) {
+        return settle_fresh_outcomes(
+          [(1.0, base_state)],
+          state.my_fresh,
+          state.opp_fresh,
+          my_action,
+          opp_action,
+        )
       }
       let attacker_burn = if attacker_is_me {
         is_burned(state.my_status[state.my_active])
@@ -1384,7 +1434,12 @@ pub fn transition_with_cache(
         pre_dmg_defender_hp~,
       )
     }
-  }
+  },
+    state.my_fresh,
+    state.opp_fresh,
+    my_action,
+    opp_action,
+  )
 }
 
 ///|
@@ -1534,6 +1589,8 @@ fn pass_turn_state(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1772,6 +1829,8 @@ pub fn attempt_turn_with_cache(
         opp_disguise_busted: state.opp_disguise_busted,
         my_flinched: state.my_flinched,
         opp_flinched: state.opp_flinched,
+        my_fresh: state.my_fresh,
+        opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
         opp_moves_used: state.opp_moves_used,
         weather: state.weather,
@@ -1854,7 +1913,13 @@ pub fn attempt_turn_with_cache(
           state.opp_must_recharge[state.opp_active],
         )
         let ns = apply_eot(ns_recharge_cleared, my_team, opp_team)
-        results.push((joint * p, ns))
+        // 選んだ行動で fresh を更新する。技がひるみ・眠り・まひ・外れで止まっても
+        // UseMove / Mega は消費する (Showdown は runMove の入口で数える)。
+        // transition 側が先に同じ開始値から決めていても結果は同じ。
+        let settled = with_turn_fresh(
+          ns, state.my_fresh, state.opp_fresh, my_action, opp_action,
+        )
+        results.push((joint * p, settled))
       }
   }
   results
@@ -2026,6 +2091,8 @@ fn partial_act_outcomes(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used,
     opp_moves_used,
     weather: state.weather,
@@ -2075,6 +2142,15 @@ fn partial_act_outcomes(
           defender_team_eff[target_slot],
           defender_mega,
         ) {
+        return [(1.0, base_state)]
+      }
+      // ねこだまし の失敗ゲート。fresh の更新は attempt_turn の出口で行う。
+      let user_fresh = if attacker_is_me {
+        base_state.my_fresh
+      } else {
+        base_state.opp_fresh
+      }
+      if fake_out_fails(used_move, user_fresh) {
         return [(1.0, base_state)]
       }
       let attacker_burn = if attacker_is_me {
@@ -2491,6 +2567,8 @@ pub fn switching_game_winrate(
   disk? : @damage_cache.DamageDiskCache? = None,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Double {
   let (v, _, _) = switching_game_winrate_stats(
     my_team,
@@ -2499,6 +2577,8 @@ pub fn switching_game_winrate(
     disk~,
     progress~,
     dp_log_every~,
+    my_fresh~,
+    opp_fresh~,
   )
   v
 }
@@ -2515,6 +2595,8 @@ pub fn switching_game_winrate_stats(
   disk? : @damage_cache.DamageDiskCache? = None,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> (Double, ValueStats, DamageCache) {
   let my_hps = Array::make(my_team.length(), 0)
   let opp_hps = Array::make(opp_team.length(), 0)
@@ -2545,6 +2627,9 @@ pub fn switching_game_winrate_stats(
     opp_disguise_busted: Array::make(opp_team.length(), false),
     my_flinched: false,
     opp_flinched: false,
+    // 省略時は None。バトル開始のリードで ねこだまし を撃たせるときは Some(true)。
+    my_fresh: my_fresh,
+    opp_fresh: opp_fresh,
     my_moves_used: Array::make(my_team.length(), 0),
     opp_moves_used: Array::make(opp_team.length(), 0),
     weather: @model.Weather::None,

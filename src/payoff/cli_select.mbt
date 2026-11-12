@@ -8,7 +8,9 @@
 ///   "opponent": [<combatant>, ...],
 ///   "format":   "single" | "double",
 ///   "stat_system": "champions" | "standard",  // default: "champions"
-///   "team_payoff_model": "switching_game" | "screened_switching_game:..."
+///   "team_payoff_model": "switching_game" | "screened_switching_game:...",
+///   "my_fresh": true | false,    // optional. 省略 = 未追跡 (ねこだまし は従来どおり)
+///   "opp_fresh": true | false    // optional. バトル開始のリードで撃つときは true
 /// }
 ///
 /// <combatant> = {
@@ -355,6 +357,21 @@ fn parse_str_field(m : Map[String, Json], key : String) -> String {
   match m.get(key) {
     Some(String(s)) => s
     _ => ""
+  }
+}
+
+///|
+/// トップレベルの optional bool。省略は `None` (未指定)。bool 以外は不正。
+/// ねこだまし の `my_fresh` / `opp_fresh` に使う。select は DB から埋めない。
+fn parse_optional_bool(
+  m : Map[String, Json],
+  key : String,
+) -> Bool? raise NashCliError {
+  match m.get(key) {
+    None => None
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    Some(_) => raise InvalidJson(key + " must be a boolean")
   }
 }
 
@@ -997,6 +1014,8 @@ pub fn compute_select_with_team_model(
   child_progress_every? : Int = 0,
   nash_config? : NashSolverConfig = NashSolverConfig::default(),
   mc_turn_limit? : Int = MC_TURN_LIMIT,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> (SelectResult, @nash.FiniteMatrix) raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE ||
     opponent.length() != REQUIRED_TEAM_SIZE {
@@ -1046,6 +1065,8 @@ pub fn compute_select_with_team_model(
           disk~,
           progress~,
           dp_log_every~,
+          my_fresh~,
+          opp_fresh~,
         ) catch {
           err => raise InnerError(@debug.to_string(err))
         }
@@ -1060,6 +1081,8 @@ pub fn compute_select_with_team_model(
         disk~,
         progress~,
         dp_log_every~,
+        my_fresh~,
+        opp_fresh~,
       ) catch {
         err => raise InnerError(@debug.to_string(err))
       }
@@ -1289,6 +1312,8 @@ pub fn run_select_typed(
       let _ = @db.unlink_file(input_path)
     }
   }
+  let my_fresh = parse_optional_bool(obj, "my_fresh")
+  let opp_fresh = parse_optional_bool(obj, "opp_fresh")
   let (r, matrix) = compute_select_with_team_model(
     team,
     opp,
@@ -1303,6 +1328,8 @@ pub fn run_select_typed(
     child_progress_every~,
     nash_config~,
     mc_turn_limit~,
+    my_fresh~,
+    opp_fresh~,
   )
   let bits = if emit_matrix_bits { matrix_bits_json(matrix) } else { "" }
   if input_path.length() > 0 {
@@ -1520,6 +1547,8 @@ pub fn run_select_shard(
     Some(n) => n
     None => json_refine_tl
   }
+  let my_fresh = parse_optional_bool(obj, "my_fresh")
+  let opp_fresh = parse_optional_bool(obj, "opp_fresh")
   let row_indices = if rows_csv.length() > 0 {
     parse_int_csv(rows_csv)
   } else {
@@ -1566,6 +1595,8 @@ pub fn run_select_shard(
             mc_seed,
             i_global * size_b + j,
             mc_tl,
+            my_fresh~,
+            opp_fresh~,
           )
           progress(
             CellDone(sel_a[i_global], sel_b[j], i_global, j, "screening"),
@@ -1615,6 +1646,8 @@ pub fn run_select_shard(
             refine_tl,
             progress~,
             dp_log_every~,
+            my_fresh~,
+            opp_fresh~,
           )
           progress(
             CellDone(

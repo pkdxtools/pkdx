@@ -71,6 +71,7 @@ fn int_baseline() -> @damage_cache.CacheKeyInput {
     incoming_critical: false,
     atk_protean_locked: "",
     def_protean_locked: "",
+    sheer_force_boost: false,
   }
 }
 

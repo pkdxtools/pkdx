@@ -459,7 +459,8 @@ test "ss gate: secondary_gated_move keeps the secondary when HP is lost (Disguis
     secondary_gated_move(base, true, 0, plain, fire_punch, 0).status_effect,
     None,
   )
-  // ちからずく の使用者: 追加効果を失う (威力は別)。
+  // ちからずく の使用者: 追加効果を失う。威力 1.3 倍は同じ集合の技だけ
+  // (`move_has_sheer_force_effect`)。
   @debug.assert_eq(
     secondary_gated_move(base, true, 0, sheer, fire_punch, 50).status_effect,
     None,

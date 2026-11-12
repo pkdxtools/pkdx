@@ -67,6 +67,11 @@ pub(all) struct CacheKeyInput {
   // (v5→v6) で既存 damage_cache.sqlite は自動 invalidate される。
   atk_protean_locked : String
   def_protean_locked : String
+  // ちからずく の 1.3 倍がこの技に乗るか。技名は同じでも select の JSON は
+  // 追加効果を DB から埋めないので、追加効果あり / なしで威力が変わる。
+  // false (既定) = 乗らない。schema_version bump (v7→v8) と key prefix v7 で
+  // 「全技 1.3 倍」時代のエントリを再利用しない。
+  sheer_force_boost : Bool
 }
 
 ///|
@@ -159,8 +164,9 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
   let disguise_active_s = if input.disguise_active { "1" } else { "0" }
   let protean_consumed_s = if input.protean_consumed { "1" } else { "0" }
   let incoming_critical_s = if input.incoming_critical { "1" } else { "0" }
+  let sheer_force_boost_s = if input.sheer_force_boost { "1" } else { "0" }
   let parts : Array[String] = [
-    "v6",
+    "v7",
     input.version,
     input.regulation,
     input.attacker,
@@ -221,6 +227,9 @@ pub fn build_cache_key(input : CacheKeyInput) -> Result[String, String] {
     // name_ja が同じでもロック値ごとに別キーへ分離する。
     input.atk_protean_locked,
     input.def_protean_locked,
+    // ちからずく の威力ゲート (v7 で追加)。1 = 追加効果のある技で 1.3 倍、
+    // 0 = 乗らない。技名だけでは JSON の追加効果の有無を区別できない。
+    sheer_force_boost_s,
   ]
   Ok(parts.join("|"))
 }

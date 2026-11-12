@@ -194,6 +194,19 @@ fn run_damage(
     @cli.Json => !no_cache && attach_team.length() == 0
     _ => false
   }
+  // ちからずく の 1.3 倍は技の追加効果の有無で変わる。キーを move 名だけで組むと、
+  // DB 上は追加効果がある技と、select JSON で追加効果を付けない同名技が同じ
+  // エントリを踏む。キャッシュを引く前に move を読んでゲートをキーへ入れる。
+  let sheer_force_boost = if use_cache && atk_ability == "ちからずく" {
+    with_db(version=game.version, fn(db) {
+      match @db.query_move(db, move_name, game.version) {
+        Ok(mv) => @damage.move_has_sheer_force_effect(mv)
+        Err(_) => false
+      }
+    })
+  } else {
+    false
+  }
   let cache_key_opt : String? = if use_cache {
     let key_input = @damage_cache.CacheKeyInput::{
       version: game.version.to_db_string(),
@@ -248,6 +261,7 @@ fn run_damage(
       // ため常に未ロック ("")。payoff layer のみがこのトークンを実値で埋める。
       atk_protean_locked: "",
       def_protean_locked: "",
+      sheer_force_boost,
     }
     match @damage_cache.build_cache_key(key_input) {
       Ok(k) => Some(k)

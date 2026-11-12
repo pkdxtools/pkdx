@@ -476,6 +476,7 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
           atk_ability,
           move_type,
           input.fainted_count,
+          sheer_force_effect=move_has_sheer_force_effect(mv),
         )
         if a_mod > 0 {
           dmg = round5(dmg, a_mod)

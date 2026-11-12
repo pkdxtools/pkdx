@@ -131,7 +131,10 @@ pub fn new_damage_cache(
 ///     alt-form rows have distinct Japanese names). Types / base stats /
 ///     weight therefore follow from the name.
 ///   * `move_` (`Move`) — keyed by `mv.name`. Move rows are 1:1 with name
-///     per version, so power / type / category / accuracy follow.
+///     per version, so power / type / category / accuracy follow. The
+///     exception is ちからずく: select JSON does not backfill secondaries, so
+///     the same name can be boosted or not. That bit is `sheer_force_boost`
+///     (`sheer_force_boost_applies`), not the move name.
 ///   * `atk_ability` / `def_ability` / `atk_item` / `def_item` — encoded.
 ///   * `weather` / `field` — canonicalized to "": payoff always passes
 ///     `Weather::None` / `Field::None` via `build_input_with_ranks`.
@@ -260,6 +263,7 @@ fn combatant_to_cache_key_input(
     incoming_critical: false,
     atk_protean_locked,
     def_protean_locked,
+    sheer_force_boost: @damage.sheer_force_boost_applies(atk.ability, mv),
   }
 }
 

@@ -154,6 +154,7 @@ fn flinch_roll_deferred(
   state : SwitchingGameState,
   is_me : Bool,
   action : ActionKind,
+  team : Array[Combatant],
   opp_action : ActionKind,
   opp_team : Array[Combatant],
 ) -> Bool {
@@ -176,9 +177,11 @@ fn flinch_roll_deferred(
   }
   let opp_active = if is_me { state.opp_active } else { state.my_active }
   // ひるませる側の fresh。ねこだまし は Some(true) 以外では実効確率 0 なので遅らせない。
+  // はやてがえし は相手の選択が priority > 0 でないと失敗するので、そのときは遅らせない。
   let flincher_fresh = if is_me { state.opp_fresh } else { state.my_fresh }
+  let target_mv = action_move_of(team, active, action)
   match action_move_of(opp_team, opp_active, opp_action) {
-    Some(mv) => flinch_chance_if_fresh(mv, flincher_fresh) > 0
+    Some(mv) => flinch_chance_vs_choice(mv, flincher_fresh, target_mv) > 0
     None => false
   }
 }
@@ -195,7 +198,7 @@ fn attempt_roll_deferred(
   opp_team : Array[Combatant],
 ) -> Bool {
   freeze_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
-  flinch_roll_deferred(state, is_me, action, opp_action, opp_team)
+  flinch_roll_deferred(state, is_me, action, team, opp_action, opp_team)
 }
 
 ///|
@@ -269,6 +272,7 @@ fn resolve_pending_attempt(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
+  foe_move : @model.Move?,
 ) -> Array[(Double, SwitchingGameState)] {
   let slot = if is_me { ws.my_active } else { ws.opp_active }
   let user_team = if is_me { my_team } else { opp_team }
@@ -308,7 +312,7 @@ fn resolve_pending_attempt(
       // 解凍して命中: 技は通常どおり解決する (解凍後の状態で。こおりの燃焼等は無関係)。
       for leg in resolve_attacker_leg(
         ws_from_state(s_o), is_me, mv, mv_idx, mega_now, def_mega_now, false,
-        my_team, opp_team, dmg_cache,
+        my_team, opp_team, dmg_cache, foe_move,
       ) {
         let (p, s) = leg
         result.push((o.prob * p, s))
@@ -524,6 +528,7 @@ fn resolve_attacker_leg(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
+  foe_move : @model.Move?,
 ) -> Array[(Double, SwitchingGameState)] {
   // Phase 2-E (#91): damage application + post-hit effects + 4 fanout は
   // apply_damage_variants_fanout に統合され、variant ごとに chance-node leaf
@@ -586,6 +591,10 @@ fn resolve_attacker_leg(
   // ダメージもひるみも付けない。`None` は未指定なのでここでは失敗させない。
   let user_fresh = if attacker_is_me { ws.my_fresh } else { ws.opp_fresh }
   if fake_out_fails(attacker_move, user_fresh) {
+    return [(1.0, pre_damage_state)]
+  }
+  // はやてがえし: 相手の選択が priority > 0 の技でなければ失敗する。ダメージもひるみも無い。
+  if upper_hand_fails(attacker_move, foe_move) {
     return [(1.0, pre_damage_state)]
   }
   // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
@@ -744,12 +753,12 @@ fn resolve_moves(
   let after_first = if first_pending {
     resolve_pending_attempt(
       ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
-      state, my_team, opp_team, dmg_cache,
+      state, my_team, opp_team, dmg_cache, Some(second_move),
     )
   } else {
     resolve_attacker_leg(
       ws, first_is_me, first_move, first_mv_idx, first_mega_now, first_def_mega_now,
-      first_pre_burn, my_team, opp_team, dmg_cache,
+      first_pre_burn, my_team, opp_team, dmg_cache, Some(second_move),
     )
   }
   // Step 2: for each branch, resolve the second attacker with the potentially
@@ -779,6 +788,7 @@ fn resolve_moves(
       for x in resolve_pending_attempt(
         ws_from_state(s1), second_is_me, second_move, second_mv_idx,
         second_mega_now, second_def_mega_now, state, my_team, opp_team, dmg_cache,
+        Some(first_move),
       ) {
         let (p2, s2) = x
         final_outs.push((p1 * p2, clone_state(s2, 1)))
@@ -803,7 +813,7 @@ fn resolve_moves(
     let ws2 = ws_from_state(s1)
     let after_second = resolve_attacker_leg(
       ws2, second_is_me, second_move, second_mv_idx, second_mega_now, second_def_mega_now,
-      second_burn, my_team, opp_team, dmg_cache,
+      second_burn, my_team, opp_team, dmg_cache, Some(first_move),
     )
     for x in after_second {
       let (p2, s2) = x
@@ -1351,13 +1361,14 @@ pub fn transition_with_cache(
           opp_action,
         )
       }
-      // ねこだまし は登場後の初行動でなければ失敗する。交代入れの相手にも当たせない。
+      // ねこだまし は登場後の初行動でなければ失敗する。交代は先制攻撃ではないので
+      // はやてがえし も失敗する (ダメージもひるみも無い)。
       let user_fresh = if attacker_is_me {
         base_state.my_fresh
       } else {
         base_state.opp_fresh
       }
-      if fake_out_fails(used_move, user_fresh) {
+      if fake_out_fails(used_move, user_fresh) || upper_hand_fails(used_move, None) {
         return settle_fresh_outcomes(
           [(1.0, base_state)],
           state.my_fresh,
@@ -1883,6 +1894,7 @@ pub fn attempt_turn_with_cache(
             my_team,
             opp_team,
             dmg_cache,
+            oa.action,
           )
         (false, true, false) =>
           partial_act_outcomes(
@@ -1892,6 +1904,7 @@ pub fn attempt_turn_with_cache(
             my_team,
             opp_team,
             dmg_cache,
+            ma.action,
           )
         (false, false, false) =>
           [(1.0, pass_turn_state(mega_pre, ma.post_status, oa.post_status))]
@@ -1937,6 +1950,7 @@ fn partial_act_outcomes(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
+  idle_action : ActionKind,
 ) -> Array[(Double, SwitchingGameState)] {
   let (core, mega_trigger) = normalize_action(action)
   let my_status_copy = state.my_status.copy()
@@ -2151,6 +2165,15 @@ fn partial_act_outcomes(
         base_state.opp_fresh
       }
       if fake_out_fails(used_move, user_fresh) {
+        return [(1.0, base_state)]
+      }
+      // 動かなかった側の選択技。実行できたかは見ない (リチャージ・眠りでも選択は残る)。
+      let foe_move = if attacker_is_me {
+        action_move_of(opp_team, state.opp_active, idle_action)
+      } else {
+        action_move_of(my_team, state.my_active, idle_action)
+      }
+      if upper_hand_fails(used_move, foe_move) {
         return [(1.0, base_state)]
       }
       let attacker_burn = if attacker_is_me {

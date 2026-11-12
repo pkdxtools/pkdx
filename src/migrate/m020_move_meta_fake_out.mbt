@@ -10,7 +10,7 @@
 ///
 /// 既存行 (m002 の priority 3) は `flinch_chance` だけを上書きする。行が無ければ
 /// priority 0 で INSERT する (本番 DB では m002 が先に行を作る)。
-/// はやてがえし と であいがしら は入れない。
+/// はやてがえし と であいがしら は入れない。はやてがえし の行は m021。
 ///
 /// 何度流しても data.json の状態へ収束する (冪等)。
 pub fn run_020(db : @db.Db, repo_root : String) -> Result[String, String] {

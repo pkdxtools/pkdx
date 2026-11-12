@@ -27,7 +27,8 @@
 ///   battle"): 初回行動だけで成功し、2 手目以降は失敗する。m019 では状態が無かったので行を
 ///   作らない。ゲート (`my_fresh`) を入れた m020 が flinch_chance 100 を投入する。
 /// - はやてがえし (:918 "fails if the target isn't about to use a priority attack"): 相手の
-///   選択技が先制技のときだけ成功する条件付き。見送り。
+///   選択技が priority > 0 のときだけ成功する。m019 は行を作らない。失敗ゲートを入れた
+///   m021 が priority 3 と flinch_chance 100 を投入する。
 ///
 /// 何度流しても data.json の状態へ収束する (冪等)。
 pub fn run_019(db : @db.Db, repo_root : String) -> Result[String, String] {

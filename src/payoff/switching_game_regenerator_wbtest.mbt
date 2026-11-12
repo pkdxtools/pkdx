@@ -309,6 +309,7 @@ test "再生力: partial_act の交代でも出ていく側だけ回復する" {
     my_team,
     opp_team,
     new_damage_cache(),
+    UseMove(0),
   )
   let (_, sm) = mine_outs[0]
   @debug.assert_eq(sm.my_hps[0], rg_healed(25, 100))
@@ -321,6 +322,7 @@ test "再生力: partial_act の交代でも出ていく側だけ回復する" {
     my_team,
     opp_team,
     new_damage_cache(),
+    UseMove(0),
   )
   let (_, so) = opp_outs[0]
   @debug.assert_eq(so.opp_hps[0], rg_healed(25, 100))

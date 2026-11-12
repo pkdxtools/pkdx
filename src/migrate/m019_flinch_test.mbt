@@ -3,7 +3,7 @@
 ///
 /// 検証する不変量:
 /// 1. data.json の技が本文の確率 (`flinch_chance`) の行になる (無い行は INSERT、ailment は既定値 = なし)。
-/// 2. ねこだまし / はやてがえし は行を作らない (条件付きのひるみはモデルしない)。
+/// 2. ねこだまし / はやてがえし は行を作らない (ねこだまし は m020、はやてがえし は m021)。
 /// 3. 既存行は flinch 列だけを上書きし、priority / ailment 列は残る (m017 / m018 の牙の行を壊さない)。
 /// 4. 表記違い (champions 全角 3 / pokedex ASCII 3) は両方の行を持つ。
 /// 5. 2 回目の実行で値も行数も変わらない (冪等)。
@@ -78,7 +78,7 @@ fn m019_row_count(db : @db.Db) -> Int {
 }
 
 ///|
-/// 1: 本文の確率どおりに行が入る (牙 3 種を含む)。ねこだまし / はやてがえし には行が無い。
+/// 1: 本文の確率どおりに行が入る (牙 3 種を含む)。m019 は ねこだまし / はやてがえし を入れない。
 test "m019 flinch: representative moves get the Champions text chance; conditional moves have no row" {
   let db = match m019_setup_temp_db("representative") {
     Ok(d) => d
@@ -106,7 +106,8 @@ test "m019 flinch: representative moves get the Champions text chance; condition
   assert_true(m019_flinch_of(db, "ほのおのキバ") == Some(10))
   assert_true(m019_flinch_of(db, "アイアンヘッド") == Some(20))
   assert_true(m019_flinch_of(db, "ひょうざんおろし") == Some(30))
-  // m019 は ねこだまし を入れない (失敗ゲート付きの 100% は m020)。はやてがえし も入れない。
+  // m019 は ねこだまし を入れない (失敗ゲート付きの 100% は m020)。
+  // はやてがえし も入れない (失敗ゲート付きの priority 3 / 100% は m021)。
   assert_true(m019_flinch_of(db, "ねこだまし") == None)
   assert_true(m019_flinch_of(db, "はやてがえし") == None)
   @db.close(db)

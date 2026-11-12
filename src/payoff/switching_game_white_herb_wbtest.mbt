@@ -348,6 +348,7 @@ test "しろいハーブ: 相手が skip しても交代登場のいかく で�
     my_team,
     herb_opp,
     new_damage_cache(),
+    UseMove(0),
   )
   @debug.assert_eq(outs.length() > 0, true)
   for o in outs {

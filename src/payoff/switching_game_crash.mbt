@@ -304,8 +304,12 @@ fn miss_self_loss_outcomes(
   } else {
     my_loss
   }
+  let idle = if me_acts { oa.action } else { ma.action }
   match missed_loss {
-    None => partial_act_outcomes(state, acting, me_acts, my_team, opp_team, dmg_cache)
+    None =>
+      partial_act_outcomes(
+        state, acting, me_acts, my_team, opp_team, dmg_cache, idle,
+      )
     Some(mv) => {
       let missed_is_me = !me_acts
       let slot = if missed_is_me {
@@ -337,7 +341,9 @@ fn miss_self_loss_outcomes(
       }
       let loss_first = fn() {
         let s0 = with_miss_self_loss(state, missed_is_me, slot, team, mv)
-        partial_act_outcomes(s0, acting, me_acts, my_team, opp_team, dmg_cache)
+        partial_act_outcomes(
+          s0, acting, me_acts, my_team, opp_team, dmg_cache, idle,
+        )
       }
       let loss_second = fn() {
         let outs : Array[(Double, SwitchingGameState)] = []
@@ -348,6 +354,7 @@ fn miss_self_loss_outcomes(
           my_team,
           opp_team,
           dmg_cache,
+          idle,
         ) {
           let s = out.1
           let now = if missed_is_me {

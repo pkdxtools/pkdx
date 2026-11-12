@@ -733,6 +733,7 @@ test "protean: 交代で出ていくスロットのロックが解除される (
     team,
     def_team,
     cache,
+    UseMove(0),
   )
   @debug.assert_eq(outs.length(), 1)
   let (_, new_state) = outs[0]

@@ -1375,7 +1375,7 @@ pub fn team_rollout(
           _ => false
         }
         let own_pending_on = match (ao, ap) {
-          (TmUseMove(_), TmUseMove(mj)) =>
+          (TmUseMove(mi), TmUseMove(mj)) =>
             mc_freeze_deferred(
               own_status[own_active],
               own_start_recharging,
@@ -1384,15 +1384,16 @@ pub fn team_rollout(
             ) ||
             mc_flinch_deferred(
               own_start_recharging,
-              flinch_chance_if_fresh(
+              flinch_chance_vs_choice(
                 opp[opp_active].moves[mj],
                 opp_fresh_at_turn,
+                Some(own[own_active].moves[mi]),
               ),
             )
           _ => false
         }
         let opp_pending_on = match (ao, ap) {
-          (TmUseMove(mi), TmUseMove(_)) =>
+          (TmUseMove(mi), TmUseMove(mj)) =>
             mc_freeze_deferred(
               opp_status[opp_active],
               opp_start_recharging,
@@ -1401,9 +1402,10 @@ pub fn team_rollout(
             ) ||
             mc_flinch_deferred(
               opp_start_recharging,
-              flinch_chance_if_fresh(
+              flinch_chance_vs_choice(
                 own[own_active].moves[mi],
                 own_fresh_at_turn,
+                Some(opp[opp_active].moves[mj]),
               ),
             )
           _ => false
@@ -1624,6 +1626,7 @@ pub fn team_rollout(
             // grounded な opp に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if own_attempt_acts &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
+              !upper_hand_fails(mv_own, Some(mv_opp)) &&
               !mc_psychic_priority_blocked(
                 mv_own,
                 field_state[0],
@@ -1749,6 +1752,7 @@ pub fn team_rollout(
               opp_attempt_acts &&
               !opp_blocked_mid_turn &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+              !upper_hand_fails(mv_opp, Some(mv_own)) &&
               !mc_psychic_priority_blocked(
                 mv_opp,
                 field_state[0],
@@ -1852,6 +1856,7 @@ pub fn team_rollout(
             // grounded な own に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if opp_attempt_acts &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+              !upper_hand_fails(mv_opp, Some(mv_own)) &&
               !mc_psychic_priority_blocked(
                 mv_opp,
                 field_state[0],
@@ -1977,6 +1982,7 @@ pub fn team_rollout(
               own_attempt_acts &&
               !own_blocked_mid_turn &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
+              !upper_hand_fails(mv_own, Some(mv_opp)) &&
               !mc_psychic_priority_blocked(
                 mv_own,
                 field_state[0],
@@ -2068,8 +2074,10 @@ pub fn team_rollout(
           let mv_own = own[own_active].moves[mi_own]
           let own_burn = is_burned(own_status[own_active])
           // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
+          // 相手は交代したので、はやてがえし は先制攻撃を選んでいない。
           if own_attempt_acts &&
             !fake_out_fails(mv_own, own_fresh_at_turn) &&
+            !upper_hand_fails(mv_own, None) &&
             !mc_psychic_priority_blocked(
               mv_own,
               field_state[0],
@@ -2159,8 +2167,10 @@ pub fn team_rollout(
           let mv_opp = opp[opp_active].moves[mi_opp]
           let opp_burn = is_burned(opp_status[opp_active])
           // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
+          // 相手は交代したので、はやてがえし は先制攻撃を選んでいない。
           if opp_attempt_acts &&
             !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+            !upper_hand_fails(mv_opp, None) &&
             !mc_psychic_priority_blocked(
               mv_opp,
               field_state[0],

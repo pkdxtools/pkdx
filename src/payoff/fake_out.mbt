@@ -22,9 +22,10 @@
 /// `Some` を `Some(false)` にする。交代は技ではないので `Some(true)` に戻し、
 /// そのターン自体は動かない (次のターンが初行動)。
 ///
-/// はやてがえし (`WAZAINFO_SYN_918`) は相手の先制技が条件で、このフラグでは
-/// 表せない。であいがしら (`WAZAINFO_SYN_660`) は同じ「first move」文を持つが
-/// ひるみは無く、本変更の対象外。
+/// はやてがえし (`WAZAINFO_SYN_918`) は相手の選択技が priority > 0 のときだけ
+/// 成功する。fresh では表せないので `upper_hand.mbt` が別ゲートにする。
+/// であいがしら (`WAZAINFO_SYN_660`) は同じ「first move」文を持つが
+/// ひるみは無く、ゲートしない。
 
 ///|
 const FAKE_OUT_NAME : String = "ねこだまし"

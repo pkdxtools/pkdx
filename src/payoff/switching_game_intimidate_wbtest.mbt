@@ -255,6 +255,7 @@ test "いかく: partial_act_outcomes (true,Switch) で opp active の A -1" {
     my_team,
     opp_team,
     new_damage_cache(),
+    UseMove(0),
   )
   @debug.assert_eq(outs.length(), 1)
   let (_, s) = outs[0]
@@ -280,6 +281,7 @@ test "いかく: partial_act_outcomes (false,Switch) で my active の A -1" {
     my_team,
     opp_team,
     new_damage_cache(),
+    UseMove(0),
   )
   @debug.assert_eq(outs.length(), 1)
   let (_, s) = outs[0]

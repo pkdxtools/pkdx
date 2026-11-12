@@ -508,7 +508,7 @@ test "with_post_hit_effects: 通常技は weather を書き換えない" {
 }
 
 // =================================================================
-// Stage 6: WeatherDependent healing (つきのひかり / あさのひざし / シンセシス)
+// Stage 6: WeatherDependent healing (つきのひかり / あさのひざし / こうごうせい)
 // =================================================================
 //
 // `HealingEffect::WeatherDependent(default_n, default_d, sunny_n, sunny_d,
@@ -518,7 +518,7 @@ test "with_post_hit_effects: 通常技は weather を書き換えない" {
 //   - Rain / Sand / Snow  → (harsh_n, harsh_d)   = (1, 4)   (= max / 4 回復)
 //   - None                → (default_n, default_d) = (1, 2) (= max / 2 回復)
 //
-// data.json では つきのひかり / あさのひざし / シンセシス すべて
+// data.json では つきのひかり / あさのひざし / こうごうせい すべて
 // (1,2) / (2,3) / (1,4) の triple を持つ。本テストは「つきのひかり」を代表
 // として 5 天候境界 + 動的切り替え (晴れ→消滅で default に戻る) を pin する。
 

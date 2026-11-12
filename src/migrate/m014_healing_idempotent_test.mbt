@@ -229,3 +229,59 @@ test "m014 idempotent: third run is identical to second (steady state)" {
   @debug.assert_eq(count_m014_columns(db), 9)
   @db.close(db)
 }
+
+///|
+/// move_meta の JOIN キーは技名。Champions / pokedex の技名は こうごうせい で、
+/// シンセシス ではない。3 技とも無天候 1/2、晴れ 2/3、雨砂雪 1/4。
+test "m014: weather heals are keyed by つきのひかり / あさのひざし / こうごうせい" {
+  let db = match setup_temp_db("weather_names") {
+    Ok(d) => d
+    Err(e) => {
+      @debug.assert_eq(e, "open or create_table should succeed")
+      return
+    }
+  }
+  match @migrate.run_014(db, ".") {
+    Ok(_) => ()
+    Err(e) => {
+      @db.close(db)
+      @debug.assert_eq(e, "run_014 should succeed")
+      return
+    }
+  }
+  let names = ["つきのひかり", "あさのひざし", "こうごうせい"]
+  for i in 0..<names.length() {
+    let rows = match
+      @db.query_binds(
+        db,
+        "SELECT heal_kind, heal_num, heal_den, heal_sunny_num, heal_sunny_den, heal_harsh_num, heal_harsh_den FROM move_meta WHERE name_ja = ?",
+        [@db.BindText(names[i])],
+      ) {
+      Ok(r) => r
+      Err(_) => []
+    }
+    if rows.length() != 1 {
+      @db.close(db)
+      fail("missing weather heal row: " + names[i])
+      return
+    }
+    @debug.assert_eq(rows[0].get(0), Some(Some("weather")))
+    @debug.assert_eq(rows[0].get(1), Some(Some("1")))
+    @debug.assert_eq(rows[0].get(2), Some(Some("2")))
+    @debug.assert_eq(rows[0].get(3), Some(Some("2")))
+    @debug.assert_eq(rows[0].get(4), Some(Some("3")))
+    @debug.assert_eq(rows[0].get(5), Some(Some("1")))
+    @debug.assert_eq(rows[0].get(6), Some(Some("4")))
+  }
+  let absent = match
+    @db.query_binds(
+      db, "SELECT name_ja FROM move_meta WHERE name_ja = ?", [
+        @db.BindText("シンセシス"),
+      ],
+    ) {
+    Ok(r) => r
+    Err(_) => []
+  }
+  @debug.assert_eq(absent.length(), 0)
+  @db.close(db)
+}

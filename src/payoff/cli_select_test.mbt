@@ -682,3 +682,137 @@ test "e2e: 6v6 turn_limit=3 degenerate fixture triggers Nash fallback" {
     _ => fail("output is not a JSON object")
   }
 }
+
+///|
+/// max HP 100、現在 HP 10 から天候依存回復を 1 回撃ったあとの HP。
+/// 無天候は 10+50=60、晴れは 10+66=76、雨・砂・雪は 10+25=35。
+/// 整数除算 `max * n / d`。Champions 本文の分数 (1/2, 2/3, 1/4)。
+fn weather_heal_hp(mv : @model.Move, weather : @model.Weather) -> Int {
+  let hps = [10]
+  let status : Array[@model.StatusCondition] = [@model.None]
+  @payoff.apply_healing(mv, 0, hps, 100, weather, status, "", 0, "")
+  hps[0]
+}
+
+///|
+fn assert_champions_weather_heal(mv : @model.Move) -> Unit raise {
+  assert_true(mv.healing == Some(@model.WeatherDependent(1, 2, 2, 3, 1, 4)))
+  assert_true(weather_heal_hp(mv, @model.Weather::None) == 60)
+  assert_true(weather_heal_hp(mv, @model.Weather::Sun) == 76)
+  assert_true(weather_heal_hp(mv, @model.Weather::Rain) == 35)
+  assert_true(weather_heal_hp(mv, @model.Weather::Sand) == 35)
+  assert_true(weather_heal_hp(mv, @model.Weather::Snow) == 35)
+}
+
+///|
+/// `pkdx moves` が出す天気回復の JSON。省略キーは埋めない。
+fn weather_heal_move_json(name : String, type_ : String) -> String {
+  "{\"name\":\"" +
+  name +
+  "\",\"type\":\"" +
+  type_ +
+  "\",\"category\":\"変化\",\"power\":0,\"heal_kind\":\"weather\",\"heal_num\":1,\"heal_den\":2,\"heal_sunny_num\":2,\"heal_sunny_den\":3,\"heal_harsh_num\":1,\"heal_harsh_den\":4}"
+}
+
+///|
+fn parse_one_move(move_json : String) -> @model.Move? {
+  let raw = "{\"team\":[{\"name\":\"A\",\"type1\":\"ノーマル\",\"type2\":\"\",\"hp\":100,\"atk\":100,\"def\":100,\"spa\":100,\"spd\":100,\"spe\":100,\"moves\":[" +
+    move_json +
+    "]}]}"
+  let parsed = @json.parse(raw) catch { _ => return None }
+  match parsed {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => {
+          let team = @payoff.parse_team_array(t, "team") catch { _ => return None }
+          if team.length() == 0 || team[0].moves.length() == 0 {
+            return None
+          }
+          Some(team[0].moves[0])
+        }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// #212 が残した入力の穴。`tests/fixtures/nash_select_input_6v6_t3.json` の
+/// つきのひかりは `heal_kind: weather` と既定 1/2 だけではなく、`pkdx moves` が
+/// DB から出す晴れ 2/3・雨砂雪 1/4 を持つ。select は省略を 0/1 として扱うので、
+/// キーが落ちると晴れと雨では回復しない。このテストはフィクスチャを select の
+/// パーサに通し、3 区分の回復量を固定する。
+test "select fixture: つきのひかり heals 1/2, sunny 2/3, harsh 1/4" {
+  let input_json = match
+    @db.read_file("tests/fixtures/nash_select_input_6v6_t3.json") {
+    Some(s) => s
+    None => {
+      fail("missing tests/fixtures/nash_select_input_6v6_t3.json")
+      return
+    }
+  }
+  let team = match @json.parse(input_json) {
+    Object(m) =>
+      match m.get("team") {
+        Some(t) => @payoff.parse_team_array(t, "team")
+        _ => {
+          fail("fixture has no team")
+          return
+        }
+      }
+    _ => {
+      fail("fixture is not an object")
+      return
+    }
+  }
+  let mut found = false
+  for i in 0..<team.length() {
+    let moves = team[i].moves
+    for j in 0..<moves.length() {
+      if moves[j].name == "つきのひかり" {
+        assert_champions_weather_heal(moves[j])
+        found = true
+      }
+    }
+  }
+  assert_true(found)
+}
+
+///|
+/// あさのひざし / こうごうせい は つきのひかりと同じ本文
+/// (無天候 1/2、にほんばれ 2/3、それ以外の天気 1/4)。
+/// リポジトリ内の select フィクスチャにはこの 2 技が無いので、
+/// `pkdx moves` と同じキーを持つ JSON を select に読ませる。
+test "select input: あさのひざし and こうごうせい use the same weather fractions" {
+  let names = [("あさのひざし", "ノーマル"), ("こうごうせい", "くさ")]
+  for i in 0..<names.length() {
+    let (name, type_) = names[i]
+    match parse_one_move(weather_heal_move_json(name, type_)) {
+      Some(mv) => {
+        assert_true(mv.name == name)
+        assert_champions_weather_heal(mv)
+      }
+      None => fail("failed to parse " + name)
+    }
+  }
+}
+
+///|
+/// select は DB を引かない。晴れ・雨砂雪の分数を省略した weather 回復は
+/// 0/1 のままで、晴れと雨では回復しない。既定の 1/2 だけが残る。
+test "select input: omitted weather fractions stay 0/1 and do not backfill" {
+  let raw = "{\"name\":\"つきのひかり\",\"type\":\"フェアリー\",\"category\":\"変化\",\"power\":0,\"heal_kind\":\"weather\",\"heal_num\":1,\"heal_den\":2}"
+  let mv = match parse_one_move(raw) {
+    Some(m) => m
+    None => {
+      fail("failed to parse omitted weather fractions")
+      return
+    }
+  }
+  assert_true(mv.healing == Some(@model.WeatherDependent(1, 2, 0, 1, 0, 1)))
+  assert_true(weather_heal_hp(mv, @model.Weather::None) == 60)
+  assert_true(weather_heal_hp(mv, @model.Weather::Sun) == 10)
+  assert_true(weather_heal_hp(mv, @model.Weather::Rain) == 10)
+  assert_true(weather_heal_hp(mv, @model.Weather::Sand) == 10)
+  assert_true(weather_heal_hp(mv, @model.Weather::Snow) == 10)
+}

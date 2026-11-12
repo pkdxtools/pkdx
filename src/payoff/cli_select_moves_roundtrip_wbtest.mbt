@@ -294,6 +294,8 @@ test "pkdx moves -> select input (DB): heal variants じこさいせい / つき
   let cases : Array[(String, @model.HealingEffect)] = [
     ("じこさいせい", @model.FixedFraction(1, 2)),
     ("つきのひかり", @model.WeatherDependent(1, 2, 2, 3, 1, 4)),
+    ("あさのひざし", @model.WeatherDependent(1, 2, 2, 3, 1, 4)),
+    ("こうごうせい", @model.WeatherDependent(1, 2, 2, 3, 1, 4)),
     ("ギガドレイン", @model.Drain(1, 2)),
     ("ねむる", @model.Rest),
     ("やどりぎのタネ", @model.LeechSeed),

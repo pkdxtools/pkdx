@@ -332,3 +332,35 @@ test "query_move: つきのひかり has WeatherDependent (default/sunny/harsh)"
     Err(e) => fail("query_move つきのひかり failed: " + e)
   }
 }
+
+///|
+/// つきのひかり / あさのひざし / こうごうせい は同じ
+/// `WeatherDependent(1, 2, 2, 3, 1, 4)`。技名 シンセシス は move_meta に無い。
+test "query_move: あさのひざし and こうごうせい share moonlight fractions" {
+  let db_path = match find_test_db() {
+    Some(p) => p
+    None => return
+  }
+  let db = match @db.open(db_path) {
+    Ok(d) => d
+    Err(e) => fail("failed to open test db: " + e)
+  }
+  let names = ["つきのひかり", "あさのひざし", "こうごうせい"]
+  let want = Some(@model.WeatherDependent(1, 2, 2, 3, 1, 4))
+  for i in 0..<names.length() {
+    match @db.query_move(db, names[i], @model.Other("scarlet_violet")) {
+      Ok(mv) =>
+        if mv.healing != want {
+          @db.close(db)
+          fail(names[i] + " healing does not match WeatherDependent(1, 2, 2, 3, 1, 4)")
+          return
+        }
+      Err(e) => {
+        @db.close(db)
+        fail("query_move " + names[i] + " failed: " + e)
+        return
+      }
+    }
+  }
+  @db.close(db)
+}

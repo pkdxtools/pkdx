@@ -5,7 +5,7 @@
 
   { "name": "つきのひかり", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
   { "name": "あさのひざし", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
-  { "name": "シンセシス", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
+  { "name": "こうごうせい", "heal_kind": "weather", "heal_num": 1, "heal_den": 2, "heal_sunny_num": 2, "heal_sunny_den": 3, "heal_harsh_num": 1, "heal_harsh_den": 4 },
 
   { "name": "ギガドレイン", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },
   { "name": "メガドレイン", "heal_kind": "drain", "heal_num": 1, "heal_den": 2 },

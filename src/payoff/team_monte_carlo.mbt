@@ -897,6 +897,86 @@ fn mc_freeze_deferred(
 }
 
 ///|
+/// MC のひるみ: 相手の技がひるみを付与しうるとき、行動時点へ試行を遅らせる側 (DP
+/// `flinch_roll_deferred` と同じ規則)。両者が技を出すことは呼び出し側で保証する。
+/// リチャージ中の側は行動しないので遅らせない。
+fn mc_flinch_deferred(recharging : Bool, opp_flinch_chance : Int) -> Bool {
+  !recharging && opp_flinch_chance > 0
+}
+
+///|
+/// MC のひるみ抽選 (DP `maybe_apply_flinch_fanout` の 1 命中版)。先攻の技が命中して相手が生存し、
+/// この命中で相手の HP が減り (ばけのかわ の chip を含む)、ちからずく でなく、相手の特性で遮断
+/// されないときに `flinch_chance` % で成立する。多段技の命中数ぶんの抽選は持たず 1 回として扱う
+/// (現データのひるみ技は全て単発。DP は `hits_count` 回の独立抽選)。
+fn mc_flinch_roll(
+  rng : @random.Rand,
+  mv : @model.Move,
+  attacker_ability : String,
+  defender : Combatant,
+  hp_before : Int,
+  hp_after : Int,
+  immune : Bool,
+) -> Bool {
+  if immune || mv.power <= 0 || mv.flinch_chance <= 0 {
+    return false
+  }
+  if hp_after <= 0 || hp_before - hp_after <= 0 {
+    return false
+  }
+  if ability_strips_secondaries(attacker_ability) {
+    return false
+  }
+  if flinch_blocked_by_ability(defender.ability, mv) {
+    return false
+  }
+  rand_bool(rng, flinch_probability(mv.flinch_chance, 1))
+}
+
+///|
+/// MC の保留試行 (こおり / ひるみ) を行動時点で解決する。`flinched` が true ならひるみの分布
+/// (`flinched_outcomes`、DP と同じ SSoT) から 1 つ引く。行動しない (命中判定なし)。戻り値は
+/// (新しい状態, 行動するか, 外れたか, ふくつのこころ が発火したか)。`flinched = false` は従来どおり。
+fn mc_resolve_pending_attempt(
+  rng : @random.Rand,
+  status : @model.StatusCondition,
+  mv_acc : Int,
+  thaws_user : Bool,
+  flinched : Bool,
+) -> (@model.StatusCondition, Bool, Bool, Bool) {
+  if !flinched {
+    let (st, acts, missed) = mc_resolve_attempt(
+      status,
+      mv_acc,
+      rng,
+      thaws_user=thaws_user,
+    )
+    return (st, acts, missed, false)
+  }
+  let outs = flinched_outcomes(status, thaws_user)
+  let u = rng.int(limit=1000000).to_double() / 1000000.0
+  let mut cum = 0.0
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (p, post, steadfast) = outs[i]
+    cum = cum + p
+    if u < cum {
+      return (post, false, false, steadfast)
+    }
+  }
+  let (_, post, steadfast) = outs[outs.length() - 1]
+  (post, false, false, steadfast)
+}
+
+///|
+/// ふくつのこころ (MC): ひるみで行動を止められた側の素早さランクを +1 する (DP
+/// `ws_with_flinch_speed_boost` と同じ `clamp_rank_for`)。MC は mega を模さないので生の特性を読む。
+fn mc_flinch_speed_boost(ranks : Array[Int], ability : String) -> Unit {
+  if ability_flinch_speed_boost(ability) {
+    ranks[4] = clamp_rank_for(ability, ranks[4] + 1)
+  }
+}
+
+///|
 /// 解凍 (こおり → None)。こおり以外は変えない。
 fn mc_thaw(defender_status : Array[@model.StatusCondition], slot : Int) -> Unit {
   match defender_status[slot] {
@@ -1271,6 +1351,9 @@ pub fn team_rollout(
         let mut opp_attempt_acts = true
         let mut own_missed = false
         let mut opp_missed = false
+        // ひるみ (追加効果) のターン内フラグ。先攻の技の命中で後攻側に立つ (DP の `*_flinched` と同じ)。
+        let mut own_flinch = false
+        let mut opp_flinch = false
         // こおり: 両者が技を出し、こちらが凍っている / 相手の技が凍らせうるとき、解凍抽選と命中を
         // 行動時点 (Step 3) で振る (DP `freeze_roll_deferred` と同じ規則)。ここでは仮の値を置く。
         let own_thaws = match ao {
@@ -1288,6 +1371,10 @@ pub fn team_rollout(
               own_start_recharging,
               own_thaws,
               move_can_freeze(opp[opp_active].moves[mj]),
+            ) ||
+            mc_flinch_deferred(
+              own_start_recharging,
+              opp[opp_active].moves[mj].flinch_chance,
             )
           _ => false
         }
@@ -1298,6 +1385,10 @@ pub fn team_rollout(
               opp_start_recharging,
               opp_thaws,
               move_can_freeze(own[own_active].moves[mi]),
+            ) ||
+            mc_flinch_deferred(
+              opp_start_recharging,
+              own[own_active].moves[mi].flinch_chance,
             )
           _ => false
         }
@@ -1499,12 +1590,14 @@ pub fn team_rollout(
           let own_pre_status = own_status[own_active]
           let opp_pre_status = opp_status[opp_active]
           if own_first {
-            // こおり: 先攻 (own) の遅らせた試行は行動時点 (ここ) で振る。
+            // こおり / ひるみ: 先攻 (own) の遅らせた試行は行動時点 (ここ) で振る。先攻はひるまない。
             if own_pending_on {
-              let (st, acts, missed) = mc_resolve_attempt(
+              let (st, acts, missed, _) = mc_resolve_pending_attempt(
+                rng,
                 own_status[own_active],
                 own_pending_acc,
-                rng,
+                own_thaws,
+                own_flinch,
               )
               own_status[own_active] = st
               own_attempt_acts = acts
@@ -1582,6 +1675,18 @@ pub fn team_rollout(
               if all_ko(opp_hps) {
                 return 1.0
               }
+              // ひるみ: 先攻 (own) の命中で後攻 (opp) にひるみ抽選 (DP `maybe_apply_flinch_fanout`)。
+              if mc_flinch_roll(
+                rng,
+                mv_own,
+                own[own_active].ability,
+                opp[opp_active],
+                before,
+                res_hp,
+                res_immune,
+              ) {
+                opp_flinch = true
+              }
               if action_blocked_by_fresh_status(
                   opp_pre_status,
                   opp_status[opp_active],
@@ -1607,11 +1712,16 @@ pub fn team_rollout(
             }
             // こおり: 後攻 (opp) の遅らせた試行は先攻の技の結果を見てから振る。
             if opp_pending_on && opp_hps[opp_active] > 0 && own_hps[own_active] > 0 {
-              let (st, acts, missed) = mc_resolve_attempt(
+              let (st, acts, missed, steadfast) = mc_resolve_pending_attempt(
+                rng,
                 opp_status[opp_active],
                 opp_pending_acc,
-                rng,
+                opp_thaws,
+                opp_flinch,
               )
+              if steadfast {
+                mc_flinch_speed_boost(opp_ranks, opp[opp_active].ability)
+              }
               opp_status[opp_active] = st
               opp_attempt_acts = acts
               opp_missed = missed
@@ -1705,12 +1815,14 @@ pub fn team_rollout(
               }
             }
           } else {
-            // こおり: 先攻 (opp) の遅らせた試行は行動時点 (ここ) で振る。
+            // こおり / ひるみ: 先攻 (opp) の遅らせた試行は行動時点 (ここ) で振る。先攻はひるまない。
             if opp_pending_on {
-              let (st, acts, missed) = mc_resolve_attempt(
+              let (st, acts, missed, _) = mc_resolve_pending_attempt(
+                rng,
                 opp_status[opp_active],
                 opp_pending_acc,
-                rng,
+                opp_thaws,
+                opp_flinch,
               )
               opp_status[opp_active] = st
               opp_attempt_acts = acts
@@ -1788,6 +1900,18 @@ pub fn team_rollout(
               if all_ko(opp_hps) {
                 return 1.0
               }
+              // ひるみ: 先攻 (opp) の命中で後攻 (own) にひるみ抽選 (DP `maybe_apply_flinch_fanout`)。
+              if mc_flinch_roll(
+                rng,
+                mv_opp,
+                opp[opp_active].ability,
+                own[own_active],
+                before,
+                res_hp,
+                res_immune,
+              ) {
+                own_flinch = true
+              }
               if action_blocked_by_fresh_status(
                   own_pre_status,
                   own_status[own_active],
@@ -1813,11 +1937,16 @@ pub fn team_rollout(
             }
             // こおり: 後攻 (own) の遅らせた試行は先攻の技の結果を見てから振る。
             if own_pending_on && own_hps[own_active] > 0 && opp_hps[opp_active] > 0 {
-              let (st, acts, missed) = mc_resolve_attempt(
+              let (st, acts, missed, steadfast) = mc_resolve_pending_attempt(
+                rng,
                 own_status[own_active],
                 own_pending_acc,
-                rng,
+                own_thaws,
+                own_flinch,
               )
+              if steadfast {
+                mc_flinch_speed_boost(own_ranks, own[own_active].ability)
+              }
               own_status[own_active] = st
               own_attempt_acts = acts
               own_missed = missed

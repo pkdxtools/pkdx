@@ -167,13 +167,16 @@ pub fn query_champions_moves(
     "LEFT JOIN pokedex.move_meta mm ON mm.name_ja = m.waza\n" +
     "WHERE l.id = ?\n" +
     "ORDER BY CAST(REPLACE(m.power, '-', '0') AS INTEGER) DESC"
-  collect_champions_moves_rows(
+  match collect_champions_moves_rows(
     db,
     sql,
     [pokemon_id],
     has_heal=heal_cols != "",
     has_field=field_cols != "",
-  )
+  ) {
+    Ok(moves) => Ok(apply_flinch_chance(moves, flinch_chance_map(db, "pokedex")))
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -284,6 +287,7 @@ fn collect_champions_moves_rows(
       healing,
       weather_set,
       field_set,
+      flinch_chance: 0,
     })
   }
   Ok(moves)
@@ -428,6 +432,7 @@ pub fn query_champions_move(
     healing,
     weather_set,
     field_set,
+    flinch_chance: flinch_chance_of(flinch_chance_map(db, "pokedex"), r[0]),
   })
 }
 

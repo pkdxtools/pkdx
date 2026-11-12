@@ -22,7 +22,8 @@
 ///                 "name_ja":String}?,  // optional; present if mega-capable
 ///   "ivs": {"h":Int, "a":Int, "b":Int, "c":Int, "d":Int, "s":Int}?,
 ///   "moves":   [{"name":..., "type":..., "category":"物理"|"特殊"|"変化",
-///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?}, ...]
+///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?,
+///                "flinch_chance":Int?}, ...]  // flinch_chance: ひるみ率 (%)、省略 0
 /// }
 /// ```
 ///
@@ -150,6 +151,8 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         Some(Object(se)) => parse_status_effect_object(se)
         _ => None
       }
+      // ひるみ確率 (%)。省略は 0 (ひるみなし)。DB 経路は move_meta.flinch_chance (m019)。
+      let flinch_chance = parse_int_field_or(m, "flinch_chance", 0)
       let recoil_num = match m.get("recoil_num") {
         Some(Number(n, ..)) => n.to_int()
         _ => 0
@@ -239,6 +242,7 @@ fn parse_move_json(j : Json, ctx : String) -> @model.Move raise NashCliError {
         healing,
         weather_set,
         field_set,
+        flinch_chance,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
@@ -453,6 +457,7 @@ fn parse_combatant_json(
             healing: None,
             weather_set: None,
             field_set: None,
+            flinch_chance: 0,
           })
           for i in 0..<arr.length() {
             out[i] = parse_move_json(

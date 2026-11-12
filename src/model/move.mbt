@@ -149,6 +149,12 @@ pub(all) struct Move {
   healing : HealingEffect?
   weather_set : Weather?
   field_set : Field?
+  // `flinch_chance` — per-hit ひるみ chance (%) of a damaging move (Champions
+  // wazainfo_syn.json の「N% chance of making the target flinch」)。0 = ひるみなし。
+  // 命中して相手が生存したときだけ抽選し、成功すると相手はそのターンの後攻の行動を
+  // 失う (持ち越さない)。DB では move_meta.flinch_chance (m019) から入る。
+  // ゲート (ちからずく / せいしんりょく / りんぷん / HP 減少なし) は payoff 層で掛ける。
+  flinch_chance : Int
 } derive(Debug, Eq)
 
 ///|

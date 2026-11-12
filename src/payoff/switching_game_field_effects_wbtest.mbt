@@ -81,6 +81,8 @@ fn mk_field_eff_state() -> SwitchingGameState {
     my_disguise_busted: [false, false],
     opp_item_consumed: [false, false],
     opp_disguise_busted: [false, false],
+    my_flinched: false,
+    opp_flinched: false,
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,

@@ -141,6 +141,13 @@ pub(all) struct SwitchingGameState {
   //   not modeled in this PR). When 0 the next EOT clears to `None`.
   field : @model.Field
   field_turns_left : Int
+  // ひるみ (Champions wazainfo_syn.json の「N% chance of making the target flinch」) のターン内
+  // フラグ。先攻の技が命中して相手が生存し、ひるみ抽選に当たると相手側を true にする。後攻の
+  // 試行はこのフラグを行動時点で読み、true なら行動しない (`flinched_outcomes`)。ターン末
+  // (`attempt_turn_with_cache` の出口) で必ず false に戻すので、ひるみは持ち越さない。
+  // ターン外の状態では常に false (DP のキャッシュ鍵もこの前提で同一になる)。
+  my_flinched : Bool
+  opp_flinched : Bool
   turn : Int
 } derive(Debug, Eq, Hash)
 
@@ -1309,6 +1316,18 @@ fn apply_damage_variants_fanout(
       },
       fn(s) {
         maybe_apply_status_fanout(
+          s,
+          target_is_me,
+          target_slot,
+          defender_team,
+          secondary_move,
+          hits_count=outcome.hits_count,
+        )
+      },
+      // ひるみ (追加効果): 相手が生存し、特性で遮断されないときに命中数ぶんの独立抽選で成立し、
+      // 成立枝には相手側の `*_flinched` が立つ。後攻の行動はその後 `resolve_pending_attempt` が止める。
+      fn(s) {
+        maybe_apply_flinch_fanout(
           s,
           target_is_me,
           target_slot,

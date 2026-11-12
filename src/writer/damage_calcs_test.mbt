@@ -46,6 +46,7 @@ fn mk_move_for_test(
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
 }
 

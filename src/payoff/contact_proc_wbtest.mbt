@@ -75,6 +75,8 @@ fn cp_state() -> SwitchingGameState {
     my_disguise_busted: [false, false, false],
     opp_item_consumed: [false, false, false],
     opp_disguise_busted: [false, false, false],
+    my_flinched: false,
+    opp_flinched: false,
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,
@@ -111,6 +113,7 @@ fn cp_move(name : String) -> @model.Move {
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
 }
 
@@ -259,6 +262,7 @@ fn cp_multihit_move(name : String) -> @model.Move {
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
 }
 

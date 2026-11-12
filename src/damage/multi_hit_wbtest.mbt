@@ -22,6 +22,7 @@ fn mh_move(name : String) -> @model.Move {
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
 }
 

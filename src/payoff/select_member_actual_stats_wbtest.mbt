@@ -126,6 +126,7 @@ test "build_input_with_ranks: physical attacker routes actual_stats[1] to atk_st
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   // 物理技なので attacker Atk (index 1) / defender Def (index 2)
@@ -187,6 +188,7 @@ test "build_input_with_ranks: special move routes to SpA (3) / SpD (4)" {
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   // 特殊技: attacker SpA (index 3) / defender SpD (index 4)
@@ -227,6 +229,7 @@ test "build_input_with_ranks: missing actual_stats falls back to zero override" 
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   @debug.assert_eq(input.atk_stat_override, 0)
@@ -289,6 +292,7 @@ test "build_input_with_ranks: body press picks Def (index 2) as atk stat" {
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let input = build_input_with_ranks(atk, dfn, mv, 0, 0)
   // ボディプレス: 攻撃側 Def = 222, 防御側 Def = 144
@@ -356,6 +360,7 @@ test "compute_mean_damage: actual_stats override changes damage output" {
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let d_default = compute_mean_damage(base_atk, dfn, mv, 0, 0)
   let d_boosted = compute_mean_damage(boosted_atk, dfn, mv, 0, 0)
@@ -805,6 +810,7 @@ test "compute_mean_damage via effective_combatant: mega uses stat_points-derived
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
   let d_invested = compute_mean_damage(invested, dfn, mv, 0, 0)
   let d_uninvested = compute_mean_damage(uninvested, dfn, mv, 0, 0)

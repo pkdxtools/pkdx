@@ -66,6 +66,7 @@ fn asv_move(
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
 }
 
@@ -112,6 +113,8 @@ fn asv_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
     my_disguise_busted: [false],
     opp_item_consumed: [false],
     opp_disguise_busted: [false],
+    my_flinched: false,
+    opp_flinched: false,
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,

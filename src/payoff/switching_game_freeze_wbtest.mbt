@@ -41,6 +41,7 @@ fn frz_move(
     healing: None,
     weather_set: None,
     field_set: None,
+    flinch_chance: 0,
   }
 }
 
@@ -115,6 +116,8 @@ fn frz_state(
     opp_item_consumed: [false],
     my_disguise_busted: [false],
     opp_disguise_busted: [false],
+    my_flinched: false,
+    opp_flinched: false,
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,
@@ -662,6 +665,8 @@ test "frz switch: a benched frozen Pokémon keeps its counter when the bench is 
     opp_must_recharge: [false, false],
     opp_item_consumed: [false, false],
     opp_disguise_busted: [false, false],
+    my_flinched: false,
+    opp_flinched: false,
     opp_leech_seeded: [false, false],
     opp_protean_locked: ["", ""],
   }

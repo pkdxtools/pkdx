@@ -160,6 +160,8 @@ pub fn team_payoff_matrix_switching(
   disk? : @damage_cache.DamageDiskCache? = None,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> @nash.FiniteMatrix raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -197,6 +199,8 @@ pub fn team_payoff_matrix_switching(
         disk~,
         progress~,
         dp_log_every~,
+        my_fresh~,
+        opp_fresh~,
       )
       progress(CellDone(sel_a[i], sel_b[j], i, j, "dp-full"))
       progress(PhaseProgress("dp-full", i * size_b + j + 1, total))
@@ -228,6 +232,8 @@ pub fn team_payoff_matrix_with_team_model(
   disk? : @damage_cache.DamageDiskCache? = None,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> @nash.FiniteMatrix raise PayoffError {
   match team_model {
     SwitchingGame(turn_limit) => {
@@ -246,6 +252,8 @@ pub fn team_payoff_matrix_with_team_model(
         disk~,
         progress~,
         dp_log_every~,
+        my_fresh~,
+        opp_fresh~,
       )
     }
     ScreenedSwitchingGame(_, _, _, _) =>

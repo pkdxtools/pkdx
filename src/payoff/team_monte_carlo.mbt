@@ -917,8 +917,10 @@ fn mc_flinch_roll(
   hp_before : Int,
   hp_after : Int,
   immune : Bool,
+  user_fresh? : Bool? = None,
 ) -> Bool {
-  if immune || mv.power <= 0 || mv.flinch_chance <= 0 {
+  let chance = flinch_chance_if_fresh(mv, user_fresh)
+  if immune || mv.power <= 0 || chance <= 0 {
     return false
   }
   if hp_after <= 0 || hp_before - hp_after <= 0 {
@@ -930,7 +932,7 @@ fn mc_flinch_roll(
   if flinch_blocked_by_ability(defender.ability, mv) {
     return false
   }
-  rand_bool(rng, flinch_probability(mv.flinch_chance, 1))
+  rand_bool(rng, flinch_probability(chance, 1))
 }
 
 ///|
@@ -1192,6 +1194,8 @@ pub fn team_rollout(
   epsilon? : Double = default_rollout_epsilon,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Double {
   let own_hps = Array::make(own.length(), 0)
   let opp_hps = Array::make(opp.length(), 0)
@@ -1267,6 +1271,9 @@ pub fn team_rollout(
   let opp_item_consumed : Array[Bool] = Array::make(opp.length(), false)
   let mut own_active = 0
   let mut opp_active = 0
+  // ねこだまし。None は未追跡 (select の既定)。Some は交代で true、技の行動で false。
+  let mut own_fresh : Bool? = my_fresh
+  let mut opp_fresh : Bool? = opp_fresh
   // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
   // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
   // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
@@ -1344,6 +1351,9 @@ pub fn team_rollout(
         let opp_start_active = opp_active
         let own_start_recharging = own_must_recharge[own_start_active]
         let opp_start_recharging = opp_must_recharge[opp_start_active]
+        // ねこだまし の判定はターン開始時の値を見る。更新はターン末 (Step 4 の前)。
+        let own_fresh_at_turn = own_fresh
+        let opp_fresh_at_turn = opp_fresh
         // Step 1: resolve status-phase attempts for move attempts (switches are
         // always successful and bypass sleep / paralyze). Recharge short-
         // circuits UseMove to `acts=false` regardless of status.
@@ -1374,7 +1384,10 @@ pub fn team_rollout(
             ) ||
             mc_flinch_deferred(
               own_start_recharging,
-              opp[opp_active].moves[mj].flinch_chance,
+              flinch_chance_if_fresh(
+                opp[opp_active].moves[mj],
+                opp_fresh_at_turn,
+              ),
             )
           _ => false
         }
@@ -1388,7 +1401,10 @@ pub fn team_rollout(
             ) ||
             mc_flinch_deferred(
               opp_start_recharging,
-              own[own_active].moves[mi].flinch_chance,
+              flinch_chance_if_fresh(
+                own[own_active].moves[mi],
+                own_fresh_at_turn,
+              ),
             )
           _ => false
         }
@@ -1607,6 +1623,7 @@ pub fn team_rollout(
             // Stage H: Psychic Terrain priority block — own の priority>0 技は
             // grounded な opp に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if own_attempt_acts &&
+              !fake_out_fails(mv_own, own_fresh_at_turn) &&
               !mc_psychic_priority_blocked(
                 mv_own,
                 field_state[0],
@@ -1684,6 +1701,7 @@ pub fn team_rollout(
                 before,
                 res_hp,
                 res_immune,
+                user_fresh=own_fresh_at_turn,
               ) {
                 opp_flinch = true
               }
@@ -1730,6 +1748,7 @@ pub fn team_rollout(
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
               !opp_blocked_mid_turn &&
+              !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
               !mc_psychic_priority_blocked(
                 mv_opp,
                 field_state[0],
@@ -1832,6 +1851,7 @@ pub fn team_rollout(
             // Stage H: Psychic Terrain priority block — opp の priority>0 技は
             // grounded な own に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if opp_attempt_acts &&
+              !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
               !mc_psychic_priority_blocked(
                 mv_opp,
                 field_state[0],
@@ -1909,6 +1929,7 @@ pub fn team_rollout(
                 before,
                 res_hp,
                 res_immune,
+                user_fresh=opp_fresh_at_turn,
               ) {
                 own_flinch = true
               }
@@ -1955,6 +1976,7 @@ pub fn team_rollout(
               opp_hps[opp_active] > 0 &&
               own_attempt_acts &&
               !own_blocked_mid_turn &&
+              !fake_out_fails(mv_own, own_fresh_at_turn) &&
               !mc_psychic_priority_blocked(
                 mv_own,
                 field_state[0],
@@ -2047,6 +2069,7 @@ pub fn team_rollout(
           let own_burn = is_burned(own_status[own_active])
           // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
           if own_attempt_acts &&
+            !fake_out_fails(mv_own, own_fresh_at_turn) &&
             !mc_psychic_priority_blocked(
               mv_own,
               field_state[0],
@@ -2137,6 +2160,7 @@ pub fn team_rollout(
           let opp_burn = is_burned(opp_status[opp_active])
           // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
           if opp_attempt_acts &&
+            !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
             !mc_psychic_priority_blocked(
               mv_opp,
               field_state[0],
@@ -2233,6 +2257,10 @@ pub fn team_rollout(
           opp_start_active < opp_must_recharge.length() {
           opp_must_recharge[opp_start_active] = false
         }
+        // 交代した側は次ターンが初行動。技を選んだ側は成否にかかわらず消費する。
+        // None は None のまま (未指定の入力を追跡し始めない)。
+        own_fresh = fresh_after_switch(own_fresh_at_turn, own_switches)
+        opp_fresh = fresh_after_switch(opp_fresh_at_turn, opp_switches)
         // Step 4: end-of-turn — Gen9 公式順序で適用する。DP 側 `apply_eot`
         // (switching_game_effects.mbt) と同じ順序を保つことで、MC と DP の
         // 意味論 parity を保証する。順序:
@@ -2467,6 +2495,8 @@ pub fn team_monte_carlo_value(
   turn_limit? : Int = MC_TURN_LIMIT,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Double {
   if trials <= 0 {
     return 0.0
@@ -2474,7 +2504,9 @@ pub fn team_monte_carlo_value(
   let rng = seeded_rng(seed)
   let mut total = 0.0
   for _ in 0..<trials {
-    total += team_rollout(own, opp, rng, turn_limit~, weather~, field~)
+    total += team_rollout(
+      own, opp, rng, turn_limit~, weather~, field~, my_fresh~, opp_fresh~,
+    )
   }
   total / trials.to_double()
 }

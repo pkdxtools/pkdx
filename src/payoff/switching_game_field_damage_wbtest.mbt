@@ -52,6 +52,8 @@ fn f5_state_from_field(
     opp_disguise_busted: Array::make(opp_team.length(), false),
     my_flinched: false,
     opp_flinched: false,
+    my_fresh: None,
+    opp_fresh: None,
     my_moves_used: Array::make(my_team.length(), 0),
     opp_moves_used: Array::make(opp_team.length(), 0),
     weather: @model.Weather::None,

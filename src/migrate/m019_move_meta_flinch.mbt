@@ -24,8 +24,8 @@
 ///
 /// 意図的に含めないもの:
 /// - ねこだまし (:252 "fails unless it is the first move used by the user after it enters a
-///   battle"): 初回行動だけで成功し、2 手目以降は失敗する。switch-in 後の初回行動を表す状態が
-///   モデルに無いため、100% のひるみを行として入れると 2 手目以降も必ずひるむことになる。見送り。
+///   battle"): 初回行動だけで成功し、2 手目以降は失敗する。m019 では状態が無かったので行を
+///   作らない。ゲート (`my_fresh`) を入れた m020 が flinch_chance 100 を投入する。
 /// - はやてがえし (:918 "fails if the target isn't about to use a priority attack"): 相手の
 ///   選択技が先制技のときだけ成功する条件付き。見送り。
 ///

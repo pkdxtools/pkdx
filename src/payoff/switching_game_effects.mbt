@@ -412,7 +412,11 @@ pub fn maybe_apply_flinch_fanout(
   mv : @model.Move,
   hits_count? : Int = 1,
 ) -> Array[(Double, SwitchingGameState)] {
-  if mv.flinch_chance <= 0 {
+  // ねこだまし は使用者の fresh が Some(true) のときだけ既存のひるみ経路に乗せる。
+  // None / Some(false) は確率 100 でもひるませない (未指定の回帰入力を変えない)。
+  let user_fresh = if target_is_me { state.opp_fresh } else { state.my_fresh }
+  let chance = flinch_chance_if_fresh(mv, user_fresh)
+  if chance <= 0 {
     return [(1.0, state)]
   }
   let target_hps = if target_is_me { state.my_hps } else { state.opp_hps }
@@ -425,7 +429,7 @@ pub fn maybe_apply_flinch_fanout(
   if flinch_blocked_by_holder(state, target_is_me, target_slot, target_team, mv) {
     return [(1.0, state)]
   }
-  let p = flinch_probability(mv.flinch_chance, hits_count)
+  let p = flinch_probability(chance, hits_count)
   if p <= 0.0 {
     return [(1.0, state)]
   }
@@ -1233,6 +1237,8 @@ fn with_status_set(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: state.weather,
@@ -1666,6 +1672,8 @@ pub fn apply_eot(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_fresh: state.my_fresh,
+    opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
     opp_moves_used: state.opp_moves_used.copy(),
     weather: next_weather,

@@ -161,6 +161,8 @@ fn sgd_state(
     opp_disguise_busted: [opp_busted],
     my_flinched: false,
     opp_flinched: false,
+    my_fresh: None,
+    opp_fresh: None,
     my_moves_used: [],
     opp_moves_used: [],
     weather: @model.Weather::None,
@@ -361,6 +363,8 @@ test "disguise: busted flag persists across switch round-trip" {
     opp_disguise_busted: [true, false],
     my_flinched: false,
     opp_flinched: false,
+    my_fresh: None,
+    opp_fresh: None,
     opp_leech_seeded: [false, false],
     opp_protean_locked: ["", ""],
   }

@@ -31,6 +31,8 @@ pub fn team_payoff_matrix_screened(
   disk? : @damage_cache.DamageDiskCache? = None,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> (@nash.FiniteMatrix, Array[Int], Array[Int]) raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -66,6 +68,8 @@ pub fn team_payoff_matrix_screened(
       disk~,
       progress~,
       dp_log_every~,
+      my_fresh~,
+      opp_fresh~,
     )
     let rows = Array::make(size_a, 0)
     for i in 0..<size_a {
@@ -96,6 +100,8 @@ pub fn team_payoff_matrix_screened(
         mc_trials,
         mc_seed ^ cell_idx,
         turn_limit=mc_turn_limit,
+        my_fresh~,
+        opp_fresh~,
       )
       progress(CellDone(sel_a[i], sel_b[j], i, j, "screening"))
       progress(PhaseProgress("screening", i * size_b + j + 1, phase_a_total))
@@ -140,6 +146,8 @@ pub fn team_payoff_matrix_screened(
         disk~,
         progress~,
         dp_log_every~,
+        my_fresh~,
+        opp_fresh~,
       )
       progress(
         CellDone(
@@ -184,6 +192,8 @@ pub fn screen_phase_rows(
   row_start : Int,
   row_end : Int,
   mc_turn_limit? : Int = MC_TURN_LIMIT,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Array[Array[Double]] raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -217,6 +227,8 @@ pub fn screen_phase_rows(
       mc_seed,
       i_global * size_b + j,
       mc_turn_limit,
+      my_fresh~,
+      opp_fresh~,
     )
   })
 }
@@ -236,6 +248,8 @@ pub fn screen_one_cell(
   mc_seed : UInt64,
   cell_idx : Int,
   mc_turn_limit : Int,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Double {
   let picked_a = pick_combatants(team_a, sel_a_row)
   let picked_b = pick_combatants(team_b, sel_b_col)
@@ -245,6 +259,8 @@ pub fn screen_one_cell(
     mc_trials,
     mc_seed ^ cell_idx.to_uint64(),
     turn_limit=mc_turn_limit,
+    my_fresh~,
+    opp_fresh~,
   )
 }
 
@@ -266,6 +282,8 @@ pub fn refine_phase_rows(
   col_keep : Array[Int],
   row_start : Int,
   row_end : Int,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Array[Array[Double]] raise PayoffError {
   let k = pick_count(format)
   let na = team_a.length()
@@ -296,6 +314,8 @@ pub fn refine_phase_rows(
       sel_a[row_keep[i_global]],
       sel_b[col_keep[j]],
       refine_turn_limit,
+      my_fresh~,
+      opp_fresh~,
     )
   })
 }
@@ -318,6 +338,8 @@ pub fn refine_one_cell(
   refine_turn_limit : Int,
   progress? : (ProgressEvent) -> Unit = noop_progress,
   dp_log_every? : Int = 0,
+  my_fresh? : Bool? = None,
+  opp_fresh? : Bool? = None,
 ) -> Double {
   let picked_a = pick_combatants(team_a, sel_a_row)
   let picked_b = pick_combatants(team_b, sel_b_col)
@@ -327,6 +349,8 @@ pub fn refine_one_cell(
     refine_turn_limit,
     progress~,
     dp_log_every~,
+    my_fresh~,
+    opp_fresh~,
   )
 }
 

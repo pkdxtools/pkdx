@@ -418,11 +418,17 @@ test "eot_leftovers_heal: non-leftovers items are no-op" {
 
 ///|
 test "apply_eot: たべのこし heals before status slip" {
-  // たべのこし 装備 + Burn 状態。EOT 順は heal → burn slip。
-  // pre 80 → +160/16 = 90 → 90 - 160/16 = 80 (差し引きゼロ)。
+  // たべのこし 装備 + Burn。EOT 順は heal → burn slip。
+  // actual_stats の HP をプール (pokemon.hp = 100) に揃える。回復は
+  // effective_hp、やけど slip はプールで、どちらも 100/16 = 6。
+  // pre 80 → 86 → 80。
   let poke = mk_test_pokemon("d", "ノーマル")
   let mut combatant = mk_test_combatant(poke)
-  combatant = { ..combatant, item: "たべのこし" }
+  combatant = {
+    ..combatant,
+    item: "たべのこし",
+    actual_stats: Some([100, 100, 100, 100, 100, 100]),
+  }
   let team = [combatant]
   let mut state = mk_test_state(1, 80, 80, @model.Burn, @model.None)
   state = { ..state, my_must_recharge: [false], opp_must_recharge: [false] }

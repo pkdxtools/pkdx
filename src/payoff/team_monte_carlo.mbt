@@ -2398,19 +2398,20 @@ pub fn team_rollout(
         }
 
         // === Step 4.4: 状態異常 slip ===
-        // DP 側 `eot_slip_active` を直接呼ぶ (MC ローカル `mc_eot_slip` と
-        // semantics 完全一致だが、SSoT 化のため DP 側を共有)。Stage 12 で確立
-        // した eot_slip_active を MC でも reuse することで両者の乖離を防ぐ。
+        // DP 側 `eot_slip_active` を直接呼ぶ。分母も DP と同じ
+        // `status_slip_max_hp` (バトルの HP プール)。`own_max` / `opp_max`
+        // (`effective_hp`) を渡すとプールより大きい chip になり、瀕死の閾値で
+        // DP の平均ダメージと MC の 1 乱数が割れる。
         let (new_own_hp, new_own_st) = eot_slip_active(
           own_hps[own_active],
-          own_max,
+          status_slip_max_hp(own[own_active]),
           own_status[own_active],
         )
         own_hps[own_active] = new_own_hp
         own_status[own_active] = new_own_st
         let (new_opp_hp, new_opp_st) = eot_slip_active(
           opp_hps[opp_active],
-          opp_max,
+          status_slip_max_hp(opp[opp_active]),
           opp_status[opp_active],
         )
         opp_hps[opp_active] = new_opp_hp

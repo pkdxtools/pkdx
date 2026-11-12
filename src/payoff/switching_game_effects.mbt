@@ -1258,8 +1258,22 @@ fn with_status_set(
 }
 
 ///|
+/// やけど / どく / もうどく のターン終了ダメージの分母。
+///
+/// バトルの HP プール、初期 HP、終端の HP 比は `pokemon.hp` (実数値) を使う。
+/// `effective_hp` は同じ数を種族値とみなして Lv50 の投資込み HP を返すので、
+/// `actual_stats` が無いときはプールより大きい。slip の分母にそれを使うと
+/// 1/16・1/8 より大きい割合になり、DP (16 乱数の平均) と MC (16 乱数の 1 つ)
+/// が瀕死の閾値のどちら側にいるかで値が割れる。砂・たべのこし・やどりぎ は
+/// 従来どおり `effective_hp`。
+fn status_slip_max_hp(c : Combatant) -> Int {
+  c.pokemon.hp
+}
+
+///|
 /// Apply one end-of-turn slip / counter update for the given active slot.
 /// Returns `(new_hp, new_status)`. HP never falls below 0 from slip damage.
+/// `max_hp` is the battle pool (`status_slip_max_hp`), not `effective_hp`.
 /// - Burn / Poison: subtract max_hp / 16 or max_hp / 8 respectively.
 /// - BadPoison(n): subtract max_hp * min(n+1, TOXIC_MAX_TICKS) / 16 and
 ///   advance to BadPoison(min(n+1, TOXIC_MAX_TICKS)).
@@ -1543,20 +1557,22 @@ pub fn apply_eot(
 
   // === Step 4: 状態異常 slip ===
   // Burn / Poison / BadPoison / Drowsy → Sleep の counter 遷移を含む。
+  // 分母はバトルの HP プール (`status_slip_max_hp`)。`my_max` / `opp_max`
+  // (`effective_hp`) は砂・回復・やどりぎ用で、slip には使わない。
   // `eot_slip_active` は HP<=0 で早期 return するので、Sand or Leech で HP=0
   // になったスロットは status slip を観測しない (= HP は不変、status counter
   // も不変)。これは mainline 挙動 (faint 後の status は燃え尽きない / Toxic
   // counter は death で凍結) と一致する。
   let (my_hp_new, my_st_new) = eot_slip_active(
     my_hps[state.my_active],
-    my_max,
+    status_slip_max_hp(my_team[state.my_active]),
     my_status[state.my_active],
   )
   my_hps[state.my_active] = my_hp_new
   my_status[state.my_active] = my_st_new
   let (opp_hp_new, opp_st_new) = eot_slip_active(
     opp_hps[state.opp_active],
-    opp_max,
+    status_slip_max_hp(opp_team[state.opp_active]),
     opp_status[state.opp_active],
   )
   opp_hps[state.opp_active] = opp_hp_new

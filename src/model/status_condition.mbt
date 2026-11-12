@@ -97,6 +97,22 @@ pub fn status_kind_from_jp(name : String) -> StatusKind? {
 }
 
 ///|
+/// `status_kind_from_jp` の逆変換。`pkdx moves` の JSON (`status_effect.kind`) に使う
+/// 和名を返す。`status_kind_from_jp(status_kind_to_jp(k)) == Some(k)` が全 kind で成り立つ
+/// (`status_condition_wbtest.mbt` で確認)。
+pub fn status_kind_to_jp(kind : StatusKind) -> String {
+  match kind {
+    ParalyzeKind => "まひ"
+    BurnKind => "やけど"
+    PoisonKind => "どく"
+    BadPoisonKind => "もうどく"
+    SleepKind => "ねむり"
+    FreezeKind => "こおり"
+    DrowsyKind => "あくび"
+  }
+}
+
+///|
 /// Build the initial `StatusCondition` produced when a move of the given kind
 /// lands. `Sleep` starts at counter 2 (Champions: the first move attempt after
 /// falling asleep is a sure skip; see `StatusCondition`). `BadPoison` starts at

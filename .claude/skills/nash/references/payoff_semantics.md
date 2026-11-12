@@ -133,7 +133,7 @@ pub(all) struct Move {
 
 payoff 層 (`SwitchingGame` / `MonteCarloSim`) は再帰 / rollout 内で `move.priority` / `move.stat_effects` を直接参照するだけ。別キャッシュや lookup 関数は不要。
 
-スキル側は `pkdx moves` 出力 (priority / stat_effects 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。新技を追加するときは `pkdx_patch/002_move_meta/data.json` に行を追加するだけ — コード変更は不要。
+スキル側は `pkdx moves` 出力 (priority / stat_effects / status_effect / flinch_chance 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。追加効果の 2 キーは既定値 (状態異常なし / flinch 0) のときは省略される。新技を追加するときは `pkdx_patch/002_move_meta/data.json` に行を追加するだけ — コード変更は不要 (状態異常・ひるみは m017–m019 の投入先に行を足す)。
 
 ### `ValueStats` / `DamageCache` (memoization 観測)
 
@@ -511,7 +511,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 **DB 経路の正規化 (二重抽選の防止)**: `move_meta.ailment_chance` は変化技では命中率と同値 (おにび 85 / 命中 85、でんじは 90 / 命中 90、ねむりごな 75 / 命中 75 など。champions.db の `move.accuracy` と一致を確認済み)。命中は `move.accuracy` で既に抽選されるので、DB 経路の変化技の `status_effect` は確率 100 に正規化する (`normalize_status_effect_chance`、`src/db/query_moves.mbt`)。正規化しないと 命中 × 確率 の二重抽選になる。ダメージ技の二次効果は ailment_chance が追加効果の確率なのでそのまま残す。JSON 入力 (`pkdx select`) の `status_effect` は従来どおりで、変化技の確率は命中後の確率として扱う (命中率は `accuracy` に書き、JSON の `accuracy` を 100 のままにする既存の入力はそのまま有効)。
 
-**payoff への接続 (現状)**: `pkdx select` は JSON 入力の `status_effect` だけを読む。`pkdx moves` の JSON (`src/cli/format_moves.mbt`) は `priority` / `stat_effects` だけを出し `status_effect` を出さない。よって DB の行は `query_moves` 経由の Move にだけ入り、既存の nash スキル経由の select には届かない (未接続)。接続するには `pkdx moves` の出力に `status_effect` を足すことになるが、先に上記の変化技の二重抽選を解消しておく必要がある (そうしないと JSON 経路の変化技が二重抽選になる)。
+**payoff への接続**: `pkdx moves` の JSON (`src/cli/format_moves.mbt` `moves_to_json`) は `status_effect` を `{"kind":和名,"chance":N}` で出す。`pkdx select` の `parse_move_json` は同じ形を読むので、DB の行は nash スキル経由の select まで届く。キーは既定値 (None) のとき省略する (キー無し = None と同じ結果)。変化技の確率は上記「DB 経路の正規化」で 100 に揃っているので、JSON 経由でも 命中 × 確率 の二重抽選は起きない。手書きの JSON 入力では、変化技は `accuracy` に命中率を書き `chance` は 100 にする (`chance` にも命中率を入れると二重抽選になる)。回帰テスト: `src/payoff/cli_select_moves_roundtrip_wbtest.mbt` (DB 実値の往復)、`src/cli/format_moves_wbtest.mbt` (出力形式)。
 
 **Showdown との比較** (本文が沈黙する点だけ補う。今回の 33 行は全て本文の確率で足り、Showdown の確率は使っていない。以下は規則の照合のみ、`crash-scratch/freeze-showdown/abilities.ts` と `crash-scratch/mega-showdown/battle-actions.ts`):
 
@@ -546,7 +546,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 ### ひるみ (flinch, Champions 規則) — DP / MC
 
 - 本文: `champout/rom-txt/usa/wazainfo_syn.json` の「N% chance of making the target flinch」(命中ごと)。特性: せいしんりょく は受けない (tokuseiinfo_syn.json:039)。ふくつのこころ はひるみで素早さ +1 (tokuseiinfo_syn.json:080)。りんぷん はダメージ技の追加効果を止め、ちからずく の使用者は追加効果を失う (既存のゲートを流用)。
-- データ: `move_meta.flinch_chance` (m019、19 行 = 18 技 + 表記違い 1 件)。champions 経路は champout の全角 `３ぼんのや`、pokedex 経路は `3ぼんのや` (ASCII) で引くので両方を入れる。ねこだまし (初回行動限定) と はやてがえし (相手の先制技が条件) は行を作らない (見送り)。DB → payoff は未接続: `pkdx moves` の JSON (`moves_to_json`) は `flinch_chance` を出さず、`pkdx select` は JSON 入力の `flinch_chance` だけを読む (`status_effect` と同じ扱い)。
+- データ: `move_meta.flinch_chance` (m019、19 行 = 18 技 + 表記違い 1 件)。champions 経路は champout の全角 `３ぼんのや`、pokedex 経路は `3ぼんのや` (ASCII) で引くので両方を入れる。ねこだまし (初回行動限定) と はやてがえし (相手の先制技が条件) は行を作らない (見送り)。DB → payoff 接続済み: `pkdx moves` の JSON (`moves_to_json`) は `flinch_chance` を出し (0 の技は省略)、`pkdx select` の `parse_move_json` が同じキーを読む。
 - 規則 (DP / MC 共通): 先攻の技が命中して相手の HP が減り、相手が生存すると、命中数ぶんの独立抽選 (`1 - (1 - p)^n`) で `flinch_chance`% 成立する。成立した相手は同ターンの後攻の行動を失う (持ち越さない)。後攻が先に行動している場合は効かない。
 - 行動時点の解決: 相手の技がひるみを付与しうる (`flinch_chance > 0`) ときは、こちらの試行 (眠り / 凍結 / まひ / 命中) を後攻の行動時点で振る (DP `flinch_roll_deferred`、MC `mc_flinch_deferred`、こおり の `freeze_roll_deferred` と同じ仕組み)。ひるみ成立枝は `flinched_outcomes` (DP / MC の SSoT) の分布を使い、命中判定を行わない。
 - 優先度 (Showdown `data/conditions.ts`、Champions 本文は未記載): flinch 8 / slp・frz 10 (先に止まる) / par 1 (ひるみが先、まひ判定はしない) / mustrecharge 11 (リチャージは止まってひるみに到達しない)。defrost 技の使用者はひるみで止まっても凍ったまま (解凍は技の実行時)。ふくつのこころ は行動前にひるみが効いた枝だけ発火 (Showdown `Flinch` event)。せいしんりょく は付与自体を拒否 (`onTryAddVolatile`)。

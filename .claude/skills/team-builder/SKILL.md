@@ -509,7 +509,7 @@ Champions のチーム画面スクショ 2 枚を、次のメッセージにま�
    - vision 抽出の性別マーク (♂ / ♀) は DB 照合直前に `♂ → （オス）` / `♀ → （メス）` へ正規化して `pkdx query` に渡す。`イダイトウ♂` / `イダイトウ♀` のままでは "Pokemon not found" になる
 2. **SP 逆算検証**: `pkdx stat-reverse "<name>" --stats "<HP>,<A>,<B>,<C>,<D>,<S>" --version champions --format json` の出力 SP と vision 抽出 SP を比較。複数解は「いずれかと一致」で OK
 3. **性格確定**: ↑↓マーカーが読めていれば性格テーブルから直接特定。読めない場合は SP + 実数値の整合性で候補を絞る (`team-builder/references/champions_sp.md` 参照)。候補 1 つなら自動確定、複数候補は後段で AskUserQuestion
-4. **技詳細補完**: `pkdx moves "<name>" --version champions --format json` で抽出した 4 つの技名を DB 照合し、`{name, type, category, power, accuracy}` の 5 フィールドを `members[i].moves[j]` に格納する (issue #68 以降 `accuracy` も許容されるため手動で剥がす必要はない)。`pkdx moves` 出力には `pp` / `learn_method` / `priority` / `stat_effects` も含まれるが、これらはスキーマで拒否されるため抜粋が必要
+4. **技詳細補完**: `pkdx moves "<name>" --version champions --format json` で抽出した 4 つの技名を DB 照合し、`{name, type, category, power, accuracy}` の 5 フィールドを `members[i].moves[j]` に格納する (issue #68 以降 `accuracy` も許容されるため手動で剥がす必要はない)。`pkdx moves` 出力には `pp` / `learn_method` / `priority` / `stat_effects` / `status_effect` / `flinch_chance` も含まれるが (後の 2 つは効果を持つ技のみ)、これらはスキーマで拒否されるため抜粋が必要
 5. **育成データ格納**: 1-3 で検証済みの性格・SP・実数値を直接 `members[i]` に書き込む:
    - `members[i].nature = "<性格名 JP>"` (例: `"ようき"`)
    - `members[i].stat_points = {h, a, b, c, d, s}` (vision 抽出 SP、stat-reverse と一致するもの)

@@ -23,7 +23,11 @@
 ///   "ivs": {"h":Int, "a":Int, "b":Int, "c":Int, "d":Int, "s":Int}?,
 ///   "moves":   [{"name":..., "type":..., "category":"物理"|"特殊"|"変化",
 ///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?,
-///                "flinch_chance":Int?}, ...]  // flinch_chance: ひるみ率 (%)、省略 0
+///                "status_effect":{"kind":String, "chance":Int}?,
+///                "flinch_chance":Int?}, ...]
+///   // status_effect: kind は まひ/やけど/どく/もうどく/ねむり/こおり/あくび (和名)、
+///   //   chance 省略 100、キー省略 = 状態異常なし。`pkdx moves` の出力はこの形。
+///   // flinch_chance: ひるみ率 (%)、省略 0。
 /// }
 /// ```
 ///

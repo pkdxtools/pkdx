@@ -1351,7 +1351,7 @@ pub fn team_rollout(
         let opp_start_active = opp_active
         let own_start_recharging = own_must_recharge[own_start_active]
         let opp_start_recharging = opp_must_recharge[opp_start_active]
-        // ねこだまし の判定はターン開始時の値を見る。更新はターン末 (Step 4 の前)。
+        // ねこだまし / であいがしら の判定はターン開始時の値を見る。更新はターン末 (Step 4 の前)。
         let own_fresh_at_turn = own_fresh
         let opp_fresh_at_turn = opp_fresh
         // Step 1: resolve status-phase attempts for move attempts (switches are
@@ -1626,6 +1626,7 @@ pub fn team_rollout(
             // grounded な opp に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if own_attempt_acts &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
+              !first_impression_fails(mv_own, own_fresh_at_turn) &&
               !upper_hand_fails(mv_own, Some(mv_opp)) &&
               !mc_psychic_priority_blocked(
                 mv_own,
@@ -1752,6 +1753,7 @@ pub fn team_rollout(
               opp_attempt_acts &&
               !opp_blocked_mid_turn &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+              !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
               !upper_hand_fails(mv_opp, Some(mv_own)) &&
               !mc_psychic_priority_blocked(
                 mv_opp,
@@ -1856,6 +1858,7 @@ pub fn team_rollout(
             // grounded な own に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if opp_attempt_acts &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+              !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
               !upper_hand_fails(mv_opp, Some(mv_own)) &&
               !mc_psychic_priority_blocked(
                 mv_opp,
@@ -1982,6 +1985,7 @@ pub fn team_rollout(
               own_attempt_acts &&
               !own_blocked_mid_turn &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
+              !first_impression_fails(mv_own, own_fresh_at_turn) &&
               !upper_hand_fails(mv_own, Some(mv_opp)) &&
               !mc_psychic_priority_blocked(
                 mv_own,
@@ -2077,6 +2081,7 @@ pub fn team_rollout(
           // 相手は交代したので、はやてがえし は先制攻撃を選んでいない。
           if own_attempt_acts &&
             !fake_out_fails(mv_own, own_fresh_at_turn) &&
+            !first_impression_fails(mv_own, own_fresh_at_turn) &&
             !upper_hand_fails(mv_own, None) &&
             !mc_psychic_priority_blocked(
               mv_own,
@@ -2170,6 +2175,7 @@ pub fn team_rollout(
           // 相手は交代したので、はやてがえし は先制攻撃を選んでいない。
           if opp_attempt_acts &&
             !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+            !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
             !upper_hand_fails(mv_opp, None) &&
             !mc_psychic_priority_blocked(
               mv_opp,

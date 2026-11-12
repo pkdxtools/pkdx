@@ -28,7 +28,8 @@
 ///
 /// いたずらごころ / はやてのつばさ / ヒーリングシフトの優先度加算は
 /// `turn_order_sign` が未使用のままなので、ここでも足さない。
-/// であいがしら (`WAZAINFO_SYN_660`) はこのゲートの対象外。
+/// であいがしら (`WAZAINFO_SYN_660`) はこのゲートの対象外。登場後の初行動で
+/// 失敗するのは `first_impression_fails` (ねこだまし と同じ fresh) で、ひるみは無い。
 ///
 /// `pkdx select` は DB から priority も `flinch_chance` も埋めない。入力 JSON の
 /// 技が正。名前が はやてがえし でも、入力の `flinch_chance` が 0 ならひるまない。

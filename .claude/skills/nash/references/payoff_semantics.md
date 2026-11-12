@@ -567,8 +567,21 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
   - `Some(false)` — 登場後に技の行動を使った。ねこだまし は失敗する (ダメージもひるみも無い)。命中した扱いにはしない。
 - 更新: ターン開始値から決める。`None` は何をしても `None`。`Some` は交代で `Some(true)` (そのターンは動かず、次のターンが初行動)、`UseMove` / `Mega` で `Some(false)`。技がひるみ・眠り・まひ・反動・外れで止まっても消費する。本文は "used" としか書かない。この消費位置は Showdown `sim/battle-actions.ts` の `runMove` 先頭 (`activeMoveActions++` が `BeforeMove` より前) に合わせた。交代で 0 に戻すのも同ファイルの `switchIn`。
 - 他のひるみ技は fresh を見ない。せいしんりょく / りんぷん / ちからずく / ふくつのこころ / ひんし / 先攻だけ、は #210 の経路のまま。
-- 見送り: であいがしら (`WAZAINFO_SYN_660`) は同じ "first move" 文を持つがひるみは無く、ゲートしない。はやてがえし は次の節。
+- であいがしら (`WAZAINFO_SYN_660`) は同じ "first move" 失敗文を、同じ fresh で失敗させる。ひるみは無い。次の節。はやてがえし はその次。
 - 参照テスト: `src/payoff/switching_game_fake_out_wbtest.mbt`、`src/migrate/m020_fake_out_test.mbt`。
+
+### であいがしら (First Impression, WAZAINFO_SYN_660) — DP / MC
+
+- 本文: `WAZAINFO_SYN_660` (Index 444)。"This move fails unless it is the first move used by the user after it enters a battle." 日本語は同じラベルで「登場して最初に出す技でない場合失敗する。」技名は `WAZANAME_660` = First Impression / であいがしら。
+- ねこだまし と同じ「first move」失敗文。ひるみの文は無いので、ひるみは付けない。`flinch_chance` 行は m020 も m021 も作らない。
+- 状態は新しいフラグを足さず、ねこだまし の `my_fresh` / `opp_fresh` を使用者側だけ見る。
+  - `None` — 失敗させない。select は fresh を DB から埋めない。省略した既存入力は従来どおり先制のダメージ技として解決する。
+  - `Some(true)` — 登場後の初行動。ダメージは入る。ひるみは無いので相手は行動する。
+  - `Some(false)` — 技自体が失敗する (ダメージ無し)。命中した扱いにはしない。
+- 更新規則は ねこだまし と同じ (`fresh_after_action` / `fresh_after_switch`)。ターン開始値で判定する。`UseMove` / `Mega` の消費と交代の `Some(true)` はターン出口。途中のメガシンカは解決前に fresh を消費しない。
+- 基本スペックは champions の `move` 行のまま。`champout/masterdata/waza.json` id "660": むし / 物理 / 威力 100 / 命中 100 / PP 12 / 接触 / priority 2。priority 2 は m002 が既に入れている。move 行は変えない。
+- Showdown (`data/moves.ts` の `firstimpression.onTry`) は `activeMoveActions > 1` で失敗する。失敗条件は ねこだまし と同じ fresh で合わせている。威力は Showdown が 90、champout が 100。PP は Showdown が 10、champout が 12。ひるみ (`secondary`) はどちらも無い。
+- 参照テスト: `src/payoff/switching_game_first_impression_wbtest.mbt`。
 
 ### はやてがえし (Upper Hand, WAZAINFO_SYN_918) — DP / MC
 
@@ -578,7 +591,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 - 「about to use」/「使っていない」はロックした選択を見る。その後にひるみ・眠り・まひ・リチャージで打てなくても、選択が priority > 0 なら成功する。交代は先制攻撃ではない。
 - 「priority attack」/「先制できる攻撃」は選択技の `priority > 0`。変化の先制 (まもる +4、みきり +4、ファストガード +3、ねこだまし +3) を含む。本文の attack / 攻撃は説明文の言い方で、カテゴリでは切らない。サイコフィールドが後から相手の先制技を無効にしても、ゲートは選択時点の priority を見る (本文は地形に触れない)。はやてがえし 自身は priority 3 なので、地上の相手への自分の技は既存のサイコフィールド無効 (G-3) のまま。
 - 現在の Showdown (`data/moves.ts` の `upperhand.onTry`) は `priority <= 0.1` に加え `category === 'Status'` でも失敗する。整数の priority では `<= 0` と同じ閾値だが、変化技の除外は Champions 本文に無く、本実装は入れない。`queue.willMove` がロックした選択を見る点は同じ。PP は Showdown が 15、champout が 16。move 行は変えない。
-- 未モデル: いたずらごころ / はやてのつばさ / ヒーリングシフトの優先度加算 (`turn_order_sign` は特性による優先度を使っていない)。であいがしら はゲートしない。まもる は payoff が技を止めないので、ターン解決では「守って無効」をテストしない (helper が priority 4 の変化技を成功側と判定するだけ)。
+- 未モデル: いたずらごころ / はやてのつばさ / ヒーリングシフトの優先度加算 (`turn_order_sign` は特性による優先度を使っていない)。であいがしら は fresh の失敗ゲート (前節) で、この priority ゲートの対象外。まもる は payoff が技を止めないので、ターン解決では「守って無効」をテストしない (helper が priority 4 の変化技を成功側と判定するだけ)。
 - select は DB から priority も `flinch_chance` も埋めない。入力 JSON が正。名前が はやてがえし でも、入力の `flinch_chance` が 0 ならひるまない。既存の select 入力にこの技は無く、行列は変わらない。
 - 参照テスト: `src/payoff/switching_game_upper_hand_wbtest.mbt`、`src/migrate/m021_upper_hand_test.mbt`。
 

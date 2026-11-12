@@ -9,7 +9,7 @@
 ///   "format":   "single" | "double",
 ///   "stat_system": "champions" | "standard",  // default: "champions"
 ///   "team_payoff_model": "switching_game" | "screened_switching_game:...",
-///   "my_fresh": true | false,    // optional. 省略 = 未追跡 (ねこだまし は従来どおり)
+///   "my_fresh": true | false,    // optional. 省略 = 未追跡 (ねこだまし / であいがしら は従来どおり)
 ///   "opp_fresh": true | false    // optional. バトル開始のリードで撃つときは true
 /// }
 ///
@@ -362,7 +362,7 @@ fn parse_str_field(m : Map[String, Json], key : String) -> String {
 
 ///|
 /// トップレベルの optional bool。省略は `None` (未指定)。bool 以外は不正。
-/// ねこだまし の `my_fresh` / `opp_fresh` に使う。select は DB から埋めない。
+/// ねこだまし と であいがしら の `my_fresh` / `opp_fresh` に使う。select は DB から埋めない。
 fn parse_optional_bool(
   m : Map[String, Json],
   key : String,

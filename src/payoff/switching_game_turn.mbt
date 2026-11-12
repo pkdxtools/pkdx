@@ -358,7 +358,7 @@ priv struct TurnWorkspace {
   opp_disguise_busted : Array[Bool]
   my_flinched : Bool
   opp_flinched : Bool
-  // ターン開始時の ねこだまし 初行動フラグ。行動の成否では途中更新しない。
+  // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
   my_moves_used : Array[Int]
@@ -587,10 +587,12 @@ fn resolve_attacker_leg(
     ) {
     return [(1.0, pre_damage_state)]
   }
-  // ねこだまし: 登場後に技を使ったあと (`Some(false)`) は技自体が失敗する。
+  // ねこだまし / であいがしら: 登場後に技を使ったあと (`Some(false)`) は技自体が失敗する。
   // ダメージもひるみも付けない。`None` は未指定なのでここでは失敗させない。
+  // 見るのは使用者の fresh。であいがしら にひるみは無い。
   let user_fresh = if attacker_is_me { ws.my_fresh } else { ws.opp_fresh }
-  if fake_out_fails(attacker_move, user_fresh) {
+  if fake_out_fails(attacker_move, user_fresh) ||
+    first_impression_fails(attacker_move, user_fresh) {
     return [(1.0, pre_damage_state)]
   }
   // はやてがえし: 相手の選択が priority > 0 の技でなければ失敗する。ダメージもひるみも無い。
@@ -1361,14 +1363,16 @@ pub fn transition_with_cache(
           opp_action,
         )
       }
-      // ねこだまし は登場後の初行動でなければ失敗する。交代は先制攻撃ではないので
-      // はやてがえし も失敗する (ダメージもひるみも無い)。
+      // ねこだまし / であいがしら は登場後の初行動でなければ失敗する。交代は先制攻撃
+      // ではないので はやてがえし も失敗する (ダメージもひるみも無い)。
       let user_fresh = if attacker_is_me {
         base_state.my_fresh
       } else {
         base_state.opp_fresh
       }
-      if fake_out_fails(used_move, user_fresh) || upper_hand_fails(used_move, None) {
+      if fake_out_fails(used_move, user_fresh) ||
+        first_impression_fails(used_move, user_fresh) ||
+        upper_hand_fails(used_move, None) {
         return settle_fresh_outcomes(
           [(1.0, base_state)],
           state.my_fresh,
@@ -2158,13 +2162,14 @@ fn partial_act_outcomes(
         ) {
         return [(1.0, base_state)]
       }
-      // ねこだまし の失敗ゲート。fresh の更新は attempt_turn の出口で行う。
+      // ねこだまし / であいがしら の失敗ゲート。fresh の更新は attempt_turn の出口で行う。
       let user_fresh = if attacker_is_me {
         base_state.my_fresh
       } else {
         base_state.opp_fresh
       }
-      if fake_out_fails(used_move, user_fresh) {
+      if fake_out_fails(used_move, user_fresh) ||
+        first_impression_fails(used_move, user_fresh) {
         return [(1.0, base_state)]
       }
       // 動かなかった側の選択技。実行できたかは見ない (リチャージ・眠りでも選択は残る)。
@@ -2650,7 +2655,7 @@ pub fn switching_game_winrate_stats(
     opp_disguise_busted: Array::make(opp_team.length(), false),
     my_flinched: false,
     opp_flinched: false,
-    // 省略時は None。バトル開始のリードで ねこだまし を撃たせるときは Some(true)。
+    // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,
     my_moves_used: Array::make(my_team.length(), 0),

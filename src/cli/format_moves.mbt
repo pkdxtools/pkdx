@@ -3,6 +3,10 @@
 /// (payoff-layer metadata populated from `move_meta` via `query_moves`);
 /// skills consuming this output can forward it to `pkdx select` without
 /// a separate DB query.
+///
+/// 追加効果の `status_effect` (やけど / まひ / こおり 等) と `flinch_chance` (ひるみ率)
+/// も同じ経路で載せる。既定値 (`None` / 0) のときはキーを省略する: `pkdx select` は
+/// キー無しを None / 0 として読むので、効果の無い技の出力は従来とバイト単位で同じになる。
 fn moves_to_json(moves : Array[@model.Move]) -> String {
   let mut s = "["
   for i = 0; i < moves.length(); i = i + 1 {
@@ -30,9 +34,37 @@ fn moves_to_json(moves : Array[@model.Move]) -> String {
       m.priority.to_string() +
       ",\"stat_effects\":" +
       stat_effects_to_json(m.stat_effects) +
+      status_effect_to_json(m.status_effect) +
+      flinch_chance_to_json(m.flinch_chance) +
       "}"
   }
   s + "]"
+}
+
+///|
+/// `status_effect` を `,"status_effect":{"kind":"やけど","chance":10}` の形で返す。
+/// `None` は空文字 (キーを省略)。形は `pkdx select` の `parse_status_effect_object`
+/// が読む入力契約そのもの (`kind` は和名、`chance` は命中後の確率)。
+fn status_effect_to_json(se : (@model.StatusKind, Int)?) -> String {
+  match se {
+    Some((kind, chance)) =>
+      ",\"status_effect\":{\"kind\":\"" +
+      @model.status_kind_to_jp(kind) +
+      "\",\"chance\":" +
+      chance.to_string() +
+      "}"
+    None => ""
+  }
+}
+
+///|
+/// `flinch_chance` を `,"flinch_chance":30` の形で返す。0 以下は空文字 (キーを省略)。
+fn flinch_chance_to_json(chance : Int) -> String {
+  if chance > 0 {
+    ",\"flinch_chance\":" + chance.to_string()
+  } else {
+    ""
+  }
 }
 
 ///|

@@ -193,7 +193,7 @@ ls box/teams/*.meta.json
 
 #### 1. 入力 JSON をファイルへ保存
 
-実行主体に関わらず、入力 JSON はまず `/tmp/pkdx_select_input.json` に書き出す (ユーザー手動ルートでも同じファイルを参照させるため heredoc ではなくファイル経由に統一する)。技の priority / stat_effects は `pkdx moves` 出力をそのまま流せる。省略時はデフォルト (priority=0 / stat_effects=[]) 扱い。
+実行主体に関わらず、入力 JSON はまず `/tmp/pkdx_select_input.json` に書き出す (ユーザー手動ルートでも同じファイルを参照させるため heredoc ではなくファイル経由に統一する)。技の priority / stat_effects / status_effect / flinch_chance は `pkdx moves` 出力をそのまま流せる。省略時はデフォルト (priority=0 / stat_effects=[] / 状態異常なし / flinch_chance=0) 扱い。`status_effect` は `{"kind":"やけど","chance":10}` の形、`flinch_chance` は ひるみ率 (%) の整数。
 
 ```bash
 cat > /tmp/pkdx_select_input.json <<'JSON'

@@ -102,6 +102,18 @@ test "status_kind_from_jp: あくび maps to DrowsyKind" {
 }
 
 ///|
+test "status_kind_to_jp: every kind round-trips through status_kind_from_jp" {
+  let kinds : Array[StatusKind] = [
+    ParalyzeKind, BurnKind, PoisonKind, BadPoisonKind, SleepKind, FreezeKind, DrowsyKind,
+  ]
+  for k in kinds {
+    assert_true(status_kind_from_jp(status_kind_to_jp(k)) == Some(k))
+  }
+  @debug.debug_inspect(status_kind_to_jp(BurnKind), content="\"やけど\"")
+  @debug.debug_inspect(status_kind_to_jp(BadPoisonKind), content="\"もうどく\"")
+}
+
+///|
 test "immune_to_status: drowsy ignores type (MVP behaviour)" {
   assert_true(!immune_to_status(DrowsyKind, "くさ", ""))
   assert_true(!immune_to_status(DrowsyKind, "でんき", ""))

@@ -14,7 +14,8 @@
 ///   (select は「毎選択がターン 1」とは仮定しない)。交代で入った次のターンも true。
 ///   命中すれば既存のひるみ経路 (`flinch_chance`、せいしんりょく 等) で 100% ひるむ。
 /// - `Some(false)` — 登場後に技の行動を使った。ねこだまし は失敗する (ダメージも
-///   ひるみも無い)。命中した扱いにしない。
+///   ひるみも無い)。であいがしら も同じフラグで失敗する (ダメージ無し。ひるみの
+///   文は無く、ひるみは付けない)。命中した扱いにしない。
 ///
 /// 行動の消費は Showdown `sim/battle-actions.ts` の `runMove` 先頭の
 /// `activeMoveActions++` (BeforeMove より前) に合わせる。本文は「used」としか
@@ -24,8 +25,8 @@
 ///
 /// はやてがえし (`WAZAINFO_SYN_918`) は相手の選択技が priority > 0 のときだけ
 /// 成功する。fresh では表せないので `upper_hand.mbt` が別ゲートにする。
-/// であいがしら (`WAZAINFO_SYN_660`) は同じ「first move」文を持つが
-/// ひるみは無く、ゲートしない。
+/// であいがしら (`WAZAINFO_SYN_660`) は同じ「first move」失敗文を持つ。ひるみは
+/// 無く、失敗ゲートだけを `first_impression_fails` がこの fresh で行う。
 
 ///|
 const FAKE_OUT_NAME : String = "ねこだまし"

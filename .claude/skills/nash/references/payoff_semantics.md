@@ -133,7 +133,7 @@ pub(all) struct Move {
 
 payoff 層 (`SwitchingGame` / `MonteCarloSim`) は再帰 / rollout 内で `move.priority` / `move.stat_effects` を直接参照するだけ。別キャッシュや lookup 関数は不要。
 
-スキル側は `pkdx moves` 出力 (priority / stat_effects / status_effect / flinch_chance 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。追加効果の 2 キーは既定値 (状態異常なし / flinch 0) のときは省略される。新技を追加するときは `pkdx_patch/002_move_meta/data.json` に行を追加するだけ — コード変更は不要 (状態異常・ひるみは m017–m019 の投入先に行を足す)。
+スキル側は `pkdx moves` 出力 (priority / stat_effects / status_effect / flinch_chance / recoil_num・recoil_den / self_ko / recharge / heal_* / weather_set / field_set 込み) をそのまま `pkdx select` の stdin JSON に流し込めば DB 由来のメタが正しく伝わる。効果のキーは既定値 (状態異常なし / flinch 0 / 反動なし / false / 回復・天候・フィールド設定なし) のときは省略される。新技を追加するときは `pkdx_patch/002_move_meta/data.json` に行を追加するだけ — コード変更は不要 (状態異常・ひるみは m017–m019 の投入先に行を足す)。
 
 ### `ValueStats` / `DamageCache` (memoization 観測)
 
@@ -305,6 +305,8 @@ screening は **MC phase に 3,600 cells × N trials の rollout オーバヘッ
 - `recoil_num` / `recoil_den` — 反動ダメージ割合。`(0, 1)` なら反動なし。`dmg > 0` のとき `max(1, dmg * num / den)` HP を攻撃者から減算 (ゴースト無効化等で `dmg = 0` の場合は反動ゼロ)
 - `self_ko` — `true` なら使用後に攻撃者 HP を 0 にする。**`dmg` によらず必ず発動** (ゴースト相手のじばくでも自爆する canonical 仕様)
 - `recharge` — `true` なら次ターン行動不可。`SwitchingGameState.{my,opp}_must_recharge: Array[Bool]` に独立して保持 (`StatusCondition` とは別系統)。やけど+はかいこうせん等が共存可能
+
+上の 3 種 (recoil / self_ko / recharge) は move_meta (m005) 由来で、`pkdx moves` の JSON も同じ名前 (`recoil_num` / `recoil_den` / `self_ko` / `recharge`) で出し、`pkdx select` の `parse_move_json` が読む (既定値は省略)。JSON 入力では DB を引かない。一方、崩れ技 (`is_crash_move`) の自傷とてっていこうせんの最大 HP 反動 (`is_max_hp_recoil_move`) は技名の判定 (`src/damage/move_flags.mbt`) なので、JSON の `name` だけで決まりキーは不要。回復 (`heal_*`、`HealingEffect` の 7 種) / 天候設定 (`weather_set`) / フィールド設定 (`field_set`) は m014 / m015 由来で、同じく JSON のキー (`heal_kind` 等) で届く。
 
 `stat_effects_json` のスキーマは `[[stat, delta, target]]` の 3 要素 (legacy 2 要素 `[stat, delta]` は target=0 として解釈されるので 006 既存エントリとの後方互換あり)。`target`:
 

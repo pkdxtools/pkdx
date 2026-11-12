@@ -34,7 +34,11 @@
 /// key は不変 (atk_ability = すてみ + 崩れ技) なので v6 entries は旧威力の値が
 /// 残る。v3 と同じ理屈 (値の意味が変わった entries は再利用しない) で一括 invalidate。
 /// pkdx_version (moon.mod) は修正 PR では上がらないため、これが唯一の invalidate 手段。
-pub const SCHEMA_VERSION : Int = 7
+///
+/// v8: ちからずく の 1.3 倍を追加効果のある技だけに限定し、cache key 末尾へ
+/// `sheer_force_boost` を足して prefix を v7 にした。追加効果の無い技は旧実装
+/// では 1.3 倍の値が残る。key が変わっても schema を上げて一括 invalidate する。
+pub const SCHEMA_VERSION : Int = 8
 
 ///|
 const META_KEY_SCHEMA : String = "schema_version"

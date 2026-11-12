@@ -319,8 +319,10 @@ pub fn secondary_gated_move(
   if mv.power <= 0 {
     return if mv.flinch_chance > 0 { { ..mv, flinch_chance: 0 } } else { mv }
   }
-  // 追加効果 (状態異常 / ひるみ) をすべて落とした写し。
-  let no_secondary = { ..mv, status_effect: None, flinch_chance: 0 }
+  // 追加効果 (状態異常 / ひるみ) をすべて落とした写し。能力変化は残す。
+  // ちからずく の 1.3 倍が乗る集合は `move_has_sheer_force_effect` (この写しで
+  // 消える chance > 0 の状態異常と flinch_chance)。
+  let no_secondary = @damage.clear_damaging_secondaries(mv)
   if hp_lost <= 0 {
     return no_secondary
   }

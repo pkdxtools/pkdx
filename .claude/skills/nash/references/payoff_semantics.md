@@ -517,7 +517,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 **Showdown との比較** (本文が沈黙する点だけ補う。今回の 33 行は全て本文の確率で足り、Showdown の確率は使っていない。以下は規則の照合のみ、`crash-scratch/freeze-showdown/abilities.ts` と `crash-scratch/mega-showdown/battle-actions.ts`):
 
-- ちからずく: Showdown `sheerforce.onModifyMove` は `move.secondaries` を削除して追加効果を失わせ、`onBasePower` の 1.3 倍 (`[5325, 4096]`) も `hasSheerForce` の技 (= 追加効果のある技) だけに掛ける。本 PR は追加効果の削除を採用。威力の条件は pkdx で未対応 (上記 4)。
+- ちからずく: Showdown `sheerforce.onModifyMove` は `move.secondaries` を削除して追加効果を失わせ、`onBasePower` の 1.3 倍 (`[5325, 4096]`) も `hasSheerForce` の技 (= 追加効果のある技) だけに掛ける。pkdx も、今剥がしている追加効果 (`status_effect` と `flinch_chance`) があるダメージ技だけに同じ 5325/4096 を掛ける (`move_has_sheer_force_effect`)。Showdown が追加で落とす `move.self` (自分の能力低下) や `hasSheerForceBoost` (じゅうでん / オーダーアップ) は、pkdx がそれらを剥がしていないので威力も掛けない。下の「ちからずく の威力」。
 - りんぷん: Showdown `shielddust.onModifySecondaries` は `effect.self` でない追加効果を全て落とす。本 PR の規則 (ダメージ技の追加効果を全 kind で止める) と一致。
 
 **判断事項 (Judgment calls)**:
@@ -525,7 +525,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 1. **HP が減った命中だけ追加効果 (ばけのかわ の chip を含む)。Showdown fallback。** Champions 本文 (`tokuseiinfo_syn.json:6600`、LabelName 行、本文は OriginalText の "loses 1/8 of its max HP instead of taking the damage") は chip だけを述べ、追加効果には触れない。字面の Showdown では、`disguise.onDamage` が 0 を返し (`crash-scratch/dl-abilities/abilities.ts:970-976`)、`battle-actions.ts:1146` / `:1164` の `if (!damage[i] && damage[i] !== 0) targets[i] = false` は 0 ダメージの対象を残すので、追加効果は走る。本 PR はこれを採る: ばけのかわ の初撃でも 100% まひの ほっぺすりすり は まひ を入れる。コードを読んだ限り、b102445 (#208) も ばけのかわ の chip で こおり を付けていた (gate なし)。本 PR の gate 追加で一度落ちたため、同じ規則に戻した (こおり も同じ gate)。タイプ免疫・吸収 (そうしょく)・瀕死は HP を減らさないので付かない。
 2. **二ターン技 (とびはねる `:6368`) は 1 ターンの近似で扱う**。pkdx は溜ターンを持たず、二ターン技も 1 ターンの技として解決する (既存)。まひ の追加効果はその命中ターンに付く。
 3. **確率の記述がない技 (でんじほう / ほっぺすりすり / れんごく / キラースピン) は 100%**。本文 "Paralyzes the target." / "Burns the target." / "Poisons targets." を確定と読む (Showdown も chance 100 で一致)。
-4. **ちからずく の威力 1.3 倍は既存の実装のまま全技に掛かる** (`damage/abilities.mbt` `get_atk_ability_final`)。本文は追加効果のある技だけ。本 PR では直さない (既存の入力の出力が変わるため)。
+4. **ちからずく の威力 1.3 倍は、剥がす追加効果がある技だけ** (`move_has_sheer_force_effect`)。以前は全技に掛かっていた。詳細は「ちからずく の威力」。
 5. **りんぷん は こおり 以外の kind にも効かせる**。m017 の時点では こおり だけだったが、本 PR で ダメージ技の追加効果 (やけど / まひ / どく) へ広げた (本文 `:606` は種類を限定しない)。
 
 **未モデル (既知の近似・未対応)**:
@@ -535,7 +535,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 - 威力が条件で 2 倍になる技: ひゃっきやこう (状態異常の相手に 2 倍)、どくばりセンボン (毒の相手に 2 倍)、のしかかり (ミニマイズの相手に 2 倍)。確率の部分だけ入れ、威力は既存どおり (未モデル)。
 - 特性 (状態異常の免疫・反射・EOT): じゅうなん `:256` (まひ免疫)、めんえき `:544` (どく免疫)、ねつこうかん `:7654` / すいほう `:6396` (やけど免疫)、きよめのしお `:7712` (全状態異常免疫)、リーフガード `:3566` (はれで免疫)、シンクロ `:926` (反射)、ふしょく `:6658` (毒・鋼 相手にも毒)、こんじょう `:2126` (状態異常中の攻撃 1.5 倍、やけどの物理半減無効)、ポイズンヒール `:3144` (毒中の回復)。どれも pure status 技と同様に未モデル (指示どおり、既存の免疫 helper を流用しない)。
 - マジックガード: 状態異常の EOT (やけど / どく / もうどく) のダメージを防がない (既存の `eot_slip_active` が見ない)。
-- ちからずく の威力 1.3 倍が全技に掛かる (上記 4)。
+- ちからずく が能力変化 (`stat_effects`) を剥がさない。威力も掛けない (上記「ちからずく の威力」)。Showdown は `move.self` を消して 1.3 倍にする。
 - 天候による命中 (かみなり の雨 / 晴れ の命中 50%)、ミニマイズ、フィールド効果の追加効果 (たつまき 等) は未モデル。
 - 技由来でない状態異常 (ほのおのからだ 等の接触特性) は既存どおり (`apply_contact_proc_fanout`)。
 - 変化技 (`power = 0`) の状態異常の命中・確率は既存のまま。JSON 入力で `accuracy` と `status_effect.chance` の両方に値を入れると二重抽選になる (既存の入力契約。DB 経路は正規化済み)。
@@ -545,9 +545,35 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 **参照テスト**: `src/payoff/switching_game_secstatus_wbtest.mbt` (付与の確率・免疫・ブロック・ちからずく / ばけのかわ の chip 経路 (まひ 100% / こおり 100%)・タイプ免疫と そうしょく の不発・解凍後の やけど・後攻の半減・りんぷん の e2e)、`src/payoff/team_monte_carlo_secstatus_parity_wbtest.mbt` (MC の分布・真理値表・ばけのかわ の chip・DP/MC parity と感度ガード)、`src/payoff/team_monte_carlo_freeze_parity_wbtest.mbt` (MC の ばけのかわ chip の こおり)、`src/migrate/m018_status_test.mbt` (投入の内容・既存行・冪等)、`src/db/status_effect_normalize_test.mbt` (DB 経路の正規化)。
 
+### ちからずく の威力 (Sheer Force, TOKUSEIINFO_SYN_125) — DP / MC
+
+本文 (`champout` `50e7233`, `rom-txt/usa/tokuseiinfo_syn.json` 行 4170, `TOKUSEIINFO_SYN_125`):
+
+> The Pokémon’s moves lose their additional effects, but the power of those moves will be boosted by 30%.
+
+日本語 (同ラベル, `rom-txt/jpn/tokuseiinfo_syn.json` 行 4064): 「攻撃の追加効果はなくなるが１．３倍の威力で技を出すことができる。」英語の "those moves" に合わせ、追加効果を失う技だけを 1.3 倍 (5325/4096) にする。日本語は「それらの技」と繰り返さないが、同じ特性文で、追加効果と威力を一組に述べている。
+
+**ゲート** (`damage/abilities.mbt` `move_has_sheer_force_effect`、ダメージ式と L2 キーの共通判定):
+
+- ダメージ技 (`power > 0`) で、`status_effect` の chance が 0 より大きい、または `flinch_chance > 0`。
+- この集合は `clear_damaging_secondaries` が消すフィールドと同じ。DP `secondary_gated_move` と MC (`mc_try_apply_status` / `mc_flinch_roll`) の `ability_strips_secondaries` がそれを剥がす。剥がす技はブーストし、ブーストする技は剥がす。
+- 追加効果の無い技 (たいあたり 等) は 1.0 倍。chance 0 の `status_effect` も追加効果に数えない。
+- 変化技 (`power = 0`) の状態異常は直接効果のまま。ちからずく では剥がさず、威力補正も無い。
+- アナライズ は別アームのまま。従来どおり技を問わず 5325。移動順 (「ターンの最後」) ではゲートしない。
+
+**Showdown と意図的に違う点** (`data/abilities.ts` の `sheerforce`):
+
+- Showdown は `move.secondaries` に加えて `move.self` (インファイト / オーバーヒート 等の自分の能力低下) を消し、その技も 1.3 倍にする。pkdx の `stat_effects` は剥がしていないので、能力変化だけの技は 1.0 倍のまま能力変化も残る。状態異常やひるみと能力変化が両方ある技は、状態異常 / ひるみだけ剥がして 1.3 倍にし、能力変化は残る。
+- Showdown の `hasSheerForceBoost` (じゅうでん / オーダーアップ) は技側の特別フラグ。Champions 本文は技ごとの例外を述べない。pkdx にはそのフラグが無く、`status_effect` / `flinch_chance` が無ければブーストしない。
+- 反動・ドレインは Showdown でも secondaries ではない。pkdx も掛けない。
+
+**キャッシュ**: 技名は同じでも select の JSON は追加効果を DB から埋めない。L2 キー (`CacheKeyInput.sheer_force_boost`, prefix `v7`) にゲート結果を入れ、追加効果なしの 1.0 倍が追加効果ありの 1.3 倍を再利用しない。`SCHEMA_VERSION` は 8。ちからずく 以外の技はゲートが常に偽なので、キー上は互いに従来どおり衝突しない (ダメージも変わらない)。
+
+**参照テスト**: `src/damage/abilities_test.mbt` (5325 の条件、アナライズ、`calc_damage`)、`src/payoff/sheer_force_boost_wbtest.mbt` (剥がしと威力の一致、キャッシュキー、DP/MC parity)。
+
 ### ひるみ (flinch, Champions 規則) — DP / MC
 
-- 本文: `champout/rom-txt/usa/wazainfo_syn.json` の「N% chance of making the target flinch」(命中ごと)。特性: せいしんりょく は受けない (tokuseiinfo_syn.json:039)。ふくつのこころ はひるみで素早さ +1 (tokuseiinfo_syn.json:080)。りんぷん はダメージ技の追加効果を止め、ちからずく の使用者は追加効果を失う (既存のゲートを流用)。
+- 本文: `champout/rom-txt/usa/wazainfo_syn.json` の「N% chance of making the target flinch」(命中ごと)。特性: せいしんりょく は受けない (tokuseiinfo_syn.json:039)。ふくつのこころ はひるみで素早さ +1 (tokuseiinfo_syn.json:080)。りんぷん はダメージ技の追加効果を止め、ちからずく の使用者は追加効果を失う (既存のゲートを流用)。ひるみがあるダメージ技は、その剥がしと同時に威力 1.3 倍 (`move_has_sheer_force_effect`)。
 - データ: `move_meta.flinch_chance` (m019、19 行 = 18 技 + 表記違い 1 件)。champions 経路は champout の全角 `３ぼんのや`、pokedex 経路は `3ぼんのや` (ASCII) で引くので両方を入れる。ねこだまし は m019 では行を作らない (初回行動ゲートは m020、下の節)。はやてがえし は m019 / m020 では行を作らない (失敗ゲート付きの行は m021、下の節)。DB → payoff 接続済み: `pkdx moves` の JSON (`moves_to_json`) は `flinch_chance` を出し (0 の技は省略)、`pkdx select` の `parse_move_json` が同じキーを読む。
 - 規則 (DP / MC 共通): 先攻の技が命中して相手の HP が減り、相手が生存すると、命中数ぶんの独立抽選 (`1 - (1 - p)^n`) で `flinch_chance`% 成立する。成立した相手は同ターンの後攻の行動を失う (持ち越さない)。後攻が先に行動している場合は効かない。
 - 行動時点の解決: 相手の技がひるみを付与しうる (`flinch_chance > 0`) ときは、こちらの試行 (眠り / 凍結 / まひ / 命中) を後攻の行動時点で振る (DP `flinch_roll_deferred`、MC `mc_flinch_deferred`、こおり の `freeze_roll_deferred` と同じ仕組み)。ひるみ成立枝は `flinched_outcomes` (DP / MC の SSoT) の分布を使い、命中判定を行わない。

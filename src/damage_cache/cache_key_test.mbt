@@ -52,6 +52,7 @@ fn baseline() -> @damage_cache.CacheKeyInput {
     incoming_critical: false,
     atk_protean_locked: "",
     def_protean_locked: "",
+    sheer_force_boost: false,
   }
 }
 
@@ -127,6 +128,8 @@ test "build_cache_key: single-field change yields distinct key" {
     // v6 additions: Protean/Libero ロックタイプの両側トークン。
     { ..baseline(), atk_protean_locked: "ほのお" },
     { ..baseline(), def_protean_locked: "みず" },
+    // v7 addition: ちからずく の威力ゲート。追加効果あり / なしで別エントリ。
+    { ..baseline(), sheer_force_boost: true },
   ]
   for i = 0; i < mutations.length(); i = i + 1 {
     guard @damage_cache.build_cache_key(mutations[i]) is Ok(k) else {
@@ -216,11 +219,11 @@ test "build_cache_key: rejects trailing whitespace" {
 }
 
 ///|
-/// v6 schema bump: baseline key must start with the new version prefix so a
-/// damage_cache.sqlite written under v2/v3/v4/v5 cannot collide with v6 entries.
-test "build_cache_key: v6 schema prefix" {
+/// v7 schema bump: baseline key must start with the new version prefix so a
+/// damage_cache.sqlite written under v2..v6 cannot collide with v7 entries.
+test "build_cache_key: v7 schema prefix" {
   guard @damage_cache.build_cache_key(baseline()) is Ok(k) else { fail("unexpected Err") }
-  assert_true(k.has_prefix("v6|"))
+  assert_true(k.has_prefix("v7|"))
 }
 
 ///|

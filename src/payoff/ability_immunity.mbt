@@ -56,10 +56,11 @@ pub fn ability_blocks_secondary(ability : String) -> Bool {
 /// Return `true` when the attacker's ability removes the additional (secondary)
 /// effects of its own damaging moves. ちからずく (Sheer Force): "The Pokémon's
 /// moves lose their additional effects, but the power of those moves will be
-/// boosted by 30%." (Champions tokuseiinfo_syn.json:4170). This predicate only
-/// strips the status secondary in the payoff fanouts (`secondary_gated_move` /
-/// `mc_try_apply_status`). The 30% power boost stays in the damage engine
-/// (`get_atk_ability_final`), which applies it to every move (pre-existing).
+/// boosted by 30%." (Champions tokuseiinfo_syn.json:4170, TOKUSEIINFO_SYN_125).
+/// The fanouts (`secondary_gated_move` / `mc_try_apply_status` /
+/// `mc_flinch_roll`) drop `status_effect` and `flinch_chance` on damaging
+/// moves. The 1.3x boost is the same set: `move_has_sheer_force_effect`
+/// (damage engine `get_atk_ability_final`). A move with neither is not boosted.
 pub fn ability_strips_secondaries(ability : String) -> Bool {
   ability == "ちからずく"
 }

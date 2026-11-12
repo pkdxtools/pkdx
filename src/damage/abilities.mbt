@@ -213,11 +213,58 @@ pub fn get_stab_mult(ability : String) -> Int {
 }
 
 ///|
+/// ちからずく が威力を上げる「追加効果」がこの技にあるか。
+///
+/// Champions `tokuseiinfo_syn.json` `TOKUSEIINFO_SYN_125` (usa 行 4170):
+/// "The Pokémon’s moves lose their additional effects, but the power of
+/// those moves will be boosted by 30%." 日本語 (jpn 行 4064):
+/// 「攻撃の追加効果はなくなるが１．３倍の威力で技を出すことができる。」
+/// 英語の "those moves" に合わせ、追加効果を失う技だけを真にする。
+///
+/// 落とす集合は payoff `secondary_gated_move` / MC の
+/// `ability_strips_secondaries` と同じで、`clear_damaging_secondaries` が
+/// 消すフィールドに限る: ダメージ技 (`power > 0`) の `status_effect`
+/// (chance > 0) と `flinch_chance > 0`。変化技の状態異常は直接効果なので
+/// 対象外。`stat_effects` (能力変化)・反動・ドレインは現行の除去対象に
+/// 入っていないので、ここでも追加効果に数えない。
+pub fn move_has_sheer_force_effect(mv : @model.Move) -> Bool {
+  if mv.power <= 0 {
+    return false
+  }
+  if mv.flinch_chance > 0 {
+    return true
+  }
+  match mv.status_effect {
+    Some((_, chance)) => chance > 0
+    None => false
+  }
+}
+
+///|
+/// ちからずく の 1.3 倍がこの技に乗るか。`move_has_sheer_force_effect` と
+/// 特性名の積。ダメージキャッシュのキーとダメージ式は両方これを見る。
+pub fn sheer_force_boost_applies(ability : String, mv : @model.Move) -> Bool {
+  ability == "ちからずく" && move_has_sheer_force_effect(mv)
+}
+
+///|
+/// ダメージ技の追加効果 (`status_effect` と `flinch_chance`) を落とした写し。
+/// ちからずく が剥がす集合と、HP が減らなかった命中で付かない集合は同じ。
+/// `stat_effects` は触らない。変化技では呼ばない (状態異常は直接効果)。
+pub fn clear_damaging_secondaries(mv : @model.Move) -> @model.Move {
+  { ..mv, status_effect: None, flinch_chance: 0 }
+}
+
+///|
 /// Get attacker ability final modifier (4096 base). Returns 0 if not applicable.
+///
+/// `sheer_force_effect` は ちからずく 専用。真のときだけ 5325/4096 (1.3 倍)。
+/// アナライズ はこのフラグを見ない (従来どおり常に 5325)。
 pub fn get_atk_ability_final(
   ability : String,
   move_type : String,
   fainted_count : Int,
+  sheer_force_effect? : Bool = false,
 ) -> Int {
   match ability {
     "トランジスタ" => if move_type == "でんき" { 5325 } else { 0 }
@@ -233,7 +280,8 @@ pub fn get_atk_ability_final(
       } else {
         0
       }
-    "ちからずく" | "アナライズ" => 5325
+    "アナライズ" => 5325
+    "ちからずく" => if sheer_force_effect { 5325 } else { 0 }
     "そうだいしょう" => {
       let count = if fainted_count < 0 {
         0

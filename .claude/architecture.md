@@ -65,7 +65,7 @@ stateDiagram-v2
   P1: Phase 1 軸ポケモン決定
   note right of P1
     pkdx query → 種族値・特性
-    pkdx moves --format json → 技候補 (priority/stat_effects/status_effect/flinch_chance 込み)
+    pkdx moves --format json → 技候補 (priority/stat_effects/status_effect/flinch_chance/反動/自滅/反動ターン/回復/天候設定/フィールド設定 込み)
   end note
 
   P1 --> P2
@@ -397,7 +397,7 @@ flowchart LR
   end
 
   MoveS --> CliFmt[cli/format.moves_to_json]
-  CliFmt --> MVOut["pkdx moves 出力 JSON\n名前/型/カテゴリ/威力/命中/PP/\n優先度/ランク効果/状態異常/ひるみ率"]
+  CliFmt --> MVOut["pkdx moves 出力 JSON\n名前/型/カテゴリ/威力/命中/PP/\n優先度/ランク効果/状態異常/ひるみ率/\n反動/自滅/反動ターン/回復/天候設定/フィールド設定"]
 
   MVOut -.skillがコピペ.-> SelectIn["pkdx select stdin JSON"]
 

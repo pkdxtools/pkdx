@@ -24,10 +24,24 @@
 ///   "moves":   [{"name":..., "type":..., "category":"物理"|"特殊"|"変化",
 ///                "power":Int, "priority":Int?, "stat_effects":[[Int,Int], ...]?,
 ///                "status_effect":{"kind":String, "chance":Int}?,
-///                "flinch_chance":Int?}, ...]
+///                "flinch_chance":Int?,
+///                "recoil_num":Int?, "recoil_den":Int?, "self_ko":Bool?,
+///                "recharge":Bool?, "heal_kind":String?, "heal_num":Int?,
+///                "heal_den":Int?, "heal_sunny_num":Int?, "heal_sunny_den":Int?,
+///                "heal_harsh_num":Int?, "heal_harsh_den":Int?,
+///                "weather_set":String?, "field_set":String?}, ...]
 ///   // status_effect: kind は まひ/やけど/どく/もうどく/ねむり/こおり/あくび (和名)、
 ///   //   chance 省略 100、キー省略 = 状態異常なし。`pkdx moves` の出力はこの形。
 ///   // flinch_chance: ひるみ率 (%)、省略 0。
+///   // recoil_num / recoil_den: 反動 (与ダメ × num / den)、省略 0 / 1。
+///   // self_ko / recharge: じばく系 / 反動ターン、省略 false。
+///   // heal_kind: fixed / weather / drain / rest / leech_seed / pain_split / wish、省略 = 回復なし。
+///   //   heal_num / heal_den は fixed / drain / weather の既定分数、weather は
+///   //   heal_sunny_* (晴れ) と heal_harsh_* (雨・雪・砂)、省略 0 / 1。
+///   // weather_set: sun / rain / sand / snow、field_set: electric / grassy / misty / psychic、
+///   //   省略 = 設定なし。
+///   // 上の 014–016 系キーは `pkdx moves` の出力と同じ形 (DB の値をそのまま流す)。
+///   // 名前だけで決まる効果 (崩れ技 / てっていこうせんの反動 / 技の分類) はキー不要 (name で判定)。
 /// }
 /// ```
 ///

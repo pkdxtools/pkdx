@@ -456,9 +456,9 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 - 技の追加効果 `status_effect` (FreezeKind、確率 %)。DB: `pkdx_patch/017_move_meta_freeze/data.json` (m017) が れいとうビーム / ふぶき / れいとうパンチ / こおりのキバ / フリーズドライ を 10% で投入 (本文 `wazainfo_syn.json:636` / `:658` / `:38` / `:8136`。フリーズドライ の `:11178` は凍結に触れないので Showdown の 10% で補う)。
 - **トライアタック は未対応**: 本文 `:2208` "20% chance of leaving the target burned, frozen, or paralyzed" は 3 種を 1/3 ずつ振るが、`status_effect` は単一の種類と整数確率しか持てない (6.67% は表せない)。やけど / まひ の 3 分岐も同様に未モデル。
-- 付与をブロックする条件 (`maybe_apply_status_fanout` / `mc_try_apply_status`): こおりタイプ、ミストフィールド (grounded、既存の `field_blocks_status`)、はれ (`Weather::Sun`)、マグマのよろい (`tokuseiinfo_syn.json:1348` "The Pokémon cannot be frozen.")、りんぷん (`:606` "immune to additional effects from attacks"、`power > 0` の技の追加効果のみ。やけど / まひ / どく / もうどく にも同じ規則で、下の節)。エレキフィールドは凍結を止めない (`field_blocks_status`)。既存の状態異常がある相手には付与しない (状態異常は同時に 1 つ)。
+- 付与をブロックする条件 (`maybe_apply_status_fanout` / `mc_try_apply_status`): こおりタイプ、ミストフィールド (grounded、既存の `field_blocks_status`)、はれ (`Weather::Sun`)、マグマのよろい (`tokuseiinfo_syn.json:1348` "The Pokémon cannot be frozen.")、りんぷん (`:606` "immune to additional effects from attacks"、`power > 0` の技の追加効果のみ。やけど / まひ / どく / もうどく にも同じ規則で、下の節)、きよめのしお / はれのリーフガード / くさのフラワーベール (`ability_blocks_status`、下の状態異常免疫)。エレキフィールドは凍結を止めない (`field_blocks_status`)。既存の状態異常がある相手には付与しない (状態異常は同時に 1 つ)。
 - はれ (Harsh Sunlight、`help_syn.json:27747`) の本文は凍結に触れない。Showdown `sunnyday.onImmunity` (`frz` → false) を採用 (判断事項)。
-- リーフガード (`tokuseiinfo_syn.json:3566`、はれで状態異常を防ぐ)、ぜったいねむり、フラワーベール (ダブル専用) は未モデル。pkdx は他の状態異常にも同じ特性を適用していないため (「特性免疫」は眠りの Rest 経路のみ)。
+- きよめのしお / リーフガード (はれ) / フラワーベール (自分がくさ) は全状態異常の一部としてこおりも止める (`ability_blocks_status`)。ぜったいねむりは Champions の `tokusei.json` に無い。
 
 **試行の数え方と行動時点の解決** (`per_side_attempt` / `mc_resolve_attempt`):
 
@@ -506,7 +506,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 1. 追加効果は命中ごとに独立に抽選する (連続技は hit ごと。既存の per-hit 規則)。
 2. この命中で相手の HP が減ったときだけ付く (`secondary_gated_move` の `hp_lost`。DP は `actual_dmg`、MC は `before - res_hp`)。ばけのかわ が初撃を吸収した命中は chip (最大 HP / 8) で HP が減るので付く (Showdown fallback、判断事項 1)。タイプ免疫と 特性による吸収 (そうしょく) は HP を減らさず、呼び出し元で抜けるので付かない。瀕死の対象 (HP 減少なし) にも付かない。命中で倒れた対象は HP 0 なので `maybe_apply_status_fanout` が付与しない。
 3. 対象が既に状態異常なら付かない (こおり の凍結中も含む)。タイプ免疫。ミストフィールド (grounded) で止まる。エレキフィールドは止めない (既存の `field_blocks_status`)。
-4. りんぷん (ダメージ技のみ) と ちからずく (攻撃側) で止める。マグマのよろい と はれ は こおり だけ止める。
+4. りんぷん (ダメージ技のみ) と ちからずく (攻撃側) で止める。マグマのよろい と はれ は こおり だけ止める。じゅうなん / めんえき / すいほう / ねつこうかん / きよめのしお / リーフガード (はれ) / フラワーベール (くさ) は `ability_blocks_status` で変化技と追加効果の両方を止める。
 5. 変化技 (power 0) の状態異常は追加効果ではなく命中後の直接効果で、りんぷん・ちからずく の影響を受けない。
 6. 凍結解除: 炎のダメージ技の命中で凍結が解けた後は、同じ技の追加効果が付く (解凍は二次効果より前)。ねっとう / ねっさのだいち の解凍は二次効果の後 (既存の thawsTarget 規則)。
 7. 後攻が先攻の技で やけど になった場合、後攻の物理攻撃は行動時点の状態で半減する (`resolve_moves` の `second_burn` / MC の `opp_burn_now`)。まひ の 12.5% 行動不能は行動時点では振らない (下記の既知の近似)。
@@ -533,11 +533,11 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 - フリンチ (ひるみ): こおりのキバ / ほのおのキバ / かみなりのキバ / 等。ひるみは本 PR の範囲外 (別 PR)。フリンチを足す時は、行動前の「ひるみ」判定を後攻の行動前に入れる (`action_blocked_by_fresh_status` と同じ位置) 必要がある。
 - 複数状態異常の技: トライアタック (3 種 6.67% ずつ)、フェイタルクロー (どく / まひ / ねむり 各 10%)。単一の `status_effect` では表せない。
 - 威力が条件で 2 倍になる技: ひゃっきやこう (状態異常の相手に 2 倍)、どくばりセンボン (毒の相手に 2 倍)、のしかかり (ミニマイズの相手に 2 倍)。確率の部分だけ入れ、威力は既存どおり (未モデル)。
-- 特性 (状態異常の免疫・反射・EOT): じゅうなん `:256` (まひ免疫)、めんえき `:544` (どく免疫)、ねつこうかん `:7654` / すいほう `:6396` (やけど免疫)、きよめのしお `:7712` (全状態異常免疫)、リーフガード `:3566` (はれで免疫)、シンクロ `:926` (反射)、ふしょく `:6658` (毒・鋼 相手にも毒)、こんじょう `:2126` (状態異常中の攻撃 1.5 倍、やけどの物理半減無効)、ポイズンヒール `:3144` (毒中の回復)。どれも pure status 技と同様に未モデル (指示どおり、既存の免疫 helper を流用しない)。
+- 特性 (反射・EOT。免疫は下の節でモデル済み): シンクロ `:926` (反射)、ふしょく `:6658` (毒・鋼 相手にも毒)、こんじょう `:2126` (状態異常中の攻撃 1.5 倍、やけどの物理半減無効)、ポイズンヒール `:3144` (毒中の回復)。未モデル。
 - マジックガード: 状態異常の EOT (やけど / どく / もうどく) のダメージを防がない (既存の `eot_slip_active` が見ない)。
 - ちからずく が能力変化 (`stat_effects`) を剥がさない。威力も掛けない (上記「ちからずく の威力」)。Showdown は `move.self` を消して 1.3 倍にする。
 - 天候による命中 (かみなり の雨 / 晴れ の命中 50%)、ミニマイズ、フィールド効果の追加効果 (たつまき 等) は未モデル。
-- 技由来でない状態異常 (ほのおのからだ 等の接触特性) は既存どおり (`apply_contact_proc_fanout`)。
+- 技由来でない状態異常 (ほのおのからだ 等の接触特性、とびだすハバネロ 等の接触持ち物) は `apply_contact_proc_fanout`。攻撃側の `ability_blocks_status` が付与を止める (本文は付与源を限定しない。MC に接触 proc は無い)。
 - 変化技 (`power = 0`) の状態異常の命中・確率は既存のまま。JSON 入力で `accuracy` と `status_effect.chance` の両方に値を入れると二重抽選になる (既存の入力契約。DB 経路は正規化済み)。
 - Champions に無い (参考): Serene Grace (てんのめぐみ 0 体)、Covert Cloak (かくれみの: items に無し)。
 
@@ -570,6 +570,38 @@ Showdown との差 (意図的):
 終了ダメージの分母を直したあとも、ダメージ乱数の平均 (DP) と 1 つの乱数 (MC) が瀕死の閾値のどちら側にいるかで終端値が割れることがある。特殊 威力 70 の乱数は 55 から 66 で、4 発の平均は 240、最大は 264。HP 240 は状態異常が無くても平均だとちょうど瀕死になり、DP は 1、MC は約 0.31 になる。HP 260 の 30% やけどの差は、プール分母でも約 0.03 でしきい値を超える。HP 360 は、`effective_hp` 分母だと やけど約 0.08、どく約 0.04 でしきい値を超え、プール分母だとどちらも 0.02 未満になる。瀕死の境界で 0.02 を強制すると、DP を 16 通りに分岐させるか MC を平均に固定する再設計になる。どちらもしていない。テストは HP 360 の 30% やけど / どく と、乱数の無い変化技 100% (HP 160、4 ターンで やけど 0.125、どく 0.25、もうどく 0.3125。`effective_hp` 分母なら 0.2 / 0.4125 / 1.0) を使う。物理 威力 50 の相手に特殊 威力 50 の やけど 30% を撃つ既存 fixture は、分母の修正前から差が 0.02 未満だった。
 
 **参照テスト**: `src/payoff/switching_game_secstatus_wbtest.mbt` (付与の確率・免疫・ブロック・ちからずく / ばけのかわ の chip 経路 (まひ 100% / こおり 100%)・タイプ免疫と そうしょく の不発・解凍後の やけど・後攻の半減・りんぷん の e2e)、`src/payoff/team_monte_carlo_secstatus_parity_wbtest.mbt` (MC の分布・真理値表・ばけのかわ の chip・DP/MC parity と感度ガード)、`src/payoff/team_monte_carlo_status_slip_parity_wbtest.mbt` (終了ダメージの分母がプールであること、変化技 100% の厳密値、HP 360 の 30% やけど / どく parity)、`src/payoff/team_monte_carlo_freeze_parity_wbtest.mbt` (MC の ばけのかわ chip の こおり)、`src/migrate/m018_status_test.mbt` (投入の内容・既存行・冪等)、`src/db/status_effect_normalize_test.mbt` (DB 経路の正規化)。
+
+### 特性の状態異常免疫 — DP / MC
+
+ゲートは `ability_blocks_status` (`src/payoff/ability_immunity.mbt`)。DP は `status_blocked_by_holder_ability` (メガ後の特性とタイプ)、MC は raw。変化技・ダメージ技の追加効果・あくび (DrowsyKind) が同じ関数を通る。ねむるは `apply_healing` が `self_inflicted=true` で同じ関数を見る。あくびの EOT 発動 (`Drowsy(0)` → `Sleep(2)`) は `eot_slip_active` が眠りを止める特性なら `None` にする。接触特性・接触持ち物は `apply_contact_proc_fanout` (攻撃側。MC にこの経路は無い)。既存の状態は治さない。かたやぶりは未モデル。
+
+本文 (`champout` `50e7233`, `rom-txt/usa/tokuseiinfo_syn.json` の LabelName 行):
+
+| 特性 | ラベル | 本文 | 止めるもの |
+|---|---|---|---|
+| じゅうなん | `TOKUSEIINFO_SYN_007:256` | cannot be paralyzed | まひ |
+| めんえき | `:544` | cannot be poisoned or badly poisoned | どく / もうどく |
+| すいほう | `:6396` | cannot be burned | やけど (威力・軽減はダメージ計算の既存) |
+| ねつこうかん | `:7654` | cannot be burned | やけど (ほのおを受けた攻撃 +1 は未モデル) |
+| きよめのしお | `:7712` | immune to status conditions | 全 StatusKind |
+| リーフガード | `:3566` | immune to status conditions in harsh sunlight | はれ (`Weather::Sun`) のとき全 StatusKind |
+| フラワーベール | `:5468` | Grass-type allies are immune to status conditions | シングルでは自分がくさのとき全 StatusKind。ねむるは通す |
+
+ふみん / やるき / スイートベールの眠り・あくびは従来どおり。マグマのよろいのこおりは `ability_blocks_freeze` のまま。
+
+**Champions に無いので入れない**: みずのベール (Water Veil。`TOKUSEI_011` は ちょすい)、パステルベール (Pastel Veil)、ぜったいねむり (Comatose)。マイペース (`TOKUSEIINFO_SYN_020:628`) はこんらん (未モデル) といかく (既存の `ability_blocks_intimidate`) だけなので状態異常ゲートには入れない。
+
+**Showdown fallback** (本文が述べない点):
+
+1. 「状態異常」に あくびを含める。`help_syn.json:25431` の Status Conditions は どく / もうどく / やけど / まひ / こおり / ねむり の 6 つで、あくびを挙げない。Showdown は Purifying Salt / Leaf Guard (はれ) / Flower Veil (くさ) の `onTryAddVolatile` であくびを止める。
+2. あくびの EOT で眠りを止める特性は予告を消して眠らない。Showdown `yawn.onResidual` は volatile を外してから `trySetStatus` する。
+3. フラワーベールは自分でかける状態 (ねむる) を止めない。本文に例外は無い。Showdown `onAllySetStatus` は `target !== source`。
+4. 既にある状態は治さない。本文は "cannot be" / 「ならない」。Showdown の `onUpdate` 治療は採らない。
+5. 接触特性と接触持ち物も止める。本文は付与源を限定しない。`help_11_02_00` (`help_syn.json:25453`) は源に move / Ability / held item を含む。
+
+**未モデル**: フラワーベールの能力低下防止、ダブルの味方全体、シンクロ、ねつこうかんの攻撃上昇、すいほうのダメージ補正以外の新規効果。
+
+**参照テスト**: `src/payoff/ability_immunity_test.mbt`、`src/payoff/status_immunity_wbtest.mbt` (変化技 / 追加効果 / 既存状態 / はれ / 接触 / あくび発動 / ねむる / DP/MC `|dp-mc| < 0.02`)。
 
 ### ちからずく の威力 (Sheer Force, TOKUSEIINFO_SYN_125) — DP / MC
 

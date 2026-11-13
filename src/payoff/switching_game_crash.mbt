@@ -213,11 +213,13 @@ fn attempt_turn_sign(
         mv_me,
         my_mega || is_mega_action(ma.action),
         is_paralyzed(state.my_status[state.my_active]),
+        state.my_hps[state.my_active],
         opp_team[state.opp_active],
         state.opp_ranks,
         mv_opp,
         opp_mega || is_mega_action(oa.action),
         is_paralyzed(state.opp_status[state.opp_active]),
+        state.opp_hps[state.opp_active],
       )
     }
     _ => 0

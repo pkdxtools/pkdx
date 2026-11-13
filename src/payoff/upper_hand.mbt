@@ -19,15 +19,17 @@
 /// 実際に打てたか (ひるみ・眠り・まひ・リチャージで止まるか) は見ない。交代は
 /// 先制攻撃ではないので失敗する。
 ///
-/// 「priority attack」/「先制できる攻撃」は選択技の `Move.priority > 0`。
+/// 「priority attack」/「先制できる攻撃」は選択技の実効優先度 > 0。
 /// 変化技の先制 (まもる +4 / みきり +4 / ファストガード +3) も含む。本文の
 /// attack / 攻撃は説明文の言い方で、カテゴリでは切らない。サイコフィールドが
-/// あとから相手の先制技を無効にしても、ゲートは選択時点の priority を見る
+/// あとから相手の先制技を無効にしても、ゲートは選択時点の優先度を見る
 /// (本文は地形に触れていない)。はやてがえし 自身は priority 3 なので、地上の
 /// 相手への自分の技は既存のサイコフィールド無効 (G-3) のまま。
 ///
-/// いたずらごころ / はやてのつばさ / ヒーリングシフトの優先度加算は
-/// `turn_order_sign` が未使用のままなので、ここでも足さない。
+/// 実効優先度は `effective_priority` (いたずらごころの変化技 +1、満タン時の
+/// はやてのつばさのひこう技 +1)。特性本文が優先度を上げた技は先制できる。
+/// 省略した特性 / HP は補正 0 で、`Move.priority` だけを見る (既存呼び出しと同じ)。
+/// Showdown の `category === 'Status'` 除外は Champions 本文に無いので入れない。
 /// であいがしら (`WAZAINFO_SYN_660`) はこのゲートの対象外。登場後の初行動で
 /// 失敗するのは `first_impression_fails` (ねこだまし と同じ fresh) で、ひるみは無い。
 ///
@@ -38,15 +40,23 @@
 const UPPER_HAND_NAME : String = "はやてがえし"
 
 ///|
-/// はやてがえし で、相手のこのターンの選択が priority > 0 の技ではない。
-/// 交代・技なし (`None`)・priority <= 0 は失敗。他の技名は false。
-pub fn upper_hand_fails(mv : @model.Move, foe_move : @model.Move?) -> Bool {
+/// はやてがえし で、相手のこのターンの選択の実効優先度が 0 以下。
+/// 交代・技なし (`None`) は失敗。他の技名は false。
+/// `foe_ability` / HP を省略すると補正は 0 で、選択技の `Move.priority` だけを見る。
+pub fn upper_hand_fails(
+  mv : @model.Move,
+  foe_move : @model.Move?,
+  foe_ability? : String = "",
+  foe_hp? : Int = 0,
+  foe_max_hp? : Int = 0,
+) -> Bool {
   if mv.name != UPPER_HAND_NAME {
     return false
   }
   match foe_move {
     None => true
-    Some(foe) => foe.priority <= 0
+    Some(foe) =>
+      effective_priority(foe_ability, foe, foe_hp, foe_max_hp) <= 0
   }
 }
 
@@ -58,8 +68,11 @@ pub fn flinch_chance_vs_choice(
   mv : @model.Move,
   user_fresh : Bool?,
   foe_move : @model.Move?,
+  foe_ability? : String = "",
+  foe_hp? : Int = 0,
+  foe_max_hp? : Int = 0,
 ) -> Int {
-  if upper_hand_fails(mv, foe_move) {
+  if upper_hand_fails(mv, foe_move, foe_ability~, foe_hp~, foe_max_hp~) {
     0
   } else {
     flinch_chance_if_fresh(mv, user_fresh)

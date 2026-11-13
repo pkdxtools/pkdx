@@ -1,23 +1,26 @@
 ///|
 /// Priority-aware, rank-aware turn order sign between the two actives for the
 /// given moves. Returns `+1` if my active acts first, `-1` if opp acts first,
-/// `0` on full ties. Reads priority directly from `@model.Move.priority`
-/// (populated by `query_moves` via the `move_meta` DB JOIN).
+/// `0` on full ties. Priority is the ability-adjusted value
+/// (`combatant_move_priority`: いたずらごころ / はやてのつばさ), not the raw
+/// `Move.priority`. `me_hp` / `opp_hp` are the turn-start HP used for 満タン.
 ///
 /// When either side is currently running on mega-form stats (`me_mega` /
-/// `opp_mega`), the post-mega speed base is used for the tie-breaker. Priority
-/// is never affected by mega evolution, so it reads straight from the move.
+/// `opp_mega`), the post-mega speed and the post-mega ability are used.
+/// Mega does not change `pokemon.hp`, which is the full-HP denominator.
 fn move_turn_sign(
   me : Combatant,
   me_ranks : Array[Int],
   mv_me : @model.Move,
   me_mega : Bool,
   me_para : Bool,
+  me_hp : Int,
   opp : Combatant,
   opp_ranks : Array[Int],
   mv_opp : @model.Move,
   opp_mega : Bool,
   opp_para : Bool,
+  opp_hp : Int,
 ) -> Int {
   let me_eff = effective_combatant(me, me_mega)
   let opp_eff = effective_combatant(opp, opp_mega)
@@ -28,10 +31,10 @@ fn move_turn_sign(
   let eff_opp = if opp_para { base_opp / 2 } else { base_opp }
   turn_order_sign(
     me_eff,
-    mv_me.priority,
+    effective_priority(me_eff.ability, mv_me, me_hp, me_eff.pokemon.hp),
     eff_me,
     opp_eff,
-    mv_opp.priority,
+    effective_priority(opp_eff.ability, mv_opp, opp_hp, opp_eff.pokemon.hp),
     eff_opp,
   )
 }
@@ -177,11 +180,23 @@ fn flinch_roll_deferred(
   }
   let opp_active = if is_me { state.opp_active } else { state.my_active }
   // ひるませる側の fresh。ねこだまし は Some(true) 以外では実効確率 0 なので遅らせない。
-  // はやてがえし は相手の選択が priority > 0 でないと失敗するので、そのときは遅らせない。
+  // はやてがえし は相手の選択の実効優先度が > 0 でないと失敗するので、そのときは遅らせない。
   let flincher_fresh = if is_me { state.opp_fresh } else { state.my_fresh }
   let target_mv = action_move_of(team, active, action)
+  let target_hp = if is_me { state.my_hps[active] } else { state.opp_hps[active] }
+  let target_megaed = if is_me { state.my_megaed } else { state.opp_megaed }
+  let target_mega = active < target_megaed.length() && target_megaed[active]
+  let target_eff = effective_combatant(team[active], target_mega)
   match action_move_of(opp_team, opp_active, opp_action) {
-    Some(mv) => flinch_chance_vs_choice(mv, flincher_fresh, target_mv) > 0
+    Some(mv) =>
+      flinch_chance_vs_choice(
+        mv,
+        flincher_fresh,
+        target_mv,
+        foe_ability=target_eff.ability,
+        foe_hp=target_hp,
+        foe_max_hp=target_eff.pokemon.hp,
+      ) > 0
     None => false
   }
 }
@@ -579,9 +594,20 @@ fn resolve_attacker_leg(
   let def_megaed_arr = if attacker_is_me { ws.opp_megaed } else { ws.my_megaed }
   let def_is_mega = defender_active < def_megaed_arr.length() &&
     def_megaed_arr[defender_active]
+  let atk_megaed_arr = if attacker_is_me { ws.my_megaed } else { ws.opp_megaed }
+  let atk_is_mega = attacker_active < atk_megaed_arr.length() &&
+    atk_megaed_arr[attacker_active]
+  let atk_hp_arr = if attacker_is_me { ws.my_hps } else { ws.opp_hps }
+  let atk_c = attacker_team[attacker_active]
+  let atk_prio = combatant_move_priority(
+    atk_c,
+    attacker_move,
+    atk_hp_arr[attacker_active],
+    atk_is_mega,
+  )
   if psychic_blocks_priority(
       ws.field,
-      attacker_move.priority,
+      atk_prio,
       defender_team_eff[defender_active],
       def_is_mega,
     ) {
@@ -595,8 +621,34 @@ fn resolve_attacker_leg(
     first_impression_fails(attacker_move, user_fresh) {
     return [(1.0, pre_damage_state)]
   }
-  // はやてがえし: 相手の選択が priority > 0 の技でなければ失敗する。ダメージもひるみも無い。
-  if upper_hand_fails(attacker_move, foe_move) {
+  // はやてがえし: 相手の選択の実効優先度が > 0 でなければ失敗する。ダメージもひるみも無い。
+  let foe_eff = effective_combatant(
+    defender_team_eff[defender_active],
+    def_is_mega,
+  )
+  if upper_hand_fails(
+      attacker_move,
+      foe_move,
+      foe_ability=foe_eff.ability,
+      foe_hp=defender_hps[defender_active],
+      foe_max_hp=foe_eff.pokemon.hp,
+    ) {
+    return [(1.0, pre_damage_state)]
+  }
+  // いたずらごころ: 相手に効く変化技はあくタイプには失敗する。自分強化は通す。
+  let def_protean = protean_locked_of(
+    pre_damage_state,
+    !attacker_is_me,
+    defender_active,
+  )
+  if prankster_status_blocked(
+      atk_c,
+      atk_is_mega,
+      attacker_move,
+      defender_team_eff[defender_active],
+      def_is_mega,
+      def_protean,
+    ) {
     return [(1.0, pre_damage_state)]
   }
   // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
@@ -1215,8 +1267,18 @@ pub fn transition_with_cache(
       let my_para = is_paralyzed(state.my_status[state.my_active])
       let opp_para = is_paralyzed(state.opp_status[state.opp_active])
       let s = move_turn_sign(
-        me, my_ranks_new, mv_me, my_mega_now, my_para, opp, opp_ranks_new, mv_opp,
-        opp_mega_now, opp_para,
+        me,
+        my_ranks_new,
+        mv_me,
+        my_mega_now,
+        my_para,
+        state.my_hps[state.my_active],
+        opp,
+        opp_ranks_new,
+        mv_opp,
+        opp_mega_now,
+        opp_para,
+        state.opp_hps[state.opp_active],
       )
       // Last Resort 解禁判定用に両サイドの move を「使用済み」として記録。
       // resolve_moves は state を ws に変換して回すので、state を新しい mask で
@@ -1349,9 +1411,20 @@ pub fn transition_with_cache(
       // Switch-vs-UseMove の DP path にも適用する。これがないと priority 技が
       // Psychic 下の grounded な switch-in に当たってしまう。base_state は
       // 既に turn を advance 済みなので blocked leaf は base_state をそのまま返す。
+      // 優先度は特性補正込み (いたずらごころ / はやてのつばさ)。
+      let atk_hp_switch = if attacker_is_me {
+        base_state.my_hps[attacker_slot]
+      } else {
+        base_state.opp_hps[attacker_slot]
+      }
       if psychic_blocks_priority(
           base_state.field,
-          used_move.priority,
+          combatant_move_priority(
+            attacker_team[attacker_slot],
+            used_move,
+            atk_hp_switch,
+            attacker_mega,
+          ),
           defender_team_eff[target_slot],
           defender_mega,
         ) {
@@ -1372,7 +1445,15 @@ pub fn transition_with_cache(
       }
       if fake_out_fails(used_move, user_fresh) ||
         first_impression_fails(used_move, user_fresh) ||
-        upper_hand_fails(used_move, None) {
+        upper_hand_fails(used_move, None) ||
+        prankster_status_blocked(
+          attacker_team[attacker_slot],
+          attacker_mega,
+          used_move,
+          defender_team_eff[target_slot],
+          defender_mega,
+          protean_locked_of(base_state, !attacker_is_me, target_slot),
+        ) {
         return settle_fresh_outcomes(
           [(1.0, base_state)],
           state.my_fresh,
@@ -2154,9 +2235,20 @@ fn partial_act_outcomes(
       // Stage G-3: partial-act (相手が para/sleep/miss で skip) でも actor の
       // priority 技は Psychic 下の grounded defender に当たってはならない。
       // resolve_attacker_leg / Switch-vs-UseMove path と同じ guard を funnel する。
+      // 優先度は特性補正込み。
+      let atk_hp_partial = if attacker_is_me {
+        base_state.my_hps[attacker_slot]
+      } else {
+        base_state.opp_hps[attacker_slot]
+      }
       if psychic_blocks_priority(
           base_state.field,
-          used_move.priority,
+          combatant_move_priority(
+            attacker_team[attacker_slot],
+            used_move,
+            atk_hp_partial,
+            attacker_mega,
+          ),
           defender_team_eff[target_slot],
           defender_mega,
         ) {
@@ -2173,12 +2265,36 @@ fn partial_act_outcomes(
         return [(1.0, base_state)]
       }
       // 動かなかった側の選択技。実行できたかは見ない (リチャージ・眠りでも選択は残る)。
+      // ゲートは選択の実効優先度を見る。
       let foe_move = if attacker_is_me {
         action_move_of(opp_team, state.opp_active, idle_action)
       } else {
         action_move_of(my_team, state.my_active, idle_action)
       }
-      if upper_hand_fails(used_move, foe_move) {
+      let foe_eff = effective_combatant(
+        defender_team_eff[target_slot],
+        defender_mega,
+      )
+      let foe_hp_partial = if attacker_is_me {
+        base_state.opp_hps[target_slot]
+      } else {
+        base_state.my_hps[target_slot]
+      }
+      if upper_hand_fails(
+          used_move,
+          foe_move,
+          foe_ability=foe_eff.ability,
+          foe_hp=foe_hp_partial,
+          foe_max_hp=foe_eff.pokemon.hp,
+        ) ||
+        prankster_status_blocked(
+          attacker_team[attacker_slot],
+          attacker_mega,
+          used_move,
+          defender_team_eff[target_slot],
+          defender_mega,
+          protean_locked_of(base_state, !attacker_is_me, target_slot),
+        ) {
         return [(1.0, base_state)]
       }
       let attacker_burn = if attacker_is_me {

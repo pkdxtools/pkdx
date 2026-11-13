@@ -639,13 +639,50 @@ Showdown との差 (意図的):
 
 - 本文: `champout/rom-txt/usa/wazainfo_syn.json` の `WAZAINFO_SYN_918` (Index 673)。"Makes the target flinch. This move fails if the target isn’t about to use a priority attack." 日本語は同じラベルで「相手が　先制できる攻撃を使っていない場合失敗する。相手をひるませる。」`help_syn.json` には該当文が無い。技名は `WAZANAME_918` = Upper Hand / はやてがえし。
 - 優先度: `champout/masterdata/waza.json` id "918" の `"priority": "3"`。基本スペック (かくとう / 物理 / 威力 65 / 命中 100 / PP 16 / 接触) は champions の `move` 行が既に持つので、m021 は触らない。m002 は `move_meta` 行を作らない。失敗ゲート (`upper_hand_fails`) を入れてから、m021 が priority 3 と `flinch_chance` 100 を投入する。m019 と m020 は今も行を作らない。
-- 失敗: このターンの相手の選択が `UseMove` / `Mega` で、その `Move.priority > 0` でないとき、技自体が失敗する (ダメージもひるみも無い)。交代、priority 0、負の優先度、技が無い、がここへ落ちる。成功して命中したときは既存のひるみ経路 (#210) で 100%。fresh フラグは使わない。
-- 「about to use」/「使っていない」はロックした選択を見る。その後にひるみ・眠り・まひ・リチャージで打てなくても、選択が priority > 0 なら成功する。交代は先制攻撃ではない。
-- 「priority attack」/「先制できる攻撃」は選択技の `priority > 0`。変化の先制 (まもる +4、みきり +4、ファストガード +3、ねこだまし +3) を含む。本文の attack / 攻撃は説明文の言い方で、カテゴリでは切らない。サイコフィールドが後から相手の先制技を無効にしても、ゲートは選択時点の priority を見る (本文は地形に触れない)。はやてがえし 自身は priority 3 なので、地上の相手への自分の技は既存のサイコフィールド無効 (G-3) のまま。
-- 現在の Showdown (`data/moves.ts` の `upperhand.onTry`) は `priority <= 0.1` に加え `category === 'Status'` でも失敗する。整数の priority では `<= 0` と同じ閾値だが、変化技の除外は Champions 本文に無く、本実装は入れない。`queue.willMove` がロックした選択を見る点は同じ。PP は Showdown が 15、champout が 16。move 行は変えない。
-- 未モデル: いたずらごころ / はやてのつばさ / ヒーリングシフトの優先度加算 (`turn_order_sign` は特性による優先度を使っていない)。であいがしら は fresh の失敗ゲート (前節) で、この priority ゲートの対象外。まもる は payoff が技を止めないので、ターン解決では「守って無効」をテストしない (helper が priority 4 の変化技を成功側と判定するだけ)。
+- 失敗: このターンの相手の選択が `UseMove` / `Mega` で、その実効優先度 (`effective_priority`) が 0 以下のとき、技自体が失敗する (ダメージもひるみも無い)。交代、base priority 0 で特性補正も無い技、負の優先度、技が無い、がここへ落ちる。成功して命中したときは既存のひるみ経路 (#210) で 100%。fresh フラグは使わない。特性 / HP を渡さない呼び出しは補正 0 で `Move.priority` だけを見る。
+- 「about to use」/「使っていない」はロックした選択を見る。その後にひるみ・眠り・まひ・リチャージで打てなくても、選択の実効優先度 > 0 なら成功する。交代は先制攻撃ではない。
+- 「priority attack」/「先制できる攻撃」は選択技の実効優先度 > 0。変化の先制 (まもる +4、みきり +4、ファストガード +3、ねこだまし +3) を含む。本文の attack / 攻撃は説明文の言い方で、カテゴリでは切らない。特性が優先度を上げた技 (次節) も先制できる。サイコフィールドが後から相手の先制技を無効にしても、ゲートは選択時点の実効優先度を見る (本文は地形に触れない)。はやてがえし 自身は priority 3 なので、地上の相手への自分の技は既存のサイコフィールド無効 (G-3) のまま。
+- 現在の Showdown (`data/moves.ts` の `upperhand.onTry`) は `priority <= 0.1` に加え `category === 'Status'` でも失敗する。整数の priority では `<= 0` と同じ閾値だが、変化技の除外は Champions 本文に無く、本実装は入れない。`queue.willMove` がロックした選択を見る点は同じ。PP は Showdown が 15、champout が 16。move 行は変えない。Showdown は gen>5 で行動の `move.priority` に特性補正を書き戻してからこのゲートを見る。本実装も実効優先度を見るが、Status 除外はコピーしない。そのためいたずらごころのでんじは (base 0、実効 +1、変化) にははやてがえしが成功する。Showdown は Status で失敗する。
+- 未モデル: であいがしら は fresh の失敗ゲート (前節) で、この priority ゲートの対象外。まもる は payoff が技を止めないので、ターン解決では「守って無効」をテストしない (helper が priority 4 の変化技を成功側と判定するだけ)。カウンター / ミラーコート / メタルバーストの `compute_p_slow` は相手技の `Move.priority` のまま (特性補正は見ていない)。優先度特性そのものは次節。
 - select は DB から priority も `flinch_chance` も埋めない。入力 JSON が正。名前が はやてがえし でも、入力の `flinch_chance` が 0 ならひるまない。既存の select 入力にこの技は無く、行列は変わらない。
-- 参照テスト: `src/payoff/switching_game_upper_hand_wbtest.mbt`、`src/migrate/m021_upper_hand_test.mbt`。
+- 参照テスト: `src/payoff/switching_game_upper_hand_wbtest.mbt`、`src/migrate/m021_upper_hand_test.mbt`、`src/payoff/priority_abilities_wbtest.mbt`。
+
+### いたずらごころ / はやてのつばさ (優先度特性) — DP / MC
+
+実効優先度 = `Move.priority` + 特性補正。行動順 (`move_turn_sign` / MC `turn_order_sign`)、はやてがえし、サイコフィールドの既存ブロック、ひるみの遅延判定がこれを見る。ねこだまし / であいがしらの fresh 失敗は優先度ゲートではなく、この補正では変わらない。
+
+**本文** (`champout` `50e7233`, `rom-txt/*/tokuseiinfo_syn.json`):
+
+- いたずらごころ (`TOKUSEI_158` / `TOKUSEIINFO_SYN_158`, Prankster): "Increases the priority of the Pokémon’s status moves by 1 stage. However, the Pokémon’s status moves no longer work against Dark-type Pokémon." 日本語: 「変化技の優先度が１段階上がる。代わりに　あくタイプの　ポケモンには変化技が効かなくなる。」
+- はやてのつばさ (`TOKUSEI_177` / `TOKUSEIINFO_SYN_177`, Gale Wings): "Increases the priority of the Pokémon’s Flying-type moves by 1 stage while its HP is full." 日本語: 「ＨＰが満タンの時　ひこうタイプの技の優先度が１段階上がる。」
+- ヒーリングシフト (Triage) は `tokusei.json` (217 特性) にも `tokuseiinfo_syn.json` にも名前も本文も無い。Showdown (`data/abilities.ts` の `triage`: `move.flags['heal']` で +3) は入れない。名前が入力にあっても補正は 0。
+
+**補正**:
+
+- いたずらごころ: 変化技 (`category == Status`) なら +1。ダメージ技は +0。トリックルーム (-7) は -6。まもる (+4) は +5。
+- はやてのつばさ: 技タイプが `ひこう` かつ満タンなら +1。ダメージ技も変化技 (はねやすめ) も本文は「ひこうタイプの技」。
+- 満タンは戦闘状態の HP がスロット初期値 `pokemon.hp` 以上 (`hp >= pokemon.hp` かつ `max_hp > 0`)。`effective_hp` (ダメ計の実数値) は初期 HP とスケールが違うので使わない。回復が状態上の最大を超えても満タン。`max_hp <= 0` は満タンにしない。省略した HP 引数の既定は 0 なので、既存呼び出しははやてのつばさが乗らない。
+- DP はメガ後の実効特性 (`effective_combatant`)。メガは `pokemon.hp` を変えない。MC は mega 未モデルなので raw ability。
+
+**あく無効** (本文の第 2 文。Showdown からの追加ではない):
+
+- 実効特性がいたずらごころの変化技で、相手に効くペイロードを持ち、相手の実効タイプ (メガ後 + へんげんじざいのロック。テラスタルは既存どおりタイプを置き換えない) の type1 か type2 が `あく` のとき、技全体が無効 (サイコフィールド / はやてがえし失敗と同じ no-effect leaf)。
+- 相手に効くペイロード: `status_effect` がある、`stat_effects` の `target != 0` がある、`healing` が `LeechSeed` か `PainSplit`。
+- 自分対象だけ (つるぎのまい の target 0)、天候、フィールド、ペイロードの無い変化技 (まもる 等、効果自体が未モデル) は失敗させない。「には」は相手のあくポケモンに対して効かない、という意味に読んだ。
+- Showdown (`battle-actions.ts` `hitStepTryImmunity`, gen>=7) は `pranksterBoosted` かつ使用者に prankster かつ対象が味方でなく `getImmunity('prankster')` が無い (あく) ときに失敗する。自分対象は ally なので通る。この範囲は本文と一致する。未モデルの変化技まで Dark 免疫を広げる材料は本文に無いので、上のペイロードに限る。
+
+**サイコフィールド** (既存 G-3 を実効優先度に差し替えただけ):
+
+- 実効優先度 > 0 の技は、地上の相手には止まる。満タンのはやてのつばさのひこう技、いたずらごころの変化技を含む。priority 0 のままのひこう技は止まらない。ひこうタイプの相手は grounded でないので止まらない。
+- 既存の限界はそのまま: 自分対象の priority>0 (つるぎのまい) も地上相手がいると止まる。Showdown は自分対象を除外する。target をモデル化するまで絞らない。
+
+**見送り**:
+
+- ヒーリングシフト。Champions 本文が無い。
+- `compute_p_slow` (カウンター / ミラーコート / メタルバーストが後攻になる確率) は相手技の `Move.priority` のまま。行動順の経路ではない。
+- select は新しい JSON フィールドを足さない。特性は既存の `ability`、優先度は既存の `priority`。省略 / 空の特性は補正 0。DB から優先度も特性も埋め戻さない。
+
+**参照テスト**: `src/payoff/priority_abilities_wbtest.mbt` (補正、はやてがえしが実効優先度を見ること、あく無効、行動順、サイコフィールド、ねこだましの fresh が変わらないこと、`pick_best_move`、DP/MC parity)。
 
 ### MVP 非対応 (将来拡張で検討)
 

@@ -31,6 +31,8 @@ fn best_expected_damage(
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
   def_disguise_intact? : Bool = false,
+  atk_hp? : Int = 0,
+  atk_max_hp? : Int = 0,
 ) -> Double {
   // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
   // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
@@ -61,7 +63,14 @@ fn best_expected_damage(
     // priority>0 の damage 期待値を 0 として評価する。これが無いと greedy が
     // 無効化される priority 技を選び続け、resolution 側で `mc_psychic_priority_
     // blocked` により毎ターン no-effect になって MC value が DP と乖離する。
-    if mc_psychic_priority_blocked(mv, field, dfn) {
+    if mc_psychic_priority_blocked(
+        mv,
+        field,
+        dfn,
+        attacker_ability=atk.ability,
+        attacker_hp=atk_hp,
+        attacker_max_hp=atk_max_hp,
+      ) {
       continue
     }
     let ar = match mv.category {
@@ -201,6 +210,8 @@ fn greedy_team_action(
         atk_protean_locked=locked_of(my_protean_locked, s),
         def_protean_locked=opp_locked,
         def_disguise_intact=opp_def_intact,
+        atk_hp=my_hps[s],
+        atk_max_hp=my_team[s].pokemon.hp,
       )
       if score > best_score {
         best_score = score
@@ -265,6 +276,8 @@ fn greedy_team_action(
       atk_protean_locked=active_locked,
       def_protean_locked=opp_locked,
       def_disguise_intact=opp_def_intact,
+      atk_hp=my_hps[active],
+      atk_max_hp=my_team[active].pokemon.hp,
     ) /
     opp_hp_denom
   let mut best_switch = -1
@@ -284,6 +297,8 @@ fn greedy_team_action(
         atk_protean_locked=locked_of(my_protean_locked, s),
         def_protean_locked=opp_locked,
         def_disguise_intact=opp_def_intact,
+        atk_hp=my_hps[s],
+        atk_max_hp=my_team[s].pokemon.hp,
       ) /
       opp_hp_denom
     if v > best_switch_value {
@@ -308,6 +323,8 @@ fn greedy_team_action(
       atk_protean_locked=active_locked,
       def_protean_locked=opp_locked,
       def_disguise_intact=opp_def_intact,
+      atk_hp=my_hps[active],
+      atk_max_hp=my_team[active].pokemon.hp,
     ) {
     Some(i) => Some(TmUseMove(i))
     None => Some(TmUseMove(0))
@@ -1116,9 +1133,9 @@ fn mc_try_apply_status(
 
 ///|
 /// MC variant of the DP Psychic-terrain priority block (switching_game_turn.mbt
-/// Stage G-3). Returns `true` when `mv` has priority > 0 and the grounded
-/// `defender` is under Psychic Terrain — the attack is fully negated (no
-/// damage / post-hit / status), matching the DP single-leaf no-effect branch.
+/// Stage G-3). Returns `true` when the move's effective priority is > 0 and the
+/// grounded `defender` is under Psychic Terrain — the attack is fully negated
+/// (no damage / post-hit / status), matching the DP single-leaf no-effect branch.
 /// MC does not model mega, so the raw combatant is read directly (= DP's
 /// `effective_combatant(defender, false)`). Without this gate the MC screening
 /// phase overvalues priority moves under Psychic Terrain vs the DP refine phase.
@@ -1126,8 +1143,12 @@ fn mc_psychic_priority_blocked(
   mv : @model.Move,
   field : @model.Field,
   defender : Combatant,
+  attacker_ability? : String = "",
+  attacker_hp? : Int = 0,
+  attacker_max_hp? : Int = 0,
 ) -> Bool {
-  if mv.priority <= 0 {
+  // 省略時は補正 0。既存の base priority>0 テストはそのまま。
+  if effective_priority(attacker_ability, mv, attacker_hp, attacker_max_hp) <= 0 {
     return false
   }
   match field {
@@ -1140,6 +1161,48 @@ fn mc_psychic_priority_blocked(
       )
     _ => false
   }
+}
+
+///|
+/// 技解決前の失敗。はやてがえし (相手の実効優先度)、サイコフィールド、
+/// いたずらごころのあく無効。ねこだまし / であいがしらは別 (fresh ゲート)。
+fn mc_attack_negated(
+  mv : @model.Move,
+  foe_mv : @model.Move?,
+  attacker : Combatant,
+  attacker_hp : Int,
+  defender : Combatant,
+  defender_hp : Int,
+  field : @model.Field,
+  defender_protean : String,
+) -> Bool {
+  if upper_hand_fails(
+      mv,
+      foe_mv,
+      foe_ability=defender.ability,
+      foe_hp=defender_hp,
+      foe_max_hp=defender.pokemon.hp,
+    ) {
+    return true
+  }
+  if mc_psychic_priority_blocked(
+      mv,
+      field,
+      defender,
+      attacker_ability=attacker.ability,
+      attacker_hp=attacker_hp,
+      attacker_max_hp=attacker.pokemon.hp,
+    ) {
+    return true
+  }
+  prankster_status_blocked(
+    attacker,
+    false,
+    mv,
+    defender,
+    false,
+    defender_protean,
+  )
 }
 
 // Stage 13: `mc_eot_slip` は削除。MC rollout の EOT 状態異常 slip は DP 側
@@ -1388,6 +1451,9 @@ pub fn team_rollout(
                 opp[opp_active].moves[mj],
                 opp_fresh_at_turn,
                 Some(own[own_active].moves[mi]),
+                foe_ability=own[own_active].ability,
+                foe_hp=own_hps[own_active],
+                foe_max_hp=own[own_active].pokemon.hp,
               ),
             )
           _ => false
@@ -1406,6 +1472,9 @@ pub fn team_rollout(
                 own[own_active].moves[mi],
                 own_fresh_at_turn,
                 Some(opp[opp_active].moves[mj]),
+                foe_ability=opp[opp_active].ability,
+                foe_hp=opp_hps[opp_active],
+                foe_max_hp=opp[opp_active].pokemon.hp,
               ),
             )
           _ => false
@@ -1589,10 +1658,20 @@ pub fn team_rollout(
           }
           let s = turn_order_sign(
             own[own_active],
-            mv_own.priority,
+            effective_priority(
+              own[own_active].ability,
+              mv_own,
+              own_hps[own_active],
+              own[own_active].pokemon.hp,
+            ),
             eff_spe_own,
             opp[opp_active],
-            mv_opp.priority,
+            effective_priority(
+              opp[opp_active].ability,
+              mv_opp,
+              opp_hps[opp_active],
+              opp[opp_active].pokemon.hp,
+            ),
             eff_spe_opp,
           )
           let own_first = if s > 0 {
@@ -1627,11 +1706,15 @@ pub fn team_rollout(
             if own_attempt_acts &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
               !first_impression_fails(mv_own, own_fresh_at_turn) &&
-              !upper_hand_fails(mv_own, Some(mv_opp)) &&
-              !mc_psychic_priority_blocked(
+              !mc_attack_negated(
                 mv_own,
-                field_state[0],
+                Some(mv_opp),
+                own[own_active],
+                own_hps[own_active],
                 opp[opp_active],
+                opp_hps[opp_active],
+                field_state[0],
+                opp_protean_locked[opp_active],
               ) {
               let before = opp_hps[opp_active]
               let opp_intact = disguise_intact_mc(
@@ -1754,11 +1837,15 @@ pub fn team_rollout(
               !opp_blocked_mid_turn &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
               !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
-              !upper_hand_fails(mv_opp, Some(mv_own)) &&
-              !mc_psychic_priority_blocked(
+              !mc_attack_negated(
                 mv_opp,
-                field_state[0],
+                Some(mv_own),
+                opp[opp_active],
+                opp_hps[opp_active],
                 own[own_active],
+                own_hps[own_active],
+                field_state[0],
+                own_protean_locked[own_active],
               ) {
               // Read burn *after* first leg's status fan-out so a fresh burn
               // from own's move halves opp's physical damage this turn.
@@ -1859,11 +1946,15 @@ pub fn team_rollout(
             if opp_attempt_acts &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
               !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
-              !upper_hand_fails(mv_opp, Some(mv_own)) &&
-              !mc_psychic_priority_blocked(
+              !mc_attack_negated(
                 mv_opp,
-                field_state[0],
+                Some(mv_own),
+                opp[opp_active],
+                opp_hps[opp_active],
                 own[own_active],
+                own_hps[own_active],
+                field_state[0],
+                own_protean_locked[own_active],
               ) {
               let before = own_hps[own_active]
               let own_intact = disguise_intact_mc(
@@ -1986,11 +2077,15 @@ pub fn team_rollout(
               !own_blocked_mid_turn &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
               !first_impression_fails(mv_own, own_fresh_at_turn) &&
-              !upper_hand_fails(mv_own, Some(mv_opp)) &&
-              !mc_psychic_priority_blocked(
+              !mc_attack_negated(
                 mv_own,
-                field_state[0],
+                Some(mv_opp),
+                own[own_active],
+                own_hps[own_active],
                 opp[opp_active],
+                opp_hps[opp_active],
+                field_state[0],
+                opp_protean_locked[opp_active],
               ) {
               let own_burn_now = is_burned(own_status[own_active])
               let before = opp_hps[opp_active]
@@ -2082,11 +2177,15 @@ pub fn team_rollout(
           if own_attempt_acts &&
             !fake_out_fails(mv_own, own_fresh_at_turn) &&
             !first_impression_fails(mv_own, own_fresh_at_turn) &&
-            !upper_hand_fails(mv_own, None) &&
-            !mc_psychic_priority_blocked(
+            !mc_attack_negated(
               mv_own,
-              field_state[0],
+              None,
+              own[own_active],
+              own_hps[own_active],
               opp[opp_active],
+              opp_hps[opp_active],
+              field_state[0],
+              opp_protean_locked[opp_active],
             ) {
             let before = opp_hps[opp_active]
             let opp_intact = disguise_intact_mc(
@@ -2176,11 +2275,15 @@ pub fn team_rollout(
           if opp_attempt_acts &&
             !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
             !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
-            !upper_hand_fails(mv_opp, None) &&
-            !mc_psychic_priority_blocked(
+            !mc_attack_negated(
               mv_opp,
-              field_state[0],
+              None,
+              opp[opp_active],
+              opp_hps[opp_active],
               own[own_active],
+              own_hps[own_active],
+              field_state[0],
+              own_protean_locked[own_active],
             ) {
             let before = own_hps[own_active]
             let own_intact = disguise_intact_mc(

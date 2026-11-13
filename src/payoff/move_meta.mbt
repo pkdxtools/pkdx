@@ -56,6 +56,11 @@ pub fn clamp_rank_for(owner_ability : String, raw : Int) -> Int {
 /// Compare two combatants' turn order accounting for move priority. Returns
 /// `+1` if `a` acts before `b`, `-1` if after, `0` on a full tie. Priority
 /// dominates; speed is the tie-breaker (matches in-game rules).
+///
+/// `prio_a` / `prio_b` are effective priorities. Callers apply
+/// `effective_priority` (いたずらごころ / はやてのつばさ) before this
+/// comparison. The combatant arguments stay for a later modifier that needs
+/// more than the integer; this function only compares the numbers it is given.
 pub fn turn_order_sign(
   a : Combatant,
   prio_a : Int,
@@ -64,9 +69,6 @@ pub fn turn_order_sign(
   prio_b : Int,
   b_spe : Int,
 ) -> Int {
-  // `a` and `b` are kept in the signature for future extensions (ability-
-  // based priority, e.g. プレッシャー / いたずらごころ). Currently unused
-  // beyond the speed values the caller already resolved.
   let _ = a
   let _ = b
   if prio_a > prio_b {

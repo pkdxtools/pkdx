@@ -48,6 +48,8 @@ pub fn pick_best_move(
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
   def_disguise_intact? : Bool = false,
+  atk_hp? : Int = 0,
+  atk_max_hp? : Int = 0,
 ) -> Int? {
   // Stage 7 (Protean / Libero MC parity): greedy 選択も `best_expected_damage` /
   // `team_perform_attack` と同じ Protean override を見る。ロック中の Protean 個体は
@@ -73,11 +75,11 @@ pub fn pick_best_move(
       continue
     }
     // Psychic Terrain priority block (DP/MC parity): grounded defender 下で
-    // priority>0 は no-effect になるので greedy 選択から除外する。判定は
+    // 実効優先度 >0 は no-effect になるので greedy 選択から除外する。判定は
     // `mc_psychic_priority_blocked` (team_monte_carlo.mbt) と同 semantics を
     // インライン化 (cross-file 依存を避けるため、ここでは `@damage.is_grounded`
-    // を直接呼ぶ)。
-    if mv.priority > 0 {
+    // を直接呼ぶ)。atk_hp 省略時ははやてのつばさが乗らない。
+    if effective_priority(atk.ability, mv, atk_hp, atk_max_hp) > 0 {
       match field {
         @model.Field::Psychic =>
           if @damage.is_grounded(

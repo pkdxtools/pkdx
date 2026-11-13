@@ -255,9 +255,11 @@ pub fn field_blocks_status(
 }
 
 ///|
-/// 追加効果の状態異常 (`kind`) を止める対象側の特性・天候 (DP `maybe_apply_status_fanout` と
-/// MC `mc_try_apply_status` の共通 SSoT)。ねむり / あくび など他の kind には未モデルの特性を
-/// 適用しない (指示どおり、既存の状態異常免疫と同じ範囲に留める)。
+/// 追加効果の状態異常 (`kind`) を止める対象側の特性・天候のうち、りんぷん / こおり専用
+/// (DP `maybe_apply_status_fanout` と MC `mc_try_apply_status` の共通 SSoT)。
+/// じゅうなん / めんえき / すいほう / ねつこうかん / きよめのしお / リーフガード /
+/// フラワーベールは `ability_blocks_status` (`status_blocked_by_holder_ability`)
+/// が変化技・追加効果・あくびをまとめて止める。ここには入れない。
 /// - りんぷん (Shield Dust): "immune to additional effects from attacks"
 ///   (tokuseiinfo_syn.json:606)。ダメージ技の追加効果 (`power > 0`) を全 kind で止める。
 ///   変化技の直接の状態異常は止めない。
@@ -291,6 +293,36 @@ pub fn secondary_blocked_by_holder(
   let ability = effective_combatant(target_team[target_slot], is_mega).ability
   (mv.power > 0 && ability_blocks_secondary(ability)) ||
     (freeze_only && ability_blocks_freeze(ability))
+}
+
+///|
+/// 対象の特性が `kind` の付与を止めるか (DP)。メガ後の特性とタイプで
+/// `ability_blocks_status` を読む。変化技・追加効果・あくび (DrowsyKind) の
+/// 共通ゲート。ねむる (自分への付与) はここを通さない。
+fn status_blocked_by_holder_ability(
+  state : SwitchingGameState,
+  target_is_me : Bool,
+  target_slot : Int,
+  target_team : Array[Combatant],
+  kind : @model.StatusKind,
+) -> Bool {
+  if target_slot < 0 || target_slot >= target_team.length() {
+    return false
+  }
+  let megaed = if target_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let is_mega = target_slot < megaed.length() && megaed[target_slot]
+  let eff = effective_combatant(target_team[target_slot], is_mega)
+  ability_blocks_status(
+    eff.ability,
+    kind,
+    weather=state.weather,
+    type1=eff.pokemon.type1,
+    type2=eff.pokemon.type2,
+  )
 }
 
 ///|
@@ -580,6 +612,17 @@ pub fn maybe_apply_status_fanout(
     ) {
     return [(1.0, state)]
   }
+  // 特性の状態異常免疫 (じゅうなん / めんえき / すいほう / ねつこうかん /
+  // きよめのしお / リーフガード / フラワーベール)。変化技・追加効果・あくび。
+  if status_blocked_by_holder_ability(
+    state,
+    target_is_me,
+    target_slot,
+    target_team,
+    kind,
+  ) {
+    return [(1.0, state)]
+  }
   // りんぷん (ダメージ技の追加効果) / マグマのよろい・はれ (こおり): `secondary_blocked_by_holder`。
   if secondary_blocked_by_holder(
     state,
@@ -795,6 +838,16 @@ pub fn apply_contact_proc_fanout(
       ) {
       continue
     }
+    // 攻撃側の特性がこの状態を受けない (本文は付与源を限定しない。接触特性も止める)。
+    if ability_blocks_status(
+      attacker.ability,
+      kind,
+      weather=state.weather,
+      type1=attacker.pokemon.type1,
+      type2=attacker.pokemon.type2,
+    ) {
+      continue
+    }
     viable_ability_chance = viable_ability_chance + chance
     viable_ability.push((kind, chance))
   }
@@ -810,6 +863,17 @@ pub fn apply_contact_proc_fanout(
         attacker.pokemon.type1,
         attacker.pokemon.type2,
       ) {
+      continue
+    }
+    // 接触持ち物 (とびだすハバネロ / とびだすなかみ) も同じ免疫。help_11_02_00 は
+    // 状態異常の源に held item を含む。
+    if ability_blocks_status(
+      attacker.ability,
+      kind,
+      weather=state.weather,
+      type1=attacker.pokemon.type1,
+      type2=attacker.pokemon.type2,
+    ) {
       continue
     }
     viable_item_chance = viable_item_chance + chance
@@ -1282,6 +1346,10 @@ pub fn eot_slip_active(
   current_hp : Int,
   max_hp : Int,
   status : @model.StatusCondition,
+  ability? : String = "",
+  weather? : @model.Weather = @model.Weather::None,
+  type1? : String = "",
+  type2? : String = "",
 ) -> (Int, @model.StatusCondition) {
   if current_hp <= 0 {
     return (current_hp, status)
@@ -1302,13 +1370,48 @@ pub fn eot_slip_active(
     }
     @model.Drowsy(n) =>
       // n>0: まだ猶予あり、カウンタを 1 減らす。n==0: ここでねむり発動。
+      // 眠りを止める特性なら予告だけ消す。Showdown `yawn.onResidual` は volatile を
+      // 外してから trySetStatus し、免疫で失敗すると眠らない。本文は順序を書かない。
       if n > 0 {
         (current_hp, @model.Drowsy(n - 1))
+      } else if ability_blocks_status(
+        ability,
+        @model.SleepKind,
+        weather~,
+        type1~,
+        type2~,
+      ) {
+        (current_hp, @model.None)
       } else {
         (current_hp, @model.Sleep(2))
       }
     _ => (current_hp, status)
   }
+}
+
+///|
+/// あくび発動時にメガ後の特性・タイプと現在の天候を `eot_slip_active` へ渡す。
+/// 分母は raw の HP プール (メガは HP を変えない)。
+fn eot_slip_holder(
+  state : SwitchingGameState,
+  holder_is_me : Bool,
+  team : Array[Combatant],
+  hps : Array[Int],
+  status : Array[@model.StatusCondition],
+) -> (Int, @model.StatusCondition) {
+  let slot = if holder_is_me { state.my_active } else { state.opp_active }
+  let megaed = if holder_is_me { state.my_megaed } else { state.opp_megaed }
+  let is_mega = slot < megaed.length() && megaed[slot]
+  let eff = effective_combatant(team[slot], is_mega)
+  eot_slip_active(
+    hps[slot],
+    status_slip_max_hp(team[slot]),
+    status[slot],
+    ability=eff.ability,
+    weather=state.weather,
+    type1=eff.pokemon.type1,
+    type2=eff.pokemon.type2,
+  )
 }
 
 ///|
@@ -1563,17 +1666,21 @@ pub fn apply_eot(
   // になったスロットは status slip を観測しない (= HP は不変、status counter
   // も不変)。これは mainline 挙動 (faint 後の status は燃え尽きない / Toxic
   // counter は death で凍結) と一致する。
-  let (my_hp_new, my_st_new) = eot_slip_active(
-    my_hps[state.my_active],
-    status_slip_max_hp(my_team[state.my_active]),
-    my_status[state.my_active],
+  let (my_hp_new, my_st_new) = eot_slip_holder(
+    state,
+    true,
+    my_team,
+    my_hps,
+    my_status,
   )
   my_hps[state.my_active] = my_hp_new
   my_status[state.my_active] = my_st_new
-  let (opp_hp_new, opp_st_new) = eot_slip_active(
-    opp_hps[state.opp_active],
-    status_slip_max_hp(opp_team[state.opp_active]),
-    opp_status[state.opp_active],
+  let (opp_hp_new, opp_st_new) = eot_slip_holder(
+    state,
+    false,
+    opp_team,
+    opp_hps,
+    opp_status,
   )
   opp_hps[state.opp_active] = opp_hp_new
   opp_status[state.opp_active] = opp_st_new
@@ -1991,6 +2098,8 @@ pub fn apply_healing(
   defender_ability : String,
   field? : @model.Field = @model.Field::None,
   attacker_grounded? : Bool = true,
+  attacker_type1? : String = "",
+  attacker_type2? : String = "",
 ) -> Unit {
   match mv.healing {
     None => ()
@@ -2037,7 +2146,16 @@ pub fn apply_healing(
       // Magic Guard は Sleep の付与を **阻止しない** (residual damage の
       // immunity であって status immunity ではない) ので、ability_blocks_status
       // の truth table から意図的に外している (ability_immunity.mbt 参照)。
-      if ability_blocks_status(attacker_ability, @model.SleepKind) {
+      // ふみん / やるき / スイートベールに加え、きよめのしお、はれのリーフガードも
+      // ねむれない。フラワーベールは自分への付与 (self_inflicted) を止めない。
+      if ability_blocks_status(
+        attacker_ability,
+        @model.SleepKind,
+        weather~,
+        type1=attacker_type1,
+        type2=attacker_type2,
+        self_inflicted=true,
+      ) {
         return
       }
       // エレキフィールド / ミストフィールド 下で grounded な使用者は眠れない

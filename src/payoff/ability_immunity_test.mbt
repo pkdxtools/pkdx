@@ -110,6 +110,139 @@ test "ability_blocks_status_empty_ability_never_blocks" {
 }
 
 ///|
+/// じゅうなん (TOKUSEIINFO_SYN_007:256) はまひだけ。
+test "ability_blocks_status_limber_blocks_only_paralyze" {
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.ParalyzeKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.BurnKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.PoisonKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.BadPoisonKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.SleepKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.FreezeKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("じゅうなん", @model.DrowsyKind), false)
+}
+
+///|
+/// めんえき (TOKUSEIINFO_SYN_017:544) はどく・もうどくだけ。
+test "ability_blocks_status_immunity_blocks_poison_and_bad_poison" {
+  @debug.assert_eq(@payoff.ability_blocks_status("めんえき", @model.PoisonKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("めんえき", @model.BadPoisonKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("めんえき", @model.ParalyzeKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("めんえき", @model.BurnKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("めんえき", @model.SleepKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("めんえき", @model.DrowsyKind), false)
+}
+
+///|
+/// すいほう / ねつこうかん はやけどだけ。
+test "ability_blocks_status_water_bubble_and_thermal_exchange_block_burn" {
+  @debug.assert_eq(@payoff.ability_blocks_status("すいほう", @model.BurnKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("ねつこうかん", @model.BurnKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("すいほう", @model.ParalyzeKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("ねつこうかん", @model.PoisonKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("すいほう", @model.FreezeKind), false)
+}
+
+///|
+/// きよめのしお (TOKUSEIINFO_SYN_272:7712) は全 StatusKind。あくびは Showdown fallback。
+test "ability_blocks_status_purifying_salt_blocks_every_kind" {
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.ParalyzeKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.BurnKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.PoisonKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.BadPoisonKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.SleepKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.FreezeKind), true)
+  @debug.assert_eq(@payoff.ability_blocks_status("きよめのしお", @model.DrowsyKind), true)
+}
+
+///|
+/// リーフガード (TOKUSEIINFO_SYN_102:3566) ははれのときだけ全状態。
+test "ability_blocks_status_leaf_guard_only_in_sun" {
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "リーフガード",
+      @model.BurnKind,
+      weather=@model.Weather::Sun,
+    ),
+    true,
+  )
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "リーフガード",
+      @model.DrowsyKind,
+      weather=@model.Weather::Sun,
+    ),
+    true,
+  )
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "リーフガード",
+      @model.FreezeKind,
+      weather=@model.Weather::Sun,
+    ),
+    true,
+  )
+  @debug.assert_eq(@payoff.ability_blocks_status("リーフガード", @model.BurnKind), false)
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "リーフガード",
+      @model.SleepKind,
+      weather=@model.Weather::Rain,
+    ),
+    false,
+  )
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "リーフガード",
+      @model.ParalyzeKind,
+      weather=@model.Weather::Sand,
+    ),
+    false,
+  )
+}
+
+///|
+/// フラワーベール (TOKUSEIINFO_SYN_166:5468)。シングルは自分がくさのとき。
+/// ねむる (self_inflicted) は Showdown fallback で通す。
+test "ability_blocks_status_flower_veil_grass_self_only" {
+  @debug.assert_eq(
+    @payoff.ability_blocks_status("フラワーベール", @model.BurnKind, type1="くさ"),
+    true,
+  )
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "フラワーベール",
+      @model.SleepKind,
+      type2="くさ",
+    ),
+    true,
+  )
+  @debug.assert_eq(
+    @payoff.ability_blocks_status("フラワーベール", @model.ParalyzeKind, type1="ノーマル"),
+    false,
+  )
+  @debug.assert_eq(
+    @payoff.ability_blocks_status(
+      "フラワーベール",
+      @model.SleepKind,
+      type1="くさ",
+      self_inflicted=true,
+    ),
+    false,
+  )
+}
+
+///|
+/// マイペースはこんらん (未モデル) といかくだけ。状態異常は止めない。
+test "ability_blocks_status_own_tempo_does_not_block_modelled_status" {
+  @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.ParalyzeKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.BurnKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.PoisonKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.SleepKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.DrowsyKind), false)
+  @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.FreezeKind), false)
+}
+
+///|
 test "ability_blocks_leech_seed_magic_guard_returns_true" {
   @debug.assert_eq(@payoff.ability_blocks_leech_seed("マジックガード"), true)
 }

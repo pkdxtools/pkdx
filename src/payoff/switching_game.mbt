@@ -1791,10 +1791,101 @@ fn holder_ability_of(
 }
 
 ///|
+/// Mega for this hit: already mega-evolved, or the side megas at the start of
+/// this turn. `attempt_accuracy` runs before `turn_start_mega` writes the flag,
+/// so the this-turn trigger has to be passed in. Fanout runs after the flag is
+/// set and can leave the trigger false.
+fn slot_mega_for_hit(
+  megaed : Array[Bool],
+  slot : Int,
+  mega_trigger : Bool,
+) -> Bool {
+  mega_trigger || (slot >= 0 && slot < megaed.length() && megaed[slot])
+}
+
+///|
+/// Protean lock seen by this hit. `resolve_moves` clears the lock whenever the
+/// slot is on mega stats this turn (`*_mega_now`, already megaed or triggered),
+/// before damage. The accuracy check uses the same view.
+fn protean_for_hit(
+  locked : Array[String],
+  slot : Int,
+  is_mega : Bool,
+) -> String {
+  if is_mega {
+    ""
+  } else if slot >= 0 && slot < locked.length() {
+    locked[slot]
+  } else {
+    ""
+  }
+}
+
+///|
+/// Attacker and defender as the hit resolves them: post-mega ability and types,
+/// then the Protean override (cleared when that side is mega this turn).
+fn effective_hit_pair(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  defender_slot : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+  attacker_mega_trigger : Bool,
+  defender_mega_trigger : Bool,
+) -> (Combatant, Combatant)? {
+  if attacker_slot < 0 ||
+    attacker_slot >= attacker_team.length() ||
+    defender_slot < 0 ||
+    defender_slot >= defender_team.length() {
+    return None
+  }
+  let atk_megaed = if attacker_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let def_megaed = if attacker_is_me {
+    state.opp_megaed
+  } else {
+    state.my_megaed
+  }
+  let atk_locked = if attacker_is_me {
+    state.my_protean_locked
+  } else {
+    state.opp_protean_locked
+  }
+  let def_locked = if attacker_is_me {
+    state.opp_protean_locked
+  } else {
+    state.my_protean_locked
+  }
+  let atk_mega = slot_mega_for_hit(
+    atk_megaed, attacker_slot, attacker_mega_trigger,
+  )
+  let def_mega = slot_mega_for_hit(
+    def_megaed, defender_slot, defender_mega_trigger,
+  )
+  let atk = effective_combatant(
+    attacker_team[attacker_slot],
+    atk_mega,
+    protean_locked=protean_for_hit(atk_locked, attacker_slot, atk_mega),
+  )
+  let def = effective_combatant(
+    defender_team[defender_slot],
+    def_mega,
+    protean_locked=protean_for_hit(def_locked, defender_slot, def_mega),
+  )
+  Some((atk, def))
+}
+
+///|
 /// そうしょく (Sap Sipper) absorption check: does the defender at `defender_slot`
-/// absorb `mv` from the attacker at `attacker_slot`? The move type is the same
-/// pre-immunity chain the engine uses (`resolve_effective_move_type`). Covers
-/// damaging and status moves alike, since Showdown's `onTryHit` runs for both.
+/// absorb `mv` from the attacker at `attacker_slot`? Both sides are
+/// `effective_hit_pair` (post-mega ability and types, Protean override). The
+/// move type is the same pre-immunity chain the engine uses
+/// (`resolve_effective_move_type`). Covers damaging and status moves alike,
+/// since Showdown's `onTryHit` runs for both.
 fn move_absorbed_by_holder(
   state : SwitchingGameState,
   attacker_is_me : Bool,
@@ -1803,19 +1894,76 @@ fn move_absorbed_by_holder(
   attacker_team : Array[Combatant],
   defender_team : Array[Combatant],
   mv : @model.Move,
+  attacker_mega_trigger? : Bool = false,
+  defender_mega_trigger? : Bool = false,
 ) -> Bool {
-  let holder_ability = holder_ability_of(
+  match effective_hit_pair(
     state,
-    !attacker_is_me,
+    attacker_is_me,
+    attacker_slot,
     defender_slot,
+    attacker_team,
     defender_team,
-  )
-  let move_type = @damage.resolve_effective_move_type(
-    mv,
-    state.weather,
-    attacker_team[attacker_slot].ability,
-  )
-  ability_absorbs_move(holder_ability, mv.name, move_type)
+    attacker_mega_trigger,
+    defender_mega_trigger,
+  ) {
+    None => false
+    Some((atk_eff, def_eff)) => {
+      let move_type = @damage.resolve_effective_move_type(
+        mv,
+        state.weather,
+        atk_eff.ability,
+      )
+      ability_absorbs_move(def_eff.ability, mv.name, move_type)
+    }
+  }
+}
+
+///|
+/// Showdown runs TryHit (そうしょく), TypeImmunity, and TryImmunity before
+/// Accuracy. A move that is absorbed, or a damaging move the effective
+/// defender is immune to, has no miss branch. Status moves (`power <= 0`)
+/// other than そうしょく absorption still roll accuracy: the damage pipeline
+/// does not treat them as the immune sentinel.
+fn move_skips_accuracy(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  defender_slot : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+  mv : @model.Move,
+  attacker_mega_trigger : Bool,
+  defender_mega_trigger : Bool,
+) -> Bool {
+  match effective_hit_pair(
+    state,
+    attacker_is_me,
+    attacker_slot,
+    defender_slot,
+    attacker_team,
+    defender_team,
+    attacker_mega_trigger,
+    defender_mega_trigger,
+  ) {
+    None => false
+    Some((atk_eff, def_eff)) => {
+      let move_type = @damage.resolve_effective_move_type(
+        mv,
+        state.weather,
+        atk_eff.ability,
+      )
+      ability_absorbs_move(def_eff.ability, mv.name, move_type) ||
+      damaging_move_immune(
+        def_eff.ability,
+        mv.name,
+        move_type,
+        mv.power,
+        def_eff.pokemon.type1,
+        def_eff.pokemon.type2,
+      )
+    }
+  }
 }
 
 ///|

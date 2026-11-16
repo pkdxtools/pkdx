@@ -1509,6 +1509,16 @@ pub fn team_rollout(
         }
         let mut own_pending_acc = 100
         let mut opp_pending_acc = 100
+        // Switches resolve before moves. Accuracy and immunity see the
+        // Pokémon that will be hit, not the one that is switching out.
+        let opp_acc_slot = match ap {
+          TmSwitch(j) => j
+          _ => opp_active
+        }
+        let own_acc_slot = match ao {
+          TmSwitch(i) => i
+          _ => own_active
+        }
         match ao {
           TmUseMove(mi) =>
             if own_start_recharging {
@@ -1517,9 +1527,9 @@ pub fn team_rollout(
               own_pending_acc = mc_attempt_accuracy(
                 own[own_active],
                 own[own_active].moves[mi],
-                opp[opp_active],
+                opp[opp_acc_slot],
                 weather_state[0],
-                defender_protean=opp_protean_locked[opp_active],
+                defender_protean=opp_protean_locked[opp_acc_slot],
               )
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
@@ -1527,9 +1537,9 @@ pub fn team_rollout(
                 mc_attempt_accuracy(
                   own[own_active],
                   own[own_active].moves[mi],
-                  opp[opp_active],
+                  opp[opp_acc_slot],
                   weather_state[0],
-                  defender_protean=opp_protean_locked[opp_active],
+                  defender_protean=opp_protean_locked[opp_acc_slot],
                 ),
                 rng,
                 thaws_user=own_thaws,
@@ -1548,9 +1558,9 @@ pub fn team_rollout(
               opp_pending_acc = mc_attempt_accuracy(
                 opp[opp_active],
                 opp[opp_active].moves[mi],
-                own[own_active],
+                own[own_acc_slot],
                 weather_state[0],
-                defender_protean=own_protean_locked[own_active],
+                defender_protean=own_protean_locked[own_acc_slot],
               )
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
@@ -1558,9 +1568,9 @@ pub fn team_rollout(
                 mc_attempt_accuracy(
                   opp[opp_active],
                   opp[opp_active].moves[mi],
-                  own[own_active],
+                  own[own_acc_slot],
                   weather_state[0],
-                  defender_protean=own_protean_locked[own_active],
+                  defender_protean=own_protean_locked[own_acc_slot],
                 ),
                 rng,
                 thaws_user=opp_thaws,

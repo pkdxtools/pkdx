@@ -1605,6 +1605,11 @@ fn action_accuracy(
 /// runs before `turn_start_mega` writes the flags, so a Mega chosen this turn
 /// is `attacker_mega_trigger` / `defender_mega_trigger` (or `Mega` on `action`).
 /// Every other action keeps `action_accuracy`.
+///
+/// Switches resolve before moves, so the defender is the Pokémon that will be
+/// on the field when the move runs. `defender_switch_slot >= 0` is that
+/// incoming slot (`Switch` of the defender). Immunity against the Pokémon
+/// that is switching out must not cancel the miss into the switch-in.
 fn attempt_accuracy(
   state : SwitchingGameState,
   action : ActionKind,
@@ -1613,13 +1618,16 @@ fn attempt_accuracy(
   defender_team : Array[Combatant],
   attacker_mega_trigger? : Bool = false,
   defender_mega_trigger? : Bool = false,
+  defender_switch_slot? : Int = -1,
 ) -> Int {
   let attacker_active = if attacker_is_me {
     state.my_active
   } else {
     state.opp_active
   }
-  let defender_active = if attacker_is_me {
+  let defender_active = if defender_switch_slot >= 0 {
+    defender_switch_slot
+  } else if attacker_is_me {
     state.opp_active
   } else {
     state.my_active
@@ -1644,6 +1652,16 @@ fn attempt_accuracy(
     100
   } else {
     action_accuracy(action, attacker_active, attacker_team)
+  }
+}
+
+///|
+/// Slot a `Switch` brings in, or `-1` when the action is not a switch.
+/// `attempt_accuracy` uses it as the defender that actually receives the move.
+fn switch_slot_of(action : ActionKind) -> Int {
+  match action {
+    Switch(j) => j
+    _ => -1
   }
 }
 
@@ -1830,11 +1848,13 @@ pub fn attempt_turn_with_cache(
     state, my_action, true, my_team, opp_team,
     attacker_mega_trigger=my_mega_trigger,
     defender_mega_trigger=opp_mega_trigger,
+    defender_switch_slot=switch_slot_of(opp_action),
   )
   let opp_acc = attempt_accuracy(
     state, opp_action, false, opp_team, my_team,
     attacker_mega_trigger=opp_mega_trigger,
     defender_mega_trigger=my_mega_trigger,
+    defender_switch_slot=switch_slot_of(my_action),
   )
   let my_attempts = per_side_attempt(
     state.my_status[state.my_active],

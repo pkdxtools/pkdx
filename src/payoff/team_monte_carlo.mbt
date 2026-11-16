@@ -487,6 +487,8 @@ fn team_apply_post_hit(
     defender_ability,
     field=field_state[0],
     attacker_grounded~,
+    attacker_type1=attacker_c.pokemon.type1,
+    attacker_type2=attacker_c.pokemon.type2,
   )
   // Stage 13: LeechSeed 植え付け (apply_healing は attacker 側バッファしか
   // 触れない設計なので、defender_leech_seeded への書き込みは専用パス)。
@@ -1100,6 +1102,17 @@ fn mc_try_apply_status(
   }
   let c = defender_team[defender_slot]
   if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
+    return
+  }
+  // 特性の状態異常免疫。DP `status_blocked_by_holder_ability` と同じ
+  // `ability_blocks_status`。MC は mega を模さないので raw combatant。
+  if ability_blocks_status(
+    c.ability,
+    kind,
+    weather~,
+    type1=c.pokemon.type1,
+    type2=c.pokemon.type2,
+  ) {
     return
   }
   // りんぷん: ダメージ技の追加効果を全 kind で止める。こおり だけ はれ / マグマのよろい も止める
@@ -2505,17 +2518,27 @@ pub fn team_rollout(
         // `status_slip_max_hp` (バトルの HP プール)。`own_max` / `opp_max`
         // (`effective_hp`) を渡すとプールより大きい chip になり、瀕死の閾値で
         // DP の平均ダメージと MC の 1 乱数が割れる。
+        let own_c = own[own_active]
         let (new_own_hp, new_own_st) = eot_slip_active(
           own_hps[own_active],
-          status_slip_max_hp(own[own_active]),
+          status_slip_max_hp(own_c),
           own_status[own_active],
+          ability=own_c.ability,
+          weather=weather_state[0],
+          type1=own_c.pokemon.type1,
+          type2=own_c.pokemon.type2,
         )
         own_hps[own_active] = new_own_hp
         own_status[own_active] = new_own_st
+        let opp_c = opp[opp_active]
         let (new_opp_hp, new_opp_st) = eot_slip_active(
           opp_hps[opp_active],
-          status_slip_max_hp(opp[opp_active]),
+          status_slip_max_hp(opp_c),
           opp_status[opp_active],
+          ability=opp_c.ability,
+          weather=weather_state[0],
+          type1=opp_c.pokemon.type1,
+          type2=opp_c.pokemon.type2,
         )
         opp_hps[opp_active] = new_opp_hp
         opp_status[opp_active] = new_opp_st

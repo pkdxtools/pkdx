@@ -1550,11 +1550,13 @@ fn with_post_hit_effects(
     attacker_max,
     state.weather,
     attacker_status,
-    attacker_ability,
+    atk_eff.ability,
     dmg,
     defender_ability,
     field=state.field,
     attacker_grounded~,
+    attacker_type1=atk_eff.pokemon.type1,
+    attacker_type2=atk_eff.pokemon.type2,
   )
   // Stage 9 (LeechSeed planting): `apply_healing` は attacker 側のバッファ
   // (HP / status) しか書き換えられない設計だが、LeechSeed は defender 側の

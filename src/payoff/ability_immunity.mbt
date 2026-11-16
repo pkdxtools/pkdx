@@ -14,30 +14,78 @@
 /// dispatch stays in one place.
 
 ///|
-/// Return `true` when the defender's ability prevents a status of `kind`
-/// from being applied at all. Mirrors the mainline interaction where
-/// Insomnia / Vital Spirit / Sweet Veil refuse both direct sleep and the
-/// Drowsy → Sleep transition. Magic Guard is intentionally absent: it
-/// suppresses residual damage, not the status application itself.
+/// Return `true` when the holder's ability prevents a status of `kind` from
+/// being applied. Existing sleep immunities are unchanged: ふみん / やるき /
+/// スイートベール refuse both direct sleep and Drowsy. Magic Guard is
+/// intentionally absent: it suppresses residual damage, not the status
+/// application itself. マグマのよろい stays in `ability_blocks_freeze`.
+///
+/// Champions text (`champout` `50e7233`, `rom-txt/usa/tokuseiinfo_syn.json`,
+/// LabelName line). Japanese names are `tokusei.json` of the same index.
+/// - じゅうなん `TOKUSEI_007` / `TOKUSEIINFO_SYN_007:256`: "cannot be paralyzed."
+/// - めんえき `TOKUSEI_017` / `:544`: "cannot be poisoned or badly poisoned."
+/// - すいほう `TOKUSEI_199` / `:6396` and ねつこうかん `TOKUSEI_270` / `:7654`:
+///   "cannot be burned." (Water Bubble's damage mods and Thermal Exchange's
+///   Attack boost are outside this predicate.)
+/// - きよめのしお `TOKUSEI_272` / `:7712`: "immune to status conditions."
+/// - リーフガード `TOKUSEI_102` / `:3566`: "immune to status conditions in
+///   harsh sunlight" (`weather == Sun` only).
+/// - フラワーベール `TOKUSEI_166` / `:5468`: "Grass-type allies are immune to
+///   status conditions". Singles has no other ally, so the holder is covered
+///   only when it is Grass (`type1` / `type2`). `self_inflicted` (Rest) is not
+///   blocked: Champions text states no self-exception; Showdown
+///   `onAllySetStatus` requires `target !== source`.
+///
+/// "Status conditions" in `help_syn.json:25431` lists poison, bad poison, burn,
+/// paralysis, freeze, and sleep. Yawn (DrowsyKind) is not in that list.
+/// Showdown blocks the yawn volatile for Purifying Salt, Leaf Guard in sun,
+/// and Flower Veil on Grass, so those abilities block every `StatusKind`,
+/// including Drowsy. The predicate does not cure a status the holder already
+/// has (Champions text is "cannot be" / 「ならない」, not a cure). マイペース
+/// (`TOKUSEIINFO_SYN_020:628`) only stops confusion (unmodelled) and Intimidate
+/// (already `ability_blocks_intimidate`), so it is absent here.
 pub fn ability_blocks_status(
   ability : String,
   kind : @model.StatusKind,
+  weather? : @model.Weather = @model.Weather::None,
+  type1? : String = "",
+  type2? : String = "",
+  self_inflicted? : Bool = false,
 ) -> Bool {
-  match (ability, kind) {
+  let specific = match (ability, kind) {
     ("ふみん", SleepKind) | ("ふみん", DrowsyKind) => true
     ("やるき", SleepKind) | ("やるき", DrowsyKind) => true
     ("スイートベール", SleepKind)
     | ("スイートベール", DrowsyKind) => true
+    ("じゅうなん", ParalyzeKind) => true
+    ("めんえき", PoisonKind) | ("めんえき", BadPoisonKind) => true
+    ("すいほう", BurnKind) | ("ねつこうかん", BurnKind) => true
     _ => false
   }
+  if specific {
+    return true
+  }
+  // 全状態異常 (help の 6 種 + あくび)。あくびは Showdown fallback。
+  if ability == "きよめのしお" {
+    return true
+  }
+  if ability == "リーフガード" && weather == @model.Weather::Sun {
+    return true
+  }
+  if ability == "フラワーベール" &&
+    !self_inflicted &&
+    (type1 == "くさ" || type2 == "くさ") {
+    return true
+  }
+  false
 }
 
 ///|
 /// Return `true` when the ability stops the defender from being frozen
 /// (こおり). マグマのよろい: "The Pokémon cannot be frozen." (Champions
-/// tokuseiinfo_syn.json:1348). Only the freeze rule is added: the other
-/// status-immunity abilities (ふみん etc.) are not applied to the secondary
-/// fanout in the model, so this is deliberately freeze-specific.
+/// tokuseiinfo_syn.json:1348). Freeze-only. All-status abilities that also
+/// stop freeze (きよめのしお / リーフガード in sun / フラワーベール on Grass)
+/// go through `ability_blocks_status`, not this predicate.
 pub fn ability_blocks_freeze(ability : String) -> Bool {
   ability == "マグマのよろい"
 }

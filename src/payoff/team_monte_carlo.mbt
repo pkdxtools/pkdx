@@ -800,21 +800,36 @@ fn rand_bool(rng : @random.Rand, p : Double) -> Bool {
 }
 
 ///|
-/// Accuracy fed to the MC attempt roll. A move the defender absorbs (そうしょく)
-/// is not subject to the roll (Showdown `TryHit` precedes `Accuracy`), so its
-/// accuracy is 100. Mirrors `attempt_accuracy` on the DP side.
+/// Accuracy fed to the MC attempt roll. A move the defender absorbs (そうしょく),
+/// or a damaging move the defender's ability or typing nullifies, is not
+/// subject to the roll (Showdown TryHit / TypeImmunity / TryImmunity precede
+/// Accuracy), so its accuracy is 100. `defender_protean` is the defender's
+/// Protean lock (MC has no mega; the lock is not cleared here). Mirrors
+/// `attempt_accuracy` on the DP side for the non-mega case.
 fn mc_attempt_accuracy(
   attacker : Combatant,
   mv : @model.Move,
   defender : Combatant,
   weather : @model.Weather,
+  defender_protean? : String = "",
 ) -> Int {
+  let def_eff = effective_combatant(
+    defender, false, protean_locked=defender_protean,
+  )
   let move_type = @damage.resolve_effective_move_type(
     mv,
     weather,
     attacker.ability,
   )
-  if ability_absorbs_move(defender.ability, mv.name, move_type) {
+  if ability_absorbs_move(def_eff.ability, mv.name, move_type) ||
+    damaging_move_immune(
+      def_eff.ability,
+      mv.name,
+      move_type,
+      mv.power,
+      def_eff.pokemon.type1,
+      def_eff.pokemon.type2,
+    ) {
     100
   } else {
     mv.accuracy
@@ -1504,6 +1519,7 @@ pub fn team_rollout(
                 own[own_active].moves[mi],
                 opp[opp_active],
                 weather_state[0],
+                defender_protean=opp_protean_locked[opp_active],
               )
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
@@ -1513,6 +1529,7 @@ pub fn team_rollout(
                   own[own_active].moves[mi],
                   opp[opp_active],
                   weather_state[0],
+                  defender_protean=opp_protean_locked[opp_active],
                 ),
                 rng,
                 thaws_user=own_thaws,
@@ -1533,6 +1550,7 @@ pub fn team_rollout(
                 opp[opp_active].moves[mi],
                 own[own_active],
                 weather_state[0],
+                defender_protean=own_protean_locked[own_active],
               )
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
@@ -1542,6 +1560,7 @@ pub fn team_rollout(
                   opp[opp_active].moves[mi],
                   own[own_active],
                   weather_state[0],
+                  defender_protean=own_protean_locked[own_active],
                 ),
                 rng,
                 thaws_user=opp_thaws,

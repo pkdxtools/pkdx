@@ -290,6 +290,33 @@ pub fn ability_absorbs_move(
 }
 
 ///|
+/// A damaging move (`power > 0`) that the defender nullifies before the
+/// accuracy roll. Showdown Gen 9 runs `TypeImmunity` and `TryImmunity` before
+/// `Accuracy`, so there is no miss branch. Status moves stay on the accuracy
+/// roll: the damage pipeline does not mark `power <= 0` as the immune
+/// sentinel. そうしょく absorption of status Grass moves is `ability_absorbs_move`,
+/// not this predicate. ちくでん is absent from `check_def_immunity` (open).
+pub fn damaging_move_immune(
+  ability : String,
+  move_name : String,
+  move_type : String,
+  power : Int,
+  def_type1 : String,
+  def_type2 : String,
+) -> Bool {
+  if power <= 0 {
+    return false
+  }
+  if @damage.check_def_immunity(ability, move_type) {
+    return true
+  }
+  let (e1, e2) = @damage.move_effectiveness_slots_x4(
+    move_name, move_type, def_type1, def_type2,
+  )
+  e1 == 0 || e2 == 0
+}
+
+///|
 /// Return `true` when the holder's ranks are tracked over the real ±6 stage
 /// range (see `clamp_rank_for`) rather than the payoff layer's reduced ±2:
 /// まけんき / かちき (the reaction needs the true floor) and そうしょく (its +1 must

@@ -294,10 +294,19 @@ fn resolve_pending_attempt(
   let status_now = if is_me { ws.my_status[slot] } else { ws.opp_status[slot] }
   let flinched = if is_me { ws.my_flinched } else { ws.opp_flinched }
   let thaws = freeze_move_thaws_user(pre_state, is_me, user_team, UseMove(mv_idx))
+  // `pre_state` はターン頭で、このターンのメガフラグはまだ無い。`mega_now` /
+  // `def_mega_now` がメガ後の実効特性・タイプ (Protean 解除込み) を渡す。
+  // 行動は UseMove に正規化済みなので、トリガは引数側にある。
   let acc = if is_me {
-    attempt_accuracy(pre_state, UseMove(mv_idx), true, my_team, opp_team)
+    attempt_accuracy(
+      pre_state, UseMove(mv_idx), true, my_team, opp_team,
+      attacker_mega_trigger=mega_now, defender_mega_trigger=def_mega_now,
+    )
   } else {
-    attempt_accuracy(pre_state, UseMove(mv_idx), false, opp_team, my_team)
+    attempt_accuracy(
+      pre_state, UseMove(mv_idx), false, opp_team, my_team,
+      attacker_mega_trigger=mega_now, defender_mega_trigger=def_mega_now,
+    )
   }
   let result : Array[(Double, SwitchingGameState)] = []
   if flinched {
@@ -1588,17 +1597,22 @@ fn action_accuracy(
 }
 
 ///|
-/// Accuracy of `action` for the attempt-phase split (`per_side_attempt`). A move
-/// that the defender absorbs (そうしょく) is never subject to the accuracy roll:
-/// Showdown runs `TryHit` (where the absorb happens) before `Accuracy`. Its
-/// accuracy is therefore fixed at 100, so the split has no miss branch and the
-/// absorb happens once. Every other action keeps `action_accuracy`.
+/// Accuracy of `action` for the attempt-phase split (`per_side_attempt`).
+/// Showdown runs TryHit (そうしょく), TypeImmunity, and TryImmunity before
+/// Accuracy, so an absorbed move, or a damaging move the defender is immune
+/// to, is fixed at 100. The defender and the attacker's move type are the
+/// post-mega `effective_combatant` (ability, types, Protean override). This
+/// runs before `turn_start_mega` writes the flags, so a Mega chosen this turn
+/// is `attacker_mega_trigger` / `defender_mega_trigger` (or `Mega` on `action`).
+/// Every other action keeps `action_accuracy`.
 fn attempt_accuracy(
   state : SwitchingGameState,
   action : ActionKind,
   attacker_is_me : Bool,
   attacker_team : Array[Combatant],
   defender_team : Array[Combatant],
+  attacker_mega_trigger? : Bool = false,
+  defender_mega_trigger? : Bool = false,
 ) -> Int {
   let attacker_active = if attacker_is_me {
     state.my_active
@@ -1610,10 +1624,11 @@ fn attempt_accuracy(
   } else {
     state.my_active
   }
-  let absorbed = match action {
+  let atk_trigger = attacker_mega_trigger || is_mega_action(action)
+  let skips = match action {
     Switch(_) => false
     UseMove(mi) | Mega(mi) =>
-      move_absorbed_by_holder(
+      move_skips_accuracy(
         state,
         attacker_is_me,
         attacker_active,
@@ -1621,9 +1636,11 @@ fn attempt_accuracy(
         attacker_team,
         defender_team,
         attacker_team[attacker_active].moves[mi],
+        atk_trigger,
+        defender_mega_trigger,
       )
   }
-  if absorbed {
+  if skips {
     100
   } else {
     action_accuracy(action, attacker_active, attacker_team)
@@ -1806,8 +1823,19 @@ pub fn attempt_turn_with_cache(
   opp_team : Array[Combatant],
   dmg_cache : DamageCache,
 ) -> Array[(Double, SwitchingGameState)] {
-  let my_acc = attempt_accuracy(state, my_action, true, my_team, opp_team)
-  let opp_acc = attempt_accuracy(state, opp_action, false, opp_team, my_team)
+  // 命中判定はメガフラグを書く前。このターンの Mega を実効特性・タイプへ渡す。
+  let my_mega_trigger = is_mega_action(my_action)
+  let opp_mega_trigger = is_mega_action(opp_action)
+  let my_acc = attempt_accuracy(
+    state, my_action, true, my_team, opp_team,
+    attacker_mega_trigger=my_mega_trigger,
+    defender_mega_trigger=opp_mega_trigger,
+  )
+  let opp_acc = attempt_accuracy(
+    state, opp_action, false, opp_team, my_team,
+    attacker_mega_trigger=opp_mega_trigger,
+    defender_mega_trigger=my_mega_trigger,
+  )
   let my_attempts = per_side_attempt(
     state.my_status[state.my_active],
     state.my_must_recharge[state.my_active],

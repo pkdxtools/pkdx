@@ -348,11 +348,12 @@ Showdown の `onTryHit` (null を返す): 相手のくさタイプの技 (攻撃
 - **吸収時に起きないこと**: HP 変化、状態異常、寄生、回復、ねがいごと、反動、自爆、recharge、相手ダウン、使用者の自己ダウン、接触 proc、道具 proc。Showdown は吸収で `targets` が空になり、`selfDrops` (`spreadMoveHit` の段) まで進まないため、リーフストーム の自己とくこう -2 も起きない。
 - **Protean / Libero**: 吸収された技でもタイプ固定は記録する。Showdown は `PrepareHit` を `trySpreadMoveHit` の moveSteps (TryHit を含む) より前に実行する。
 - **命中**: 吸収は命中判定より前に起きる (Gen 9 の moveSteps は Invulnerability → TryHit → TypeImmunity → TryImmunity → Accuracy)。そのため命中率が低い状態技 (ねむりごな 75 等) でも外れ枝は無く、単一 leaf (確率 1.0) になる。
+- **メガしたターン**: `attempt_accuracy` は `turn_start_mega` がフラグを書く前に走る。判定は `effective_hit_pair` (このターンのメガ発動、または既にメガ済みの実効特性・タイプ。Protean ロックはメガ中は外す。技タイプは攻撃側のメガ後特性で `resolve_effective_move_type`)。そうしょく をメガで得るターンは命中 100 で A +1、失うターンはメガ前の吸収を使わず技の命中率で外れる。
 - **ランク範囲**: そうしょく の所持者は ±6 で追跡する (`ability_tracks_full_stages` → `clamp_rank_for`)。通常特性の ±2 で丸めると、+1 の頭打ちが +2 になってしまう。
 - **あまのじゃく**: 所持者は特性を 1 つしか持たないため、所持者側の反転は起きない。使用者があまのじゃくでも吸収された技は自己効果を出さないので、反転対象がない (`switching_game_sap_sipper_wbtest.mbt` で確認)。
 - **かたやぶり**: 未対応 (下記「MVP 対象外」)。そうしょく は破壊可能 (breakable) 特性だが、かたやぶり は pkdx でモデルしていない。
 - **瀕死の保持者**: 保持者が瀕死 (HP 0) なら A は上がらない (Showdown は瀕死の対象に技が通らない)。DP (`with_absorb_effects`) と MC (`team_apply_post_hit`) の両方で、生存時のみ A +1 を適用する。
-- **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。
+- **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。ダメージ技のタイプ / 特性無効を命中 100 にする規則は DP と同じで、防御側の Protean ロックも見る。
 
 ### 崩れ技 (Crash damage) — DP / MC
 
@@ -386,7 +387,8 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
   - しろいハーブ の判定: DP は通らず、MC は通る。理由は「しろいハーブ」節の「吸収 / 免疫 leg」。
 - **ifHit の自爆は発動しない**: Memento (おきみやげ) / Final Gambit / Healing Wish (いやしのねがい) / Lunar Dance (みかづきのまい) は `selfdestruct: 'ifHit'` で、`runMoveEffects` の `damage[i] !== false` でしか倒れない (`battle-actions.ts:1342-1344`)。pkdx の `self_ko` は DB (`move_meta`) 上 じばく / だいばくはつ だけなので、この区別を持つ必要はない。
 - **未対応: 先の leg で対象が ひんし になった場合**: 2 本目の leg は攻撃側の HP だけを見て解決される (`switching_game_turn.mbt:469`)。Showdown は `getMoveTargets` が空を返して技を失敗させる (`pokemon.ts:841-862`) ので、Protean 記録も崩れ技も起きない。本変更の対象外。
-- **参照テスト**: `src/payoff/switching_game_immune_wbtest.mbt` (DP、対照・Protean・そうしょく+しろいハーブ を含む)、`src/payoff/team_monte_carlo_immune_parity_wbtest.mbt` (MC と DP/MC parity)。
+- **命中**: ダメージ技 (`power > 0`) のタイプ無効と `check_def_immunity` は命中判定より前 (`TypeImmunity` / `TryImmunity`)。DP の `attempt_accuracy` と MC の `mc_attempt_accuracy` は命中率を 100 にする。防御側は `effective_combatant` (DP はメガ後のタイプ・特性。Protean ロックはメガ中は外し、それ以外は上書き。MC はメガ未モデルで raw 特性 + Protean ロック)。変化技 (`power <= 0`) はダメージパイプラインが免疫 sentinel を返さないので命中率を変えない (そうしょく の吸収は別)。ちくでん は `check_def_immunity` 未収録のまま (下記崩れ技の open)。
+- **参照テスト**: `src/payoff/switching_game_immune_wbtest.mbt` (DP、対照・Protean・そうしょく+しろいハーブ を含む)、`src/payoff/team_monte_carlo_immune_parity_wbtest.mbt` (MC と DP/MC parity)、`src/payoff/switching_game_mega_absorb_wbtest.mbt` (メガターンの吸収 / 無効と命中 100)。
 
 ### てっていこうせん (最大 HP 1/2 反動) — DP / MC
 
@@ -953,6 +955,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、DP 配線 `with_post_hit_effects`)
 - `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) ブロックの MC/DP parity
 - `switching_game_sap_sipper_wbtest.mbt` — そうしょく の吸収 (くさ攻撃 / 状態 / やどりぎのタネ / 相手素早さダウン / リーフストーム の自己ダウン不発 / 自分狙いのくさ技は非吸収 / グラスフィールド / くさ以外は通常 / A +6 頭打ち / ±6 積み上がり / Protean 固定 / 持ち主の技は非吸収 / 命中 100 の固定 / 1 ターン解決で単一 leaf)
+- `switching_game_mega_absorb_wbtest.mbt` — メガターンの吸収 / タイプ無効 / 特性無効をメガ後の実効特性・タイプで判定 (そうしょく を得る・失う、ふゆう、ゴースト、エレキスキン、Protean ロック解除)。MC はダメージ技の無効を命中 100 にし、変化技は技の命中率のまま
 - `team_monte_carlo_sap_sipper_parity_wbtest.mbt` — そうしょく の MC 経路 (post-hit / 状態付与 / 命中) と、乱数の入らない matchup での DP/MC parity (horizon 2 / 3)
 
 ### MVP 対象外 (将来拡張)

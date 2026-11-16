@@ -4,7 +4,8 @@
 ///
 /// 仕様 (Showdown 準拠):
 ///   - クリアボディ / しろいけむり / メタルプロテクト は相手由来の負のブーストを全能力
-///     で不発にする (同一 body)。かいりきバサミ は攻撃 (A) のダウンのみ不発にする。
+///     で不発にする (同一 body)。かいりきバサミ は攻撃 (A)、はとむね は防御 (B) の
+///     ダウンのみ不発にする。
 ///   - 不発のダウンは rank も反応 (まけんき / かちき) も変えない。
 ///   - 自己ダウン (target = 0) は不発にならない (Showdown は `target === source` で免除)。
 ///   - いかく 専用の防御特性 (どんかん / マイペース / せいしんりょく / きもったま) と
@@ -353,4 +354,203 @@ test "DP 配線: メガ後の実効特性で判定 — メガ進化後は クリ
   let mega_state = { ..state, opp_megaed: [true, false, false] }
   let mega = with_post_hit_effects(mega_state, true, 0, 0, my_team, team, growl, 0)
   @debug.assert_eq(mega.opp_ranks[0], -1)
+}
+
+///|
+/// **Case 11 (はとむね / 防御のみ)**: しっぽをふる (B-1) と いやなおと (B-2) は不発。
+/// くすぐる (A-1 / B-1) は A だけ下がり、B は残る。なきごえ (A-1) は通る。
+/// Champions `TOKUSEIINFO_SYN_145`: 相手の技や特性で防御を下げられない。
+test "はとむね: 防御のダウンのみ不発、攻撃のダウンは通る" {
+  let tail = mk_move("しっぽをふる", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let screech = mk_move("いやなおと", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 1, delta: -2, target: 1 },
+  ])
+  for mv in [tail, screech] {
+    let opp_ranks = [0, 0, 0, 0, 0]
+    apply_stat_effects(
+      [0, 0, 0, 0, 0],
+      opp_ranks,
+      true,
+      mv,
+      attacker_ability="",
+      defender_ability="はとむね",
+    )
+    for i in 0..<5 {
+      @debug.assert_eq(opp_ranks[i], 0)
+    }
+  }
+  let tickle = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let tickle_opp = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    tickle_opp,
+    true,
+    tickle,
+    attacker_ability="",
+    defender_ability="はとむね",
+  )
+  @debug.assert_eq(tickle_opp[0], -1)
+  @debug.assert_eq(tickle_opp[1], 0)
+  let growl = mk_move("なきごえ", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+  ])
+  let growl_opp = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    growl_opp,
+    true,
+    growl,
+    attacker_ability="",
+    defender_ability="はとむね",
+  )
+  @debug.assert_eq(growl_opp[0], -1)
+  @debug.assert_eq(growl_opp[1], 0)
+}
+
+///|
+/// **Case 12 (はとむね / 自己ダウンは通る)**: インファイト の自己 B-1 / D-1 と
+/// ばかぢから相当の自己 A-1 / B-1 は、所持者が はとむね でも下がる。
+test "はとむね: インファイト / 自己防御ダウンは不発にならない" {
+  let close_combat = mk_move("インファイト", "かくとう", @model.Physical, 120, stat_effects=[
+    @model.StatEffect::{ stat: 1, delta: -1, target: 0 },
+    @model.StatEffect::{ stat: 3, delta: -1, target: 0 },
+  ])
+  let cc_self = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    cc_self,
+    [0, 0, 0, 0, 0],
+    true,
+    close_combat,
+    attacker_ability="はとむね",
+    defender_ability="",
+  )
+  @debug.assert_eq(cc_self[1], -1)
+  @debug.assert_eq(cc_self[3], -1)
+  let superpower = mk_move("ばかぢから", "かくとう", @model.Physical, 120, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 0 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 0 },
+  ])
+  let sp_self = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    sp_self,
+    [0, 0, 0, 0, 0],
+    true,
+    superpower,
+    attacker_ability="はとむね",
+    defender_ability="",
+  )
+  @debug.assert_eq(sp_self[0], -1)
+  @debug.assert_eq(sp_self[1], -1)
+}
+
+///|
+/// **Case 13 (はとむねで不発の防御ダウンは反応しない)**: しっぽをふる (B-1) を
+/// はとむね が受けるとランクは全部 0 のまま (まけんき の攻撃 +2 も起きない)。
+/// 同じ技を まけんき が受けると B は下がり、下がった能力 1 つで攻撃 +2 する。
+test "はとむね: 防いだ防御ダウンは まけんき の反応を起こさない" {
+  let tail = mk_move("しっぽをふる", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let blocked = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    blocked,
+    true,
+    tail,
+    attacker_ability="",
+    defender_ability="はとむね",
+  )
+  for i in 0..<5 {
+    @debug.assert_eq(blocked[i], 0)
+  }
+  let sensitive = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    sensitive,
+    true,
+    tail,
+    attacker_ability="",
+    defender_ability="まけんき",
+  )
+  @debug.assert_eq(sensitive[0], 2)
+  @debug.assert_eq(sensitive[1], -1)
+}
+
+///|
+/// **Case 14 (DP 配線 / 攻撃技の防御ダウン)**: 威力のある技の相手 B-1
+/// (かみくだく相当の確定ダウン) も post-hit で はとむね にブロックされる。
+test "DP 配線: 攻撃技の防御ダウンは はとむね で不発" {
+  let crunch = mk_move("かみくだく", "あく", @model.Physical, 80, stat_effects=[
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let my_team = [im_combatant(im_pokemon("かみくだく使い"), [crunch])]
+  let block_team = [
+    im_combatant(im_pokemon("はとむね持ち"), [im_tackle()], ability="はとむね"),
+  ]
+  let blocked = with_post_hit_effects(
+    im_state(),
+    true,
+    0,
+    0,
+    my_team,
+    block_team,
+    crunch,
+    20,
+  )
+  @debug.assert_eq(blocked.opp_ranks[1], 0)
+  let plain_team = [im_combatant(im_pokemon("ふつう"), [im_tackle()])]
+  let plain = with_post_hit_effects(
+    im_state(),
+    true,
+    0,
+    0,
+    my_team,
+    plain_team,
+    crunch,
+    20,
+  )
+  @debug.assert_eq(plain.opp_ranks[1], -1)
+}
+
+///|
+/// **Case 15 (吸収の上昇は相手ダウンではない)**: そうしょく がくさ技を吸収すると
+/// 攻撃 +1 だけが残り、技に載っていた相手 A-1 / B-1 は当たらない。+1 は吸収の
+/// 上昇であり、まけんき の +2 は乗らない。ひらいしん も同じで、特攻 +1 だけ。
+test "そうしょく / ひらいしん: 吸収の上昇は相手ダウンを消すので まけんき は誘発しない" {
+  let grass = mk_move("くさダウン", "くさ", @model.Special, 90, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let sap = sap_one_leaf(
+    im_state(),
+    true,
+    sap_team(grass),
+    [im_combatant(im_pokemon("そうしょく持ち"), [im_tackle()], ability="そうしょく")],
+    grass,
+    40,
+  )
+  @debug.assert_eq(sap.opp_ranks[0], 1)
+  @debug.assert_eq(sap.opp_ranks[1], 0)
+  @debug.assert_eq(sap.opp_hps[0], 100)
+  let bolt = mk_move("でんきダウン", "でんき", @model.Special, 90, stat_effects=[
+    @model.StatEffect::{ stat: 2, delta: -1, target: 1 },
+  ])
+  let rod = sap_one_leaf(
+    im_state(),
+    true,
+    sap_team(bolt),
+    [im_combatant(im_pokemon("ひらいしん持ち"), [im_tackle()], ability="ひらいしん")],
+    bolt,
+    40,
+  )
+  @debug.assert_eq(rod.opp_ranks[2], 1)
+  for i in [0, 1, 3, 4] {
+    @debug.assert_eq(rod.opp_ranks[i], 0)
+  }
+  @debug.assert_eq(rod.opp_hps[0], 100)
 }

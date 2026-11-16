@@ -2152,9 +2152,11 @@ fn clamp_zero(x : Int) -> Int {
 /// An opponent-inflicted drop (`target=1`, `delta<0` after the flip) is first
 /// checked against the holder's block (`ability_blocks_opp_stat_drop`:
 /// クリアボディ / しろいけむり / メタルプロテクト on every stat, かいりきバサミ on
-/// Attack only). A blocked drop changes neither the rank nor the reaction
-/// (`landed` stays false), as Showdown's `onTryBoost` removes it before
-/// `AfterEachBoost` runs. Self drops (`target=0`) are never blocked.
+/// Attack only, はとむね on Defense only). A blocked drop changes neither the
+/// rank nor the reaction (`landed` stays false), as Showdown's `onTryBoost`
+/// removes it before `AfterEachBoost` runs. Self drops (`target=0`) are never
+/// blocked. Absorb boosts (そうしょく / ひらいしん) are raises on a different
+/// path and do not set `landed`.
 fn apply_stat_effects(
   self_ranks : Array[Int],
   opp_ranks : Array[Int],

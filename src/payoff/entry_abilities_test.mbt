@@ -104,6 +104,16 @@ test "non_intimidate_entrant_is_a_no_op" {
 }
 
 ///|
+/// Big Pecks blocks Defense drops from moves, not Intimidate's Attack drop.
+test "intimidate_big_pecks_still_drops_attack" {
+  let target = zero_ranks()
+  let entrant = zero_ranks()
+  @payoff.apply_intimidate_on_entry("いかく", "はとむね", target, entrant)
+  @debug.assert_eq(target, [-1, 0, 0, 0, 0])
+  @debug.assert_eq(entrant, [0, 0, 0, 0, 0])
+}
+
+///|
 /// Two Intimidate users entering simultaneously: the caller invokes the
 /// helper once per entrant, and both sides end at A-1 (いかく does not block
 /// an incoming Intimidate).

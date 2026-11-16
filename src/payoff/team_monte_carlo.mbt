@@ -397,9 +397,11 @@ fn team_apply_post_hit(
   dmg : Int,
   immune? : Bool = false,
 ) -> Unit {
-  // そうしょく: 吸収された技は当たらないため、防御側の A が上がるだけで、以降の効果
-  // (stat_effects / recoil / 回復 / 寄生 / ねがいごと / self_ko / recharge) は起きない。
-  // Protean の記録は呼び出し側 (`record_protean_lock`) が行う (DP と同じ)。
+  // 吸収 (そうしょく / ちくでん / ちょすい / かんそうはだ / でんきエンジン /
+  // ひらいしん / もらいび): 技は当たらない。防御側のランク上昇と 1/4 回復だけ行い、
+  // 以降の効果 (stat_effects / recoil / 回復 / 寄生 / ねがいごと / self_ko / recharge)
+  // は起きない。崩れは呼び出し側が `res_immune` で先に適用する (ダメージ技は
+  // `check_def_immunity` で immune)。Protean の記録は呼び出し側 (DP と同じ)。
   let absorb_type = @damage.resolve_effective_move_type(
     mv,
     weather_state[0],
@@ -417,6 +419,12 @@ fn team_apply_post_hit(
           )
         None => ()
       }
+      let max_hp = effective_hp(defender_team[defender_active])
+      defender_hps[defender_active] = absorb_healed_hp(
+        absorb_ability,
+        defender_hps[defender_active],
+        max_hp,
+      )
     }
     return
   }
@@ -800,8 +808,8 @@ fn rand_bool(rng : @random.Rand, p : Double) -> Bool {
 }
 
 ///|
-/// Accuracy fed to the MC attempt roll. A move the defender absorbs (そうしょく),
-/// or a damaging move the defender's ability or typing nullifies, is not
+/// Accuracy fed to the MC attempt roll. A move the defender absorbs, or a
+/// damaging move the defender's ability or typing nullifies, is not
 /// subject to the roll (Showdown TryHit / TypeImmunity / TryImmunity precede
 /// Accuracy), so its accuracy is 100. `defender_protean` is the defender's
 /// Protean lock (MC has no mega; the lock is not cleared here). Mirrors
@@ -1091,8 +1099,8 @@ fn mc_try_apply_status(
   if mv.power > 0 && (hp_lost <= 0 || ability_strips_secondaries(attacker_ability)) {
     return
   }
-  // そうしょく: 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ
-  // 判定)。Weather は type 解決に効かない (Weather Ball は草タイプにならない)。
+  // 吸収された状態技は状態異常を付与しない (DP `with_absorb_effects` と同じ判定)。
+  // Weather は type 解決に効かない (Weather Ball は草タイプにならない)。
   if defender_slot < defender_team.length() &&
     ability_absorbs_move(
       defender_team[defender_slot].ability,

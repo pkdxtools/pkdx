@@ -412,16 +412,41 @@ test "ability_reverses_stat_changes_other_abilities_return_false" {
 }
 
 ///|
-test "ability_absorb_boost: そうしょく は Attack +1、他の特性は None" {
+test "ability_absorb_boost: そうしょくは A+1、ひらいしんは C+1、でんきエンジンは S+1" {
   @debug.assert_eq(@payoff.ability_absorb_boost("そうしょく"), Some((0, 1)))
+  @debug.assert_eq(@payoff.ability_absorb_boost("ひらいしん"), Some((2, 1)))
+  @debug.assert_eq(@payoff.ability_absorb_boost("でんきエンジン"), Some((4, 1)))
   @debug.assert_eq(@payoff.ability_absorb_boost("ちょすい"), None)
-  @debug.assert_eq(@payoff.ability_absorb_boost("でんきエンジン"), None)
+  @debug.assert_eq(@payoff.ability_absorb_boost("ちくでん"), None)
+  @debug.assert_eq(@payoff.ability_absorb_boost("もらいび"), None)
+  @debug.assert_eq(@payoff.ability_absorb_boost("よびみず"), None)
   @debug.assert_eq(@payoff.ability_absorb_boost("クリアボディ"), None)
   @debug.assert_eq(@payoff.ability_absorb_boost(""), None)
 }
 
 ///|
-test "ability_absorbs_move: くさ技を相手に向けた時だけ吸収する" {
+test "ability_absorb_heal_denom: ちくでん / ちょすい / かんそうはだ は最大HPの1/4" {
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("ちくでん"), Some(4))
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("ちょすい"), Some(4))
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("かんそうはだ"), Some(4))
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("そうしょく"), None)
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("でんきエンジン"), None)
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("もらいび"), None)
+  @debug.assert_eq(@payoff.ability_absorb_heal_denom("ふゆう"), None)
+}
+
+///|
+test "absorb_healed_hp: 1/4 を足して最大HPで頭打ち、瀕死と非回復特性は不変" {
+  @debug.assert_eq(@payoff.absorb_healed_hp("ちょすい", 100, 200), 150)
+  @debug.assert_eq(@payoff.absorb_healed_hp("ちくでん", 180, 200), 200)
+  @debug.assert_eq(@payoff.absorb_healed_hp("かんそうはだ", 200, 200), 200)
+  @debug.assert_eq(@payoff.absorb_healed_hp("ちょすい", 0, 200), 0)
+  @debug.assert_eq(@payoff.absorb_healed_hp("そうしょく", 100, 200), 100)
+  @debug.assert_eq(@payoff.absorb_healed_hp("もらいび", 100, 200), 100)
+}
+
+///|
+test "ability_absorbs_move: そうしょくはくさ、ちょすいはみずを吸収する" {
   @debug.assert_eq(
     @payoff.ability_absorbs_move("そうしょく", "リーフブレード", "くさ"),
     true,
@@ -436,9 +461,38 @@ test "ability_absorbs_move: くさ技を相手に向けた時だけ吸収する"
   )
   @debug.assert_eq(
     @payoff.ability_absorbs_move("ちょすい", "なみのり", "みず"),
-    false,
+    true,
   )
   @debug.assert_eq(@payoff.ability_absorbs_move("", "リーフブレード", "くさ"), false)
+}
+
+///|
+test "ability_absorbs_move: 吸収特性は自分のタイプだけを吸収する" {
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちくでん", "１０まんボルト", "でんき"), true)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちくでん", "でんじは", "でんき"), true)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちくでん", "なみのり", "みず"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("でんきエンジン", "かみなり", "でんき"), true)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ひらいしん", "ボルテッカー", "でんき"), true)
+  @debug.assert_eq(@payoff.ability_absorbs_move("かんそうはだ", "なみのり", "みず"), true)
+  @debug.assert_eq(@payoff.ability_absorbs_move("かんそうはだ", "かえんほうしゃ", "ほのお"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("もらいび", "おにび", "ほのお"), true)
+  @debug.assert_eq(@payoff.ability_absorbs_move("もらいび", "１０まんボルト", "でんき"), false)
+  // ふゆう はダメージ無効の既存経路。よびみず は Champions の tokusei に無い。
+  @debug.assert_eq(@payoff.ability_absorbs_move("ふゆう", "じしん", "じめん"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("よびみず", "なみのり", "みず"), false)
+}
+
+///|
+test "ability_absorbs_move: 自分・味方・フィールド・相手側の技は吸収されない" {
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちょすい", "あまごい", "みず"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちょすい", "アクアリング", "みず"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちょすい", "いのちのしずく", "みず"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちくでん", "じゅうでん", "でんき"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ちくでん", "でんじふゆう", "でんき"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("でんきエンジン", "エレキフィールド", "でんき"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ひらいしん", "じばそうさ", "でんき"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("もらいび", "にほんばれ", "ほのお"), false)
+  @debug.assert_eq(@payoff.ability_absorbs_move("ふゆう", "まきびし", "じめん"), false)
 }
 
 ///|
@@ -458,11 +512,15 @@ test "ability_absorbs_move: 自分・自分側・フィールドを狙うくさ�
 }
 
 ///|
-test "ability_tracks_full_stages: まけんき / かちき / そうしょく は ±6 で追跡" {
+test "ability_tracks_full_stages: まけんき / かちき / 吸収のランク上昇は ±6 で追跡" {
   @debug.assert_eq(@payoff.ability_tracks_full_stages("まけんき"), true)
   @debug.assert_eq(@payoff.ability_tracks_full_stages("かちき"), true)
   @debug.assert_eq(@payoff.ability_tracks_full_stages("そうしょく"), true)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("ひらいしん"), true)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("でんきエンジン"), true)
   @debug.assert_eq(@payoff.ability_tracks_full_stages("ちょすい"), false)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("ちくでん"), false)
+  @debug.assert_eq(@payoff.ability_tracks_full_stages("もらいび"), false)
   @debug.assert_eq(@payoff.ability_tracks_full_stages(""), false)
 }
 
@@ -470,6 +528,9 @@ test "ability_tracks_full_stages: まけんき / かちき / そうしょく は
 test "clamp_rank_for: そうしょく は +6 まで、通常特性は +2 まで" {
   @debug.assert_eq(@payoff.clamp_rank_for("そうしょく", 9), 6)
   @debug.assert_eq(@payoff.clamp_rank_for("そうしょく", -9), -6)
+  @debug.assert_eq(@payoff.clamp_rank_for("でんきエンジン", 9), 6)
+  @debug.assert_eq(@payoff.clamp_rank_for("ひらいしん", 9), 6)
+  @debug.assert_eq(@payoff.clamp_rank_for("ちょすい", 9), 2)
   @debug.assert_eq(@payoff.clamp_rank_for("", 9), 2)
   @debug.assert_eq(@payoff.clamp_rank_for("", -9), -2)
 }

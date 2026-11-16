@@ -255,38 +255,103 @@ pub fn ability_boosts_on_opp_drop(ability : String) -> Bool {
 
 ///|
 /// Return the stat boost the holder gains when it absorbs a move aimed at it,
-/// as `(stat, delta)` with `stat` the rank index (0 = Attack), or `None` for
-/// every other holder. そうしょく (Sap Sipper) raises Attack by 1. Showdown runs
-/// it as `onTryHit` (`this.boost({ atk: 1 })`), which precedes the accuracy roll
-/// in Gen 9, so the boost does not depend on accuracy. At +6 the holder still
-/// absorbs; only the boost is lost.
+/// as `(stat, delta)` with `stat` the rank index (0 = Attack, 2 = SpA,
+/// 4 = Speed), or `None` when the absorb has no stage change. Showdown runs
+/// the boost in `onTryHit`, which precedes the accuracy roll, so it does not
+/// depend on accuracy. At +6 the holder still absorbs; only the boost is lost.
+///
+/// Champions `tokuseiinfo_syn.json` (`champout` `50e7233`):
+/// - そうしょく `TOKUSEIINFO_SYN_157`: Grass moves boost Attack by 1.
+/// - でんきエンジン `TOKUSEIINFO_SYN_078`: Electric moves boost Speed by 1.
+/// - ひらいしん `TOKUSEIINFO_SYN_031`: draws in Electric moves and boosts
+///   Sp. Atk by 1. Singles has no second target, so this is immunity plus the
+///   boost. Redirection is not modeled.
+/// よびみず is not in Champions `tokusei.json`, so it is not given a boost.
 pub fn ability_absorb_boost(ability : String) -> (Int, Int)? {
   match ability {
     "そうしょく" => Some((0, 1))
+    "ひらいしん" => Some((2, 1))
+    "でんきエンジン" => Some((4, 1))
     _ => None
+  }
+}
+
+///|
+/// Denominator of the max-HP heal applied when the holder absorbs a move, or
+/// `None` when the absorb does not heal. Champions text (`50e7233`):
+/// - ちくでん `TOKUSEIINFO_SYN_010`: Electric moves restore 1/4 max HP.
+/// - ちょすい `TOKUSEIINFO_SYN_011`: Water moves restore 1/4 max HP.
+/// - かんそうはだ `TOKUSEIINFO_SYN_087`: the Water sentence is the same 1/4.
+///   The Fire 1.25× is `get_def_type_resist`. The rain / sun end-of-turn
+///   1/8 is not part of this absorb.
+pub fn ability_absorb_heal_denom(ability : String) -> Int? {
+  match ability {
+    "ちくでん" | "ちょすい" | "かんそうはだ" => Some(4)
+    _ => None
+  }
+}
+
+///|
+/// HP after an absorb heal, capped at `max_hp`. A fainted holder (`current_hp
+/// <= 0`) is unchanged: Showdown does not run `onTryHit` on a fainted target.
+/// A full holder still absorbs; the heal adds nothing. Integer division matches
+/// Showdown `baseMaxhp / 4`.
+pub fn absorb_healed_hp(
+  ability : String,
+  current_hp : Int,
+  max_hp : Int,
+) -> Int {
+  if current_hp <= 0 {
+    return current_hp
+  }
+  match ability_absorb_heal_denom(ability) {
+    None => current_hp
+    Some(den) => {
+      if den <= 0 || max_hp <= 0 {
+        return current_hp
+      }
+      let healed = current_hp + max_hp / den
+      if healed > max_hp {
+        max_hp
+      } else {
+        healed
+      }
+    }
+  }
+}
+
+///|
+/// `true` when `ability` nullifies a move of `move_type` aimed at the holder
+/// (Showdown `onTryHit` returns null). ふゆう stays on the damaging-immunity
+/// path (`check_def_immunity` / `is_grounded`): Champions gives it no heal or
+/// boost, and the only available Ground status move is まきびし (foe side).
+/// よびみず is not a Champions ability, so it is not an absorb either.
+fn ability_absorb_type(ability : String, move_type : String) -> Bool {
+  match ability {
+    "そうしょく" => move_type == "くさ"
+    "ちくでん" | "ひらいしん" | "でんきエンジン" => move_type == "でんき"
+    "ちょすい" | "かんそうはだ" => move_type == "みず"
+    // もらいび: immunity only. The Flash Fire status (BTR_STATE_SYN_121_02,
+    // Fire moves ×1.5) is not a field on SwitchingGameState, and the damage
+    // engine keys that 1.5× off the ability string itself.
+    "もらいび" => move_type == "ほのお"
+    _ => false
   }
 }
 
 ///|
 /// Return `true` when the holder absorbs the move `move_name` (resolved type
 /// `move_type`) that is aimed at it. An absorbed move does no damage and has no
-/// secondary, status, or self effect, and the holder gets `ability_absorb_boost`.
-/// Only holders with an absorb boost qualify, so the other immunity abilities
-/// keep their existing path. Type matching is the damage engine's
-/// `check_def_immunity` (single source of truth). Non-foe Grass moves
-/// (`is_grass_non_foe_target_move`: ねをはる / グラスフィールド ...) never reach the
-/// holder and are excluded.
+/// secondary, status, or self effect. The holder then gets `ability_absorb_boost`
+/// and `absorb_healed_hp`. Self, ally, field, and foe-side moves
+/// (`is_absorb_non_foe_target_move`) never reach the holder.
 pub fn ability_absorbs_move(
   ability : String,
   move_name : String,
   move_type : String,
 ) -> Bool {
-  match ability_absorb_boost(ability) {
-    Some(_) =>
-      @damage.check_def_immunity(ability, move_type) &&
-        !@damage.is_grass_non_foe_target_move(move_name)
-    None => false
-  }
+  ability_absorb_type(ability, move_type) &&
+  !@damage.is_absorb_non_foe_target_move(move_name)
 }
 
 ///|
@@ -294,8 +359,10 @@ pub fn ability_absorbs_move(
 /// accuracy roll. Showdown Gen 9 runs `TypeImmunity` and `TryImmunity` before
 /// `Accuracy`, so there is no miss branch. Status moves stay on the accuracy
 /// roll: the damage pipeline does not mark `power <= 0` as the immune
-/// sentinel. そうしょく absorption of status Grass moves is `ability_absorbs_move`,
-/// not this predicate. ちくでん is absent from `check_def_immunity` (open).
+/// sentinel. Absorb abilities (そうしょく and the heal / boost set) nullify
+/// their status moves in `ability_absorbs_move`, not this predicate. ちくでん
+/// is in `check_def_immunity`, so a damaging Electric move is also this
+/// sentinel (サンダーダイブ still crashes).
 pub fn damaging_move_immune(
   ability : String,
   move_name : String,
@@ -319,8 +386,8 @@ pub fn damaging_move_immune(
 ///|
 /// Return `true` when the holder's ranks are tracked over the real ±6 stage
 /// range (see `clamp_rank_for`) rather than the payoff layer's reduced ±2:
-/// まけんき / かちき (the reaction needs the true floor) and そうしょく (its +1 must
-/// stop at +6, not at +2).
+/// まけんき / かちき (the reaction needs the true floor) and absorb boosts
+/// (そうしょく / ひらいしん / でんきエンジン: the +1 must stop at +6, not at +2).
 pub fn ability_tracks_full_stages(ability : String) -> Bool {
   if ability_boosts_on_opp_drop(ability) {
     return true

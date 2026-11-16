@@ -1128,8 +1128,8 @@ fn apply_damage_variants_fanout(
   let target_is_me = !attacker_is_me
   let target_slot = defender_active
   let attacker_slot = attacker_active
-  // そうしょく: 防御側が技を吸収すると、技は当たらず (HP / 状態異常 / 自己効果 /
-  // 接触 proc なし) 防御側の A が +1 される。命中判定より前に起きるので、outcomes
+  // 吸収: 防御側が技を吸収すると、技は当たらず (ダメージ / 状態異常 / 自己効果 /
+  // 接触 proc なし) ランク上昇か 1/4 回復だけが起きる。命中判定より前なので、outcomes
   // の分布によらず単一 leaf (確率 1.0) を返す。`attempt_turn_with_cache` が同じ
   // 判定で命中率を 100 に固定するため、ここでは外れ枝が来ない。
   if move_absorbed_by_holder(
@@ -1880,8 +1880,8 @@ fn effective_hit_pair(
 }
 
 ///|
-/// そうしょく (Sap Sipper) absorption check: does the defender at `defender_slot`
-/// absorb `mv` from the attacker at `attacker_slot`? Both sides are
+/// Absorb check: does the defender at `defender_slot` absorb `mv` from the
+/// attacker at `attacker_slot`? Both sides are
 /// `effective_hit_pair` (post-mega ability and types, Protean override). The
 /// move type is the same pre-immunity chain the engine uses
 /// (`resolve_effective_move_type`). Covers damaging and status moves alike,
@@ -1920,11 +1920,11 @@ fn move_absorbed_by_holder(
 }
 
 ///|
-/// Showdown runs TryHit (そうしょく), TypeImmunity, and TryImmunity before
-/// Accuracy. A move that is absorbed, or a damaging move the effective
+/// Showdown runs TryHit (absorb abilities), TypeImmunity, and TryImmunity
+/// before Accuracy. A move that is absorbed, or a damaging move the effective
 /// defender is immune to, has no miss branch. Status moves (`power <= 0`)
-/// other than そうしょく absorption still roll accuracy: the damage pipeline
-/// does not treat them as the immune sentinel.
+/// other than an absorb (`ability_absorbs_move`) still roll accuracy: the
+/// damage pipeline does not treat them as the immune sentinel.
 fn move_skips_accuracy(
   state : SwitchingGameState,
   attacker_is_me : Bool,
@@ -1968,10 +1968,13 @@ fn move_skips_accuracy(
 
 ///|
 /// State transition for an absorbed move (`move_absorbed_by_holder` is true).
-/// The move never reaches the holder, so no HP change, status, self or opponent
+/// The move never reaches the holder, so no damage, status, self or opponent
 /// stat effect, recoil, drain, recharge, self-KO, or contact / item proc happens.
-/// The holder's Attack rises by `ability_absorb_boost` (capped at +6 by
-/// `clamp_rank_for`). The attacker's Protean / Libero lock is still recorded.
+/// The holder gets `ability_absorb_boost` (capped at +6 by `clamp_rank_for`)
+/// and `absorb_healed_hp` (1/4 max HP, capped). A fainted holder gains neither.
+/// サンダーダイブ still crashes: `onTryHit` returning null is a MoveFail, so
+/// `with_crash_damage` runs after the absorb (identity for every other move).
+/// The attacker's Protean / Libero lock is still recorded.
 fn with_absorb_effects(
   state : SwitchingGameState,
   attacker_is_me : Bool,
@@ -1983,6 +1986,8 @@ fn with_absorb_effects(
 ) -> SwitchingGameState {
   let my_ranks = state.my_ranks.copy()
   let opp_ranks = state.opp_ranks.copy()
+  let my_hps = state.my_hps.copy()
+  let opp_hps = state.opp_hps.copy()
   let holder_is_me = !attacker_is_me
   let holder_ability = holder_ability_of(
     state,
@@ -1991,17 +1996,27 @@ fn with_absorb_effects(
     defender_team,
   )
   let holder_ranks = if holder_is_me { my_ranks } else { opp_ranks }
-  let holder_hps = if holder_is_me { state.my_hps } else { state.opp_hps }
+  let holder_hps = if holder_is_me { my_hps } else { opp_hps }
   // A holder that has already fainted is not a valid target (Showdown fails
-  // the move before `onTryHit`), so it gains no boost.
+  // the move before `onTryHit`), so it gains no boost and no heal.
   let holder_alive = defender_slot < holder_hps.length() &&
     holder_hps[defender_slot] > 0
-  if holder_alive {
+  if holder_alive && defender_slot < defender_team.length() {
     match ability_absorb_boost(holder_ability) {
       Some((stat, delta)) =>
         holder_ranks[stat] = clamp_rank_for(holder_ability, holder_ranks[stat] + delta)
       None => ()
     }
+    let megaed = if holder_is_me { state.my_megaed } else { state.opp_megaed }
+    let is_mega = defender_slot < megaed.length() && megaed[defender_slot]
+    let max_hp = effective_hp(
+      effective_combatant(defender_team[defender_slot], is_mega),
+    )
+    holder_hps[defender_slot] = absorb_healed_hp(
+      holder_ability,
+      holder_hps[defender_slot],
+      max_hp,
+    )
   }
   let my_protean_locked = state.my_protean_locked.copy()
   let opp_protean_locked = state.opp_protean_locked.copy()
@@ -2025,7 +2040,20 @@ fn with_absorb_effects(
       mv,
     )
   }
-  { ..state, my_ranks, opp_ranks, my_protean_locked, opp_protean_locked }
+  let absorbed = {
+    ..state,
+    my_ranks,
+    opp_ranks,
+    my_hps,
+    opp_hps,
+    my_protean_locked,
+    opp_protean_locked,
+  }
+  // onTryHit null still MoveFails, so サンダーダイブ crashes. Other moves are
+  // unchanged (`with_crash_damage` is identity when `is_crash_move` is false).
+  with_crash_damage(
+    absorbed, attacker_is_me, attacker_slot, attacker_team, mv,
+  )
 }
 
 ///|

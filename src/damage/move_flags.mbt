@@ -228,6 +228,32 @@ pub fn is_grass_non_foe_target_move(name : String) -> Bool {
 }
 
 ///|
+/// 吸収特性 (ちくでん / ちょすい / かんそうはだ / でんきエンジン / ひらいしん /
+/// もらいび / そうしょく) が相手を狙っていないので吸収しない技。
+/// champout `50e7233` `masterdata/waza.json` の `available=1` で、該当タイプかつ
+/// 相手ポケモンを対象にしない target:
+///   - 7 自分: アクアリング / じゅうでん / でんじふゆう
+///   - 6 味方: いのちのしずく / じばそうさ
+///   - 10 フィールド: あまごい / にほんばれ / エレキフィールド
+///   - 11 相手側: まきびし
+/// くさ側は `is_grass_non_foe_target_move` (target 7 / 10 と、てもち・味方の説明文)。
+let absorb_non_foe_target_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  [
+    "アクアリング", "あまごい", "いのちのしずく", "じゅうでん", "でんじふゆう",
+    "エレキフィールド", "じばそうさ", "にほんばれ", "まきびし",
+  ].iter(),
+)
+
+///|
+/// `true` when `name` does not target the opposing Pokémon, so an absorb
+/// ability must not nullify it. Grass names stay in
+/// `is_grass_non_foe_target_move`; this is the union used by the payoff absorb
+/// check.
+pub fn is_absorb_non_foe_target_move(name : String) -> Bool {
+  is_grass_non_foe_target_move(name) || absorb_non_foe_target_moves.contains(name)
+}
+
+///|
 /// Resolve the move's effective contact flag, honoring `force_contact` from
 /// `StatResolution` (シェルアームズ 物理モード等の動的接触判定) over the
 /// static `is_contact_move` table. Shared by the damage engine and the

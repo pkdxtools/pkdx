@@ -1598,7 +1598,7 @@ fn action_accuracy(
 
 ///|
 /// Accuracy of `action` for the attempt-phase split (`per_side_attempt`).
-/// Showdown runs TryHit (そうしょく), TypeImmunity, and TryImmunity before
+/// Showdown runs TryHit (absorb), TypeImmunity, and TryImmunity before
 /// Accuracy, so an absorbed move, or a damaging move the defender is immune
 /// to, is fixed at 100. The defender and the attacker's move type are the
 /// post-mega `effective_combatant` (ability, types, Protean override). This

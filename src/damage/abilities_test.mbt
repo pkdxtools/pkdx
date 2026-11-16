@@ -233,3 +233,15 @@ test "calc_damage: ちからずく boosts only moves with a stripped secondary; 
   // 能力変化だけは追加効果に数えない。威力は変わらない。
   @debug.assert_eq(sf_low_roll("ちからずく", stat_only), sf_low_roll("", stat_only))
 }
+
+///|
+test "check_def_immunity: ちくでん はでんきを無効、かんそうはだ はみずだけ" {
+  assert_true(@damage.check_def_immunity("ちくでん", "でんき"))
+  assert_false(@damage.check_def_immunity("ちくでん", "みず"))
+  assert_false(@damage.check_def_immunity("ちくでん", "ノーマル"))
+  assert_true(@damage.check_def_immunity("かんそうはだ", "みず"))
+  assert_false(@damage.check_def_immunity("かんそうはだ", "ほのお"))
+  @debug.assert_eq(@damage.get_def_type_resist("かんそうはだ", "ほのお"), 1.25)
+  assert_true(@damage.check_def_immunity("ふゆう", "じめん"))
+  assert_true(@damage.check_def_immunity("よびみず", "みず"))
+}

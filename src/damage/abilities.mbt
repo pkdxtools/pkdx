@@ -68,7 +68,9 @@ pub fn check_def_immunity(ability : String, move_type : String) -> Bool {
   match ability {
     "ちょすい" | "よびみず" => move_type == "みず"
     "もらいび" => move_type == "ほのお"
-    "ひらいしん" | "でんきエンジン" => move_type == "でんき"
+    // ちくでん: Champions tokuseiinfo_syn TOKUSEIINFO_SYN_010
+    // "Electric-type moves do not work on the Pokémon. Instead, they restore 1/4 of its max HP."
+    "ひらいしん" | "でんきエンジン" | "ちくでん" => move_type == "でんき"
     "ふゆう" => move_type == "じめん"
     "そうしょく" => move_type == "くさ"
     "かんそうはだ" => move_type == "みず"

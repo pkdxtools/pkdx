@@ -2714,7 +2714,7 @@ pub fn team_rollout(
         // Step 4: end-of-turn — Gen9 公式順序で適用する。DP 側 `apply_eot`
         // (switching_game_effects.mbt) と同じ順序を保つことで、MC と DP の
         // 意味論 parity を保証する。順序:
-        //   1. 天候ダメ (Sand chip)
+        //   1. 天候ダメ (Sand chip、かんそうはだの雨 1/8 / 日照 1/8)
         //   2. アイテム回復 (たべのこし)
         //   3. やどりぎのタネ tick
         //   4. 状態異常 slip
@@ -2738,6 +2738,24 @@ pub fn team_rollout(
           weather_state[0],
         )
         apply_sand_damage_active(
+          opp_active,
+          opp_hps,
+          opp,
+          opp_megaed,
+          opp_max,
+          weather_state[0],
+        )
+        // かんそうはだ: 砂と同じ天候 residual。DP `apply_eot` と同じ関数。
+        // 雨と日照以外、特性が違う側は HP を書かない。
+        apply_dry_skin_weather_active(
+          own_active,
+          own_hps,
+          own,
+          own_megaed,
+          own_max,
+          weather_state[0],
+        )
+        apply_dry_skin_weather_active(
           opp_active,
           opp_hps,
           opp,

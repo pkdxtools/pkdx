@@ -357,10 +357,12 @@ Champions `tokuseiinfo_syn.json` (`champout` `50e7233`) で吸収経路に載せ
 | でんきエンジン `TOKUSEIINFO_SYN_078` | でんき技が当たらず素早さ +1 | 素早さ +1 |
 | ちくでん `TOKUSEIINFO_SYN_010` | でんき技が当たらず最大 HP の 1/4 回復 | 1/4 回復 (`check_def_immunity` にも収録) |
 | ちょすい `TOKUSEIINFO_SYN_011` | みず技が当たらず最大 HP の 1/4 回復 | 1/4 回復 |
-| かんそうはだ `TOKUSEIINFO_SYN_087` | みず技で 1/4 回復。ほのおは 25% 増。雨で 1/8 回復、日照で 1/8 減少 | みずの 1/4 だけ。ほのお 1.25× は `get_def_type_resist`。天候のターン終了は未モデル |
+| かんそうはだ `TOKUSEIINFO_SYN_087` | みず技で 1/4 回復。ほのおは 25% 増。雨で 1/8 回復、日照で 1/8 減少 | みずの 1/4。ほのおは威力段階の 1.25× 一度 (`get_def_type_resist`。最終 5120 は重ねない)。雨 / 日照の 1/8 は天候 residual（砂チップと同じ段、たべのこしの前） |
 | もらいび `TOKUSEIINFO_SYN_018` | ほのお技が当たらず、もらいび状態になる。`BTR_STATE_SYN_121_02` はほのお技の威力 1.5 倍 | 無効 + slot ごとの状態。状態中の炎技だけ威力 ×3/2。未発動の炎技は 1.5 倍しない。交代で解除 |
 
 よびみず は `tokusei.json` に無いので、特攻 +1 は付けない。ダメージ計算の水無効 (`check_def_immunity`) だけが残る。変化技のみずは命中判定が残る。どしょく (じめんで 1/4) と うなぎのぼり は本文があるが、この変更の対象外。
+
+かんそうはだのターン終了は `apply_dry_skin_weather_active`（DP `apply_eot` と MC Step 4.1 が同じ関数）。分母は水吸収・砂チップと同じ `effective_hp`。切り捨ての 1/8 で、1 未満は 0（砂の max/16 と同じ。Showdown の間接ダメージ下限 1 は使わない）。ひんしは不変。控えは動かない。判定は DP ではメガ後の実効特性、MC はメガ未モデルで raw。大雨・大日照とばんのうがさはモデルに無い。出力が変わるのは、場にかんそうはだがいて雨か日照のターン終了を迎えるときと、かんそうはだがほのお技を受けるときだけ。
 
 - **吸収される技**: 防御側の特性 (DP は mega 後の実効特性) が上表のどれかで、技の解決タイプ (`resolve_effective_move_type`、engine と同じ前段) が対応タイプ、かつ技が相手を狙う。ダメージ技と変化技の両方が対象 (Showdown の `onTryHit` は両方で走る)。生存時の回復は `min(現HP + floor(最大HP / 4), 最大HP)`。満タンでも吸収は起きる。ランクは +6 で頭打ちだが、吸収自体は起きる。
 - **吸収されない技** (`is_absorb_non_foe_target_move`、`src/damage/move_flags.mbt`): 自分・味方・フィールド・相手側に作用する技。くさ側は `is_grass_non_foe_target_move` (ねをはる / こうごうせい / せいちょう / コットンガード / ニードルガード / グラスフィールド / アロマセラピー / ジャングルヒール)。ほかは champout `waza.json` (`available=1`) の target 7 自分 (アクアリング / じゅうでん / でんじふゆう)、6 味方 (いのちのしずく / じばそうさ)、10 フィールド (あまごい / にほんばれ / エレキフィールド)、11 相手側 (まきびし)。`pokedex.db` には target 列がないため、同じ名前表で判定する。
@@ -980,6 +982,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) と はとむね による攻撃技の防御ダウンの MC/DP parity
 - `switching_game_sap_sipper_wbtest.mbt` — そうしょく の吸収 (くさ攻撃 / 状態 / やどりぎのタネ / 相手素早さダウン / リーフストーム の自己ダウン不発 / 自分狙いのくさ技は非吸収 / グラスフィールド / くさ以外は通常 / A +6 頭打ち / ±6 積み上がり / Protean 固定 / 持ち主の技は非吸収 / 命中 100 の固定 / 1 ターン解決で単一 leaf)
 - `switching_game_absorb_wbtest.mbt` — ちくでん / ちょすい / かんそうはだ の 1/4 回復、でんきエンジン の素早さ +1、ひらいしん の特攻 +1、もらいび の無効ともらいび状態、満タン頭打ち、瀕死は効果なし、+6 頭打ちと +2 を超える積み、自分・天候技は非吸収、Protean、サンダーダイブ の崩れ、命中 100、交代先と出ていく側
+- `switching_game_dry_skin_wbtest.mbt` — かんそうはだの雨 1/8・日照 1/8（上限 / ひんし / 控え / 砂はチップのみ / たべのこしより前 / メガ後特性）と DP・MC の終端値
 - `switching_game_flash_fire_wbtest.mbt` — 未発動の炎技は 1.5 倍しない、吸収後と同一ターンの後攻は 1.5 倍、交代で解除、非炎は不変、キャッシュが混ざらない、こおりのまま発動、瀕死とにほんばれは状態にしない
 - `switching_game_mega_absorb_wbtest.mbt` — メガターンの吸収 / タイプ無効 / 特性無効をメガ後の実効特性・タイプで判定 (そうしょく を得る・失う、ふゆう、ゴースト、エレキスキン、Protean ロック解除)。MC はダメージ技の無効を命中 100 にし、変化技は技の命中率のまま
 - `team_monte_carlo_sap_sipper_parity_wbtest.mbt` — そうしょく の MC 経路 (post-hit / 状態付与 / 命中) と、乱数の入らない matchup での DP/MC parity (horizon 2 / 3)

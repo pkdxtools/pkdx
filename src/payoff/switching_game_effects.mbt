@@ -1487,7 +1487,7 @@ pub fn eot_leftovers_heal(current_hp : Int, max_hp : Int, item : String) -> Int 
 /// Stage 12 (EOT 順序整理): tick blocks are arranged in the Gen9 mainline
 /// "residual" order. Plan H-2 specifies the canonical sequence as:
 ///
-///   1. 天候ダメ (Sand chip on non-はがね/いわ/じめん, non-immune ability)
+///   1. 天候ダメ (Sand chip、かんそうはだの雨 1/8 回復 / 日照 1/8 ダメージ)
 ///   2. アイテム回復 (たべのこし)
 ///   3. やどりぎのタネ tick
 ///   4. 状態異常スリップ (Burn / Poison / BadPoison / Drowsy → Sleep)
@@ -1558,7 +1558,10 @@ pub fn apply_eot(
   // an Aerodactyl that megas into Rock-typed form will not take Sand chip on
   // the same turn it megas (and pre-mega it was Rock anyway, so this is
   // mostly insurance). Other weathers (Rain / Sun / Snow / None) deal no
-  // chip damage in Gen9 (Hail was retired in favour of Snow).
+  // sand chip in Gen9 (Hail was retired in favour of Snow).
+  // かんそうはだの雨 1/8 回復と日照 1/8 ダメージは同じ天候 residual
+  // なので砂チップの直後、たべのこしの前。天候は排他で、特性が違う側は
+  // HP を書かない。
   apply_sand_damage_active(
     state.my_active,
     my_hps,
@@ -1568,6 +1571,22 @@ pub fn apply_eot(
     state.weather,
   )
   apply_sand_damage_active(
+    state.opp_active,
+    opp_hps,
+    opp_team,
+    state.opp_megaed,
+    opp_max,
+    state.weather,
+  )
+  apply_dry_skin_weather_active(
+    state.my_active,
+    my_hps,
+    my_team,
+    state.my_megaed,
+    my_max,
+    state.weather,
+  )
+  apply_dry_skin_weather_active(
     state.opp_active,
     opp_hps,
     opp_team,
@@ -1945,6 +1964,57 @@ pub fn apply_sand_damage_active(
       sub_hp_floor0(hps, active, max_hp / 16)
     }
     _ => ()
+  }
+}
+
+///|
+/// Weather residual for かんそうはだ, in the same slot as sand chip and before
+/// leftovers. Champions `tokuseiinfo_syn.json` `TOKUSEIINFO_SYN_087`
+/// (`champout` `50e7233`):
+///
+/// - あめ: restore `max_hp / 8`, capped at `max_hp`.
+/// - にほんばれ: lose `max_hp / 8`, floored at 0.
+/// - すなあらし / ゆき / 天候なし: no extra residual (sand chip stays in
+///   `apply_sand_damage_active`).
+///
+/// `max_hp` is the same `effective_hp` denominator as the 1/4 Water absorb
+/// and sand chip. Integer division, no minimum of 1 (same as sand's
+/// `max_hp / 16`). A fainted holder is unchanged. The ability is the
+/// post-mega effective ability, matching sand. Showdown also fires this on
+/// Primordial Sea / Desolate Land and suppresses it with Utility Umbrella;
+/// neither weather nor that item exists in the Champions model. Magic Guard's
+/// "damage only from attacks" cannot stack with Dry Skin on one holder.
+///
+/// Rain and sun are the only weathers that read the team. Every other weather
+/// returns before any HP write, so a side without かんそうはだ is unchanged.
+pub fn apply_dry_skin_weather_active(
+  active : Int,
+  hps : Array[Int],
+  team : Array[Combatant],
+  megaed : Array[Bool],
+  max_hp : Int,
+  weather : @model.Weather,
+) -> Unit {
+  let delta = match weather {
+    @model.Rain => max_hp / 8
+    @model.Sun => -(max_hp / 8)
+    _ => 0
+  }
+  if delta == 0 {
+    return
+  }
+  if hps[active] <= 0 {
+    return
+  }
+  let is_mega = active < megaed.length() && megaed[active]
+  let eff = effective_combatant(team[active], is_mega)
+  if eff.ability != "かんそうはだ" {
+    return
+  }
+  if delta > 0 {
+    add_hp_capped(hps, active, delta, max_hp)
+  } else {
+    sub_hp_floor0(hps, active, -delta)
   }
 }
 

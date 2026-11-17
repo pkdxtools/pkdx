@@ -214,23 +214,35 @@ pub fn ability_blocks_intimidate(ability : String) -> Bool {
 /// `target = 1` and a negative delta (after the あまのじゃく flip).
 /// `stat` is the rank index (0 = Attack ... 4 = Speed).
 ///
-/// Mirrors Showdown's `onTryBoost` for the generic blockers. Clear Body
-/// (クリアボディ), White Smoke (しろいけむり) and Full Metal Body (メタルプロテクト)
-/// share one body: every negative boost from another source is deleted. Hyper
-/// Cutter (かいりきバサミ) deletes only an Attack drop, so it blocks `stat = 0`
-/// alone. Self-inflicted drops (`target = 0`) never reach this predicate, since
-/// Showdown skips the check when `target === source`.
+/// Champions `tokuseiinfo_syn.json` (`champout` `50e7233`), same gate as
+/// Showdown `onTryBoost` (`target === source` is exempt, so self drops never
+/// reach this predicate):
+/// - クリアボディ `TOKUSEIINFO_SYN_029` and しろいけむり `TOKUSEIINFO_SYN_073`:
+///   「相手の技や特性で能力を下げられない。」 Every modelled stat.
+/// - かいりきバサミ `TOKUSEIINFO_SYN_052`: 「相手の技や特性で攻撃を下げられない。」
+///   Attack (`stat = 0`) only.
+/// - はとむね `TOKUSEIINFO_SYN_145`: 「相手の技や特性で防御を下げられない。」
+///   Defense (`stat = 1`) only.
+///
+/// するどいめ (`TOKUSEIINFO_SYN_051`) and はっこう (`TOKUSEIINFO_SYN_035`) say
+/// accuracy cannot be lowered and evasion changes are ignored. The rank array
+/// is only `[A, B, C, D, S]`, so those stats are not blocked here.
+/// メタルプロテクト is not in Champions `tokusei.json`. The name is kept so an
+/// explicit Full Metal Body string still blocks every stat (Showdown's shared
+/// body). It does not appear on a Champions team.
 ///
 /// The Intimidate-only blockers (どんかん / マイペース / せいしんりょく /
 /// きもったま) are absent on purpose: Showdown gates them on
 /// `effect.name === 'Intimidate'`, so a move's drop still lands. Guard Dog
-/// (ばんけん) is likewise Intimidate-only and does not appear here.
+/// (ばんけん) is likewise Intimidate-only and does not appear here. はとむね
+/// does not block Intimidate: that drop is Attack, not Defense.
 pub fn ability_blocks_opp_stat_drop(ability : String, stat : Int) -> Bool {
   match ability {
     "クリアボディ" => true
     "しろいけむり" => true
     "メタルプロテクト" => true
     "かいりきバサミ" => stat == 0
+    "はとむね" => stat == 1
     _ => false
   }
 }

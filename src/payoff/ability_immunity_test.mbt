@@ -326,6 +326,8 @@ test "ability_blocks_intimidate_other_abilities_return_false" {
   @debug.assert_eq(@payoff.ability_blocks_intimidate("ミラーアーマー"), false)
   @debug.assert_eq(@payoff.ability_blocks_intimidate("びびり"), false)
   @debug.assert_eq(@payoff.ability_blocks_intimidate("あまのじゃく"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("はとむね"), false)
+  @debug.assert_eq(@payoff.ability_blocks_intimidate("するどいめ"), false)
   @debug.assert_eq(@payoff.ability_blocks_intimidate(""), false)
 }
 
@@ -366,6 +368,19 @@ test "ability_blocks_opp_stat_drop_hyper_cutter_attack_only" {
 }
 
 ///|
+/// Big Pecks (はとむね, TOKUSEIINFO_SYN_145) blocks only the Defense drop
+/// (stat 1). Attack drops, including Intimidate, still land.
+test "ability_blocks_opp_stat_drop_big_pecks_defense_only" {
+  @debug.assert_eq(@payoff.ability_blocks_opp_stat_drop("はとむね", 1), true)
+  for stat in [0, 2, 3, 4] {
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop("はとむね", stat),
+      false,
+    )
+  }
+}
+
+///|
 /// Intimidate-only blockers (Showdown gates them on `effect.name ===
 /// 'Intimidate'`), Guard Dog, and the redirect / reverse / reaction abilities
 /// do not block a move's drop on any stat.
@@ -382,6 +397,12 @@ test "ability_blocks_opp_stat_drop_other_abilities_return_false" {
     "まけんき",
     "かちき",
     "いかく",
+    "そうしょく",
+    "ひらいしん",
+    // Accuracy / evasion are not rank indices. These abilities block those
+    // only (TOKUSEIINFO_SYN_051 / TOKUSEIINFO_SYN_035).
+    "するどいめ",
+    "はっこう",
     "",
   ]
   for ability in abilities {

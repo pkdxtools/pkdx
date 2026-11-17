@@ -331,10 +331,15 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 
 `apply_stat_effects` (`target = 1` かつ `delta < 0`、あまのじゃく反転後) で、所持者の特性が `ability_blocks_opp_stat_drop` を満たすとそのダウンは不発になる。DP (`with_post_hit_effects`) と MC (`team_apply_post_hit`) は同じ関数を通る。
 
-- **クリアボディ / しろいけむり / メタルプロテクト**: 全能力の相手由来ダウンを不発 (Showdown は同一の `onTryBoost` body)
-- **かいりきバサミ**: 攻撃 (index 0) のダウンのみ不発。防御・特攻・特防・素早さのダウンは通る
-- **不発のダウンは rank も反応も変えない**。`landed` が立たないので、まけんき / かちき の反応は起きない (Showdown は `AfterEachBoost` が不発のダウンに対して走らない)
-- **自己ダウン (`target = 0`) は不発にならない**。Showdown は `target === source` で免除する (インファイト の自己 B-1 / D-1 は クリアボディ でも通る)
+- **クリアボディ / しろいけむり**: 全能力の相手由来ダウンを不発。Champions `tokuseiinfo_syn.json` (`50e7233`) の `TOKUSEIINFO_SYN_029` / `TOKUSEIINFO_SYN_073` はどちらも「相手の技や特性で能力を下げられない。」Showdown は同一の `onTryBoost` body
+- **かいりきバサミ**: 攻撃 (index 0) のダウンのみ不発。`TOKUSEIINFO_SYN_052` 「相手の技や特性で攻撃を下げられない。」防御・特攻・特防・素早さのダウンは通る
+- **はとむね**: 防御 (index 1) のダウンのみ不発。`TOKUSEIINFO_SYN_145` 「相手の技や特性で防御を下げられない。」攻撃のダウン (なきごえ / いかく) は通る
+- **不発のダウンは rank も反応も変えない**。`landed` が立たないので、まけんき / かちき の反応は起きない (Showdown は `AfterEachBoost` が不発のダウンに対して走らない)。くすぐる を はとむね が受けると防御だけ不発で攻撃は下がる。反応は `landed` の能力ごとに 1 回なので、防いだ防御は回数に入らない。はとむね と まけんき は同時に持てないため、はとむね 所持者の攻撃は +2 されない
+- **自己ダウン (`target = 0`) は不発にならない**。本文は「相手の技や特性」に限る。Showdown は `target === source` で免除する (インファイト / ばかぢから の自己ダウンは クリアボディ / はとむね でも通る)
+- **吸収の上昇は相手ダウンではない**。そうしょく / ひらいしん は `onTryHit` で技を消し、上昇 (`ability_absorb_boost`) だけを書く。消えた技の相手ダウンは `landed` に乗らず、まけんき / かちき は誘発しない。上昇そのものもダウンではないので反応しない
+- **命中・回避は未モデル**。するどいめ (`TOKUSEIINFO_SYN_051`) と はっこう (`TOKUSEIINFO_SYN_035`) は「相手の回避率の変化を無視し、命中率も下げられない。」ランク配列は `[A, B, C, D, S]` だけなので、この 2 特性は能力ダウンを防がない
+- **メタルプロテクト**: 名前が来れば クリアボディ と同じ全能力ブロックをする (Showdown の Full Metal Body)。`champout` `50e7233` の `tokusei.json` に項目は無いので、Champions のプールからは出ない
+- **フラワーベール** (`TOKUSEIINFO_SYN_166`): 「味方のくさタイプのポケモンは能力が下がらず状態異常にもならない。」能力低下防止は未モデル (状態異常側は別経路)
 - **通す特性**: いかく 専用の防御特性 (どんかん / マイペース / せいしんりょく / きもったま) は Showdown で `effect.name === 'Intimidate'` に限定されるため技由来のダウンは防がない。ばんけん (Guard Dog) も いかく 専用で、技由来のダウンは通る
 - **未対応**: ミラーアーマー (技由来のダウンを使用者へ反射する) は別経路で未モデル (下記「MVP 対象外」)
 - **判定に使う特性**: DP は mega 後の実効特性 (`effective_combatant`)。メタグロス (クリアボディ) はメガ進化で かたいツメ になり、ブロックしなくなる。MC は mega 未モデル (`megaed` 常に false) なので raw の特性で判定する (MC の mega 未モデル化と同じ境界)。いかく の登場時判定も DP は mega 後実効特性
@@ -964,8 +969,8 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `held_item_stat_reset_wbtest.mbt` — しろいハーブ の判定 helper (負のランクを全て 0・正は残す / 消費済み・他の持ち物・ひんし・範囲外は no-op / 両側独立 / 消費済み所持者の itemless view)
 - `switching_game_white_herb_wbtest.mbt` — しろいハーブ の DP 判定点 (なきごえ・自己ダウン・まけんき / かちき の反応後・クリアボディ 不発・いかく (lead / 交代 / partial-act)・ミラーアーマー反射・消費の持続・技の後に後攻が解除後の B で受ける・EOT・メガ直後)
 - `team_monte_carlo_white_herb_parity_wbtest.mbt` — しろいハーブ の MC/DP parity (自己ダウン後の被弾 / 登場時いかく の lead)
-- `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、DP 配線 `with_post_hit_effects`)
-- `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) ブロックの MC/DP parity
+- `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、はとむね の防御のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、そうしょく / ひらいしん の吸収上昇は反応しない、DP 配線 `with_post_hit_effects`)
+- `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) と はとむね による攻撃技の防御ダウンの MC/DP parity
 - `switching_game_sap_sipper_wbtest.mbt` — そうしょく の吸収 (くさ攻撃 / 状態 / やどりぎのタネ / 相手素早さダウン / リーフストーム の自己ダウン不発 / 自分狙いのくさ技は非吸収 / グラスフィールド / くさ以外は通常 / A +6 頭打ち / ±6 積み上がり / Protean 固定 / 持ち主の技は非吸収 / 命中 100 の固定 / 1 ターン解決で単一 leaf)
 - `switching_game_absorb_wbtest.mbt` — ちくでん / ちょすい / かんそうはだ の 1/4 回復、でんきエンジン の素早さ +1、ひらいしん の特攻 +1、もらいび の無効のみ、満タン頭打ち、瀕死は効果なし、+6 頭打ちと +2 を超える積み、自分・天候技は非吸収、Protean、サンダーダイブ の崩れ、命中 100、交代先と出ていく側
 - `switching_game_mega_absorb_wbtest.mbt` — メガターンの吸収 / タイプ無効 / 特性無効をメガ後の実効特性・タイプで判定 (そうしょく を得る・失う、ふゆう、ゴースト、エレキスキン、Protean ロック解除)。MC はダメージ技の無効を命中 100 にし、変化技は技の命中率のまま

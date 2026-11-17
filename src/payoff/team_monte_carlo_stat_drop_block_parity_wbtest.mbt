@@ -62,3 +62,28 @@ test "select DP/MC parity: Clear Body blocks opponent's Growl (own side)" {
   let mc = sdb_parity_mc(own, opp, 2, 74007UL)
   assert_true((dp - mc).abs() < 0.03)
 }
+
+///|
+/// **Case 2 (own はとむね × 攻撃技の防御ダウン)**: 相手が先に物理技を撃ち、確定の
+/// B-1 が次の被弾を重くする。はとむね はその B-1 を不発にするので、plain より
+/// 残 HP が多い (DP の感度ガード)。MC の単一 rollout も DP と一致する。
+/// 変化技のなきごえ経路 (Case 1) と同じ `apply_stat_effects` を通る。
+test "select DP/MC parity: Big Pecks blocks a damaging move's Defense drop" {
+  let crunch = mk_move(
+    "かみくだく",
+    "あく",
+    @model.Physical,
+    80,
+    stat_effects=[@model.StatEffect::{ stat: 1, delta: -1, target: 1 }],
+  )
+  let hitter = mk_pokemon("Cruncher", "あく", "", 260, 150, 100, 60, 100, 120)
+  let opp = [pl_cmb(hitter, [crunch])]
+  let wall = mk_pokemon("Pecks", "ノーマル", "", 220, 40, 100, 40, 100, 40)
+  let own = [pl_cmb(wall, [sdb_tackle()], ability="はとむね")]
+  let own_plain = [pl_cmb(wall, [sdb_tackle()])]
+  let dp = sdb_parity_dp(own, opp, 2)
+  let dp_plain = sdb_parity_dp(own_plain, opp, 2)
+  assert_true(dp - dp_plain > 0.03)
+  let mc = sdb_parity_mc(own, opp, 2, 74011UL)
+  assert_true((dp - mc).abs() < 0.03)
+}

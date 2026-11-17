@@ -33,6 +33,7 @@ fn best_expected_damage(
   def_disguise_intact? : Bool = false,
   atk_hp? : Int = 0,
   atk_max_hp? : Int = 0,
+  atk_flash_fire? : Bool = false,
 ) -> Double {
   // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
   // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
@@ -83,9 +84,10 @@ fn best_expected_damage(
       @model.Special => def_ranks[3]
       @model.Status => 0
     }
+    let atk_for_calc = attacker_for_flash_fire(atk_eff, mv, weather, atk_flash_fire)
     let r = @damage.calc_damage(
       build_input_with_ranks(
-        atk_eff,
+        atk_for_calc,
         dfn_eff,
         mv,
         ar,
@@ -162,6 +164,7 @@ fn greedy_team_action(
   my_protean_locked? : Array[String] = [],
   opp_protean_locked? : Array[String] = [],
   opp_disguise_busted? : Array[Bool] = [],
+  my_flash_fire? : Array[Bool] = [],
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -212,6 +215,7 @@ fn greedy_team_action(
         def_disguise_intact=opp_def_intact,
         atk_hp=my_hps[s],
         atk_max_hp=my_team[s].pokemon.hp,
+        atk_flash_fire=flash_fire_lit(my_flash_fire, s),
       )
       if score > best_score {
         best_score = score
@@ -278,6 +282,7 @@ fn greedy_team_action(
       def_disguise_intact=opp_def_intact,
       atk_hp=my_hps[active],
       atk_max_hp=my_team[active].pokemon.hp,
+      atk_flash_fire=flash_fire_lit(my_flash_fire, active),
     ) /
     opp_hp_denom
   let mut best_switch = -1
@@ -299,6 +304,7 @@ fn greedy_team_action(
         def_disguise_intact=opp_def_intact,
         atk_hp=my_hps[s],
         atk_max_hp=my_team[s].pokemon.hp,
+        atk_flash_fire=flash_fire_lit(my_flash_fire, s),
       ) /
       opp_hp_denom
     if v > best_switch_value {
@@ -325,6 +331,7 @@ fn greedy_team_action(
       def_disguise_intact=opp_def_intact,
       atk_hp=my_hps[active],
       atk_max_hp=my_team[active].pokemon.hp,
+      atk_flash_fire=flash_fire_lit(my_flash_fire, active),
     ) {
     Some(i) => Some(TmUseMove(i))
     None => Some(TmUseMove(0))
@@ -396,6 +403,7 @@ fn team_apply_post_hit(
   mv : @model.Move,
   dmg : Int,
   immune? : Bool = false,
+  defender_flash_fire? : Array[Bool] = [],
 ) -> Unit {
   // 吸収 (そうしょく / ちくでん / ちょすい / かんそうはだ / でんきエンジン /
   // ひらいしん / もらいび): 技は当たらない。防御側のランク上昇と 1/4 回復だけ行い、
@@ -418,6 +426,11 @@ fn team_apply_post_hit(
             defender_ranks[stat] + delta,
           )
         None => ()
+      }
+      if absorb_ability == "もらいび" &&
+        defender_active >= 0 &&
+        defender_active < defender_flash_fire.length() {
+        defender_flash_fire[defender_active] = true
       }
       let max_hp = effective_hp(defender_team[defender_active])
       defender_hps[defender_active] = absorb_healed_hp(
@@ -690,6 +703,7 @@ fn team_perform_attack(
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
   def_disguise_intact? : Bool = false,
+  atk_flash_fire? : Bool = false,
 ) -> (Int, Int, Bool, Bool) {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
@@ -724,9 +738,12 @@ fn team_perform_attack(
     protean_locked=def_protean_locked,
   )
   let atk_consumed = atk_protean_locked != ""
+  let atk_for_calc = attacker_for_flash_fire(
+    attacker_eff, mv, weather, atk_flash_fire,
+  )
   let r = @damage.calc_damage(
     build_input_with_ranks(
-      attacker_eff,
+      atk_for_calc,
       defender_eff,
       mv,
       atk_rank,
@@ -1422,6 +1439,9 @@ pub fn team_rollout(
   // switch-in)。MC は mega 未モデルなので mega リセットは無い。
   let own_protean_locked : Array[String] = Array::make(own.length(), "")
   let opp_protean_locked : Array[String] = Array::make(opp.length(), "")
+  // もらいび状態。炎技を吸収した slot だけ true。交代で出ていく slot は false。
+  let own_flash_fire : Array[Bool] = Array::make(own.length(), false)
+  let opp_flash_fire : Array[Bool] = Array::make(opp.length(), false)
   // しろいハーブ (held_item_stat_reset.mbt) の消費フラグ。DP の my/opp_item_consumed と
   // 同じ slot-bound・戦闘持続 semantics (交代で回復しない)。Switch arm ではリセットしない。
   let own_item_consumed : Array[Bool] = Array::make(own.length(), false)
@@ -1469,6 +1489,7 @@ pub fn team_rollout(
       my_protean_locked=own_protean_locked,
       opp_protean_locked~,
       opp_disguise_busted~,
+      my_flash_fire=own_flash_fire,
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -1486,6 +1507,7 @@ pub fn team_rollout(
       my_protean_locked=opp_protean_locked,
       opp_protean_locked=own_protean_locked,
       opp_disguise_busted=own_disguise_busted,
+      my_flash_fire=opp_flash_fire,
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -1676,6 +1698,7 @@ pub fn team_rollout(
             if own_active < own_protean_locked.length() {
               own_protean_locked[own_active] = ""
             }
+            clear_flash_fire_slot(own_flash_fire, own_active)
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -1698,6 +1721,7 @@ pub fn team_rollout(
             if opp_active < opp_protean_locked.length() {
               opp_protean_locked[opp_active] = ""
             }
+            clear_flash_fire_slot(opp_flash_fire, opp_active)
             opp_active = i
             reset_ranks(opp_ranks)
           }
@@ -1864,6 +1888,7 @@ pub fn team_rollout(
                 atk_protean_locked=own_protean_locked[own_active],
                 def_protean_locked=opp_protean_locked[opp_active],
                 def_disguise_intact=opp_intact,
+                atk_flash_fire=flash_fire_lit(own_flash_fire, own_active),
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -1878,6 +1903,7 @@ pub fn team_rollout(
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_own, res_eff, immune=res_immune,
+                defender_flash_fire=opp_flash_fire,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2031,6 +2057,7 @@ pub fn team_rollout(
                 atk_protean_locked=opp_protean_locked[opp_active],
                 def_protean_locked=own_protean_locked[own_active],
                 def_disguise_intact=own_intact,
+                atk_flash_fire=flash_fire_lit(opp_flash_fire, opp_active),
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2045,6 +2072,7 @@ pub fn team_rollout(
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_opp, res_eff, immune=res_immune,
+                defender_flash_fire=own_flash_fire,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2167,6 +2195,7 @@ pub fn team_rollout(
                 atk_protean_locked=opp_protean_locked[opp_active],
                 def_protean_locked=own_protean_locked[own_active],
                 def_disguise_intact=own_intact,
+                atk_flash_fire=flash_fire_lit(opp_flash_fire, opp_active),
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2181,6 +2210,7 @@ pub fn team_rollout(
                 opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_opp, res_eff, immune=res_immune,
+                defender_flash_fire=own_flash_fire,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2332,6 +2362,7 @@ pub fn team_rollout(
                 atk_protean_locked=own_protean_locked[own_active],
                 def_protean_locked=opp_protean_locked[opp_active],
                 def_disguise_intact=opp_intact,
+                atk_flash_fire=flash_fire_lit(own_flash_fire, own_active),
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2346,6 +2377,7 @@ pub fn team_rollout(
                 own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_own, res_eff, immune=res_immune,
+                defender_flash_fire=opp_flash_fire,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2461,6 +2493,7 @@ pub fn team_rollout(
               atk_protean_locked=own_protean_locked[own_active],
               def_protean_locked=opp_protean_locked[opp_active],
               def_disguise_intact=opp_intact,
+              atk_flash_fire=flash_fire_lit(own_flash_fire, own_active),
             )
             opp_hps[opp_active] = res_hp
             mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2475,6 +2508,7 @@ pub fn team_rollout(
               own, opp_hps, opp_active, opp_ranks, opp_leech_seeded, opp, opp_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
               mv_own, res_eff, immune=res_immune,
+              defender_flash_fire=opp_flash_fire,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2589,6 +2623,7 @@ pub fn team_rollout(
               atk_protean_locked=opp_protean_locked[opp_active],
               def_protean_locked=own_protean_locked[own_active],
               def_disguise_intact=own_intact,
+              atk_flash_fire=flash_fire_lit(opp_flash_fire, opp_active),
             )
             own_hps[own_active] = res_hp
             mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2603,6 +2638,7 @@ pub fn team_rollout(
               opp, own_hps, own_active, own_ranks, own_leech_seeded, own, own_megaed,
               weather_state, weather_turns_state, field_state, field_turns_state,
               mv_opp, res_eff, immune=res_immune,
+              defender_flash_fire=own_flash_fire,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,

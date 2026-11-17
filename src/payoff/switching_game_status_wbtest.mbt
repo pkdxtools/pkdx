@@ -535,6 +535,8 @@ fn mk_test_state(
     opp_wish_turns: no_wish_pending(team_size),
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }
@@ -866,6 +868,8 @@ fn mk_same_turn_state(
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }
@@ -1423,6 +1427,8 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
   let outs1 = attempt_turn_with_cache(

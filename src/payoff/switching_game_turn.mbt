@@ -405,6 +405,9 @@ priv struct TurnWorkspace {
   // defaults; Move.field_set consumption and EOT counter tick land in Stage E.
   field : @model.Field
   field_turns_left : Int
+  // SwitchingGameState と同じ slot ごとのもらいび状態。ws round-trip で落とさない。
+  my_flash_fire : Array[Bool]
+  opp_flash_fire : Array[Bool]
   turn : Int
 }
 
@@ -445,6 +448,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
     field_turns_left: state.field_turns_left,
+    my_flash_fire: state.my_flash_fire.copy(),
+    opp_flash_fire: state.opp_flash_fire.copy(),
     turn: state.turn,
   }
 }
@@ -486,6 +491,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_wish_turns: ws.opp_wish_turns,
     field: ws.field,
     field_turns_left: ws.field_turns_left,
+    my_flash_fire: ws.my_flash_fire.copy(),
+    opp_flash_fire: ws.opp_flash_fire.copy(),
     turn: if bump_turn {
       ws.turn + 1
     } else {
@@ -745,6 +752,13 @@ fn resolve_attacker_leg(
   let def_disguise_intact = disguise_intact_of(
     pre_damage_state, attacker_is_me, defender_team_eff, defender_active,
   )
+  let (atk_flash_fire, def_flash_fire) = side_flash_fire(
+    ws.my_flash_fire,
+    ws.opp_flash_fire,
+    attacker_is_me,
+    attacker_active,
+    defender_active,
+  )
   let outcomes = damage_variants_cached(
     dmg_cache,
     attacker_is_me,
@@ -765,9 +779,11 @@ fn resolve_attacker_leg(
     atk_protean_locked~,
     def_protean_locked~,
     def_disguise_intact~,
+    atk_flash_fire~,
+    def_flash_fire~,
   )
-  apply_damage_variants_fanout(
-    pre_damage_state,
+      apply_damage_variants_fanout(
+        pre_damage_state,
     outcomes,
     attacker_is_me~,
     attacker_active~,
@@ -990,6 +1006,8 @@ fn clone_state(
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
     field_turns_left: state.field_turns_left,
+    my_flash_fire: state.my_flash_fire.copy(),
+    opp_flash_fire: state.opp_flash_fire.copy(),
     turn: state.turn + turn_delta,
   }
 }
@@ -1008,6 +1026,21 @@ pub fn target_active(state : SwitchingGameState, is_me : Bool) -> Int {
 /// Read the Protean/Libero type lock for `slot` on the `is_me` side from a
 /// `SwitchingGameState`. Returns "" (= no lock) when out of bounds, so callers
 /// that pass it to `damage_variants_cached` default to base-type behaviour.
+///|
+/// (attacker lit, defender lit) for the damage cache. Empty arrays read as false.
+fn side_flash_fire(
+  my_ff : Array[Bool],
+  opp_ff : Array[Bool],
+  attacker_is_me : Bool,
+  atk_slot : Int,
+  def_slot : Int,
+) -> (Bool, Bool) {
+  let atk_flags = if attacker_is_me { my_ff } else { opp_ff }
+  let def_flags = if attacker_is_me { opp_ff } else { my_ff }
+  (flash_fire_lit(atk_flags, atk_slot), flash_fire_lit(def_flags, def_slot))
+}
+
+///|
 fn protean_locked_of(
   state : SwitchingGameState,
   is_me : Bool,
@@ -1152,6 +1185,8 @@ pub fn transition_with_cache(
   // arm では state.copy() が base_state にそのまま流れるので影響なし。
   let my_leech_seeded_new = state.my_leech_seeded.copy()
   let opp_leech_seeded_new = state.opp_leech_seeded.copy()
+  let my_flash_fire_new = state.my_flash_fire.copy()
+  let opp_flash_fire_new = state.opp_flash_fire.copy()
   let my_protean_locked_new = state.my_protean_locked.copy()
   let opp_protean_locked_new = state.opp_protean_locked.copy()
   if my_mega_trigger {
@@ -1216,6 +1251,9 @@ pub fn transition_with_cache(
       if state.opp_active < opp_leech_seeded_new.length() {
         opp_leech_seeded_new[state.opp_active] = false
       }
+      // もらいび状態は出ていく slot で消える (volatile)。メガでは消さない。
+      clear_flash_fire_slot(my_flash_fire_new, state.my_active)
+      clear_flash_fire_slot(opp_flash_fire_new, state.opp_active)
       // Stage 4: switched-out slot の Protean/Libero ロックを解除。再登場時に
       // 未発動 ("") へ戻すことで新しいタイプで再発動できる。leech_seeded と
       // 同じ境界ガード・同じ index で出ていくスロットをリセットする。
@@ -1254,6 +1292,7 @@ pub fn transition_with_cache(
       if state.my_active < my_leech_seeded_new.length() {
         my_leech_seeded_new[state.my_active] = false
       }
+      clear_flash_fire_slot(my_flash_fire_new, state.my_active)
       // Stage 4: switched-out my slot の Protean/Libero ロックを解除。
       if state.my_active < my_protean_locked_new.length() {
         my_protean_locked_new[state.my_active] = ""
@@ -1297,6 +1336,7 @@ pub fn transition_with_cache(
       if state.opp_active < opp_leech_seeded_new.length() {
         opp_leech_seeded_new[state.opp_active] = false
       }
+      clear_flash_fire_slot(opp_flash_fire_new, state.opp_active)
       // Stage 4: switched-out opp slot の Protean/Libero ロックを解除。
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
@@ -1442,6 +1482,8 @@ pub fn transition_with_cache(
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
     field_turns_left: state.field_turns_left,
+    my_flash_fire: my_flash_fire_new,
+    opp_flash_fire: opp_flash_fire_new,
     turn: state.turn + 1,
   }
   // fresh はターン開始値から決める。途中のコピーが落としてもここで上書きする。
@@ -1579,6 +1621,13 @@ pub fn transition_with_cache(
       let def_disguise_intact = disguise_intact_of(
         base_state, attacker_is_me, defender_team_eff, target_slot,
       )
+      let (atk_flash_fire, def_flash_fire) = side_flash_fire(
+        base_state.my_flash_fire,
+        base_state.opp_flash_fire,
+        attacker_is_me,
+        attacker_slot,
+        target_slot,
+      )
       let outcomes = damage_variants_cached(
         dmg_cache,
         attacker_is_me,
@@ -1599,6 +1648,8 @@ pub fn transition_with_cache(
         atk_protean_locked~,
         def_protean_locked~,
         def_disguise_intact~,
+        atk_flash_fire~,
+        def_flash_fire~,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -1807,6 +1858,8 @@ fn pass_turn_state(
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
     field_turns_left: state.field_turns_left,
+    my_flash_fire: state.my_flash_fire.copy(),
+    opp_flash_fire: state.opp_flash_fire.copy(),
     turn: state.turn + 1,
   }
 }
@@ -2060,6 +2113,8 @@ pub fn attempt_turn_with_cache(
         opp_wish_turns: state.opp_wish_turns,
         field: state.field,
         field_turns_left: state.field_turns_left,
+        my_flash_fire: state.my_flash_fire.copy(),
+        opp_flash_fire: state.opp_flash_fire.copy(),
         turn: state.turn,
       }
       // メガ進化はターン頭に起きる。両者行動の枝は transition_with_cache が適用するので
@@ -2280,6 +2335,8 @@ fn partial_act_outcomes(
   // (base_state はこのコピーを参照する)。
   let my_protean_locked = state.my_protean_locked.copy()
   let opp_protean_locked = state.opp_protean_locked.copy()
+  let my_flash_fire = state.my_flash_fire.copy()
+  let opp_flash_fire = state.opp_flash_fire.copy()
   let mut my_active = state.my_active
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
@@ -2303,6 +2360,7 @@ fn partial_act_outcomes(
       if state.my_active < my_protean_locked.length() {
         my_protean_locked[state.my_active] = ""
       }
+      clear_flash_fire_slot(my_flash_fire, state.my_active)
       // 再生力: 自分の出ていく slot。相手が skip でも交代で回復する。
       apply_regenerator_switch_out(
         my_team, state.my_active, my_megaed, my_hps,
@@ -2331,6 +2389,7 @@ fn partial_act_outcomes(
       if state.opp_active < opp_protean_locked.length() {
         opp_protean_locked[state.opp_active] = ""
       }
+      clear_flash_fire_slot(opp_flash_fire, state.opp_active)
       // 再生力: 相手の出ていく slot。自分が skip でも交代で回復する。
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed, opp_hps,
@@ -2427,6 +2486,8 @@ fn partial_act_outcomes(
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
     field_turns_left: state.field_turns_left,
+    my_flash_fire,
+    opp_flash_fire,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -2560,6 +2621,13 @@ fn partial_act_outcomes(
       let def_disguise_intact = disguise_intact_of(
         base_state, attacker_is_me, defender_team_eff, target_slot,
       )
+      let (atk_flash_fire, def_flash_fire) = side_flash_fire(
+        base_state.my_flash_fire,
+        base_state.opp_flash_fire,
+        attacker_is_me,
+        attacker_slot,
+        target_slot,
+      )
       let outcomes = damage_variants_cached(
         dmg_cache,
         attacker_is_me,
@@ -2580,6 +2648,8 @@ fn partial_act_outcomes(
         atk_protean_locked~,
         def_protean_locked~,
         def_disguise_intact~,
+        atk_flash_fire~,
+        def_flash_fire~,
       )
       apply_damage_variants_fanout(
         base_state,
@@ -3014,6 +3084,8 @@ pub fn switching_game_winrate_stats(
     opp_wish_turns: no_wish_pending(opp_team.length()),
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: Array::make(my_team.length(), false),
+    opp_flash_fire: Array::make(opp_team.length(), false),
     turn: 0,
   }
   // 登場時いかく: 先発 lead 同士 (双方 slot 0、megaed 全 false)。再帰前なので

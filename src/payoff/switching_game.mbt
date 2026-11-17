@@ -141,6 +141,12 @@ pub(all) struct SwitchingGameState {
   //   not modeled in this PR). When 0 the next EOT clears to `None`.
   field : @model.Field
   field_turns_left : Int
+  // もらいび状態 (champout `50e7233` `BTR_STATE_SYN_121_02`: ほのお技の威力 1.5 倍)。
+  // slot ごと。炎技を吸収したとき true。交代で出ていく slot は false に戻す
+  // (Showdown の volatile。champout は継続ターン数を書かない)。メガでは消さない。
+  // 長さ 0 は未追跡 (false と同じ)。
+  my_flash_fire : Array[Bool]
+  opp_flash_fire : Array[Bool]
   // ひるみ (Champions wazainfo_syn.json の「N% chance of making the target flinch」) のターン内
   // フラグ。先攻の技が命中して相手が生存し、ひるみ抽選に当たると相手側を true にする。後攻の
   // 試行はこのフラグを行動時点で読み、true なら行動しない (`flinched_outcomes`)。ターン末
@@ -763,6 +769,8 @@ fn compute_mean_damage(
   field? : @model.Field = @model.Field::None,
   protean_consumed? : Bool = false,
   def_disguise_intact? : Bool = false,
+  atk_flash_fire? : Bool = false,
+  def_flash_fire? : Bool = false,
 ) -> Int {
   weighted_mean_floor(
     compute_damage_variants(
@@ -778,6 +786,8 @@ fn compute_mean_damage(
       field~,
       protean_consumed~,
       def_disguise_intact~,
+      atk_flash_fire~,
+      def_flash_fire~,
     ),
   )
 }
@@ -808,6 +818,8 @@ fn compute_damage_variants(
   field? : @model.Field = @model.Field::None,
   protean_consumed? : Bool = false,
   def_disguise_intact? : Bool = false,
+  atk_flash_fire? : Bool = false,
+  def_flash_fire? : Bool = false,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -836,6 +848,7 @@ fn compute_damage_variants(
           def_ranks_full~,
           weather~,
           field~,
+          step1_flash_fire=def_flash_fire,
         )
         // ばけのかわ intact な defender へ反射ダメージが返るケースも初撃扱いで
         // ブロックされ chip のみになる。reflect は outcomes_from_calc_result を
@@ -865,9 +878,12 @@ fn compute_damage_variants(
       None => ()
     }
   }
+  // 未発動のもらいびの炎技は能力名を外してから engine に渡す。発動中は
+  // `apply_atk_ability_power` の威力 3/2 (BTR_STATE の 1.5 倍) をそのまま使う。
+  let atk_for_calc = attacker_for_flash_fire(attacker, mv, weather, atk_flash_fire)
   let r = @damage.calc_damage(
     build_input_with_ranks(
-      attacker,
+      atk_for_calc,
       defender,
       mv,
       atk_rank,
@@ -919,6 +935,7 @@ fn reflect_damage_outcomes(
   def_ranks_full? : Array[Int]? = None,
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
+  step1_flash_fire? : Bool = false,
 ) -> Array[@model.DamageOutcome] {
   let _ = atk_burn
   // Type immunity check: reflect move's own type vs the OPPONENT (defender,
@@ -991,6 +1008,7 @@ fn reflect_damage_outcomes(
       allow_reflect=false,
       weather~,
       field~,
+      atk_flash_fire=step1_flash_fire,
     )
     let step1_mean = avg_mean_damage(step1_outcomes)
     let p_slow_i = compute_p_slow(kind, mv_i, attacker, defender)
@@ -2204,6 +2222,21 @@ fn with_absorb_effects(
       max_hp,
     )
   }
+  // もらいび状態は生存中の吸収でのみ付く。瀕死には技が通らない。
+  // こおりはダメージを受けたときだけ解ける (help_syn `help_11_04_01`)。吸収は
+  // ダメージ 0 なので解かず、状態だけ付ける。
+  let my_flash_fire = if holder_alive && holder_ability == "もらいび" && holder_is_me {
+    with_flash_fire_lit(state.my_flash_fire, defender_slot)
+  } else {
+    state.my_flash_fire
+  }
+  let opp_flash_fire = if holder_alive &&
+    holder_ability == "もらいび" &&
+    !holder_is_me {
+    with_flash_fire_lit(state.opp_flash_fire, defender_slot)
+  } else {
+    state.opp_flash_fire
+  }
   let my_protean_locked = state.my_protean_locked.copy()
   let opp_protean_locked = state.opp_protean_locked.copy()
   let attacker_protean = if attacker_is_me {
@@ -2235,6 +2268,8 @@ fn with_absorb_effects(
     opp_hps,
     my_protean_locked,
     opp_protean_locked,
+    my_flash_fire,
+    opp_flash_fire,
   }
   // onTryHit null still MoveFails, so サンダーダイブ crashes. Other moves are
   // unchanged (`with_crash_damage` is identity when `is_crash_move` is false).

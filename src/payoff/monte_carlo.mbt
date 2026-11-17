@@ -50,6 +50,7 @@ pub fn pick_best_move(
   def_disguise_intact? : Bool = false,
   atk_hp? : Int = 0,
   atk_max_hp? : Int = 0,
+  atk_flash_fire? : Bool = false,
 ) -> Int? {
   // Stage 7 (Protean / Libero MC parity): greedy 選択も `best_expected_damage` /
   // `team_perform_attack` と同じ Protean override を見る。ロック中の Protean 個体は
@@ -103,9 +104,10 @@ pub fn pick_best_move(
       @model.Special => def_ranks[3]
       @model.Status => 0
     }
+    let atk_for_calc = attacker_for_flash_fire(atk_eff, mv, weather, atk_flash_fire)
     let r = @damage.calc_damage(
       build_input_with_ranks(
-        atk_eff,
+        atk_for_calc,
         dfn_eff,
         mv,
         ar,

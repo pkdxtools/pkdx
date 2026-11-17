@@ -70,6 +70,8 @@ fn f5_state_from_field(
     } else {
       999
     },
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }

@@ -367,9 +367,8 @@ fn ability_absorb_type(ability : String, move_type : String) -> Bool {
     "そうしょく" => move_type == "くさ"
     "ちくでん" | "ひらいしん" | "でんきエンジン" => move_type == "でんき"
     "ちょすい" | "かんそうはだ" => move_type == "みず"
-    // もらいび: immunity only. The Flash Fire status (BTR_STATE_SYN_121_02,
-    // Fire moves ×1.5) is not a field on SwitchingGameState, and the damage
-    // engine keys that 1.5× off the ability string itself.
+    // もらいび: ほのおを吸収し、もらいび状態を付ける (TOKUSEIINFO_SYN_018)。
+    // 威力 1.5 は状態が立っているときだけ `attacker_for_flash_fire` が通す。
     "もらいび" => move_type == "ほのお"
     _ => false
   }
@@ -388,6 +387,67 @@ pub fn ability_absorbs_move(
 ) -> Bool {
   ability_absorb_type(ability, move_type) &&
   !@damage.is_absorb_non_foe_target_move(move_name)
+}
+
+///|
+/// `true` when slot `slot` of `flags` is in the Flash Fire status.
+/// A short array (untracked fixture) is not ignited.
+pub fn flash_fire_lit(flags : Array[Bool], slot : Int) -> Bool {
+  slot >= 0 && slot < flags.length() && flags[slot]
+}
+
+///|
+/// Copy of `flags` with `slot` set. Already-lit slots return the same array.
+/// A short array grows so a length-0 fixture still records the status.
+pub fn with_flash_fire_lit(flags : Array[Bool], slot : Int) -> Array[Bool] {
+  if slot < 0 {
+    return flags
+  }
+  if slot < flags.length() {
+    if flags[slot] {
+      return flags
+    }
+    let out = flags.copy()
+    out[slot] = true
+    return out
+  }
+  let out = Array::make(slot + 1, false)
+  for i in 0..<flags.length() {
+    out[i] = flags[i]
+  }
+  out[slot] = true
+  out
+}
+
+///|
+/// Clear `slot` in place. Out of range is a no-op (same guard as leech seed).
+pub fn clear_flash_fire_slot(flags : Array[Bool], slot : Int) -> Unit {
+  if slot >= 0 && slot < flags.length() {
+    flags[slot] = false
+  }
+}
+
+///|
+/// Attacker view for the damage engine. `apply_atk_ability_power` multiplies
+/// Fire move power by 3/2 whenever the ability string is もらいび. That 1.5×
+/// is the Flash Fire status (`BTR_STATE_SYN_121_02`), not the ability alone.
+/// Until the status is lit, a Fire move is calculated as if the attacker had
+/// no ability. Every other ability, and every non-Fire move, returns `atk`
+/// unchanged so the calc input stays bit-identical.
+pub fn attacker_for_flash_fire(
+  atk : Combatant,
+  mv : @model.Move,
+  weather : @model.Weather,
+  lit : Bool,
+) -> Combatant {
+  if lit || atk.ability != "もらいび" {
+    return atk
+  }
+  let ty = @damage.resolve_effective_move_type(mv, weather, atk.ability)
+  if ty != "ほのお" {
+    return atk
+  }
+  { ..atk, ability: "" }
 }
 
 ///|

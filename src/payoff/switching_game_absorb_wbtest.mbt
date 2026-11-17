@@ -5,7 +5,7 @@
 /// - ちくでん / ちょすい / かんそうはだ (みず): 最大 HP の 1/4 を回復 (上限で頭打ち)
 /// - でんきエンジン: 素早さ +1 (上限 +6)
 /// - ひらいしん: 特攻 +1。シングルなので引き寄せはしない
-/// - もらいび: 無効のみ。もらいび状態 (ほのお威力 1.5) は状態を持てない
+/// - もらいび: 無効にし、生存中の holder の slot をもらいび状態にする。威力 1.5 は別テスト
 /// - 自分・味方・フィールド・相手側の技は吸収しない
 /// - サンダーダイブ は吸収したうえで崩れる (onTryHit の null は MoveFail)
 /// - 交代先で判定し、出ていく側の吸収では外れを消さない
@@ -162,6 +162,8 @@ test "もらいび: ほのおを無効にするだけでランクもHPも変わ�
   let dropped = ab_leaf("もらいび", overheat, 100, 200, 90)
   @debug.assert_eq(dropped.my_ranks[2], 0)
   @debug.assert_eq(dropped.opp_hps[0], 100)
+  @debug.assert_eq(flash_fire_lit(s.opp_flash_fire, 0), true)
+  @debug.assert_eq(flash_fire_lit(dropped.opp_flash_fire, 0), true)
 }
 
 ///|
@@ -259,6 +261,7 @@ test "もらいび: にほんばれは吸収されず天候を張る" {
   let s = ab_leaf("もらいび", sun, 100, 200, 0)
   @debug.assert_eq(s.weather, @model.Sun)
   @debug.assert_eq(s.opp_hps[0], 100)
+  @debug.assert_eq(flash_fire_lit(s.opp_flash_fire, 0), false)
 }
 
 ///|

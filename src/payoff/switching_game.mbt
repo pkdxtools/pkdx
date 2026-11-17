@@ -1647,8 +1647,9 @@ fn with_post_hit_effects(
   //   - カテゴリゲートなし: Status 技でも発動する
   // ダメージ計算は本フックより前に走るため、発動技自身のダメージは pre-lock
   // 状態で計算済み。ここで記録するロックは「次手以降」の damage / type-chart に
-  // 効く。記録値は `mv.type_` で variant 非依存なので、`apply_damage_variants-
-  // _fanout` から variant ごとに呼ばれても全 leaf が同一値に収束する。
+  // 効く。記録値は解決後の技タイプ (`protean_lock_type`) で variant 非依存なので、
+  // `apply_damage_variants_fanout` から variant ごとに呼ばれても全 leaf が同一値に
+  // 収束する。命中外れは `with_miss_self_loss` / `partial_act_with_miss_protean`。
   //
   // Stage 5: 発動判定は base ability ではなく **mega 後の実効特性** (`atk_eff`)
   // を見る。base げきりゅう → mega へんげんじざい のように mega で初めて Protean
@@ -1663,7 +1664,9 @@ fn with_post_hit_effects(
     opp_protean_locked
   }
   if attacker_active < attacker_team.length() {
-    record_protean_on_use(atk_eff, attacker_protean, attacker_active, mv)
+    record_protean_on_use(
+      atk_eff, attacker_protean, attacker_active, mv, state.weather,
+    )
   }
   if mv.self_ko {
     attacker_hps[attacker_active] = 0
@@ -1749,27 +1752,95 @@ fn with_post_hit_effects(
 }
 
 ///|
-/// Protean / Libero: the user's type becomes the type of the move it uses,
-/// once per switch-in (`locked[active]` keeps the first type). `atk_eff` is the
-/// effective combatant (mega-resolved); a Terastallized user keeps its type.
-/// Shared by the normal post-hit path and the absorb path: Protean fires when
-/// the move is used (Showdown `PrepareHit`, before `TryHit`), so an absorbed
-/// move still sets the lock.
+/// Type Protean / Libero would lock to, or `""` when the ability does not
+/// change the user.
+///
+/// Champions `TOKUSEIINFO_SYN_168` / `_236`: "Changes the Pokémon’s type to
+/// the type of the move it’s about to use. This works only once per time the
+/// Pokémon enters battle." The type is the move's resolved type (Weather Ball
+/// via `resolve_effective_move_type`, then skin). A user that is already
+/// exactly that single type does not change, so the once-per-entry is not
+/// consumed (Showdown `getTypes().join() !== type` inside `onPrepareHit`).
+fn protean_lock_type(
+  atk_eff : Combatant,
+  mv : @model.Move,
+  weather : @model.Weather,
+) -> String {
+  if atk_eff.tera_type != "" {
+    return ""
+  }
+  if atk_eff.ability != "へんげんじざい" && atk_eff.ability != "リベロ" {
+    return ""
+  }
+  let t = @damage.resolve_effective_move_type(mv, weather, atk_eff.ability)
+  if t == "" {
+    return ""
+  }
+  let type2 = atk_eff.pokemon.type2
+  let already_single = atk_eff.pokemon.type1 == t && (type2 == "" || type2 == t)
+  if already_single {
+    ""
+  } else {
+    t
+  }
+}
+
+///|
+/// Protean / Libero: the user's type becomes the resolved type of the move it
+/// is about to use, once per switch-in (`locked[active]` keeps the first
+/// type). `atk_eff` is the effective combatant (mega-resolved); a
+/// Terastallized user keeps its type. Shared by the hit, absorb, immune, and
+/// accuracy-miss paths: Showdown runs `PrepareHit` before `TryHit` and
+/// Accuracy, so a miss still sets the lock.
 fn record_protean_on_use(
   atk_eff : Combatant,
   locked : Array[String],
   attacker_active : Int,
   mv : @model.Move,
+  weather : @model.Weather,
 ) -> Unit {
-  if (
-      atk_eff.ability == "へんげんじざい" ||
-      atk_eff.ability == "リベロ"
-    ) &&
-    atk_eff.tera_type == "" &&
-    attacker_active < locked.length() &&
-    locked[attacker_active] == "" {
-    locked[attacker_active] = mv.type_
+  if attacker_active < 0 ||
+    attacker_active >= locked.length() ||
+    locked[attacker_active] != "" {
+    return
   }
+  let t = protean_lock_type(atk_eff, mv, weather)
+  if t != "" {
+    locked[attacker_active] = t
+  }
+}
+
+///|
+/// Record Protean / Libero on `state` for a move the user is about to use
+/// (including an accuracy miss). Mega-resolved ability and types. Returns
+/// `state` unchanged when the ability does not fire.
+fn with_protean_on_use_state(
+  state : SwitchingGameState,
+  user_is_me : Bool,
+  user_slot : Int,
+  user_team : Array[Combatant],
+  mv : @model.Move,
+) -> SwitchingGameState {
+  if user_slot < 0 || user_slot >= user_team.length() {
+    return state
+  }
+  let my_protean_locked = state.my_protean_locked.copy()
+  let opp_protean_locked = state.opp_protean_locked.copy()
+  let locked = if user_is_me {
+    my_protean_locked
+  } else {
+    opp_protean_locked
+  }
+  let megaed = if user_is_me { state.my_megaed } else { state.opp_megaed }
+  let is_mega = user_slot < megaed.length() && megaed[user_slot]
+  record_protean_on_use(
+    effective_combatant(user_team[user_slot], is_mega),
+    locked,
+    user_slot,
+    mv,
+    state.weather,
+  )
+  { ..state, my_protean_locked, opp_protean_locked }
 }
 
 ///|
@@ -2038,6 +2109,7 @@ fn with_absorb_effects(
       attacker_protean,
       attacker_slot,
       mv,
+      state.weather,
     )
   }
   let absorbed = {
@@ -2103,6 +2175,7 @@ fn with_immune_effects(
       attacker_protean,
       attacker_slot,
       mv,
+      state.weather,
     )
   }
   if mv.self_ko && attacker_slot < attacker_hps.length() {

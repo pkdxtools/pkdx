@@ -189,6 +189,7 @@ test "mega absorb DP: ふゆうを得るメガターンはダメージ技を外�
 
 ///|
 /// このターン ゴースト になる相手へ、たいあたり 50。タイプ無効で外れ枝は無い。
+/// 使用者は単ノーマルなので、同じタイプのたいあたりではロックを消費しない。
 test "mega absorb DP: ゴーストになるメガターンはノーマル技を外さない" {
   let mine = ma_mon("Protean", "ノーマル", "へんげんじざい", [ma_tackle()], 120)
   let opp = ma_mon(
@@ -202,7 +203,7 @@ test "mega absorb DP: ゴーストになるメガターンはノーマル技を�
   )
   let outs = ma_turn(mine, opp, UseMove(0), Mega(0), im_state())
   @debug.assert_eq(outs.length(), 1)
-  @debug.assert_eq(mm_mass(outs, fn(s) { s.my_protean_locked[0] == "ノーマル" }), 1.0)
+  @debug.assert_eq(mm_mass(outs, fn(s) { s.my_protean_locked[0] == "" }), 1.0)
   @debug.assert_eq(outs[0].1.opp_hps[0], 100)
 }
 
@@ -247,6 +248,7 @@ test "mega absorb DP: メガでプロテアンロックが外れるとタイプ�
 
 ///|
 /// メガしていない相手が Protean でゴーストなら、たいあたり 50 は外れない。
+/// 使用者自身も単ノーマルのへんげんじざいだが、たいあたりではロックしない。
 test "mega absorb DP: プロテアンでゴーストの相手はたいあたりを外さない" {
   let tackle = ma_tackle()
   let mine = ma_mon("Atk", "ノーマル", "へんげんじざい", [tackle], 120)
@@ -255,7 +257,7 @@ test "mega absorb DP: プロテアンでゴーストの相手はたいあたり�
   @debug.assert_eq(attempt_accuracy(st, UseMove(0), true, [mine], [opp]), 100)
   let outs = ma_turn(mine, opp, UseMove(0), UseMove(0), st)
   @debug.assert_eq(outs.length(), 1)
-  @debug.assert_eq(outs[0].1.my_protean_locked[0], "ノーマル")
+  @debug.assert_eq(outs[0].1.my_protean_locked[0], "")
   @debug.assert_eq(outs[0].1.opp_hps[0], 100)
 }
 

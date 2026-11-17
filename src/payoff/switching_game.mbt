@@ -1811,6 +1811,41 @@ fn record_protean_on_use(
 }
 
 ///|
+/// Whether an accuracy miss would write a new Protean / Libero lock.
+///
+/// False when the slot is already locked, Terastallized, not Protean / Libero,
+/// or already exactly the move's resolved type. Callers must then keep the
+/// pre-change transition: one `partial_act_outcomes`, with no speed-order
+/// split. Splitting two identical orders changes a cell by 1 ULP and moves
+/// the selection simplex off the previous vertex.
+fn protean_miss_would_lock(
+  state : SwitchingGameState,
+  user_is_me : Bool,
+  user_slot : Int,
+  user_team : Array[Combatant],
+  mv : @model.Move,
+) -> Bool {
+  if user_slot < 0 || user_slot >= user_team.length() {
+    return false
+  }
+  let locked = if user_is_me {
+    state.my_protean_locked
+  } else {
+    state.opp_protean_locked
+  }
+  if user_slot >= locked.length() || locked[user_slot] != "" {
+    return false
+  }
+  let megaed = if user_is_me { state.my_megaed } else { state.opp_megaed }
+  let is_mega = user_slot < megaed.length() && megaed[user_slot]
+  protean_lock_type(
+    effective_combatant(user_team[user_slot], is_mega),
+    mv,
+    state.weather,
+  ) != ""
+}
+
+///|
 /// Record Protean / Libero on `state` for a move the user is about to use
 /// (including an accuracy miss). Mega-resolved ability and types. Returns
 /// `state` unchanged when the ability does not fire.

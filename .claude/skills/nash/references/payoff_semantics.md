@@ -831,7 +831,7 @@ contact-proc と secondary status は **hits_count を渡されて per-hit Berno
 - カテゴリゲートなし — Status 技でも発動する
 - 記録値は解決後の技タイプ (`resolve_effective_move_type`: ウェザーボールは天候タイプ、その後スキン)。`mv.type_` そのものではない
 - 使用者が既にその単タイプ (`type2` が空または `type1` と同じ) なら変化が起きないのでロックを消費しない (Showdown `getTypes().join() !== type`)
-- 命中外れでも記録する。Champions 本文は「出そうとしている技のタイプ」。Showdown は `PrepareHit` を Accuracy より前に実行する。速い側の外れは、遅い側の技のダメージ計算より前にロックする (同速は両順序を 0.5 ずつ)。眠り・まひ・ひるみ・反動ターンで技を出せなかったときは記録しない。命中率そのものの免除 (タイプ無効で外れ枝を作らない判定) はターン開始時のタイプのままなので、先攻の外れで後攻の無効が生まれたり消えたりしても命中分岐はやり直さない。ダメージ量はロック後のタイプで計算する
+- 命中外れでも記録する。Champions 本文は「出そうとしている技のタイプ」。Showdown は `PrepareHit` を Accuracy より前に実行する。速い側の外れは、遅い側の技のダメージ計算より前にロックする。同速は両順序を 0.5 ずつ平均する。この分割は、その外れが新しいロックを書くときだけ行う。特性が無い、既にロック済み、既にその単タイプ、では従来の単一 `partial_act_outcomes` のままにする。同じ後続を 0.5 ずつ再評価するとセル値が 1 ULP ずれ、選出シンプレックスが別の頂点を返す。眠り・まひ・ひるみ・反動ターンで技を出せなかったときは記録しない。命中率そのものの免除 (タイプ無効で外れ枝を作らない判定) はターン開始時のタイプのままなので、先攻の外れで後攻の無効が生まれたり消えたりしても命中分岐はやり直さない。ダメージ量はロック後のタイプで計算する
 
 特性判定は base ではなく **mega 後の実効特性** (`effective_combatant(_, atk_is_mega)`) を見る。base げきりゅう → mega へんげんじざい のように mega で初めて Protean を得る個体でも正しく記録するため。発動技自身のダメージはこのフックより前に計算済みなので、記録されたロックは「次手以降」と、同ターンの後攻の被弾相性に効く。解決後タイプは variant 非依存なので、`apply_damage_variants_fanout` から variant ごとに呼ばれても全 leaf が同一ロック値へ収束する。
 
@@ -869,7 +869,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 
 ### 検証範囲
 
-- `switching_game_protean_wbtest.mbt` — DP の発動条件 (初手ロック / Status 技 / テラス非発動 / 2手目再ロックなし / 非Protean no-op / opp 側記録 / fanout 全 leaf 同一値)、offense STAB / defense type-chart、`effective_combatant` precedence (tera 優先 / 単タイプ override / `""` no-op)、switch / mega リセット、mega-acquired Protean、mega + Status、ウェザーボールの天候タイプ、既にその単タイプなら非消費、命中外れの行動順 (先攻は後攻の被弾前、後攻は被弾タイプを変えない)、両者外れで崩れ技でない側もロック、眠りでは非発動
+- `switching_game_protean_wbtest.mbt` — DP の発動条件 (初手ロック / Status 技 / テラス非発動 / 2手目再ロックなし / 非Protean no-op / opp 側記録 / fanout 全 leaf 同一値)、offense STAB / defense type-chart、`effective_combatant` precedence (tera 優先 / 単タイプ override / `""` no-op)、switch / mega リセット、mega-acquired Protean、mega + Status、ウェザーボールの天候タイプ、既にその単タイプなら非消費、命中外れの行動順 (先攻は後攻の被弾前、後攻は被弾タイプを変えない、同速は両順序、ロックを書かない外れは二重化しない)、両者外れで崩れ技でない側もロック、眠りでは非発動
 - `team_monte_carlo_protean_parity_wbtest.mbt` — MC/DP value parity を `|dp - mc| < 0.15` で pin (offense STAB + defense type-chart、自分側 / 相手側)、非Protean の決定性 (no-op)、テラス中の bit-exact (ロックゲート off)、greedy/damage coherence (ロック個体が STAB 技を選ぶ)
 
 ## いかく / あまのじゃく / ばけのかわ (Intimidate / Contrary / Disguise)

@@ -1297,6 +1297,85 @@ test "protean: 両者外れでも崩れ技でない側はロックする" {
 }
 
 ///|
+fn protean_miss_pair(
+  my_spe : Int,
+  opp_spe : Int,
+  my_ability : String,
+) -> Array[(Double, SwitchingGameState)] {
+  // ほのお対みずは無効ではないので accuracy 0 は本当に外れる。
+  let miss = {
+    ..pl_move("かえんほうしゃ", type_="ほのお", category=@model.Special, power=90),
+    accuracy: 0,
+  }
+  let hit = {
+    ..pl_move("みずのはどう", type_="みず", category=@model.Special, power=60),
+    accuracy: 100,
+  }
+  let me = pl_with_move("me", "ノーマル", "", my_spe, my_ability, miss)
+  let opp = pl_with_move("opp", "みず", "", opp_spe, "", hit)
+  attempt_turn_with_cache(
+    pl_fanout_state(),
+    UseMove(0),
+    UseMove(0),
+    [me],
+    [opp],
+    new_damage_cache(),
+  )
+}
+
+///|
+test "protean: 特性なしの同速外れは結果を二重化しない" {
+  // ロックを書かない外れまで両順序に割ると、同じ後続を 0.5 ずつ再評価して
+  // セル値が 1 ULP ずれ、select のシンプレックスが別頂点を返す。
+  // 先攻が確定している外れと、分布の長さと確率が一致する。
+  let tied = protean_miss_pair(100, 100, "")
+  let fast = protean_miss_pair(50, 100, "")
+  @debug.assert_eq(tied.length(), fast.length())
+  for i = 0; i < tied.length(); i = i + 1 {
+    let (pt, st) = tied[i]
+    let (pf, sf) = fast[i]
+    @debug.assert_eq(pt, pf)
+    @debug.assert_eq(st.my_hps[0], sf.my_hps[0])
+    @debug.assert_eq(st.opp_hps[0], sf.opp_hps[0])
+    @debug.assert_eq(st.my_protean_locked[0], "")
+  }
+}
+
+///|
+test "protean: 同速の命中外れは両順序を平均する" {
+  // 先に外してほのおになってからみずを受ける順序と、ノーマルのまま先に受ける
+  // 順序で被ダメージが違う。同速なので両方が正の確率を持つ。
+  let outs = protean_miss_pair(100, 100, "へんげんじざい")
+  let mut low = 0.0
+  let mut high = 0.0
+  let mut min_hp = 99999
+  let mut max_hp = 0
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "ほのお")
+    let hp = s.my_hps[0]
+    if hp < min_hp {
+      min_hp = hp
+    }
+    if hp > max_hp {
+      max_hp = hp
+    }
+  }
+  assert_true(min_hp < max_hp)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (p, s) = outs[i]
+    if s.my_hps[0] == min_hp {
+      low = low + p
+    }
+    if s.my_hps[0] == max_hp {
+      high = high + p
+    }
+  }
+  assert_true(low > 0.4 && low < 0.6)
+  assert_true(high > 0.4 && high < 0.6)
+}
+
+///|
 test "protean mc: ウェザーボールのロックは天候タイプ" {
   let locked = [""]
   let atk = pl_combatant(

@@ -2087,11 +2087,17 @@ fn missed_move_of(
 }
 
 ///|
-/// One side acts. If the other side's move missed, Protean / Libero changes
-/// that user in speed order around the acting side. Showdown runs `PrepareHit`
-/// before Accuracy, so a faster miss is already the new type when the slower
-/// move lands. A switch always resolves before the missed move. Speed ties
-/// average both orders, matching `miss_self_loss_outcomes`.
+/// One side acts. If the other side's move missed and that miss would write a
+/// new Protean / Libero lock, the type changes in speed order around the
+/// acting side. Showdown runs `PrepareHit` before Accuracy, so a faster miss
+/// is already the new type when the slower move lands. A switch always
+/// resolves before the missed move. Speed ties average both orders, matching
+/// `miss_self_loss_outcomes`.
+///
+/// When the miss would not write a lock (no ability, already locked, already
+/// that single type), this is exactly `partial_act_outcomes`. Averaging two
+/// identical orders is not bitwise identical after a deep tree and shifts
+/// `pkdx select`.
 fn partial_act_with_miss_protean(
   state : SwitchingGameState,
   ma : SideAttempt,
@@ -2120,6 +2126,11 @@ fn partial_act_with_miss_protean(
   match missed_move_of(idle, idle_team, idle_active) {
     None => act(state)
     Some(mv) => {
+      if !protean_miss_would_lock(
+        state, idle_is_me, idle_active, idle_team, mv,
+      ) {
+        return act(state)
+      }
       let missed_first = match actor_action {
         Switch(_) => -1
         _ => {

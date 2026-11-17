@@ -358,7 +358,7 @@ Champions `tokuseiinfo_syn.json` (`champout` `50e7233`) で吸収経路に載せ
 | ちくでん `TOKUSEIINFO_SYN_010` | でんき技が当たらず最大 HP の 1/4 回復 | 1/4 回復 (`check_def_immunity` にも収録) |
 | ちょすい `TOKUSEIINFO_SYN_011` | みず技が当たらず最大 HP の 1/4 回復 | 1/4 回復 |
 | かんそうはだ `TOKUSEIINFO_SYN_087` | みず技で 1/4 回復。ほのおは 25% 増。雨で 1/8 回復、日照で 1/8 減少 | みずの 1/4 だけ。ほのお 1.25× は `get_def_type_resist`。天候のターン終了は未モデル |
-| もらいび `TOKUSEIINFO_SYN_018` | ほのお技が当たらず、もらいび状態になる。`BTR_STATE_SYN_121_02` はほのお技の威力 1.5 倍 | 無効のみ。もらいび状態を持つ欄が `SwitchingGameState` に無い。ダメージ計算は特性名 もらいび だけで火技を 1.5 倍する (吸収の有無を見ない) |
+| もらいび `TOKUSEIINFO_SYN_018` | ほのお技が当たらず、もらいび状態になる。`BTR_STATE_SYN_121_02` はほのお技の威力 1.5 倍 | 無効 + slot ごとの状態。状態中の炎技だけ威力 ×3/2。未発動の炎技は 1.5 倍しない。交代で解除 |
 
 よびみず は `tokusei.json` に無いので、特攻 +1 は付けない。ダメージ計算の水無効 (`check_def_immunity`) だけが残る。変化技のみずは命中判定が残る。どしょく (じめんで 1/4) と うなぎのぼり は本文があるが、この変更の対象外。
 
@@ -369,6 +369,10 @@ Champions `tokuseiinfo_syn.json` (`champout` `50e7233`) で吸収経路に載せ
 - **命中**: 吸収は命中判定より前に起きる (Gen 9 の moveSteps は Invulnerability → TryHit → TypeImmunity → TryImmunity → Accuracy)。そのため命中率が低い状態技 (ねむりごな 75 等) でも外れ枝は無く、単一 leaf (確率 1.0) になる。
 - **メガしたターン**: `attempt_accuracy` は `turn_start_mega` がフラグを書く前に走る。判定は `effective_hit_pair` (このターンのメガ発動、または既にメガ済みの実効特性・タイプ。Protean ロックはメガ中は外す。技タイプは攻撃側のメガ後特性で `resolve_effective_move_type`)。そうしょく をメガで得るターンは命中 100 で A +1、失うターンはメガ前の吸収を使わず技の命中率で外れる。
 - **ランク範囲**: ランク上昇を持つ吸収特性 (そうしょく / ひらいしん / でんきエンジン) の所持者は ±6 で追跡する (`ability_tracks_full_stages` → `clamp_rank_for`)。通常特性の ±2 で丸めると、+1 の頭打ちが +2 になってしまう。回復だけの特性 (ちくでん / ちょすい / かんそうはだ) と もらいび は ±2 のまま。
+- **もらいび状態**: `SwitchingGameState.{my,opp}_flash_fire` と MC の `own_flash_fire` / `opp_flash_fire` (slot ごと。長さ 0 は未追跡で false)。炎技を吸収した生存中の所持者だけ true (`with_absorb_effects` / `team_apply_post_hit`)。ひんしには付けない。にほんばれなど相手を狙わない炎技は吸収しないので付けない。重ねがけはしない。交代で出ていく slot だけ false (Showdown の volatile。champout は継続ターン数を書かない)。メガでは消さない。実効特性がもらいびのままのときだけ威力が乗る。
+- **威力**: `BTR_STATE_SYN_121_02` の 1.5 倍は `apply_atk_ability_power` の `move_power * 3 / 2`。状態が立っている攻撃のときだけ能力名をもらいびのまま engine に渡す。未発動で解決タイプがほのおのときは `attacker_for_flash_fire` が能力名を外す。炎以外、もらいび以外は同じ Combatant を返す。同じターンに相手の炎技を先に吸収すると、後攻の炎技から 1.5 倍。先に自分が撃った炎技は未発動のまま。こおりはダメージを受けたときだけ解ける (`help_syn` `help_11_04_01`)。吸収はダメージ 0 なのでこおりのまま状態だけ付く。
+- **キャッシュ**: L1 `DamageKey` は `atk_flash_fire` / `def_flash_fire` を持つ。防御側のビットは反射技の Step1 (反射元がもらいび状態) 用。L2 は能力名が鍵なので、未発動の炎技は空の能力名で書き、発動中は CLI と同じ「もらいび + 炎」のエントリを読む。`pkdx damage` は状態を持たないので、特性名もらいびの炎技は従来どおり常に 1.5 倍。
+- **出力が変わる入力**: 特性がもらいびで、解決タイプがほのおの技を撃つときだけ。吸収前は 1.5 倍が外れ、吸収後からその slot が交代するまで 1.5 倍。それ以外の入力はダメージも分岐の加算順も変えない。
 - **あまのじゃく**: 所持者は特性を 1 つしか持たないため、所持者側の反転は起きない。使用者があまのじゃくでも吸収された技は自己効果を出さないので、反転対象がない (`switching_game_sap_sipper_wbtest.mbt` で確認)。
 - **かたやぶり**: 未対応 (下記「MVP 対象外」)。そうしょく は破壊可能 (breakable) 特性だが、かたやぶり は pkdx でモデルしていない。
 - **瀕死の保持者**: 保持者が瀕死 (HP 0) ならランクは上がらず回復もしない (Showdown は瀕死の対象に技が通らない)。DP (`with_absorb_effects`) と MC (`team_apply_post_hit`) の両方で、生存時のみ上昇と回復を適用する。
@@ -975,10 +979,12 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、はとむね の防御のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、そうしょく / ひらいしん の吸収上昇は反応しない、DP 配線 `with_post_hit_effects`)
 - `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) と はとむね による攻撃技の防御ダウンの MC/DP parity
 - `switching_game_sap_sipper_wbtest.mbt` — そうしょく の吸収 (くさ攻撃 / 状態 / やどりぎのタネ / 相手素早さダウン / リーフストーム の自己ダウン不発 / 自分狙いのくさ技は非吸収 / グラスフィールド / くさ以外は通常 / A +6 頭打ち / ±6 積み上がり / Protean 固定 / 持ち主の技は非吸収 / 命中 100 の固定 / 1 ターン解決で単一 leaf)
-- `switching_game_absorb_wbtest.mbt` — ちくでん / ちょすい / かんそうはだ の 1/4 回復、でんきエンジン の素早さ +1、ひらいしん の特攻 +1、もらいび の無効のみ、満タン頭打ち、瀕死は効果なし、+6 頭打ちと +2 を超える積み、自分・天候技は非吸収、Protean、サンダーダイブ の崩れ、命中 100、交代先と出ていく側
+- `switching_game_absorb_wbtest.mbt` — ちくでん / ちょすい / かんそうはだ の 1/4 回復、でんきエンジン の素早さ +1、ひらいしん の特攻 +1、もらいび の無効ともらいび状態、満タン頭打ち、瀕死は効果なし、+6 頭打ちと +2 を超える積み、自分・天候技は非吸収、Protean、サンダーダイブ の崩れ、命中 100、交代先と出ていく側
+- `switching_game_flash_fire_wbtest.mbt` — 未発動の炎技は 1.5 倍しない、吸収後と同一ターンの後攻は 1.5 倍、交代で解除、非炎は不変、キャッシュが混ざらない、こおりのまま発動、瀕死とにほんばれは状態にしない
 - `switching_game_mega_absorb_wbtest.mbt` — メガターンの吸収 / タイプ無効 / 特性無効をメガ後の実効特性・タイプで判定 (そうしょく を得る・失う、ふゆう、ゴースト、エレキスキン、Protean ロック解除)。MC はダメージ技の無効を命中 100 にし、変化技は技の命中率のまま
 - `team_monte_carlo_sap_sipper_parity_wbtest.mbt` — そうしょく の MC 経路 (post-hit / 状態付与 / 命中) と、乱数の入らない matchup での DP/MC parity (horizon 2 / 3)
 - `team_monte_carlo_absorb_parity_wbtest.mbt` — 回復 / ランク上昇 / もらいび / 瀕死 / でんじは / 命中 / あまごい の MC 経路と、ちょすい の DP/MC parity
+- `team_monte_carlo_flash_fire_parity_wbtest.mbt` — MC の吸収で状態が付き、炎技の実ダメージだけ 1.5 倍になり、非炎は同じロール、先攻と後攻で rollout の値が分かれる
 
 ### MVP 対象外 (将来拡張)
 

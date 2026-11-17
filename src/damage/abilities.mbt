@@ -167,6 +167,7 @@ pub fn apply_atk_ability_power(
       } else {
         move_power
       }
+    // CLI は特性名だけで 3/2。payoff は未発動のとき能力名を外してから呼ぶ。
     "もらいび" =>
       if move_type == "ほのお" {
         move_power * 3 / 2

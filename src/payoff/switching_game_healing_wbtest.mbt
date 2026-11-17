@@ -214,6 +214,8 @@ test "with_post_hit_effects: FixedFraction heals attacker active slot" {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
   let mv = mk_heal_move(
@@ -324,6 +326,8 @@ fn mk_weather_state() -> SwitchingGameState {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }
@@ -1296,6 +1300,8 @@ test "with_post_hit_effects: Drain heals attacker by dealt/2" {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
   let mv = mk_drain_move()
@@ -1383,6 +1389,8 @@ test "with_post_hit_effects: Drain reversed by defender's ヘドロえき" {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
   let mv = mk_drain_move()
@@ -1520,6 +1528,8 @@ fn mk_seed_state() -> SwitchingGameState {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }
@@ -2124,6 +2134,8 @@ fn mk_painsplit_state() -> SwitchingGameState {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }
@@ -2406,6 +2418,8 @@ fn mk_wish_state() -> SwitchingGameState {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }
@@ -2854,6 +2868,8 @@ test "attempt_turn_with_cache: Wish used on turn T heals at EOT(T+1)" {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
   // Turn T: my[0] uses Wish, opp uses idle. EOT inside attempt_turn_with_cache
@@ -2964,6 +2980,8 @@ test "attempt_turn_with_cache: Switch threads Wish to replacement (real path)" {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
   // Turn T: my[0] uses Wish, EOT ticks 2 → 1.

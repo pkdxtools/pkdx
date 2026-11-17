@@ -91,6 +91,8 @@ fn cp_state() -> SwitchingGameState {
     opp_wish_turns: -1,
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }

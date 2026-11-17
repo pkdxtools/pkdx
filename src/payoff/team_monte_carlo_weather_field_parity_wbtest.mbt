@@ -77,6 +77,8 @@ fn h1_state_from_weather_field(
     opp_wish_turns: no_wish_pending(opp_team.length()),
     field: f,
     field_turns_left: 999,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }

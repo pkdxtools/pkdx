@@ -1351,6 +1351,8 @@ fn with_status_set(
     opp_wish_turns: state.opp_wish_turns,
     field: state.field,
     field_turns_left: state.field_turns_left,
+    my_flash_fire: state.my_flash_fire.copy(),
+    opp_flash_fire: state.opp_flash_fire.copy(),
     turn: state.turn,
   }
 }
@@ -1850,6 +1852,8 @@ pub fn apply_eot(
     // 前の最後の効果" を成立させる)。
     field: next_field,
     field_turns_left: next_field_turns,
+    my_flash_fire: state.my_flash_fire.copy(),
+    opp_flash_fire: state.opp_flash_fire.copy(),
     turn: state.turn,
   }
 }

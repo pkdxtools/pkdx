@@ -93,6 +93,8 @@ fn pl_parity_state(
     opp_wish_turns: no_wish_pending(opp_team.length()),
     field: @model.Field::None,
     field_turns_left: 0,
+    my_flash_fire: [],
+    opp_flash_fire: [],
     turn: 0,
   }
 }

@@ -45,6 +45,25 @@ test "is_contact_move: 未登録の技は非接触として扱う" {
 }
 
 ///|
+/// champout waza classification 6。風 (5) や非粉の状態技は含めない。
+test "is_powder_move: classification 6 only" {
+  assert_true(@damage.is_powder_move("どくのこな"))
+  assert_true(@damage.is_powder_move("しびれごな"))
+  assert_true(@damage.is_powder_move("ねむりごな"))
+  assert_true(@damage.is_powder_move("キノコのほうし"))
+  assert_true(@damage.is_powder_move("わたほうし"))
+  assert_true(@damage.is_powder_move("いかりのこな"))
+  assert_true(@damage.is_powder_move("ふんじん"))
+  assert_true(@damage.is_powder_move("まほうのこな"))
+  assert_false(@damage.is_powder_move("どくどく"))
+  assert_false(@damage.is_powder_move("おにび"))
+  assert_false(@damage.is_powder_move("あくび"))
+  assert_false(@damage.is_powder_move("かぜおこし"))
+  assert_false(@damage.is_powder_move("わたげ"))
+  assert_false(@damage.is_powder_move(""))
+}
+
+///|
 /// `is_spread_move` で 0.75x 補正対象を取り違えないこと。
 test "is_spread_move: 自分以外全体 (target=4) と相手全体 (target=5)" {
   // target=5 (相手全体)

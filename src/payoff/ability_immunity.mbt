@@ -162,6 +162,30 @@ pub fn ability_reverses_drain(ability : String) -> Bool {
 }
 
 ///|
+/// 粉技が受け手に効かない。champout `50e7233`:
+/// - `help_syn.json` `help_11_15_01`: powder moves have no effect on the
+///   Overcoat ability or Grass-type Pokémon.
+/// - `help_10_03_00`: Grass types are immune to moves and abilities involving
+///   powder.
+/// - `TOKUSEIINFO_SYN_142` (ぼうじん): immune to moves and abilities involving
+///   powder.
+///
+/// The move set is `@damage.is_powder_move` (waza classification 6).
+/// ぼうじんゴーグル is not in Champions `itemname.json`, so items are not
+/// consulted. ほうし (Effect Spore) is a powder ability, not a move, and stays
+/// on the contact-proc path. Absorb (TryHit) is earlier than this predicate;
+/// callers must return before it when the move is absorbed.
+pub fn powder_move_blocked(
+  move_name : String,
+  type1 : String,
+  type2 : String,
+  ability : String,
+) -> Bool {
+  @damage.is_powder_move(move_name) &&
+  (type1 == "くさ" || type2 == "くさ" || ability == "ぼうじん")
+}
+
+///|
 /// Return `true` when the ability suppresses sandstorm chip damage at EOT.
 /// Mirrors the mainline immunity set: マジックガード (Magic Guard) blocks all
 /// indirect damage including sandstorm; すなかき (Sand Rush) / すながくれ

@@ -37,6 +37,11 @@
 ///   trigger Rattled).
 /// - あまのじゃく (Contrary): the drop inverts — target A +1.
 /// - `ability_blocks_intimidate` abilities: no-op.
+/// - フラワーベール, and only when the holder itself is Grass (`target_type1`
+///   / `target_type2`): no-op. Same predicate as move drops
+///   (`ability_blocks_opp_stat_drop`). Omitted types default to `""`, so a
+///   caller that does not pass them still applies the Attack drop. A non-Grass
+///   holder (Champions Flower Veil species are Fairy) stays on the `_` arm.
 /// - まけんき / かちき and anything else: target A -1 through
 ///   `apply_opp_stat_drop`, then `apply_opp_drop_reaction` once. まけんき
 ///   (A +2) / かちき (SpA +2) react only when the drop actually landed.
@@ -45,6 +50,8 @@ pub fn apply_intimidate_on_entry(
   target_ability : String,
   target_ranks : Array[Int],
   entrant_ranks : Array[Int],
+  target_type1? : String = "",
+  target_type2? : String = "",
 ) -> Unit {
   if entrant_ability != "いかく" {
     return
@@ -60,6 +67,14 @@ pub fn apply_intimidate_on_entry(
     ability if ability_reverses_stat_changes(ability) =>
       target_ranks[0] = clamp_rank(target_ranks[0] + 1)
     ability if ability_blocks_intimidate(ability) => ()
+    // この arm は特性名がフラワーベールのときだけ評価する。くさでなければ
+    // ガードが落ちて下の `_` に進み、従来どおり A -1 になる。
+    "フラワーベール" if ability_blocks_opp_stat_drop(
+      "フラワーベール",
+      0,
+      type1=target_type1,
+      type2=target_type2,
+    ) => ()
     _ => {
       if apply_opp_stat_drop(target_ability, target_ranks, 0, -1) {
         apply_opp_drop_reaction(target_ability, target_ranks)

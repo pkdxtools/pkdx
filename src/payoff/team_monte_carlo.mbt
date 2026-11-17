@@ -464,6 +464,9 @@ fn team_apply_post_hit(
   // mega 後実効と常に一致し、drain 経路の defender_ability raw 慣例とも整合する。
   let attacker_ability = attacker_team[attacker_active].ability
   let defender_ability = defender_team[defender_active].ability
+  // MC は mega 未モデルなので raw のタイプ。フラワーベール以外は
+  // ability_blocks_opp_stat_drop が type を読まない。
+  let defender_mon = defender_team[defender_active].pokemon
   apply_stat_effects(
     attacker_ranks,
     defender_ranks,
@@ -471,6 +474,8 @@ fn team_apply_post_hit(
     mv,
     attacker_ability~,
     defender_ability~,
+    defender_type1=defender_mon.type1,
+    defender_type2=defender_mon.type2,
   )
   if mv.recoil_num > 0 && dmg > 0 {
     let raw = dmg * mv.recoil_num / mv.recoil_den
@@ -1460,12 +1465,16 @@ pub fn team_rollout(
     opp[opp_active].ability,
     opp_ranks,
     own_ranks,
+    target_type1=opp[opp_active].pokemon.type1,
+    target_type2=opp[opp_active].pokemon.type2,
   )
   apply_intimidate_on_entry(
     opp[opp_active].ability,
     own[own_active].ability,
     own_ranks,
     opp_ranks,
+    target_type1=own[own_active].pokemon.type1,
+    target_type2=own[own_active].pokemon.type2,
   )
   // しろいハーブ: 先発の登場時いかく直後に両 lead を判定する (DP の lead 配線と同じ位置)。
   apply_held_item_stat_reset_pair(
@@ -1742,6 +1751,8 @@ pub fn team_rollout(
             opp[opp_active].ability,
             opp_ranks,
             own_ranks,
+            target_type1=opp[opp_active].pokemon.type1,
+            target_type2=opp[opp_active].pokemon.type2,
           )
         }
         if opp_switches {
@@ -1750,6 +1761,8 @@ pub fn team_rollout(
             own[own_active].ability,
             own_ranks,
             opp_ranks,
+            target_type1=own[own_active].pokemon.type1,
+            target_type2=own[own_active].pokemon.type2,
           )
         }
         // しろいハーブ: 登場時いかく (双方の switch 解決後) の直後に両 active を判定する。

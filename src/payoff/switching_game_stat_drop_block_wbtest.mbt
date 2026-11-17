@@ -554,3 +554,176 @@ test "そうしょく / ひらいしん: 吸収の上昇は相手ダウンを消
   }
   @debug.assert_eq(rod.opp_hps[0], 100)
 }
+
+///|
+/// **フラワーベール (くさ)**: クリアボディと同じ `apply_stat_effects` 経路。
+/// 所持者自身がくさ (type1 または type2) のとき、相手由来の負のランクは全能力で不発。
+/// フェアリー (Champions のフラワーベール種) とタイプ未指定は通る。自己ダウンは通る。
+test "フラワーベール: 自分がくさのとき相手ダウンは不発、自己ダウンと非くさは通る" {
+  let growl = mk_move("なきごえ", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+  ])
+  let tickle = mk_move("くすぐる", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 1 },
+  ])
+  let grass = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    grass,
+    true,
+    tickle,
+    attacker_ability="",
+    defender_ability="フラワーベール",
+    defender_type1="くさ",
+  )
+  for i in 0..<5 {
+    @debug.assert_eq(grass[i], 0)
+  }
+  let dual = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    dual,
+    true,
+    growl,
+    attacker_ability="",
+    defender_ability="フラワーベール",
+    defender_type1="フェアリー",
+    defender_type2="くさ",
+  )
+  @debug.assert_eq(dual[0], 0)
+  let fairy = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    fairy,
+    true,
+    growl,
+    attacker_ability="",
+    defender_ability="フラワーベール",
+    defender_type1="フェアリー",
+  )
+  @debug.assert_eq(fairy[0], -1)
+  let omitted = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    [0, 0, 0, 0, 0],
+    omitted,
+    true,
+    growl,
+    attacker_ability="",
+    defender_ability="フラワーベール",
+  )
+  @debug.assert_eq(omitted[0], -1)
+  // ばかぢから: 自分の攻撃・防御 -1。くさのフラワーベールでも通る。
+  let superpower = mk_move("ばかぢから", "かくとう", @model.Physical, 120, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 0 },
+    @model.StatEffect::{ stat: 1, delta: -1, target: 0 },
+  ])
+  let self_ranks = [0, 0, 0, 0, 0]
+  apply_stat_effects(
+    self_ranks,
+    [0, 0, 0, 0, 0],
+    true,
+    superpower,
+    attacker_ability="フラワーベール",
+    defender_ability="",
+    defender_type1="くさ",
+  )
+  @debug.assert_eq(self_ranks[0], -1)
+  @debug.assert_eq(self_ranks[1], -1)
+}
+
+///|
+/// **DP 配線**: `with_post_hit_effects` が防御側のタイプを渡す。くさはなきごえと
+/// 攻撃技の S-1 を受けない。フェアリーはなきごえを受ける。メガ後にフェアリーへ
+/// 変わると (特性はフラワーベールのまま) ブロックが外れる。
+test "DP 配線: フラワーベールはメガ後の実効タイプがくさのときだけ相手ダウンを防ぐ" {
+  let growl = mk_move("なきごえ", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+  ])
+  let icy = mk_move("こごえるかぜ", "こおり", @model.Special, 55, stat_effects=[
+    @model.StatEffect::{ stat: 4, delta: -1, target: 1 },
+  ])
+  let my_team = [im_combatant(im_pokemon("なきごえ使い"), [growl])]
+  let grass_poke = { ..im_pokemon("くさベール"), type1: "くさ" }
+  let grass_team = [
+    im_combatant(grass_poke, [im_tackle()], ability="フラワーベール"),
+  ]
+  let blocked = with_post_hit_effects(
+    im_state(),
+    true,
+    0,
+    0,
+    my_team,
+    grass_team,
+    growl,
+    0,
+  )
+  @debug.assert_eq(blocked.opp_ranks[0], 0)
+  let icy_team = [im_combatant(im_pokemon("こごえる使い"), [icy])]
+  let blocked_spe = with_post_hit_effects(
+    im_state(),
+    true,
+    0,
+    0,
+    icy_team,
+    grass_team,
+    icy,
+    10,
+  )
+  @debug.assert_eq(blocked_spe.opp_ranks[4], 0)
+  let fairy_poke = { ..im_pokemon("フェアリーベール"), type1: "フェアリー" }
+  let fairy_team = [
+    im_combatant(fairy_poke, [im_tackle()], ability="フラワーベール"),
+  ]
+  let fairy = with_post_hit_effects(
+    im_state(),
+    true,
+    0,
+    0,
+    my_team,
+    fairy_team,
+    growl,
+    0,
+  )
+  @debug.assert_eq(fairy.opp_ranks[0], -1)
+  let mega_form : @model.MegaForm = {
+    atk: 100,
+    def_: 100,
+    spa: 100,
+    spd: 100,
+    spe: 100,
+    type1: "フェアリー",
+    type2: "",
+    ability: "フラワーベール",
+    name_ja: "メガフェアリー",
+  }
+  let mega_mon = im_combatant(
+    grass_poke,
+    [im_tackle()],
+    ability="フラワーベール",
+    mega_form=Some(mega_form),
+  )
+  let base = with_post_hit_effects(
+    im_state(),
+    true,
+    0,
+    0,
+    my_team,
+    [mega_mon],
+    growl,
+    0,
+  )
+  @debug.assert_eq(base.opp_ranks[0], 0)
+  let mega_state = { ..im_state(), opp_megaed: [true, false, false] }
+  let mega = with_post_hit_effects(
+    mega_state,
+    true,
+    0,
+    0,
+    my_team,
+    [mega_mon],
+    growl,
+    0,
+  )
+  @debug.assert_eq(mega.opp_ranks[0], -1)
+}

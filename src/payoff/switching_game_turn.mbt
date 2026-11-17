@@ -1110,11 +1110,17 @@ fn apply_intimidate_entry(
     entrant_megaed[entrant_slot]
   let target_mega = target_slot < target_megaed.length() &&
     target_megaed[target_slot]
+  // フラワーベールはメガ後の実効タイプがくさのときだけいかくを防ぐ。特性文字列は
+  // 従来と同じ effective_combatant の ability。タイプを読まない特性は
+  // apply_intimidate_on_entry 側でこの引数を見ない。
+  let target_eff = effective_combatant(target_team[target_slot], target_mega)
   apply_intimidate_on_entry(
     effective_combatant(entrant_team[entrant_slot], entrant_mega).ability,
-    effective_combatant(target_team[target_slot], target_mega).ability,
+    target_eff.ability,
     target_ranks,
     entrant_ranks,
+    target_type1=target_eff.pokemon.type1,
+    target_type2=target_eff.pokemon.type2,
   )
 }
 

@@ -370,6 +370,42 @@ test "ability_blocks_opp_stat_drop_hyper_cutter_attack_only" {
 ///|
 /// Big Pecks (はとむね, TOKUSEIINFO_SYN_145) blocks only the Defense drop
 /// (stat 1). Attack drops, including Intimidate, still land.
+/// フラワーベールは所持者自身がくさのとき全能力。タイプを渡さない呼び出しと
+/// フェアリーは false（Champions のフラワーベール種はフェアリー）。
+test "ability_blocks_opp_stat_drop_flower_veil_grass_holder_only" {
+  for stat in 0..<5 {
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop(
+        "フラワーベール",
+        stat,
+        type1="くさ",
+      ),
+      true,
+    )
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop(
+        "フラワーベール",
+        stat,
+        type1="フェアリー",
+        type2="くさ",
+      ),
+      true,
+    )
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop(
+        "フラワーベール",
+        stat,
+        type1="フェアリー",
+      ),
+      false,
+    )
+    @debug.assert_eq(
+      @payoff.ability_blocks_opp_stat_drop("フラワーベール", stat),
+      false,
+    )
+  }
+}
+
 test "ability_blocks_opp_stat_drop_big_pecks_defense_only" {
   @debug.assert_eq(@payoff.ability_blocks_opp_stat_drop("はとむね", 1), true)
   for stat in [0, 2, 3, 4] {

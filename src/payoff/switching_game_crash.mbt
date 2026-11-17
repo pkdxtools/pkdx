@@ -148,7 +148,7 @@ fn with_miss_self_loss(
   user_team : Array[Combatant],
   mv : @model.Move,
 ) -> SwitchingGameState {
-  if @damage.is_max_hp_recoil_move(mv.name) {
+  let damaged = if @damage.is_max_hp_recoil_move(mv.name) {
     let defender_alive = if user_is_me {
       state.opp_hps[state.opp_active] > 0
     } else {
@@ -165,6 +165,8 @@ fn with_miss_self_loss(
   } else {
     with_crash_damage(state, user_is_me, user_slot, user_team, mv)
   }
+  // PrepareHit runs before Accuracy, so the miss still changes type.
+  with_protean_on_use_state(damaged, user_is_me, user_slot, user_team, mv)
 }
 
 ///|
@@ -227,6 +229,29 @@ fn attempt_turn_sign(
 }
 
 ///|
+/// Accuracy miss for one side: crash / recoil self-loss (which also records
+/// Protean) or Protean alone. A skip that never reached accuracy is unchanged.
+fn with_accuracy_miss_effects(
+  state : SwitchingGameState,
+  attempt : SideAttempt,
+  user_is_me : Bool,
+  user_slot : Int,
+  user_team : Array[Combatant],
+) -> SwitchingGameState {
+  match missed_self_loss_move(attempt, user_team, user_slot) {
+    Some(mv) => with_miss_self_loss(state, user_is_me, user_slot, user_team, mv)
+    None =>
+      match missed_move_of(attempt, user_team, user_slot) {
+        Some(mv) =>
+          with_protean_on_use_state(
+            state, user_is_me, user_slot, user_team, mv,
+          )
+        None => state
+      }
+  }
+}
+
+///|
 /// Attempt-phase outcomes when a missed move carries a self-loss (`SideAttempt.miss`:
 /// 崩れ技 or てっていこうせん) on at least one side. Showdown runs the MoveFail effect in
 /// the same action slot as the missed move, so the missed user loses its HP:
@@ -262,28 +287,18 @@ fn miss_self_loss_outcomes(
   let opp_loss = missed_self_loss_move(oa, opp_team, state.opp_active)
   if !ma.acts && !oa.acts {
     let s0 = pass_turn_state(state, ma.post_status, oa.post_status)
+    // 片方だけが崩れ技 / てっていこうせんでも、もう片方の命中外れは Protean を
+    // 記録する。自己ダメージの無い外れは `missed_self_loss_move` が None。
     if !loss_is_recoil(my_loss) && !loss_is_recoil(opp_loss) {
-      let s1 = match my_loss {
-        Some(mv) => with_crash_damage(s0, true, s0.my_active, my_team, mv)
-        None => s0
-      }
-      let s2 = match opp_loss {
-        Some(mv) => with_crash_damage(s1, false, s1.opp_active, opp_team, mv)
-        None => s1
-      }
+      let s1 = with_accuracy_miss_effects(s0, ma, true, s0.my_active, my_team)
+      let s2 = with_accuracy_miss_effects(s1, oa, false, s1.opp_active, opp_team)
       return [(1.0, s2)]
     }
     let me_leg = fn(s : SwitchingGameState) -> SwitchingGameState {
-      match my_loss {
-        Some(mv) => with_miss_self_loss(s, true, s.my_active, my_team, mv)
-        None => s
-      }
+      with_accuracy_miss_effects(s, ma, true, s.my_active, my_team)
     }
     let opp_leg = fn(s : SwitchingGameState) -> SwitchingGameState {
-      match opp_loss {
-        Some(mv) => with_miss_self_loss(s, false, s.opp_active, opp_team, mv)
-        None => s
-      }
+      with_accuracy_miss_effects(s, oa, false, s.opp_active, opp_team)
     }
     let sign = attempt_turn_sign(state, ma, oa, my_team, opp_team)
     if sign > 0 {

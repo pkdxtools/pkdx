@@ -1247,31 +1247,24 @@ fn mc_attack_negated(
 // pre-Stage-13 と完全一致 (関数本体が同じ).
 
 ///|
-/// Stage 7 (Protean / Libero MC parity): 攻撃が解決した直後に attacker スロットへ
-/// Protean ロックを記録する。DP 側 `with_post_hit_effects` の記録条件と semantics
-/// 一致:
-///   - 実効特性が へんげんじざい / リベロ (MC は mega 未モデルなので raw ability)
-///   - tera_type == "" (テラス中は型固定で Protean 非発動)
-///   - 当該 slot が未ロック ("") — once per switch-in
-/// 記録値は `mv.type_`。status 技でもカテゴリゲートなしで発動する。
+/// Stage 7 (Protean / Libero MC parity): 攻撃を出そうとした時点で attacker
+/// スロットへ Protean ロックを記録する。DP 側 `protean_lock_type` と同じ条件
+/// (解決後タイプ、単タイプ一致では消費しない、テラスタル中は非発動)。命中・
+/// 無効・吸収に加え、命中外れでも呼ぶ (Showdown `PrepareHit` は Accuracy より前)。
+/// MC は mega 未モデルなので raw ability。
 fn record_protean_lock(
   locked : Array[String],
   active : Int,
   attacker : Combatant,
   mv : @model.Move,
+  weather : @model.Weather,
 ) -> Unit {
-  if active < 0 || active >= locked.length() {
+  if active < 0 || active >= locked.length() || locked[active] != "" {
     return
   }
-  if locked[active] != "" {
-    return
-  }
-  if attacker.tera_type != "" {
-    return
-  }
-  if attacker.ability == "へんげんじざい" ||
-    attacker.ability == "リベロ" {
-    locked[active] = mv.type_
+  let t = protean_lock_type(attacker, mv, weather)
+  if t != "" {
+    locked[active] = t
   }
 }
 
@@ -1808,6 +1801,7 @@ pub fn team_rollout(
                 own_active,
                 own[own_active],
                 mv_own,
+                weather_state[0],
               )
               mc_try_apply_status(
                 rng,
@@ -1854,6 +1848,13 @@ pub fn team_rollout(
               }
             }
             if own_missed && own_hps[own_active] > 0 {
+              record_protean_lock(
+                own_protean_locked,
+                own_active,
+                own[own_active],
+                mv_own,
+                weather_state[0],
+              )
               mc_apply_miss_self_loss(
                 own_hps,
                 own_active,
@@ -1942,6 +1943,7 @@ pub fn team_rollout(
                 opp_active,
                 opp[opp_active],
                 mv_opp,
+                weather_state[0],
               )
               mc_try_apply_status(
                 rng,
@@ -1965,6 +1967,13 @@ pub fn team_rollout(
               }
             }
             if opp_missed && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
+              record_protean_lock(
+                opp_protean_locked,
+                opp_active,
+                opp[opp_active],
+                mv_opp,
+                weather_state[0],
+              )
               mc_apply_miss_self_loss(
                 opp_hps,
                 opp_active,
@@ -2048,6 +2057,7 @@ pub fn team_rollout(
                 opp_active,
                 opp[opp_active],
                 mv_opp,
+                weather_state[0],
               )
               mc_try_apply_status(
                 rng,
@@ -2094,6 +2104,13 @@ pub fn team_rollout(
               }
             }
             if opp_missed && opp_hps[opp_active] > 0 {
+              record_protean_lock(
+                opp_protean_locked,
+                opp_active,
+                opp[opp_active],
+                mv_opp,
+                weather_state[0],
+              )
               mc_apply_miss_self_loss(
                 opp_hps,
                 opp_active,
@@ -2180,6 +2197,7 @@ pub fn team_rollout(
                 own_active,
                 own[own_active],
                 mv_own,
+                weather_state[0],
               )
               mc_try_apply_status(
                 rng,
@@ -2203,6 +2221,13 @@ pub fn team_rollout(
               }
             }
             if own_missed && own_hps[own_active] > 0 && !own_blocked_mid_turn {
+              record_protean_lock(
+                own_protean_locked,
+                own_active,
+                own[own_active],
+                mv_own,
+                weather_state[0],
+              )
               mc_apply_miss_self_loss(
                 own_hps,
                 own_active,
@@ -2279,6 +2304,7 @@ pub fn team_rollout(
               own_active,
               own[own_active],
               mv_own,
+              weather_state[0],
             )
             mc_try_apply_status(
               rng,
@@ -2302,6 +2328,13 @@ pub fn team_rollout(
             }
           }
           if own_missed && own_hps[own_active] > 0 {
+            record_protean_lock(
+              own_protean_locked,
+              own_active,
+              own[own_active],
+              mv_own,
+              weather_state[0],
+            )
             mc_apply_miss_self_loss(
               own_hps,
               own_active,
@@ -2377,6 +2410,7 @@ pub fn team_rollout(
               opp_active,
               opp[opp_active],
               mv_opp,
+              weather_state[0],
             )
             mc_try_apply_status(
               rng,
@@ -2400,6 +2434,13 @@ pub fn team_rollout(
             }
           }
           if opp_missed && opp_hps[opp_active] > 0 {
+            record_protean_lock(
+              opp_protean_locked,
+              opp_active,
+              opp[opp_active],
+              mv_opp,
+              weather_state[0],
+            )
             mc_apply_miss_self_loss(
               opp_hps,
               opp_active,

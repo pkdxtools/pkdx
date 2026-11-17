@@ -1097,3 +1097,295 @@ test "protean: メガ + Status 技でもロックは記録される" {
     @debug.assert_eq(s.my_megaed[0], true)
   }
 }
+
+///|
+fn pl_with_move(
+  name : String,
+  type1 : String,
+  type2 : String,
+  spe : Int,
+  ability : String,
+  mv : @model.Move,
+) -> Combatant {
+  let base = pl_pokemon(name, type1, type2)
+  {
+    ..pl_combatant({ ..base, spe }, ability=ability),
+    moves: [mv],
+  }
+}
+
+///|
+/// Champions `wazainfo`: ウェザーボール は天候でタイプが変わる。
+/// `TOKUSEIINFO_SYN_168` はその「出そうとしている技のタイプ」に変わる。
+test "protean: ウェザーボールは天候で解決したタイプでロックする" {
+  let attacker = pl_combatant(
+    pl_pokemon("attacker", "ノーマル", ""),
+    ability="へんげんじざい",
+  )
+  let defender = pl_combatant(pl_pokemon("defender", "ノーマル", ""))
+  let team = [attacker, attacker, attacker]
+  let def_team = [defender, defender, defender]
+  let mv = pl_move("ウェザーボール", type_="ノーマル", category=@model.Special, power=50)
+  let sun = {
+    ..pl_state(),
+    weather: @model.Weather::Sun,
+    weather_turns_left: 5,
+  }
+  let locked_sun = with_post_hit_effects(sun, true, 0, 0, team, def_team, mv, 10)
+  @debug.assert_eq(locked_sun.my_protean_locked[0], "ほのお")
+  let rain = {
+    ..pl_state(),
+    weather: @model.Weather::Rain,
+    weather_turns_left: 5,
+  }
+  let locked_rain = with_post_hit_effects(rain, true, 0, 0, team, def_team, mv, 10)
+  @debug.assert_eq(locked_rain.my_protean_locked[0], "みず")
+  // 天候なしのウェザーボールはノーマルのまま。単ノーマルは既にそのタイプなので
+  // 変化が起きず、1 回分を消費しない。
+  let locked_none = with_post_hit_effects(
+    pl_state(), true, 0, 0, team, def_team, mv, 10,
+  )
+  @debug.assert_eq(locked_none.my_protean_locked[0], "")
+}
+
+///|
+test "protean: 既にその単タイプならロックを消費しない" {
+  let attacker = pl_combatant(
+    pl_pokemon("attacker", "ほのお", ""),
+    ability="リベロ",
+  )
+  let defender = pl_combatant(pl_pokemon("defender", "ノーマル", ""))
+  let team = [attacker, attacker, attacker]
+  let def_team = [defender, defender, defender]
+  let fire = pl_move("かえんほうしゃ", type_="ほのお", category=@model.Special)
+  let stayed = with_post_hit_effects(
+    pl_state(), true, 0, 0, team, def_team, fire, 10,
+  )
+  @debug.assert_eq(stayed.my_protean_locked[0], "")
+  let water = pl_move("なみのり", type_="みず", category=@model.Special)
+  let changed = with_post_hit_effects(
+    pl_state(), true, 0, 0, team, def_team, water, 10,
+  )
+  @debug.assert_eq(changed.my_protean_locked[0], "みず")
+  // 複合タイプが技タイプを含むだけなら単タイプへ変化し、ロックする。
+  let dual = pl_combatant(
+    pl_pokemon("dual", "みず", "あく"),
+    ability="へんげんじざい",
+  )
+  let dual_team = [dual, dual, dual]
+  let dual_locked = with_post_hit_effects(
+    pl_state(), true, 0, 0, dual_team, def_team, water, 10,
+  )
+  @debug.assert_eq(dual_locked.my_protean_locked[0], "みず")
+}
+
+///|
+test "protean: 先攻の命中外れは後攻の被弾より前にタイプを変える" {
+  // ノーマルはゴースト技を無効化する。先に外したへんげんじざいがゴーストになって
+  // いれば、後攻のシャドーボールはダメージを与える。
+  let miss = { ..pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80), accuracy: 0 }
+  let hit = { ..pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80), accuracy: 100 }
+  let me = pl_with_move("me", "ノーマル", "", 200, "へんげんじざい", miss)
+  let opp = pl_with_move("opp", "ノーマル", "", 50, "", hit)
+  let outs = attempt_turn_with_cache(
+    pl_fanout_state(),
+    UseMove(0),
+    UseMove(0),
+    [me],
+    [opp],
+    new_damage_cache(),
+  )
+  assert_true(outs.length() >= 1)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "ゴースト")
+    assert_true(s.my_hps[0] < 2000)
+    @debug.assert_eq(s.opp_hps[0], 2000)
+  }
+}
+
+///|
+test "protean: 後攻の命中外れは先攻の被弾タイプを変えない" {
+  let miss = { ..pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80), accuracy: 0 }
+  let hit = { ..pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80), accuracy: 100 }
+  let me = pl_with_move("me", "ノーマル", "", 50, "へんげんじざい", miss)
+  let opp = pl_with_move("opp", "ノーマル", "", 200, "", hit)
+  let outs = attempt_turn_with_cache(
+    pl_fanout_state(),
+    UseMove(0),
+    UseMove(0),
+    [me],
+    [opp],
+    new_damage_cache(),
+  )
+  assert_true(outs.length() >= 1)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "ゴースト")
+    @debug.assert_eq(s.my_hps[0], 2000)
+  }
+}
+
+///|
+test "protean: 特性なしの命中外れはタイプを変えない" {
+  let miss = { ..pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80), accuracy: 0 }
+  let hit = { ..pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80), accuracy: 100 }
+  let me = pl_with_move("me", "ノーマル", "", 200, "", miss)
+  let opp = pl_with_move("opp", "ノーマル", "", 50, "", hit)
+  let outs = attempt_turn_with_cache(
+    pl_fanout_state(),
+    UseMove(0),
+    UseMove(0),
+    [me],
+    [opp],
+    new_damage_cache(),
+  )
+  assert_true(outs.length() >= 1)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "")
+    @debug.assert_eq(s.my_hps[0], 2000)
+  }
+}
+
+///|
+test "protean: 眠りで技を出せないターンはロックしない" {
+  let mv = pl_move("シャドーボール", type_="ゴースト", category=@model.Special, power=80)
+  let me = pl_with_move("me", "ノーマル", "", 200, "へんげんじざい", mv)
+  let opp = pl_with_move("opp", "ノーマル", "", 50, "", mv)
+  let st = { ..pl_fanout_state(), my_status: [@model.Sleep(2)] }
+  let outs = attempt_turn_with_cache(
+    st, UseMove(0), UseMove(0), [me], [opp], new_damage_cache(),
+  )
+  assert_true(outs.length() >= 1)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "")
+  }
+}
+
+///|
+test "protean: 両者外れでも崩れ技でない側はロックする" {
+  // 片方のとびひざげり外れが自己ダメージ経路へ倒す。かえんほうしゃ側は
+  // 自己ダメージが無いが、PrepareHit は同様にタイプを変える。
+  let ember = {
+    ..pl_move("かえんほうしゃ", type_="ほのお", category=@model.Special, power=90),
+    accuracy: 0,
+  }
+  let kick = {
+    ..pl_move("とびひざげり", type_="かくとう", category=@model.Physical, power=130),
+    accuracy: 0,
+  }
+  let me = pl_with_move("me", "ノーマル", "", 100, "へんげんじざい", ember)
+  let opp = pl_with_move("opp", "ノーマル", "", 50, "リベロ", kick)
+  let outs = attempt_turn_with_cache(
+    pl_fanout_state(),
+    UseMove(0),
+    UseMove(0),
+    [me],
+    [opp],
+    new_damage_cache(),
+  )
+  assert_true(outs.length() >= 1)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "ほのお")
+    @debug.assert_eq(s.opp_protean_locked[0], "かくとう")
+    @debug.assert_eq(s.my_hps[0], 2000)
+    assert_true(s.opp_hps[0] < 2000)
+  }
+}
+
+///|
+fn protean_miss_pair(
+  my_spe : Int,
+  opp_spe : Int,
+  my_ability : String,
+) -> Array[(Double, SwitchingGameState)] {
+  // ほのお対みずは無効ではないので accuracy 0 は本当に外れる。
+  let miss = {
+    ..pl_move("かえんほうしゃ", type_="ほのお", category=@model.Special, power=90),
+    accuracy: 0,
+  }
+  let hit = {
+    ..pl_move("みずのはどう", type_="みず", category=@model.Special, power=60),
+    accuracy: 100,
+  }
+  let me = pl_with_move("me", "ノーマル", "", my_spe, my_ability, miss)
+  let opp = pl_with_move("opp", "みず", "", opp_spe, "", hit)
+  attempt_turn_with_cache(
+    pl_fanout_state(),
+    UseMove(0),
+    UseMove(0),
+    [me],
+    [opp],
+    new_damage_cache(),
+  )
+}
+
+///|
+test "protean: 特性なしの同速外れは結果を二重化しない" {
+  // ロックを書かない外れまで両順序に割ると、同じ後続を 0.5 ずつ再評価して
+  // セル値が 1 ULP ずれ、select のシンプレックスが別頂点を返す。
+  // 先攻が確定している外れと、分布の長さと確率が一致する。
+  let tied = protean_miss_pair(100, 100, "")
+  let fast = protean_miss_pair(50, 100, "")
+  @debug.assert_eq(tied.length(), fast.length())
+  for i = 0; i < tied.length(); i = i + 1 {
+    let (pt, st) = tied[i]
+    let (pf, sf) = fast[i]
+    @debug.assert_eq(pt, pf)
+    @debug.assert_eq(st.my_hps[0], sf.my_hps[0])
+    @debug.assert_eq(st.opp_hps[0], sf.opp_hps[0])
+    @debug.assert_eq(st.my_protean_locked[0], "")
+  }
+}
+
+///|
+test "protean: 同速の命中外れは両順序を平均する" {
+  // 先に外してほのおになってからみずを受ける順序と、ノーマルのまま先に受ける
+  // 順序で被ダメージが違う。同速なので両方が正の確率を持つ。
+  let outs = protean_miss_pair(100, 100, "へんげんじざい")
+  let mut low = 0.0
+  let mut high = 0.0
+  let mut min_hp = 99999
+  let mut max_hp = 0
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (_, s) = outs[i]
+    @debug.assert_eq(s.my_protean_locked[0], "ほのお")
+    let hp = s.my_hps[0]
+    if hp < min_hp {
+      min_hp = hp
+    }
+    if hp > max_hp {
+      max_hp = hp
+    }
+  }
+  assert_true(min_hp < max_hp)
+  for i = 0; i < outs.length(); i = i + 1 {
+    let (p, s) = outs[i]
+    if s.my_hps[0] == min_hp {
+      low = low + p
+    }
+    if s.my_hps[0] == max_hp {
+      high = high + p
+    }
+  }
+  assert_true(low > 0.4 && low < 0.6)
+  assert_true(high > 0.4 && high < 0.6)
+}
+
+///|
+test "protean mc: ウェザーボールのロックは天候タイプ" {
+  let locked = [""]
+  let atk = pl_combatant(
+    pl_pokemon("attacker", "ノーマル", ""),
+    ability="リベロ",
+  )
+  let mv = pl_move("ウェザーボール", type_="ノーマル", category=@model.Special, power=50)
+  record_protean_lock(locked, 0, atk, mv, @model.Weather::Snow)
+  @debug.assert_eq(locked[0], "こおり")
+  let again = ["ほのお"]
+  record_protean_lock(again, 0, atk, mv, @model.Weather::Sun)
+  @debug.assert_eq(again[0], "ほのお")
+}

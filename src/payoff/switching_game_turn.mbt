@@ -2020,27 +2020,27 @@ pub fn attempt_turn_with_cache(
             opp_pending=oa_pend,
           )
         (true, false, false) =>
-          partial_act_outcomes(
-            mega_pre,
-            ma.action,
-            true,
-            my_team,
-            opp_team,
-            dmg_cache,
-            oa.action,
+          partial_act_with_miss_protean(
+            mega_pre, ma, oa, true, my_team, opp_team, dmg_cache,
           )
         (false, true, false) =>
-          partial_act_outcomes(
-            mega_pre,
-            oa.action,
-            false,
-            my_team,
-            opp_team,
-            dmg_cache,
-            ma.action,
+          partial_act_with_miss_protean(
+            mega_pre, ma, oa, false, my_team, opp_team, dmg_cache,
           )
-        (false, false, false) =>
-          [(1.0, pass_turn_state(mega_pre, ma.post_status, oa.post_status))]
+        (false, false, false) => {
+          let s0 = pass_turn_state(mega_pre, ma.post_status, oa.post_status)
+          let s1 = match missed_move_of(ma, my_team, s0.my_active) {
+            Some(mv) =>
+              with_protean_on_use_state(s0, true, s0.my_active, my_team, mv)
+            None => s0
+          }
+          let s2 = match missed_move_of(oa, opp_team, s1.opp_active) {
+            Some(mv) =>
+              with_protean_on_use_state(s1, false, s1.opp_active, opp_team, mv)
+            None => s1
+          }
+          [(1.0, s2)]
+        }
       }
       for s in branch_outs {
         let (p, ns_flat) = s
@@ -2069,6 +2069,108 @@ pub fn attempt_turn_with_cache(
       }
   }
   results
+}
+
+///|
+/// The move a side used and missed, or `None` when it never reached accuracy
+/// (sleep, paralysis, flinch, recharge). `SideAttempt.miss` is only the
+/// accuracy miss.
+fn missed_move_of(
+  attempt : SideAttempt,
+  team : Array[Combatant],
+  active : Int,
+) -> @model.Move? {
+  if !attempt.miss {
+    return None
+  }
+  action_move_of(team, active, attempt.action)
+}
+
+///|
+/// One side acts. If the other side's move missed and that miss would write a
+/// new Protean / Libero lock, the type changes in speed order around the
+/// acting side. Showdown runs `PrepareHit` before Accuracy, so a faster miss
+/// is already the new type when the slower move lands. A switch always
+/// resolves before the missed move. Speed ties average both orders, matching
+/// `miss_self_loss_outcomes`.
+///
+/// When the miss would not write a lock (no ability, already locked, already
+/// that single type), this is exactly `partial_act_outcomes`. Averaging two
+/// identical orders is not bitwise identical after a deep tree and shifts
+/// `pkdx select`.
+fn partial_act_with_miss_protean(
+  state : SwitchingGameState,
+  ma : SideAttempt,
+  oa : SideAttempt,
+  actor_is_me : Bool,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+) -> Array[(Double, SwitchingGameState)] {
+  let actor_action = if actor_is_me { ma.action } else { oa.action }
+  let idle = if actor_is_me { oa } else { ma }
+  let idle_is_me = !actor_is_me
+  let idle_team = if idle_is_me { my_team } else { opp_team }
+  let idle_active = if idle_is_me { state.my_active } else { state.opp_active }
+  let act = fn(base : SwitchingGameState) {
+    partial_act_outcomes(
+      base,
+      actor_action,
+      actor_is_me,
+      my_team,
+      opp_team,
+      dmg_cache,
+      idle.action,
+    )
+  }
+  match missed_move_of(idle, idle_team, idle_active) {
+    None => act(state)
+    Some(mv) => {
+      if !protean_miss_would_lock(
+        state, idle_is_me, idle_active, idle_team, mv,
+      ) {
+        return act(state)
+      }
+      let missed_first = match actor_action {
+        Switch(_) => -1
+        _ => {
+          let sign = attempt_turn_sign(state, ma, oa, my_team, opp_team)
+          if idle_is_me {
+            sign
+          } else {
+            -sign
+          }
+        }
+      }
+      let protean_first = fn() {
+        act(with_protean_on_use_state(state, idle_is_me, idle_active, idle_team, mv))
+      }
+      let protean_second = fn() {
+        let outs : Array[(Double, SwitchingGameState)] = []
+        for out in act(state) {
+          outs.push((
+            out.0,
+            with_protean_on_use_state(out.1, idle_is_me, idle_active, idle_team, mv),
+          ))
+        }
+        outs
+      }
+      if missed_first > 0 {
+        protean_first()
+      } else if missed_first < 0 {
+        protean_second()
+      } else {
+        let outs : Array[(Double, SwitchingGameState)] = []
+        for x in protean_first() {
+          outs.push((0.5 * x.0, x.1))
+        }
+        for x in protean_second() {
+          outs.push((0.5 * x.0, x.1))
+        }
+        outs
+      }
+    }
+  }
 }
 
 ///|

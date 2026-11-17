@@ -262,7 +262,7 @@ test "mega absorb DP: プロテアンでゴーストの相手はたいあたり�
 }
 
 ///|
-test "MC: ダメージ技のタイプ無効と特性無効は命中 100、変化技は技の命中率" {
+test "MC: ダメージ技の無効と無効な変化技は命中 100、当たる変化技は技の命中率" {
   let tackle = ma_tackle()
   let water = mk_move("みずでっぽう", "みず", @model.Special, 40, accuracy=50)
   let wave = mk_move("でんじは", "でんき", @model.Status, 0, accuracy=90)
@@ -279,5 +279,7 @@ test "MC: ダメージ技のタイプ無効と特性無効は命中 100、変化
     100,
   )
   @debug.assert_eq(mc_attempt_accuracy(atk, water, absorb, none), 100)
-  @debug.assert_eq(mc_attempt_accuracy(atk, wave, ground, none), 90)
+  // でんじははじめんに効かない。ノーマルには技の命中率 90 のまま。
+  @debug.assert_eq(mc_attempt_accuracy(atk, wave, ground, none), 100)
+  @debug.assert_eq(mc_attempt_accuracy(atk, wave, normal, none), 90)
 }

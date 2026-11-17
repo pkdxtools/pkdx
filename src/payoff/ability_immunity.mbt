@@ -372,9 +372,11 @@ pub fn ability_absorbs_move(
 /// `Accuracy`, so there is no miss branch. Status moves stay on the accuracy
 /// roll: the damage pipeline does not mark `power <= 0` as the immune
 /// sentinel. Absorb abilities (そうしょく and the heal / boost set) nullify
-/// their status moves in `ability_absorbs_move`, not this predicate. ちくでん
-/// is in `check_def_immunity`, so a damaging Electric move is also this
-/// sentinel (サンダーダイブ still crashes).
+/// their status moves in `ability_absorbs_move`, not this predicate. A status
+/// move the foe is immune to is `status_move_fails_on_foe`, not this
+/// predicate: `power <= 0` is not the immune sentinel, so でんじは would
+/// otherwise paralyze じめん. ちくでん is in `check_def_immunity`, so a
+/// damaging Electric move is also this sentinel (サンダーダイブ still crashes).
 pub fn damaging_move_immune(
   ability : String,
   move_name : String,

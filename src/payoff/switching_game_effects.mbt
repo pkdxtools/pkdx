@@ -605,23 +605,57 @@ pub fn maybe_apply_status_fanout(
     return [(1.0, state)]
   }
   let combatant = target_team[target_slot]
-  if @model.immune_to_status(
+  // 変化技のタイプ・特性免疫は着弾する側 (メガ後、Protean はメガ中は外す)。
+  // ダメージ技の追加効果は従来どおり素のタイプと `status_blocked_by_holder_ability`
+  // のまま。ここを変えると追加効果の分岐がずれる。
+  if mv.power <= 0 {
+    let target_megaed = if target_is_me {
+      state.my_megaed
+    } else {
+      state.opp_megaed
+    }
+    let is_mega = target_slot < target_megaed.length() &&
+      target_megaed[target_slot]
+    let protean = if is_mega {
+      ""
+    } else {
+      protean_locked_of(state, target_is_me, target_slot)
+    }
+    let eff = effective_combatant(
+      combatant,
+      is_mega,
+      protean_locked=protean,
+    )
+    if @model.immune_to_status(kind, eff.pokemon.type1, eff.pokemon.type2) ||
+      ability_blocks_status(
+        eff.ability,
+        kind,
+        weather=state.weather,
+        type1=eff.pokemon.type1,
+        type2=eff.pokemon.type2,
+        self_inflicted=false,
+      ) {
+      return [(1.0, state)]
+    }
+  } else {
+    if @model.immune_to_status(
       kind,
       combatant.pokemon.type1,
       combatant.pokemon.type2,
     ) {
-    return [(1.0, state)]
-  }
-  // 特性の状態異常免疫 (じゅうなん / めんえき / すいほう / ねつこうかん /
-  // きよめのしお / リーフガード / フラワーベール)。変化技・追加効果・あくび。
-  if status_blocked_by_holder_ability(
-    state,
-    target_is_me,
-    target_slot,
-    target_team,
-    kind,
-  ) {
-    return [(1.0, state)]
+      return [(1.0, state)]
+    }
+    // 特性の状態異常免疫 (じゅうなん / めんえき / すいほう / ねつこうかん /
+    // きよめのしお / リーフガード / フラワーベール)。変化技・追加効果・あくび。
+    if status_blocked_by_holder_ability(
+      state,
+      target_is_me,
+      target_slot,
+      target_team,
+      kind,
+    ) {
+      return [(1.0, state)]
+    }
   }
   // りんぷん (ダメージ技の追加効果) / マグマのよろい・はれ (こおり): `secondary_blocked_by_holder`。
   if secondary_blocked_by_holder(

@@ -2026,11 +2026,80 @@ fn move_absorbed_by_holder(
 }
 
 ///|
+/// 変化技が、実効の受け手に効かない。命中しても外れても結果が同じなので
+/// 命中分岐を作らない。`atk` と `def` はメガと Protean を解決済み。
+///
+/// 吸収は false。回復と上昇は吸収経路に残す (Showdown の TryHit は
+/// TryImmunity より前)。無効の中身は新しい表を持たず、次をそのまま呼ぶ。
+/// - `prankster_status_blocked` (あく)
+/// - `immune_to_status` と `ability_blocks_status`
+/// - こおりだけ `ability_blocks_freeze` と はれ
+///   (`secondary_blocked_by_holder` と同じ条件)
+/// - でんじは だけ `move_effectiveness_slots_x4` の 0 倍。じめんは
+///   `immune_to_status` のまひに入らない (にらみつけるは当たる)。
+///   Showdown で変化技の `ignoreImmunity: false` はでんじはだけ。
+///
+/// 粉技のくさ、どくタイプが使うどくどくの必中、フィールド、
+/// すでに状態異常の相手はここでは見ない。
+fn status_move_fails_on_foe(
+  atk : Combatant,
+  mv : @model.Move,
+  def : Combatant,
+  weather : @model.Weather,
+) -> Bool {
+  if mv.category != @model.Status {
+    return false
+  }
+  let move_type = @damage.resolve_effective_move_type(mv, weather, atk.ability)
+  if ability_absorbs_move(def.ability, mv.name, move_type) {
+    return false
+  }
+  if prankster_status_blocked(atk, false, mv, def, false, "") {
+    return true
+  }
+  if mv.name == "でんじは" {
+    let (e1, e2) = @damage.move_effectiveness_slots_x4(
+      mv.name,
+      move_type,
+      def.pokemon.type1,
+      def.pokemon.type2,
+    )
+    if e1 == 0 || e2 == 0 {
+      return true
+    }
+  }
+  match mv.status_effect {
+    None => false
+    Some((kind, chance)) => {
+      if chance <= 0 {
+        return false
+      }
+      if @model.immune_to_status(kind, def.pokemon.type1, def.pokemon.type2) {
+        return true
+      }
+      if ability_blocks_status(
+        def.ability,
+        kind,
+        weather~,
+        type1=def.pokemon.type1,
+        type2=def.pokemon.type2,
+        self_inflicted=false,
+      ) {
+        return true
+      }
+      kind == @model.FreezeKind &&
+      (weather == @model.Weather::Sun || ability_blocks_freeze(def.ability))
+    }
+  }
+}
+
+///|
 /// Showdown runs TryHit (absorb abilities), TypeImmunity, and TryImmunity
-/// before Accuracy. A move that is absorbed, or a damaging move the effective
-/// defender is immune to, has no miss branch. Status moves (`power <= 0`)
-/// other than an absorb (`ability_absorbs_move`) still roll accuracy: the
-/// damage pipeline does not treat them as the immune sentinel.
+/// before Accuracy. A move that is absorbed, a damaging move the effective
+/// defender is immune to, or a status move `status_move_fails_on_foe` rejects,
+/// has no miss branch. Other status moves still roll accuracy: the damage
+/// pipeline does not treat `power <= 0` as the immune sentinel, and forcing
+/// accuracy to 100 would make でんじは paralyze じめん.
 fn move_skips_accuracy(
   state : SwitchingGameState,
   attacker_is_me : Bool,
@@ -2067,7 +2136,8 @@ fn move_skips_accuracy(
         mv.power,
         def_eff.pokemon.type1,
         def_eff.pokemon.type2,
-      )
+      ) ||
+      status_move_fails_on_foe(atk_eff, mv, def_eff, state.weather)
     }
   }
 }

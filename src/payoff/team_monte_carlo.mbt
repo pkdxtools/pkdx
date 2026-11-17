@@ -808,12 +808,14 @@ fn rand_bool(rng : @random.Rand, p : Double) -> Bool {
 }
 
 ///|
-/// Accuracy fed to the MC attempt roll. A move the defender absorbs, or a
-/// damaging move the defender's ability or typing nullifies, is not
-/// subject to the roll (Showdown TryHit / TypeImmunity / TryImmunity precede
-/// Accuracy), so its accuracy is 100. `defender_protean` is the defender's
-/// Protean lock (MC has no mega; the lock is not cleared here). Mirrors
-/// `attempt_accuracy` on the DP side for the non-mega case.
+/// Accuracy fed to the MC attempt roll. A move the defender absorbs, a
+/// damaging move the defender's ability or typing nullifies, or a status move
+/// `status_move_fails_on_foe` rejects, is not subject to the roll, so its
+/// accuracy is 100. `defender_protean` is the defender's Protean lock (MC has
+/// no mega; the lock is not cleared here). Mirrors `attempt_accuracy` on the
+/// DP side for the non-mega case. The lock is the one from the start of the
+/// turn: a faster Protean that changes the defender before this move does not
+/// rebuild the roll.
 fn mc_attempt_accuracy(
   attacker : Combatant,
   mv : @model.Move,
@@ -821,13 +823,14 @@ fn mc_attempt_accuracy(
   weather : @model.Weather,
   defender_protean? : String = "",
 ) -> Int {
+  let atk_eff = effective_combatant(attacker, false)
   let def_eff = effective_combatant(
     defender, false, protean_locked=defender_protean,
   )
   let move_type = @damage.resolve_effective_move_type(
     mv,
     weather,
-    attacker.ability,
+    atk_eff.ability,
   )
   if ability_absorbs_move(def_eff.ability, mv.name, move_type) ||
     damaging_move_immune(
@@ -837,7 +840,8 @@ fn mc_attempt_accuracy(
       mv.power,
       def_eff.pokemon.type1,
       def_eff.pokemon.type2,
-    ) {
+    ) ||
+    status_move_fails_on_foe(atk_eff, mv, def_eff, weather) {
     100
   } else {
     mv.accuracy
@@ -1089,6 +1093,8 @@ fn mc_try_apply_status(
   // `attacker_ability` は攻撃側の特性 (ちからずく)。既定値 (1 / "") は従来どおり付く。
   hp_lost? : Int = 1,
   attacker_ability? : String = "",
+  // 変化技の受け手 Protean。"" のときは素のタイプ (ダメージ技の追加効果は見ない)。
+  defender_protean? : String = "",
 ) -> Unit {
   // タイプ / 特性で無効な leg は技が当たらないので状態異常も付与しない (DP の
   // `apply_damage_variants_fanout` は immune leg で fanout を回さない)。
@@ -1124,17 +1130,25 @@ fn mc_try_apply_status(
     return
   }
   let c = defender_team[defender_slot]
-  if @model.immune_to_status(kind, c.pokemon.type1, c.pokemon.type2) {
+  // 変化技は Protean 後のタイプと特性。ダメージ技の追加効果は素のまま。
+  let (imm_t1, imm_t2, imm_ab) = if mv.power <= 0 {
+    let eff = effective_combatant(c, false, protean_locked=defender_protean)
+    (eff.pokemon.type1, eff.pokemon.type2, eff.ability)
+  } else {
+    (c.pokemon.type1, c.pokemon.type2, c.ability)
+  }
+  if @model.immune_to_status(kind, imm_t1, imm_t2) {
     return
   }
   // 特性の状態異常免疫。DP `status_blocked_by_holder_ability` と同じ
-  // `ability_blocks_status`。MC は mega を模さないので raw combatant。
+  // `ability_blocks_status`。MC は mega を模さないので raw combatant
+  // (変化技だけ Protean でタイプを上書きした eff)。
   if ability_blocks_status(
-    c.ability,
+    imm_ab,
     kind,
     weather~,
-    type1=c.pokemon.type1,
-    type2=c.pokemon.type2,
+    type1=imm_t1,
+    type2=imm_t2,
   ) {
     return
   }
@@ -1231,6 +1245,15 @@ fn mc_attack_negated(
     ) {
     return true
   }
+  // 吸収は TryHit がいたずらごころより前。ここで true を返すと回復・上昇が消える。
+  let move_type = @damage.resolve_effective_move_type(
+    mv,
+    @model.Weather::None,
+    attacker.ability,
+  )
+  if ability_absorbs_move(defender.ability, mv.name, move_type) {
+    return false
+  }
   prankster_status_blocked(
     attacker,
     false,
@@ -1239,6 +1262,48 @@ fn mc_attack_negated(
     false,
     defender_protean,
   )
+}
+
+///|
+/// 変化技が受け手に効かない。true のとき呼び出し側は Protean だけ残して
+/// ダメージ・状態・ランクを付けない。はやてがえしとサイコフィールドは
+/// PrepareHit より前に技自体が失敗するので false
+/// (呼び出し側は `mc_attack_negated` に任せる)。
+fn mc_status_fail_before_hit(
+  mv : @model.Move,
+  foe_mv : @model.Move?,
+  attacker : Combatant,
+  attacker_hp : Int,
+  defender : Combatant,
+  defender_hp : Int,
+  field : @model.Field,
+  weather : @model.Weather,
+  defender_protean : String,
+) -> Bool {
+  if upper_hand_fails(
+    mv,
+    foe_mv,
+    foe_ability=defender.ability,
+    foe_hp=defender_hp,
+    foe_max_hp=defender.pokemon.hp,
+  ) {
+    return false
+  }
+  if mc_psychic_priority_blocked(
+    mv,
+    field,
+    defender,
+    attacker_ability=attacker.ability,
+    attacker_hp~,
+    attacker_max_hp=attacker.pokemon.hp,
+  ) {
+    return false
+  }
+  let atk = effective_combatant(attacker, false)
+  let def = effective_combatant(
+    defender, false, protean_locked=defender_protean,
+  )
+  status_move_fails_on_foe(atk, mv, def, weather)
 }
 
 // Stage 13: `mc_eot_slip` は削除。MC rollout の EOT 状態異常 slip は DP 側
@@ -1746,7 +1811,29 @@ pub fn team_rollout(
             let mut opp_blocked_mid_turn = false
             // Stage H: Psychic Terrain priority block — own の priority>0 技は
             // grounded な opp に対し無効化 (DP resolve 側 Stage G-3 と一致)。
+            // 無効な変化技は命中分岐を作らず、Protean だけ残して効果を付けない。
             if own_attempt_acts &&
+              !fake_out_fails(mv_own, own_fresh_at_turn) &&
+              !first_impression_fails(mv_own, own_fresh_at_turn) &&
+              mc_status_fail_before_hit(
+                mv_own,
+                Some(mv_opp),
+                own[own_active],
+                own_hps[own_active],
+                opp[opp_active],
+                opp_hps[opp_active],
+                field_state[0],
+                weather_state[0],
+                opp_protean_locked[opp_active],
+              ) {
+              record_protean_lock(
+                own_protean_locked,
+                own_active,
+                own[own_active],
+                mv_own,
+                weather_state[0],
+              )
+            } else if own_attempt_acts &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
               !first_impression_fails(mv_own, own_fresh_at_turn) &&
               !mc_attack_negated(
@@ -1815,6 +1902,7 @@ pub fn team_rollout(
                 weather=weather_state[0],
                 hp_lost=before - res_hp,
                 attacker_ability=own[own_active].ability,
+                defender_protean=opp_protean_locked[opp_active],
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -1883,6 +1971,30 @@ pub fn team_rollout(
               opp_missed = missed
             }
             if opp_hps[opp_active] > 0 &&
+              own_hps[own_active] > 0 &&
+              opp_attempt_acts &&
+              !opp_blocked_mid_turn &&
+              !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+              !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
+              mc_status_fail_before_hit(
+                mv_opp,
+                Some(mv_own),
+                opp[opp_active],
+                opp_hps[opp_active],
+                own[own_active],
+                own_hps[own_active],
+                field_state[0],
+                weather_state[0],
+                own_protean_locked[own_active],
+              ) {
+              record_protean_lock(
+                opp_protean_locked,
+                opp_active,
+                opp[opp_active],
+                mv_opp,
+                weather_state[0],
+              )
+            } else if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
               opp_attempt_acts &&
               !opp_blocked_mid_turn &&
@@ -1957,6 +2069,7 @@ pub fn team_rollout(
                 weather=weather_state[0],
                 hp_lost=before - res_hp,
                 attacker_ability=opp[opp_active].ability,
+                defender_protean=own_protean_locked[own_active],
               )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -2003,6 +2116,27 @@ pub fn team_rollout(
             // Stage H: Psychic Terrain priority block — opp の priority>0 技は
             // grounded な own に対し無効化 (DP resolve 側 Stage G-3 と一致)。
             if opp_attempt_acts &&
+              !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+              !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
+              mc_status_fail_before_hit(
+                mv_opp,
+                Some(mv_own),
+                opp[opp_active],
+                opp_hps[opp_active],
+                own[own_active],
+                own_hps[own_active],
+                field_state[0],
+                weather_state[0],
+                own_protean_locked[own_active],
+              ) {
+              record_protean_lock(
+                opp_protean_locked,
+                opp_active,
+                opp[opp_active],
+                mv_opp,
+                weather_state[0],
+              )
+            } else if opp_attempt_acts &&
               !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
               !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
               !mc_attack_negated(
@@ -2071,6 +2205,7 @@ pub fn team_rollout(
                 weather=weather_state[0],
                 hp_lost=before - res_hp,
                 attacker_ability=opp[opp_active].ability,
+                defender_protean=own_protean_locked[own_active],
               )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -2144,6 +2279,30 @@ pub fn team_rollout(
               !own_blocked_mid_turn &&
               !fake_out_fails(mv_own, own_fresh_at_turn) &&
               !first_impression_fails(mv_own, own_fresh_at_turn) &&
+              mc_status_fail_before_hit(
+                mv_own,
+                Some(mv_opp),
+                own[own_active],
+                own_hps[own_active],
+                opp[opp_active],
+                opp_hps[opp_active],
+                field_state[0],
+                weather_state[0],
+                opp_protean_locked[opp_active],
+              ) {
+              record_protean_lock(
+                own_protean_locked,
+                own_active,
+                own[own_active],
+                mv_own,
+                weather_state[0],
+              )
+            } else if own_hps[own_active] > 0 &&
+              opp_hps[opp_active] > 0 &&
+              own_attempt_acts &&
+              !own_blocked_mid_turn &&
+              !fake_out_fails(mv_own, own_fresh_at_turn) &&
+              !first_impression_fails(mv_own, own_fresh_at_turn) &&
               !mc_attack_negated(
                 mv_own,
                 Some(mv_opp),
@@ -2211,6 +2370,7 @@ pub fn team_rollout(
                 weather=weather_state[0],
                 hp_lost=before - res_hp,
                 attacker_ability=own[own_active].ability,
+                defender_protean=opp_protean_locked[opp_active],
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -2250,6 +2410,27 @@ pub fn team_rollout(
           // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
           // 相手は交代したので、はやてがえし は先制攻撃を選んでいない。
           if own_attempt_acts &&
+            !fake_out_fails(mv_own, own_fresh_at_turn) &&
+            !first_impression_fails(mv_own, own_fresh_at_turn) &&
+            mc_status_fail_before_hit(
+              mv_own,
+              None,
+              own[own_active],
+              own_hps[own_active],
+              opp[opp_active],
+              opp_hps[opp_active],
+              field_state[0],
+              weather_state[0],
+              opp_protean_locked[opp_active],
+            ) {
+            record_protean_lock(
+              own_protean_locked,
+              own_active,
+              own[own_active],
+              mv_own,
+              weather_state[0],
+            )
+          } else if own_attempt_acts &&
             !fake_out_fails(mv_own, own_fresh_at_turn) &&
             !first_impression_fails(mv_own, own_fresh_at_turn) &&
             !mc_attack_negated(
@@ -2318,6 +2499,7 @@ pub fn team_rollout(
               weather=weather_state[0],
               hp_lost=before - res_hp,
               attacker_ability=own[own_active].ability,
+              defender_protean=opp_protean_locked[opp_active],
             )
             mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
@@ -2356,6 +2538,27 @@ pub fn team_rollout(
           // Stage H: Psychic Terrain priority block (DP resolve Stage G-3 と一致)。
           // 相手は交代したので、はやてがえし は先制攻撃を選んでいない。
           if opp_attempt_acts &&
+            !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
+            !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
+            mc_status_fail_before_hit(
+              mv_opp,
+              None,
+              opp[opp_active],
+              opp_hps[opp_active],
+              own[own_active],
+              own_hps[own_active],
+              field_state[0],
+              weather_state[0],
+              own_protean_locked[own_active],
+            ) {
+            record_protean_lock(
+              opp_protean_locked,
+              opp_active,
+              opp[opp_active],
+              mv_opp,
+              weather_state[0],
+            )
+          } else if opp_attempt_acts &&
             !fake_out_fails(mv_opp, opp_fresh_at_turn) &&
             !first_impression_fails(mv_opp, opp_fresh_at_turn) &&
             !mc_attack_negated(
@@ -2424,6 +2627,7 @@ pub fn team_rollout(
               weather=weather_state[0],
               hp_lost=before - res_hp,
               attacker_ability=opp[opp_active].ability,
+              defender_protean=own_protean_locked[own_active],
             )
             mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {

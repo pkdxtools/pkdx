@@ -235,6 +235,35 @@ test "calc_damage: ちからずく boosts only moves with a stripped secondary; 
 }
 
 ///|
+test "かんそうはだ: ほのお被ダメは威力112と一致し、ノーマル技は不変" {
+  let atk = mk_pokemon_typed(
+    "アタッカー", "ノーマル", "", 100, 100, 100, 100, 100, 100,
+  )
+  let def = mk_pokemon_typed(
+    "ディフェンダー", "ノーマル", "", 100, 100, 100, 100, 100, 100,
+  )
+  let fire90 = mk_move("かえんほうしゃ", "ほのお", @model.Special, 90)
+  // 90 * 1.25 = 112.5 → 切り捨て 112。最終 5120 が重なるとこの威力より大きい。
+  let fire112 = mk_move("かえんほうしゃ", "ほのお", @model.Special, 112)
+  let tackle = mk_move("たいあたり", "ノーマル", @model.Physical, 40)
+  let dry = @damage.calc_damage(
+    mk_damage_input(atk, def, fire90, def_ability="かんそうはだ"),
+  )
+  let boosted = @damage.calc_damage(mk_damage_input(atk, def, fire112))
+  let plain = @damage.calc_damage(mk_damage_input(atk, def, fire90))
+  let dry_normal = @damage.calc_damage(
+    mk_damage_input(atk, def, tackle, def_ability="かんそうはだ"),
+  )
+  let plain_normal = @damage.calc_damage(mk_damage_input(atk, def, tackle))
+  assert_true(dry.damages.length() == 16)
+  for i in 0..<dry.damages.length() {
+    assert_true(dry.damages[i] == boosted.damages[i])
+    assert_true(dry.damages[i] > plain.damages[i])
+    assert_true(dry_normal.damages[i] == plain_normal.damages[i])
+  }
+}
+
+///|
 test "check_def_immunity: ちくでん はでんきを無効、かんそうはだ はみずだけ" {
   assert_true(@damage.check_def_immunity("ちくでん", "でんき"))
   assert_false(@damage.check_def_immunity("ちくでん", "みず"))
@@ -242,6 +271,13 @@ test "check_def_immunity: ちくでん はでんきを無効、かんそうは�
   assert_true(@damage.check_def_immunity("かんそうはだ", "みず"))
   assert_false(@damage.check_def_immunity("かんそうはだ", "ほのお"))
   @debug.assert_eq(@damage.get_def_type_resist("かんそうはだ", "ほのお"), 1.25)
+  // 最終補正に 5120 を重ねない。威力 1.25 が唯一のほのお倍率。
+  @debug.assert_eq(
+    @damage.get_def_ability_final(
+      "かんそうはだ", "かえんほうしゃ", "ほのお", false, true,
+    ),
+    0,
+  )
   assert_true(@damage.check_def_immunity("ふゆう", "じめん"))
   assert_true(@damage.check_def_immunity("よびみず", "みず"))
 }

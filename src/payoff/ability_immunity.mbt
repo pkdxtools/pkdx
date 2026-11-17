@@ -318,8 +318,9 @@ pub fn ability_absorb_boost(ability : String) -> (Int, Int)? {
 /// - ちくでん `TOKUSEIINFO_SYN_010`: Electric moves restore 1/4 max HP.
 /// - ちょすい `TOKUSEIINFO_SYN_011`: Water moves restore 1/4 max HP.
 /// - かんそうはだ `TOKUSEIINFO_SYN_087`: the Water sentence is the same 1/4.
-///   The Fire 1.25× is `get_def_type_resist`. The rain / sun end-of-turn
-///   1/8 is not part of this absorb.
+///   The Fire 1.25× is `get_def_type_resist` (power only, not a second 5120
+///   final). Rain / sun end-of-turn 1/8 is `apply_dry_skin_weather_active`,
+///   not this absorb.
 pub fn ability_absorb_heal_denom(ability : String) -> Int? {
   match ability {
     "ちくでん" | "ちょすい" | "かんそうはだ" => Some(4)

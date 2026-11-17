@@ -95,6 +95,10 @@ pub fn get_def_type_resist(ability : String, move_type : String) -> Double {
         1.0
       }
     "もふもふ" => if move_type == "ほのお" { 2.0 } else { 1.0 }
+    // かんそうはだのほのお 1.25 は威力段階の一度だけ。
+    // Champions `TOKUSEIINFO_SYN_087` は受けるダメージ 1.25 倍。Showdown は
+    // `onSourceBasePower` の `chainModify(1.25)` (= 威力 ×5120/4096 の切り捨て)。
+    // 最終補正 5120 を重ねると約 1.25^2 になるので、ここだけに置く。
     "かんそうはだ" => if move_type == "ほのお" { 1.25 } else { 1.0 }
     _ => 1.0
   }
@@ -337,7 +341,8 @@ pub fn get_def_ability_final(
       } else {
         0
       }
-    "かんそうはだ" => if move_type == "ほのお" { 5120 } else { 0 }
+    // かんそうはだのほのおは `get_def_type_resist` の威力 1.25 だけ。
+    // ここに 5120 を足すと最終ダメージにもう一度 1.25 が掛かる。
     _ => 0
   }
 }

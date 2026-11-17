@@ -700,7 +700,7 @@ fn resolve_attacker_leg(
     ) {
     return [(1.0, pre_damage_state)]
   }
-  // 変化技が受け手に効かない (状態異常免疫 / でんじはのタイプ無効 / いたずらごころ)。
+  // 変化技が受け手に効かない (状態異常免疫 / 粉 / でんじはのタイプ無効 / いたずらごころ)。
   // 命中分岐は attempt 側で既に潰してある。ここは効果なし。Protean は残す。
   // サイコフィールド / ねこだまし / はやてがえしより後 (それらに Protean は付かない)。
   match status_move_fail_state(

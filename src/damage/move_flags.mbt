@@ -334,3 +334,21 @@ let thaws_target_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
 pub fn is_thaws_target_move(name : String) -> Bool {
   thaws_target_moves.contains(name)
 }
+
+///|
+/// 粉技。champout `50e7233` `masterdata/waza.json` の
+/// `classification_a` / `classification_b` == `"6"`
+/// （`wazaclassification` Index 5 が粉。値は 1 始まりで、5 は風）。
+/// available=0 の キノコのほうし / ふんじん も分類は粉なので含める。
+/// くさ無効とぼうじんは payoff の `powder_move_blocked`。
+let powder_moves : @hashset.HashSet[String] = @hashset.HashSet::from_iter(
+  [
+    "どくのこな", "しびれごな", "ねむりごな", "キノコのほうし", "わたほうし",
+    "いかりのこな", "ふんじん", "まほうのこな",
+  ].iter(),
+)
+
+///|
+pub fn is_powder_move(name : String) -> Bool {
+  powder_moves.contains(name)
+}

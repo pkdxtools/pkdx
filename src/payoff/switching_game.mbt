@@ -2032,6 +2032,7 @@ fn move_absorbed_by_holder(
 /// 吸収は false。回復と上昇は吸収経路に残す (Showdown の TryHit は
 /// TryImmunity より前)。無効の中身は新しい表を持たず、次をそのまま呼ぶ。
 /// - `prankster_status_blocked` (あく)
+/// - `powder_move_blocked` (粉技のくさタイプ / ぼうじん)
 /// - `immune_to_status` と `ability_blocks_status`
 /// - こおりだけ `ability_blocks_freeze` と はれ
 ///   (`secondary_blocked_by_holder` と同じ条件)
@@ -2039,8 +2040,8 @@ fn move_absorbed_by_holder(
 ///   `immune_to_status` のまひに入らない (にらみつけるは当たる)。
 ///   Showdown で変化技の `ignoreImmunity: false` はでんじはだけ。
 ///
-/// 粉技のくさ、どくタイプが使うどくどくの必中、フィールド、
-/// すでに状態異常の相手はここでは見ない。
+/// どくタイプが使うどくどくの必中、フィールド、すでに状態異常の相手、
+/// ぼうじんゴーグルはここでは見ない。
 fn status_move_fails_on_foe(
   atk : Combatant,
   mv : @model.Move,
@@ -2055,6 +2056,15 @@ fn status_move_fails_on_foe(
     return false
   }
   if prankster_status_blocked(atk, false, mv, def, false, "") {
+    return true
+  }
+  // 粉は TryHit (吸収) の後。くさタイプとぼうじんだけ。道具は見ない。
+  if powder_move_blocked(
+    mv.name,
+    def.pokemon.type1,
+    def.pokemon.type2,
+    def.ability,
+  ) {
     return true
   }
   if mv.name == "でんじは" {

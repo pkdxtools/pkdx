@@ -537,6 +537,62 @@ fn psychic_blocks_priority(
 }
 
 ///|
+/// 変化技が実効の受け手に効かないときの単一 leaf。Protean と自爆、崩れ、
+/// てっていこうせんだけが残る (`with_immune_effects` と同じ残り方)。
+/// 吸収は `status_move_fails_on_foe` が false なので、ここには来ない。
+/// `None` のとき呼び出し側は従来の解決に進む。
+fn status_move_fail_state(
+  state : SwitchingGameState,
+  attacker_is_me : Bool,
+  attacker_slot : Int,
+  defender_slot : Int,
+  attacker_team : Array[Combatant],
+  defender_team : Array[Combatant],
+  mv : @model.Move,
+  defender_hp : Int,
+) -> SwitchingGameState? {
+  match effective_hit_pair(
+    state,
+    attacker_is_me,
+    attacker_slot,
+    defender_slot,
+    attacker_team,
+    defender_team,
+    false,
+    false,
+  ) {
+    None => None
+    Some((atk, def)) =>
+      if status_move_fails_on_foe(atk, mv, def, state.weather) {
+        Some(
+          with_max_hp_recoil(
+            with_crash_damage(
+              with_immune_effects(
+                state,
+                attacker_is_me,
+                attacker_slot,
+                attacker_team,
+                mv,
+              ),
+              attacker_is_me,
+              attacker_slot,
+              attacker_team,
+              mv,
+            ),
+            attacker_is_me,
+            attacker_slot,
+            attacker_team,
+            mv,
+            defender_hp > 0,
+          ),
+        )
+      } else {
+        None
+      }
+  }
+}
+
+///|
 /// Resolve one attacker's move leg: apply damage, update ranks, fan out the
 /// attacker's status effect onto the target. Mutates the caller's workspace
 /// for damage / rank changes but produces the status branches as new states
@@ -644,21 +700,21 @@ fn resolve_attacker_leg(
     ) {
     return [(1.0, pre_damage_state)]
   }
-  // いたずらごころ: 相手に効く変化技はあくタイプには失敗する。自分強化は通す。
-  let def_protean = protean_locked_of(
+  // 変化技が受け手に効かない (状態異常免疫 / でんじはのタイプ無効 / いたずらごころ)。
+  // 命中分岐は attempt 側で既に潰してある。ここは効果なし。Protean は残す。
+  // サイコフィールド / ねこだまし / はやてがえしより後 (それらに Protean は付かない)。
+  match status_move_fail_state(
     pre_damage_state,
-    !attacker_is_me,
+    attacker_is_me,
+    attacker_active,
     defender_active,
-  )
-  if prankster_status_blocked(
-      atk_c,
-      atk_is_mega,
-      attacker_move,
-      defender_team_eff[defender_active],
-      def_is_mega,
-      def_protean,
-    ) {
-    return [(1.0, pre_damage_state)]
+    attacker_team,
+    defender_team_eff,
+    attacker_move,
+    pre_dmg_defender_hp,
+  ) {
+    Some(st) => return [(1.0, st)]
+    None => ()
   }
   // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
   // 被弾側スロットの type は変化後タイプ (防御相性) に override する。攻撃側の
@@ -1454,15 +1510,7 @@ pub fn transition_with_cache(
       }
       if fake_out_fails(used_move, user_fresh) ||
         first_impression_fails(used_move, user_fresh) ||
-        upper_hand_fails(used_move, None) ||
-        prankster_status_blocked(
-          attacker_team[attacker_slot],
-          attacker_mega,
-          used_move,
-          defender_team_eff[target_slot],
-          defender_mega,
-          protean_locked_of(base_state, !attacker_is_me, target_slot),
-        ) {
+        upper_hand_fails(used_move, None) {
         return settle_fresh_outcomes(
           [(1.0, base_state)],
           state.my_fresh,
@@ -1470,6 +1518,31 @@ pub fn transition_with_cache(
           my_action,
           opp_action,
         )
+      }
+      // 交代先が変化技を無効にする。出ていく側の無効では潰さない (slot は target)。
+      match status_move_fail_state(
+        base_state,
+        attacker_is_me,
+        attacker_slot,
+        target_slot,
+        attacker_team,
+        defender_team_eff,
+        used_move,
+        if attacker_is_me {
+          base_state.opp_hps[target_slot]
+        } else {
+          base_state.my_hps[target_slot]
+        },
+      ) {
+        Some(st) =>
+          return settle_fresh_outcomes(
+            [(1.0, st)],
+            state.my_fresh,
+            state.opp_fresh,
+            my_action,
+            opp_action,
+          )
+        None => ()
       }
       let attacker_burn = if attacker_is_me {
         is_burned(state.my_status[state.my_active])
@@ -2436,16 +2509,21 @@ fn partial_act_outcomes(
           foe_ability=foe_eff.ability,
           foe_hp=foe_hp_partial,
           foe_max_hp=foe_eff.pokemon.hp,
-        ) ||
-        prankster_status_blocked(
-          attacker_team[attacker_slot],
-          attacker_mega,
-          used_move,
-          defender_team_eff[target_slot],
-          defender_mega,
-          protean_locked_of(base_state, !attacker_is_me, target_slot),
         ) {
         return [(1.0, base_state)]
+      }
+      match status_move_fail_state(
+        base_state,
+        attacker_is_me,
+        attacker_slot,
+        target_slot,
+        attacker_team,
+        defender_team_eff,
+        used_move,
+        foe_hp_partial,
+      ) {
+        Some(st) => return [(1.0, st)]
+        None => ()
       }
       let attacker_burn = if attacker_is_me {
         is_burned(state.my_status[state.my_active])

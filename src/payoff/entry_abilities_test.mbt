@@ -104,6 +104,44 @@ test "non_intimidate_entrant_is_a_no_op" {
 }
 
 ///|
+/// フラワーベールは所持者がくさのときだけいかくを不発にする。タイプ省略と
+/// フェアリーは従来どおり A -1（`_` arm）。
+test "intimidate_flower_veil_blocks_only_grass_holder" {
+  let grass = zero_ranks()
+  @payoff.apply_intimidate_on_entry(
+    "いかく",
+    "フラワーベール",
+    grass,
+    zero_ranks(),
+    target_type1="くさ",
+  )
+  @debug.assert_eq(grass, [0, 0, 0, 0, 0])
+  let dual = zero_ranks()
+  @payoff.apply_intimidate_on_entry(
+    "いかく",
+    "フラワーベール",
+    dual,
+    zero_ranks(),
+    target_type1="フェアリー",
+    target_type2="くさ",
+  )
+  @debug.assert_eq(dual, [0, 0, 0, 0, 0])
+  let fairy = zero_ranks()
+  @payoff.apply_intimidate_on_entry(
+    "いかく",
+    "フラワーベール",
+    fairy,
+    zero_ranks(),
+    target_type1="フェアリー",
+  )
+  @debug.assert_eq(fairy, [-1, 0, 0, 0, 0])
+  let omitted = zero_ranks()
+  @payoff.apply_intimidate_on_entry(
+    "いかく", "フラワーベール", omitted, zero_ranks(),
+  )
+  @debug.assert_eq(omitted, [-1, 0, 0, 0, 0])
+}
+
 /// Big Pecks blocks Defense drops from moves, not Intimidate's Attack drop.
 test "intimidate_big_pecks_still_drops_attack" {
   let target = zero_ranks()

@@ -1503,7 +1503,8 @@ fn with_post_hit_effects(
   let defender_ability = defender_team[defender_active].ability
   // 相手ダウン (stat_effects) の防御特性は mega 後の実効特性で判定する。Mega Metagross は
   // クリアボディ を失い かたいツメ になる (Mega Pinsir は かいりきバサミ を失う)。mega で
-  // なければ raw と同値なので、従来経路と結果は変わらない。
+  // なければ raw と同値なので、従来経路と結果は変わらない。フラワーベールのくさ判定も
+  // 同じ実効個体の type1 / type2 を見る (メガでくさを失えばブロックしない)。
   let defender_megaed = if attacker_is_me {
     state.opp_megaed
   } else {
@@ -1511,10 +1512,16 @@ fn with_post_hit_effects(
   }
   let defender_is_mega = defender_active < defender_megaed.length() &&
     defender_megaed[defender_active]
-  let defender_stat_ability = if defender_is_mega {
-    effective_combatant(defender_team[defender_active], true).ability
+  let defender_for_drop = defender_team[defender_active]
+  let (defender_stat_ability, defender_type1, defender_type2) = if defender_is_mega {
+    let eff = effective_combatant(defender_for_drop, true)
+    (eff.ability, eff.pokemon.type1, eff.pokemon.type2)
   } else {
-    defender_ability
+    (
+      defender_ability,
+      defender_for_drop.pokemon.type1,
+      defender_for_drop.pokemon.type2,
+    )
   }
   apply_stat_effects(
     attacker_ranks,
@@ -1523,6 +1530,8 @@ fn with_post_hit_effects(
     mv,
     attacker_ability~,
     defender_ability=defender_stat_ability,
+    defender_type1~,
+    defender_type2~,
   )
   apply_recoil(attacker_hps, attacker_active, mv, dmg)
   // 回復技 (HealingEffect) は self_ko の **手前** で適用する。本家挙動と
@@ -2375,11 +2384,13 @@ fn clamp_zero(x : Int) -> Int {
 /// An opponent-inflicted drop (`target=1`, `delta<0` after the flip) is first
 /// checked against the holder's block (`ability_blocks_opp_stat_drop`:
 /// クリアボディ / しろいけむり / メタルプロテクト on every stat, かいりきバサミ on
-/// Attack only, はとむね on Defense only). A blocked drop changes neither the
+/// Attack only, はとむね on Defense only, フラワーベール on every stat only when
+/// `defender_type1` / `defender_type2` is くさ). A blocked drop changes neither the
 /// rank nor the reaction (`landed` stays false), as Showdown's `onTryBoost`
 /// removes it before `AfterEachBoost` runs. Self drops (`target=0`) are never
 /// blocked. Absorb boosts (そうしょく / ひらいしん) are raises on a different
-/// path and do not set `landed`.
+/// path and do not set `landed`. `defender_type*` default to `""`; only the
+/// フラワーベール arm reads them, so other abilities stay on the previous branch.
 fn apply_stat_effects(
   self_ranks : Array[Int],
   opp_ranks : Array[Int],
@@ -2387,6 +2398,8 @@ fn apply_stat_effects(
   mv : @model.Move,
   attacker_ability~ : String,
   defender_ability~ : String,
+  defender_type1? : String = "",
+  defender_type2? : String = "",
 ) -> Unit {
   // 相手ダウンは全エントリを適用してから、実際に下がった能力ごとに反応を 1 回ずつ行う。
   // 反応は opp_ranks (= 所持者の ranks) にしか書かず、自己ダウン (self_ranks) とは独立。
@@ -2407,7 +2420,12 @@ fn apply_stat_effects(
         eff.delta
       }
       if eff.target == 1 && delta < 0 {
-        if !ability_blocks_opp_stat_drop(holder_ability, eff.stat) &&
+        if !ability_blocks_opp_stat_drop(
+          holder_ability,
+          eff.stat,
+          type1=defender_type1,
+          type2=defender_type2,
+        ) &&
           apply_opp_stat_drop(holder_ability, ranks, eff.stat, delta) {
           landed[eff.stat] = true
         }
@@ -2479,6 +2497,8 @@ pub fn resolve_post_hit_effects(
   dmg : Int,
   attacker_ability~ : String,
   defender_ability~ : String,
+  defender_type1? : String = "",
+  defender_type2? : String = "",
 ) -> Unit {
   let opp_alive = defender_hps[defender_active] > 0
   apply_stat_effects(
@@ -2488,6 +2508,8 @@ pub fn resolve_post_hit_effects(
     mv,
     attacker_ability~,
     defender_ability~,
+    defender_type1~,
+    defender_type2~,
   )
   apply_recoil(attacker_hps, attacker_active, mv, dmg)
   if mv.self_ko {

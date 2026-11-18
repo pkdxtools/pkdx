@@ -247,6 +247,12 @@ pub fn ability_blocks_intimidate(ability : String) -> Bool {
 ///   Attack (`stat = 0`) only.
 /// - はとむね `TOKUSEIINFO_SYN_145`: 「相手の技や特性で防御を下げられない。」
 ///   Defense (`stat = 1`) only.
+/// - フラワーベール `TOKUSEIINFO_SYN_166` (usa `:5470`, jpn `:5326`): 「味方のくさ
+///   タイプのポケモンは能力が下がらず状態異常にもならない。」Singles has no other
+///   ally, so every modelled stat is blocked only when the holder itself is
+///   Grass (`type1` / `type2`). Callers that omit the types (default `""`) do
+///   not block, which keeps a non-Grass holder — and every pre-existing call —
+///   on the old path. Self drops never reach this predicate (`target = 0`).
 ///
 /// するどいめ (`TOKUSEIINFO_SYN_051`) and はっこう (`TOKUSEIINFO_SYN_035`) say
 /// accuracy cannot be lowered and evasion changes are ignored. The rank array
@@ -260,13 +266,21 @@ pub fn ability_blocks_intimidate(ability : String) -> Bool {
 /// `effect.name === 'Intimidate'`, so a move's drop still lands. Guard Dog
 /// (ばんけん) is likewise Intimidate-only and does not appear here. はとむね
 /// does not block Intimidate: that drop is Attack, not Defense.
-pub fn ability_blocks_opp_stat_drop(ability : String, stat : Int) -> Bool {
+pub fn ability_blocks_opp_stat_drop(
+  ability : String,
+  stat : Int,
+  type1? : String = "",
+  type2? : String = "",
+) -> Bool {
   match ability {
     "クリアボディ" => true
     "しろいけむり" => true
     "メタルプロテクト" => true
     "かいりきバサミ" => stat == 0
     "はとむね" => stat == 1
+    // くさ以外は false。type を渡さない既存呼び出しもここには来ない
+    // (フラワーベールは従来この関数の対象外だった)。
+    "フラワーベール" => type1 == "くさ" || type2 == "くさ"
     _ => false
   }
 }

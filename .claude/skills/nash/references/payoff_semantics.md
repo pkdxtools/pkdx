@@ -339,7 +339,7 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 - **吸収の上昇は相手ダウンではない**。そうしょく / ひらいしん は `onTryHit` で技を消し、上昇 (`ability_absorb_boost`) だけを書く。消えた技の相手ダウンは `landed` に乗らず、まけんき / かちき は誘発しない。上昇そのものもダウンではないので反応しない
 - **命中・回避は未モデル**。するどいめ (`TOKUSEIINFO_SYN_051`) と はっこう (`TOKUSEIINFO_SYN_035`) は「相手の回避率の変化を無視し、命中率も下げられない。」ランク配列は `[A, B, C, D, S]` だけなので、この 2 特性は能力ダウンを防がない
 - **メタルプロテクト**: 名前が来れば クリアボディ と同じ全能力ブロックをする (Showdown の Full Metal Body)。`champout` `50e7233` の `tokusei.json` に項目は無いので、Champions のプールからは出ない
-- **フラワーベール** (`TOKUSEIINFO_SYN_166`): 「味方のくさタイプのポケモンは能力が下がらず状態異常にもならない。」能力低下防止は未モデル (状態異常側は別経路)
+- **フラワーベール** (`TOKUSEIINFO_SYN_166`, usa `tokuseiinfo_syn.json:5470`, jpn `:5326`): 「味方のくさタイプのポケモンは能力が下がらず状態異常にもならない。」/ "cannot have their stats lowered." シングルでは味方が自分だけなので、所持者自身の `type1` / `type2` がくさのとき、クリアボディと同じく相手由来の負のランクを全能力で不発にする (`ability_blocks_opp_stat_drop`)。いかくもこの条件で不発 (`apply_intimidate_on_entry` の専用 arm。`ability_blocks_intimidate` には入れない)。くさでない所持者 (Champions のフラワーベール種はフェアリー) は従来どおり下がる。自己ダウン (`target = 0`、ばかぢから等) は不発にしない。判定タイプは能力と同じく DP はメガ後 (`effective_combatant`)、MC は raw。テラスタル後のタイプとダブルの味方は見ない
 - **通す特性**: いかく 専用の防御特性 (どんかん / マイペース / せいしんりょく / きもったま) は Showdown で `effect.name === 'Intimidate'` に限定されるため技由来のダウンは防がない。ばんけん (Guard Dog) も いかく 専用で、技由来のダウンは通る
 - **未対応**: ミラーアーマー (技由来のダウンを使用者へ反射する) は別経路で未モデル (下記「MVP 対象外」)
 - **判定に使う特性**: DP は mega 後の実効特性 (`effective_combatant`)。メタグロス (クリアボディ) はメガ進化で かたいツメ になり、ブロックしなくなる。MC は mega 未モデル (`megaed` 常に false) なので raw の特性で判定する (MC の mega 未モデル化と同じ境界)。いかく の登場時判定も DP は mega 後実効特性
@@ -624,7 +624,7 @@ Showdown との差 (意図的):
 4. 既にある状態は治さない。本文は "cannot be" / 「ならない」。Showdown の `onUpdate` 治療は採らない。
 5. 接触特性と接触持ち物も止める。本文は付与源を限定しない。`help_11_02_00` (`help_syn.json:25453`) は源に move / Ability / held item を含む。
 
-**未モデル**: フラワーベールの能力低下防止、ダブルの味方全体、シンクロ、ねつこうかんの攻撃上昇、すいほうのダメージ補正以外の新規効果。
+**未モデル**: フラワーベールのダブルの味方全体とテラスタル後タイプ (能力低下防止そのものは上の相手ダウン節)、シンクロ、ねつこうかんの攻撃上昇、すいほうのダメージ補正以外の新規効果。
 
 **参照テスト**: `src/payoff/ability_immunity_test.mbt`、`src/payoff/status_immunity_wbtest.mbt` (変化技 / 追加効果 / 既存状態 / はれ / 接触 / あくび発動 / ねむる / DP/MC `|dp-mc| < 0.02`)。
 
@@ -901,6 +901,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
   | びびり (Rattled) | target A **-1** かつ S **+1** (Gen8+ でいかくが Rattled を誘発) |
   | あまのじゃく (Contrary) | 反転 → target A **+1** (`ability_reverses_stat_changes` 判定) |
   | `ability_blocks_intimidate` の 8 種 (どんかん / マイペース / せいしんりょく / きもったま / クリアボディ / かいりきバサミ / しろいけむり / メタルプロテクト) | no-op |
+  | フラワーベール (所持者自身がくさ) | no-op。`ability_blocks_opp_stat_drop` と同じくさ判定。くさでないフラワーベールは「その他」と同じ A **-1** (タイプ未指定の呼び出しもこちら) |
   | まけんき / かちき | target A **-1** (`apply_opp_stat_drop`)。1 回の能力ダウンイベント (いかく 1 回) で実際に下がったときだけ 1 回反応 (`apply_opp_drop_reaction`): まけんき = 攻撃 **+2** / かちき = 特攻 **+2** (上限 +6) |
   | その他 | target A **-1** |
 
@@ -978,8 +979,8 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - `held_item_stat_reset_wbtest.mbt` — しろいハーブ の判定 helper (負のランクを全て 0・正は残す / 消費済み・他の持ち物・ひんし・範囲外は no-op / 両側独立 / 消費済み所持者の itemless view)
 - `switching_game_white_herb_wbtest.mbt` — しろいハーブ の DP 判定点 (なきごえ・自己ダウン・まけんき / かちき の反応後・クリアボディ 不発・いかく (lead / 交代 / partial-act)・ミラーアーマー反射・消費の持続・技の後に後攻が解除後の B で受ける・EOT・メガ直後)
 - `team_monte_carlo_white_herb_parity_wbtest.mbt` — しろいハーブ の MC/DP parity (自己ダウン後の被弾 / 登場時いかく の lead)
-- `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、はとむね の防御のみ、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、そうしょく / ひらいしん の吸収上昇は反応しない、DP 配線 `with_post_hit_effects`)
-- `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) と はとむね による攻撃技の防御ダウンの MC/DP parity
+- `switching_game_stat_drop_block_wbtest.mbt` — 相手ダウンの防御特性 (クリアボディ / しろいけむり / メタルプロテクト の全能力ブロック、かいりきバサミ の攻撃のみ、はとむね の防御のみ、フラワーベールは自分がくさのとき全能力、自己ダウン免除、不発のダウンは反応しない、いかく 専用特性 / ばんけん は通る、あまのじゃく は反転が先、そうしょく / ひらいしん の吸収上昇は反応しない、DP 配線 `with_post_hit_effects`、フラワーベールのメガ後タイプ)
+- `team_monte_carlo_stat_drop_block_parity_wbtest.mbt` — クリアボディ による相手ダウン技 (なきごえ) と はとむね による攻撃技の防御ダウンの MC/DP parity。フラワーベールはくさならなきごえといかくを防ぎ、フェアリーは plain と bit 一致
 - `switching_game_sap_sipper_wbtest.mbt` — そうしょく の吸収 (くさ攻撃 / 状態 / やどりぎのタネ / 相手素早さダウン / リーフストーム の自己ダウン不発 / 自分狙いのくさ技は非吸収 / グラスフィールド / くさ以外は通常 / A +6 頭打ち / ±6 積み上がり / Protean 固定 / 持ち主の技は非吸収 / 命中 100 の固定 / 1 ターン解決で単一 leaf)
 - `switching_game_absorb_wbtest.mbt` — ちくでん / ちょすい / かんそうはだ の 1/4 回復、でんきエンジン の素早さ +1、ひらいしん の特攻 +1、もらいび の無効ともらいび状態、満タン頭打ち、瀕死は効果なし、+6 頭打ちと +2 を超える積み、自分・天候技は非吸収、Protean、サンダーダイブ の崩れ、命中 100、交代先と出ていく側
 - `switching_game_dry_skin_wbtest.mbt` — かんそうはだの雨 1/8・日照 1/8（上限 / ひんし / 控え / 砂はチップのみ / たべのこしより前 / メガ後特性）と DP・MC の終端値

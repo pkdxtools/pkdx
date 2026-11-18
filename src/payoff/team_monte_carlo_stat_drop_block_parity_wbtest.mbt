@@ -87,3 +87,64 @@ test "select DP/MC parity: Big Pecks blocks a damaging move's Defense drop" {
   let mc = sdb_parity_mc(own, opp, 2, 74011UL)
   assert_true((dp - mc).abs() < 0.03)
 }
+
+///|
+/// **フラワーベール × なきごえ**: 所持者がくさのときだけクリアボディと同じ経路で
+/// A-1 を不発にする。フェアリーは plain と DP / MC とも bit 一致 (ブロックが
+/// 効かない入力は値を変えない)。
+test "select DP/MC parity: Grass Flower Veil blocks Growl, Fairy does not" {
+  let growl = mk_move("なきごえ", "ノーマル", @model.Status, 0, stat_effects=[
+    @model.StatEffect::{ stat: 0, delta: -1, target: 1 },
+  ])
+  let growler = mk_pokemon("Growler", "ノーマル", "", 260, 60, 100, 60, 100, 60)
+  let opp = [pl_cmb(growler, [growl])]
+  let grass = mk_pokemon("GrassVeil", "くさ", "", 260, 130, 100, 60, 100, 100)
+  let own = [pl_cmb(grass, [sdb_tackle()], ability="フラワーベール")]
+  let own_plain = [pl_cmb(grass, [sdb_tackle()])]
+  let dp = sdb_parity_dp(own, opp, 2)
+  let dp_plain = sdb_parity_dp(own_plain, opp, 2)
+  assert_true(dp - dp_plain > 0.03)
+  let mc = sdb_parity_mc(own, opp, 2, 74021UL)
+  assert_true((dp - mc).abs() < 0.03)
+  let fairy = mk_pokemon("FairyVeil", "フェアリー", "", 260, 130, 100, 60, 100, 100)
+  let own_fairy = [pl_cmb(fairy, [sdb_tackle()], ability="フラワーベール")]
+  let own_fairy_plain = [pl_cmb(fairy, [sdb_tackle()])]
+  let dp_fairy = sdb_parity_dp(own_fairy, opp, 2)
+  let dp_fairy_plain = sdb_parity_dp(own_fairy_plain, opp, 2)
+  @debug.assert_eq(dp_fairy, dp_fairy_plain)
+  let mc_fairy = sdb_parity_mc(own_fairy, opp, 2, 74022UL)
+  let mc_fairy_plain = sdb_parity_mc(own_fairy_plain, opp, 2, 74022UL)
+  @debug.assert_eq(mc_fairy, mc_fairy_plain)
+}
+
+///|
+/// **フラワーベール × 登場時いかく**: くさの所持者は lead の A-1 を受けない。
+/// フェアリーは plain と bit 一致。DP の初期 lead と MC の lead 配線が同じタイプを見る。
+/// いかくは毎ヒットに効くので、MC は 64 試行の平均で DP と |dp-mc| < 0.02 に揃える。
+test "select DP/MC parity: Grass Flower Veil blocks lead Intimidate, Fairy does not" {
+  let intim = mk_pokemon("Intim", "ノーマル", "", 260, 150, 100, 60, 100, 80)
+  let opp = [pl_cmb(intim, [sdb_tackle()], ability="いかく")]
+  let grass = mk_pokemon("GrassVeil", "くさ", "", 260, 130, 100, 60, 100, 100)
+  let own = [pl_cmb(grass, [sdb_tackle()], ability="フラワーベール")]
+  let own_plain = [pl_cmb(grass, [sdb_tackle()])]
+  let dp = sdb_parity_dp(own, opp, 2)
+  let dp_plain = sdb_parity_dp(own_plain, opp, 2)
+  // いかくは毎ターンの物理与ダメに乗る。単一 rollout の 16 段階乱数は DP 期待値から
+  // 0.03 をわずかに超える (実測 |dp-mc| ≈ 0.031)。64 試行の平均で揃える。
+  // 感度ガードはブロックが無いと |dp-plain| ≈ 0.07 なので、MC が plain 側に
+  // 張り付くと 0.02 を超えて落ちる。
+  assert_true(dp - dp_plain > 0.05)
+  let mc = team_monte_carlo_value(own, opp, 64, 74031UL, turn_limit=2)
+  assert_true((dp - mc).abs() < 0.02)
+  let fairy = mk_pokemon("FairyVeil", "フェアリー", "", 260, 130, 100, 60, 100, 100)
+  let own_fairy = [pl_cmb(fairy, [sdb_tackle()], ability="フラワーベール")]
+  let own_fairy_plain = [pl_cmb(fairy, [sdb_tackle()])]
+  @debug.assert_eq(
+    sdb_parity_dp(own_fairy, opp, 2),
+    sdb_parity_dp(own_fairy_plain, opp, 2),
+  )
+  @debug.assert_eq(
+    sdb_parity_mc(own_fairy, opp, 2, 74032UL),
+    sdb_parity_mc(own_fairy_plain, opp, 2, 74032UL),
+  )
+}

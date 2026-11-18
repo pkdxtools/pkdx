@@ -221,7 +221,7 @@ fn combatant_to_cache_key_input(
     defender: dfn.pokemon.name_ja,
     move_name: mv.name,
     atk_ability: atk.ability,
-    def_ability: dfn.ability,
+    def_ability: defender_ability_for_move(atk.ability, dfn.ability),
     atk_item: atk.item,
     def_item: dfn.item,
     weather: weather_str,

@@ -1181,8 +1181,23 @@ fn apply_damage_variants_fanout(
   // drain を計算し、初撃なら剥がれフラグを立てる。`state` は攻撃解決前の状態なので
   // intact 判定に使える。chip は engine の def_hp_override と整合する
   // effective_hp/8 (= transform 側 r.defender_hp/8 と同値)。
+  let atk_megaed_arr = if attacker_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let atk_is_mega = attacker_slot < atk_megaed_arr.length() &&
+    atk_megaed_arr[attacker_slot]
+  let atk_break_ability = effective_combatant(
+    attacker_team[attacker_slot],
+    atk_is_mega,
+  ).ability
   let def_disguise_intact = disguise_intact_of(
-    state, attacker_is_me, defender_team, target_slot,
+    state,
+    attacker_is_me,
+    defender_team,
+    target_slot,
+    attacker_ability=atk_break_ability,
   )
   let disguise_chip = if def_disguise_intact &&
     target_slot >= 0 &&
@@ -1346,6 +1361,7 @@ fn apply_damage_variants_fanout(
           defender_team,
           secondary_move,
           hits_count=outcome.hits_count,
+          attacker_ability=atk_break_ability,
         )
       },
       // ひるみ (追加効果): 相手が生存し、特性で遮断されないときに命中数ぶんの独立抽選で成立し、
@@ -1358,6 +1374,7 @@ fn apply_damage_variants_fanout(
           defender_team,
           secondary_move,
           hits_count=outcome.hits_count,
+          attacker_ability=atk_break_ability,
         )
       },
       // こおり: 解凍技 (Scald / Scorching Sands 等) は命中後に相手を解凍する。Showdown
@@ -1523,13 +1540,34 @@ fn with_post_hit_effects(
       defender_for_drop.pokemon.type2,
     )
   }
+  // かたやぶりのときだけ、技の解決で見る受け手特性を外す。それ以外は同じ文字列。
+  let attacker_megaed_break = if attacker_is_me {
+    state.my_megaed
+  } else {
+    state.opp_megaed
+  }
+  let atk_mega_break = attacker_active < attacker_megaed_break.length() &&
+    attacker_megaed_break[attacker_active]
+  let atk_break_ability = if atk_mega_break {
+    effective_combatant(attacker_team[attacker_active], true).ability
+  } else {
+    attacker_ability
+  }
+  let defender_stat_seen = defender_ability_for_move(
+    atk_break_ability,
+    defender_stat_ability,
+  )
+  let defender_drain_seen = defender_ability_for_move(
+    atk_break_ability,
+    defender_ability,
+  )
   apply_stat_effects(
     attacker_ranks,
     defender_ranks,
     opp_alive,
     mv,
     attacker_ability~,
-    defender_ability=defender_stat_ability,
+    defender_ability=defender_stat_seen,
     defender_type1~,
     defender_type2~,
   )
@@ -1579,7 +1617,7 @@ fn with_post_hit_effects(
     attacker_status,
     atk_eff.ability,
     dmg,
-    defender_ability,
+    defender_drain_seen,
     field=state.field,
     attacker_grounded~,
     attacker_type1=atk_eff.pokemon.type1,
@@ -2004,12 +2042,12 @@ fn effective_hit_pair(
     atk_mega,
     protean_locked=protean_for_hit(atk_locked, attacker_slot, atk_mega),
   )
-  let def = effective_combatant(
+  let def0 = effective_combatant(
     defender_team[defender_slot],
     def_mega,
     protean_locked=protean_for_hit(def_locked, defender_slot, def_mega),
   )
-  Some((atk, def))
+  Some((atk, defender_for_mold_breaker(atk, def0)))
 }
 
 ///|

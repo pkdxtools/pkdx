@@ -525,6 +525,7 @@ fn psychic_blocks_priority(
   move_priority : Int,
   defender : Combatant,
   defender_megaed : Bool,
+  attacker_ability? : String = "",
 ) -> Bool {
   if move_priority <= 0 {
     return false
@@ -535,7 +536,7 @@ fn psychic_blocks_priority(
       @damage.is_grounded(
         type1=def_eff.pokemon.type1,
         type2=def_eff.pokemon.type2,
-        ability=def_eff.ability,
+        ability=defender_ability_for_move(attacker_ability, def_eff.ability),
         item=def_eff.item,
       )
     }
@@ -682,6 +683,7 @@ fn resolve_attacker_leg(
       atk_prio,
       defender_team_eff[defender_active],
       def_is_mega,
+      attacker_ability=effective_combatant(atk_c, atk_is_mega).ability,
     ) {
     return [(1.0, pre_damage_state)]
   }
@@ -750,7 +752,11 @@ fn resolve_attacker_leg(
   // damage transform で反映する (`disguise_intact_of` が SSoT)。pre_damage_state
   // は ws から round-trip 済みで disguise_busted を保持している。
   let def_disguise_intact = disguise_intact_of(
-    pre_damage_state, attacker_is_me, defender_team_eff, defender_active,
+    pre_damage_state,
+    attacker_is_me,
+    defender_team_eff,
+    defender_active,
+    attacker_ability=effective_combatant(atk_c, atk_is_mega).ability,
   )
   let (atk_flash_fire, def_flash_fire) = side_flash_fire(
     ws.my_flash_fire,
@@ -1073,11 +1079,16 @@ fn disguise_intact_of(
   attacker_is_me : Bool,
   defender_team : Array[Combatant],
   target_slot : Int,
+  attacker_ability? : String = "",
 ) -> Bool {
   if target_slot < 0 || target_slot >= defender_team.length() {
     return false
   }
-  if defender_team[target_slot].ability != "ばけのかわ" {
+  let ability = defender_ability_for_move(
+    attacker_ability,
+    defender_team[target_slot].ability,
+  )
+  if ability != "ばけのかわ" {
     return false
   }
   let busted_arr = if attacker_is_me {
@@ -1540,6 +1551,10 @@ pub fn transition_with_cache(
           ),
           defender_team_eff[target_slot],
           defender_mega,
+          attacker_ability=effective_combatant(
+            attacker_team[attacker_slot],
+            attacker_mega,
+          ).ability,
         ) {
         return settle_fresh_outcomes(
           [(1.0, base_state)],
@@ -1625,7 +1640,14 @@ pub fn transition_with_cache(
       )
       // ばけのかわ: 被弾側 slot が ばけのかわ intact なら初段ブロック + chip。
       let def_disguise_intact = disguise_intact_of(
-        base_state, attacker_is_me, defender_team_eff, target_slot,
+        base_state,
+        attacker_is_me,
+        defender_team_eff,
+        target_slot,
+        attacker_ability=effective_combatant(
+          attacker_team[attacker_slot],
+          attacker_mega,
+        ).ability,
       )
       let (atk_flash_fire, def_flash_fire) = side_flash_fire(
         base_state.my_flash_fire,
@@ -2541,6 +2563,10 @@ fn partial_act_outcomes(
           ),
           defender_team_eff[target_slot],
           defender_mega,
+          attacker_ability=effective_combatant(
+            attacker_team[attacker_slot],
+            attacker_mega,
+          ).ability,
         ) {
         return [(1.0, base_state)]
       }
@@ -2625,7 +2651,14 @@ fn partial_act_outcomes(
       )
       // ばけのかわ: 被弾側 slot が ばけのかわ intact なら初段ブロック + chip。
       let def_disguise_intact = disguise_intact_of(
-        base_state, attacker_is_me, defender_team_eff, target_slot,
+        base_state,
+        attacker_is_me,
+        defender_team_eff,
+        target_slot,
+        attacker_ability=effective_combatant(
+          attacker_team[attacker_slot],
+          attacker_mega,
+        ).ability,
       )
       let (atk_flash_fire, def_flash_fire) = side_flash_fire(
         base_state.my_flash_fire,

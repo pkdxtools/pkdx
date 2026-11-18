@@ -582,6 +582,51 @@ test "ability_tracks_full_stages: まけんき / かちき / 吸収のランク�
 }
 
 ///|
+test "defender_ability_for_move: かたやぶり以外は同じ文字列" {
+  @debug.assert_eq(@payoff.is_mold_breaker_ability("かたやぶり"), true)
+  @debug.assert_eq(@payoff.is_mold_breaker_ability("ターボブレイズ"), false)
+  @debug.assert_eq(@payoff.is_mold_breaker_ability("テラボルテージ"), false)
+  @debug.assert_eq(@payoff.is_mold_breaker_ability("すりぬけ"), false)
+  @debug.assert_eq(@payoff.defender_ability_for_move("もうか", "ふゆう"), "ふゆう")
+  @debug.assert_eq(@payoff.defender_ability_for_move("", "クリアボディ"), "クリアボディ")
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("ターボブレイズ", "ふゆう"),
+    "ふゆう",
+  )
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("テラボルテージ", "ばけのかわ"),
+    "ばけのかわ",
+  )
+  @debug.assert_eq(@payoff.defender_ability_for_move("かたやぶり", "ふゆう"), "")
+  @debug.assert_eq(@payoff.defender_ability_for_move("かたやぶり", "ばけのかわ"), "")
+  @debug.assert_eq(@payoff.defender_ability_for_move("かたやぶり", "てんねん"), "")
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("かたやぶり", "ヘドロえき"),
+    "ヘドロえき",
+  )
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("かたやぶり", "プリズムアーマー"),
+    "プリズムアーマー",
+  )
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("かたやぶり", "メタルプロテクト"),
+    "メタルプロテクト",
+  )
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("かたやぶり", "ちからもち"),
+    "ちからもち",
+  )
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("かたやぶり", "まけんき"),
+    "まけんき",
+  )
+  @debug.assert_eq(
+    @payoff.defender_ability_for_move("かたやぶり", "マジックガード"),
+    "マジックガード",
+  )
+}
+
+///|
 test "clamp_rank_for: そうしょく は +6 まで、通常特性は +2 まで" {
   @debug.assert_eq(@payoff.clamp_rank_for("そうしょく", 9), 6)
   @debug.assert_eq(@payoff.clamp_rank_for("そうしょく", -9), -6)

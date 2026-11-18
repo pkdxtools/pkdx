@@ -510,3 +510,66 @@ pub fn ability_tracks_full_stages(ability : String) -> Bool {
     None => false
   }
 }
+
+///|
+/// かたやぶり。Champions `tokusei.json` Index 104 / `TOKUSEIINFO_SYN_104`
+/// （`champout` `50e7233`）: 「相手の特性に関係なく技を出すことができる。例外と
+/// なる特性もある。」ターボブレイズとテラボルテージはその tokusei に無い。
+/// すりぬけは壁だけを貫通し、特性は無視しない。
+pub fn is_mold_breaker_ability(ability : String) -> Bool {
+  ability == "かたやぶり"
+}
+
+///|
+/// 技の解決中にかたやぶりが無視する、pkdx が既にモデルしている受け手特性。
+/// Showdown の `flags.breakable`（`suppressingAbility` が ability ハンドラを
+/// 落とす条件）に合わせる。登場時いかくとターン終了はここを通さない。
+///
+/// 無視しない実装済み特性: プリズムアーマー / メタルプロテクト（breakable で
+/// ない）、マジックガード / ヘドロえき / まけんき / かちき / じきゅうりょく /
+/// ふくつのこころ / 接触特性（ほのおのからだ等）/ ちからもち（攻撃側の倍率。
+/// breakable でない）。どんかん / マイペースはいかく専用で、技の解決では
+/// 読まれない。
+pub fn ability_ignored_by_mold_breaker(ability : String) -> Bool {
+  match ability {
+    "ふゆう" | "ちょすい" | "よびみず" | "もらいび" | "ちくでん" | "ひらいしん"
+    | "でんきエンジン" | "かんそうはだ" | "そうしょく" | "あついしぼう"
+    | "たいねつ" | "すいほう" | "もふもふ" | "ファーコート" | "マルチスケイル"
+    | "フィルター" | "ハードロック" | "こおりのりんぷん" | "クリアボディ"
+    | "しろいけむり" | "かいりきバサミ" | "はとむね" | "フラワーベール"
+    | "あまのじゃく" | "りんぷん" | "せいしんりょく" | "ぼうじん" | "ふみん"
+    | "やるき" | "スイートベール" | "じゅうなん" | "めんえき" | "マグマのよろい"
+    | "リーフガード" | "きよめのしお" | "ねつこうかん" | "ばけのかわ"
+    | "てんねん" =>
+      true
+    _ => false
+  }
+}
+
+///|
+/// 技の解決で受け手の特性として見る文字列。攻撃側がかたやぶりで、受け手特性が
+/// `ability_ignored_by_mold_breaker` のときだけ `""`。それ以外は `def_ability`
+/// をそのまま返す（分岐の加算順を変えない）。
+pub fn defender_ability_for_move(
+  atk_ability : String,
+  def_ability : String,
+) -> String {
+  if is_mold_breaker_ability(atk_ability) &&
+    ability_ignored_by_mold_breaker(def_ability) {
+    ""
+  } else {
+    def_ability
+  }
+}
+
+///|
+/// `defender_ability_for_move` を Combatant に載せた写し。無視しないときは
+/// 引数そのものを返す。
+pub fn defender_for_mold_breaker(atk : Combatant, def : Combatant) -> Combatant {
+  let seen = defender_ability_for_move(atk.ability, def.ability)
+  if seen == def.ability {
+    def
+  } else {
+    { ..def, ability: seen }
+  }
+}

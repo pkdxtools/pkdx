@@ -182,7 +182,10 @@ fn greedy_team_action(
   // 扱いだが、ability != "ばけのかわ" なら disguise_intact_mc が false を返すため
   // 非 disguise チームでは no-op。
   let opp_def_intact = disguise_intact_mc(
-    opp_team, opp_active, opp_disguise_busted,
+    opp_team,
+    opp_active,
+    opp_disguise_busted,
+    attacker_ability=my_team[active].ability,
   )
   if must_recharge && my_hps[active] > 0 {
     return Some(TmUseMove(0))
@@ -415,7 +418,10 @@ fn team_apply_post_hit(
     weather_state[0],
     attacker_team[attacker_active].ability,
   )
-  let absorb_ability = defender_team[defender_active].ability
+  let absorb_ability = defender_ability_for_move(
+    attacker_team[attacker_active].ability,
+    defender_team[defender_active].ability,
+  )
   if ability_absorbs_move(absorb_ability, mv.name, absorb_type) {
     // A fainted holder gains no boost (see `with_absorb_effects` on the DP side).
     if defender_hps[defender_active] > 0 {
@@ -463,7 +469,10 @@ fn team_apply_post_hit(
   // raw ability で足りる: あまのじゃく を持つ mega form は存在しないため raw =
   // mega 後実効と常に一致し、drain 経路の defender_ability raw 慣例とも整合する。
   let attacker_ability = attacker_team[attacker_active].ability
-  let defender_ability = defender_team[defender_active].ability
+  let defender_ability = defender_ability_for_move(
+    attacker_ability,
+    defender_team[defender_active].ability,
+  )
   // MC は mega 未モデルなので raw のタイプ。フラワーベール以外は
   // ability_blocks_opp_stat_drop が type を読まない。
   let defender_mon = defender_team[defender_active].pokemon
@@ -634,11 +643,16 @@ fn disguise_intact_mc(
   defender_team : Array[Combatant],
   defender_slot : Int,
   busted : Array[Bool],
+  attacker_ability? : String = "",
 ) -> Bool {
   if defender_slot < 0 || defender_slot >= defender_team.length() {
     return false
   }
-  if defender_team[defender_slot].ability != "ばけのかわ" {
+  let ability = defender_ability_for_move(
+    attacker_ability,
+    defender_team[defender_slot].ability,
+  )
+  if ability != "ばけのかわ" {
     return false
   }
   if defender_slot < busted.length() && busted[defender_slot] {
@@ -846,9 +860,10 @@ fn mc_attempt_accuracy(
   defender_protean? : String = "",
 ) -> Int {
   let atk_eff = effective_combatant(attacker, false)
-  let def_eff = effective_combatant(
+  let def_eff0 = effective_combatant(
     defender, false, protean_locked=defender_protean,
   )
+  let def_eff = defender_for_mold_breaker(atk_eff, def_eff0)
   let move_type = @damage.resolve_effective_move_type(
     mv,
     weather,
@@ -997,7 +1012,10 @@ fn mc_flinch_roll(
   if ability_strips_secondaries(attacker_ability) {
     return false
   }
-  if flinch_blocked_by_ability(defender.ability, mv) {
+  if flinch_blocked_by_ability(
+    defender_ability_for_move(attacker_ability, defender.ability),
+    mv,
+  ) {
     return false
   }
   rand_bool(rng, flinch_probability(chance, 1))
@@ -1131,7 +1149,10 @@ fn mc_try_apply_status(
   // Weather は type 解決に効かない (Weather Ball は草タイプにならない)。
   if defender_slot < defender_team.length() &&
     ability_absorbs_move(
-      defender_team[defender_slot].ability,
+      defender_ability_for_move(
+        attacker_ability,
+        defender_team[defender_slot].ability,
+      ),
       mv.name,
       @damage.resolve_effective_move_type(mv, @model.Weather::None, ""),
     ) {
@@ -1166,7 +1187,7 @@ fn mc_try_apply_status(
   // `ability_blocks_status`。MC は mega を模さないので raw combatant
   // (変化技だけ Protean でタイプを上書きした eff)。
   if ability_blocks_status(
-    imm_ab,
+    defender_ability_for_move(attacker_ability, imm_ab),
     kind,
     weather~,
     type1=imm_t1,
@@ -1176,11 +1197,12 @@ fn mc_try_apply_status(
   }
   // りんぷん: ダメージ技の追加効果を全 kind で止める。こおり だけ はれ / マグマのよろい も止める
   // (DP `secondary_blocked_by_holder` と同じ規則)。MC は mega を模さないので raw combatant の特性。
-  if mv.power > 0 && ability_blocks_secondary(c.ability) {
+  let seen_ability = defender_ability_for_move(attacker_ability, c.ability)
+  if mv.power > 0 && ability_blocks_secondary(seen_ability) {
     return
   }
   if kind == @model.FreezeKind &&
-    (weather == @model.Weather::Sun || ability_blocks_freeze(c.ability)) {
+    (weather == @model.Weather::Sun || ability_blocks_freeze(seen_ability)) {
     return
   }
   // Stage H: terrain (Misty / Electric) は grounded defender への状態異常付与を
@@ -1191,7 +1213,7 @@ fn mc_try_apply_status(
     if @damage.is_grounded(
         type1=c.pokemon.type1,
         type2=c.pokemon.type2,
-        ability=c.ability,
+        ability=defender_ability_for_move(attacker_ability, c.ability),
         item=c.item,
       ) {
       return
@@ -1228,7 +1250,7 @@ fn mc_psychic_priority_blocked(
       @damage.is_grounded(
         type1=defender.pokemon.type1,
         type2=defender.pokemon.type2,
-        ability=defender.ability,
+        ability=defender_ability_for_move(attacker_ability, defender.ability),
         item=defender.item,
       )
     _ => false
@@ -1273,7 +1295,11 @@ fn mc_attack_negated(
     @model.Weather::None,
     attacker.ability,
   )
-  if ability_absorbs_move(defender.ability, mv.name, move_type) {
+  if ability_absorbs_move(
+    defender_ability_for_move(attacker.ability, defender.ability),
+    mv.name,
+    move_type,
+  ) {
     return false
   }
   prankster_status_blocked(
@@ -1322,10 +1348,10 @@ fn mc_status_fail_before_hit(
     return false
   }
   let atk = effective_combatant(attacker, false)
-  let def = effective_combatant(
+  let def0 = effective_combatant(
     defender, false, protean_locked=defender_protean,
   )
-  status_move_fails_on_foe(atk, mv, def, weather)
+  status_move_fails_on_foe(atk, mv, defender_for_mold_breaker(atk, def0), weather)
 }
 
 // Stage 13: `mc_eot_slip` は削除。MC rollout の EOT 状態異常 slip は DP 側
@@ -1885,7 +1911,10 @@ pub fn team_rollout(
               ) {
               let before = opp_hps[opp_active]
               let opp_intact = disguise_intact_mc(
-                opp, opp_active, opp_disguise_busted,
+                opp,
+                opp_active,
+                opp_disguise_busted,
+                attacker_ability=own[own_active].ability,
               )
               let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(own, own_active, own_item_consumed),
@@ -2054,7 +2083,10 @@ pub fn team_rollout(
               let opp_burn_now = is_burned(opp_status[opp_active])
               let before = own_hps[own_active]
               let own_intact = disguise_intact_mc(
-                own, own_active, own_disguise_busted,
+                own,
+                own_active,
+                own_disguise_busted,
+                attacker_ability=opp[opp_active].ability,
               )
               let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(opp, opp_active, opp_item_consumed),
@@ -2192,7 +2224,10 @@ pub fn team_rollout(
               ) {
               let before = own_hps[own_active]
               let own_intact = disguise_intact_mc(
-                own, own_active, own_disguise_busted,
+                own,
+                own_active,
+                own_disguise_busted,
+                attacker_ability=opp[opp_active].ability,
               )
               let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(opp, opp_active, opp_item_consumed),
@@ -2359,7 +2394,10 @@ pub fn team_rollout(
               let own_burn_now = is_burned(own_status[own_active])
               let before = opp_hps[opp_active]
               let opp_intact = disguise_intact_mc(
-                opp, opp_active, opp_disguise_busted,
+                opp,
+                opp_active,
+                opp_disguise_busted,
+                attacker_ability=own[own_active].ability,
               )
               let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
                 consumed_item_view(own, own_active, own_item_consumed),
@@ -2490,7 +2528,10 @@ pub fn team_rollout(
             ) {
             let before = opp_hps[opp_active]
             let opp_intact = disguise_intact_mc(
-              opp, opp_active, opp_disguise_busted,
+              opp,
+              opp_active,
+              opp_disguise_busted,
+              attacker_ability=own[own_active].ability,
             )
             let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
               consumed_item_view(own, own_active, own_item_consumed),
@@ -2620,7 +2661,10 @@ pub fn team_rollout(
             ) {
             let before = own_hps[own_active]
             let own_intact = disguise_intact_mc(
-              own, own_active, own_disguise_busted,
+              own,
+              own_active,
+              own_disguise_busted,
+              attacker_ability=opp[opp_active].ability,
             )
             let (res_hp, res_eff, res_bust, res_immune) = team_perform_attack(
               consumed_item_view(opp, opp_active, opp_item_consumed),

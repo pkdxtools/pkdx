@@ -273,6 +273,7 @@ pub fn secondary_blocked_by_holder(
   target_team : Array[Combatant],
   kind : @model.StatusKind,
   mv : @model.Move,
+  attacker_ability? : String = "",
 ) -> Bool {
   let freeze_only = kind == @model.FreezeKind
   if mv.power <= 0 && !freeze_only {
@@ -290,7 +291,8 @@ pub fn secondary_blocked_by_holder(
     state.opp_megaed
   }
   let is_mega = target_slot < megaed.length() && megaed[target_slot]
-  let ability = effective_combatant(target_team[target_slot], is_mega).ability
+  let ability0 = effective_combatant(target_team[target_slot], is_mega).ability
+  let ability = defender_ability_for_move(attacker_ability, ability0)
   (mv.power > 0 && ability_blocks_secondary(ability)) ||
     (freeze_only && ability_blocks_freeze(ability))
 }
@@ -305,6 +307,7 @@ fn status_blocked_by_holder_ability(
   target_slot : Int,
   target_team : Array[Combatant],
   kind : @model.StatusKind,
+  attacker_ability? : String = "",
 ) -> Bool {
   if target_slot < 0 || target_slot >= target_team.length() {
     return false
@@ -317,7 +320,7 @@ fn status_blocked_by_holder_ability(
   let is_mega = target_slot < megaed.length() && megaed[target_slot]
   let eff = effective_combatant(target_team[target_slot], is_mega)
   ability_blocks_status(
-    eff.ability,
+    defender_ability_for_move(attacker_ability, eff.ability),
     kind,
     weather=state.weather,
     type1=eff.pokemon.type1,
@@ -390,14 +393,18 @@ pub fn flinch_blocked_by_holder(
   target_slot : Int,
   target_team : Array[Combatant],
   mv : @model.Move,
+  attacker_ability? : String = "",
 ) -> Bool {
   if target_slot < 0 || target_slot >= target_team.length() {
     return false
   }
   let megaed = if target_is_me { state.my_megaed } else { state.opp_megaed }
   let is_mega = target_slot < megaed.length() && megaed[target_slot]
-  let ability = effective_combatant(target_team[target_slot], is_mega).ability
-  flinch_blocked_by_ability(ability, mv)
+  let ability0 = effective_combatant(target_team[target_slot], is_mega).ability
+  flinch_blocked_by_ability(
+    defender_ability_for_move(attacker_ability, ability0),
+    mv,
+  )
 }
 
 ///|
@@ -445,6 +452,7 @@ pub fn maybe_apply_flinch_fanout(
   target_team : Array[Combatant],
   mv : @model.Move,
   hits_count? : Int = 1,
+  attacker_ability? : String = "",
 ) -> Array[(Double, SwitchingGameState)] {
   // ねこだまし は使用者の fresh が Some(true) のときだけ既存のひるみ経路に乗せる。
   // None / Some(false) は確率 100 でもひるませない (未指定の回帰入力を変えない)。
@@ -460,7 +468,9 @@ pub fn maybe_apply_flinch_fanout(
   if target_hps[target_slot] <= 0 {
     return [(1.0, state)]
   }
-  if flinch_blocked_by_holder(state, target_is_me, target_slot, target_team, mv) {
+  if flinch_blocked_by_holder(
+    state, target_is_me, target_slot, target_team, mv, attacker_ability~,
+  ) {
     return [(1.0, state)]
   }
   let p = flinch_probability(chance, hits_count)
@@ -582,6 +592,7 @@ pub fn maybe_apply_status_fanout(
   target_team : Array[Combatant],
   mv : @model.Move,
   hits_count? : Int = 1,
+  attacker_ability? : String = "",
 ) -> Array[(Double, SwitchingGameState)] {
   let eff = match mv.status_effect {
     None => return [(1.0, state)]
@@ -628,7 +639,7 @@ pub fn maybe_apply_status_fanout(
     )
     if @model.immune_to_status(kind, eff.pokemon.type1, eff.pokemon.type2) ||
       ability_blocks_status(
-        eff.ability,
+        defender_ability_for_move(attacker_ability, eff.ability),
         kind,
         weather=state.weather,
         type1=eff.pokemon.type1,
@@ -653,6 +664,7 @@ pub fn maybe_apply_status_fanout(
       target_slot,
       target_team,
       kind,
+      attacker_ability~,
     ) {
       return [(1.0, state)]
     }
@@ -665,6 +677,7 @@ pub fn maybe_apply_status_fanout(
     target_team,
     kind,
     mv,
+    attacker_ability~,
   ) {
     return [(1.0, state)]
   }
@@ -692,7 +705,7 @@ pub fn maybe_apply_status_fanout(
     if @damage.is_grounded(
         type1=eff.pokemon.type1,
         type2=eff.pokemon.type2,
-        ability=eff.ability,
+        ability=defender_ability_for_move(attacker_ability, eff.ability),
         item=eff.item,
       ) {
       return [(1.0, state)]

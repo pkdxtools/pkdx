@@ -86,7 +86,7 @@ pub fn pick_best_move(
           if @damage.is_grounded(
               type1=dfn.pokemon.type1,
               type2=dfn.pokemon.type2,
-              ability=dfn.ability,
+              ability=defender_ability_for_move(atk.ability, dfn.ability),
               item=dfn.item,
             ) {
             continue

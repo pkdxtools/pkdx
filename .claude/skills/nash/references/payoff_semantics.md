@@ -376,7 +376,7 @@ Champions `tokuseiinfo_syn.json` (`champout` `50e7233`) で吸収経路に載せ
 - **キャッシュ**: L1 `DamageKey` は `atk_flash_fire` / `def_flash_fire` を持つ。防御側のビットは反射技の Step1 (反射元がもらいび状態) 用。L2 は能力名が鍵なので、未発動の炎技は空の能力名で書き、発動中は CLI と同じ「もらいび + 炎」のエントリを読む。`pkdx damage` は状態を持たないので、特性名もらいびの炎技は従来どおり常に 1.5 倍。
 - **出力が変わる入力**: 特性がもらいびで、解決タイプがほのおの技を撃つときだけ。吸収前は 1.5 倍が外れ、吸収後からその slot が交代するまで 1.5 倍。それ以外の入力はダメージも分岐の加算順も変えない。
 - **あまのじゃく**: 所持者は特性を 1 つしか持たないため、所持者側の反転は起きない。使用者があまのじゃくでも吸収された技は自己効果を出さないので、反転対象がない (`switching_game_sap_sipper_wbtest.mbt` で確認)。
-- **かたやぶり**: 未対応 (下記「MVP 対象外」)。そうしょく は破壊可能 (breakable) 特性だが、かたやぶり は pkdx でモデルしていない。
+- **かたやぶり**: 技の解決中だけ、受け手の breakable な特性を見ない (`defender_ability_for_move`)。攻撃側の実効特性が `かたやぶり` で受け手が無視対象のときだけ能力名を外す。それ以外は同じ文字列、同じ Combatant を返す。登場時いかくとターン終了は対象外。ターボブレイズ / テラボルテージは champout `50e7233` の tokusei に無い。L2 の `def_ability` も同じ条件で空にする。
 - **瀕死の保持者**: 保持者が瀕死 (HP 0) ならランクは上がらず回復もしない (Showdown は瀕死の対象に技が通らない)。DP (`with_absorb_effects`) と MC (`team_apply_post_hit`) の両方で、生存時のみ上昇と回復を適用する。
 - **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。ダメージ技のタイプ / 特性無効を命中 100 にする規則は DP と同じで、防御側の Protean ロックも見る。
 
@@ -598,7 +598,7 @@ Showdown との差 (意図的):
 
 ### 特性の状態異常免疫 — DP / MC
 
-ゲートは `ability_blocks_status` (`src/payoff/ability_immunity.mbt`)。DP は `status_blocked_by_holder_ability` (メガ後の特性とタイプ)、MC は raw。変化技・ダメージ技の追加効果・あくび (DrowsyKind) が同じ関数を通る。ねむるは `apply_healing` が `self_inflicted=true` で同じ関数を見る。あくびの EOT 発動 (`Drowsy(0)` → `Sleep(2)`) は `eot_slip_active` が眠りを止める特性なら `None` にする。接触特性・接触持ち物は `apply_contact_proc_fanout` (攻撃側。MC にこの経路は無い)。既存の状態は治さない。かたやぶりは未モデル。
+ゲートは `ability_blocks_status` (`src/payoff/ability_immunity.mbt`)。DP は `status_blocked_by_holder_ability` (メガ後の特性とタイプ)、MC は raw。変化技・ダメージ技の追加効果・あくび (DrowsyKind) が同じ関数を通る。ねむるは `apply_healing` が `self_inflicted=true` で同じ関数を見る。あくびの EOT 発動 (`Drowsy(0)` → `Sleep(2)`) は `eot_slip_active` が眠りを止める特性なら `None` にする。接触特性・接触持ち物は `apply_contact_proc_fanout` (攻撃側。MC にこの経路は無い)。既存の状態は治さない。かたやぶりは技の解決中だけ受け手の免疫特性を外す。ねむるの自分付与とあくびのターン終了は外さない。
 
 本文 (`champout` `50e7233`, `rom-txt/usa/tokuseiinfo_syn.json` の LabelName 行):
 
@@ -993,7 +993,6 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 ### MVP 対象外 (将来拡張)
 
 - ミラーアーマーによる技由来 (非いかく) の能力ダウンの反射 — 反射された能力ダウンで まけんき / かちき の使用者が反応する経路を含めて未対応 (いかく の反射は `apply_intimidate_on_entry` で対応済み)
-- かたやぶり (Mold Breaker) による ばけのかわ / あまのじゃく の貫通
 - あまのじゃく × はらだいこ — はらだいこ は `move_meta` 未収録のため現状 edge case は発生しない
 
 ## 将来拡張

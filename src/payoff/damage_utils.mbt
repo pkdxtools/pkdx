@@ -186,7 +186,7 @@ fn build_input_with_ranks(
     defender: dfn.pokemon,
     move_: mv,
     atk_ability: atk.ability,
-    def_ability: dfn.ability,
+    def_ability: defender_ability_for_move(atk.ability, dfn.ability),
     atk_item: atk.item,
     def_item: dfn.item,
     weather,

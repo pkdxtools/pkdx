@@ -214,7 +214,8 @@ fn attempt_roll_deferred(
 ) -> Bool {
   freeze_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
   flinch_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
-  confusion_roll_deferred(state, is_me, action, team, opp_action, opp_team)
+  confusion_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
+  attract_roll_deferred(state, is_me, action, team, opp_action, opp_team)
 }
 
 ///|
@@ -278,7 +279,7 @@ fn ws_with_status(
 ///   更新する。外れた枝は崩れ技 / てっていこうせん の自傷を行動者に適用する (`with_miss_self_loss`)。
 /// `pre_state` は命中判定の基準 (ターン頭の状態。`attempt_accuracy` と同じ)。
 fn resolve_pending_attempt(
-  ws : TurnWorkspace,
+  ws_in : TurnWorkspace,
   is_me : Bool,
   mv : @model.Move,
   mv_idx : Int,
@@ -290,25 +291,13 @@ fn resolve_pending_attempt(
   dmg_cache : DamageCache,
   foe_move : @model.Move?,
 ) -> Array[(Double, SwitchingGameState)] {
+  // フラグが 0 のときは同じ workspace。ひんしの付与元だけ 0 にする。
+  let ws = scrub_attract_workspace(ws_in)
   let slot = if is_me { ws.my_active } else { ws.opp_active }
   let user_team = if is_me { my_team } else { opp_team }
   let status_now = if is_me { ws.my_status[slot] } else { ws.opp_status[slot] }
   let flinched = if is_me { ws.my_flinched } else { ws.opp_flinched }
   let thaws = freeze_move_thaws_user(pre_state, is_me, user_team, UseMove(mv_idx))
-  // `pre_state` はターン頭で、このターンのメガフラグはまだ無い。`mega_now` /
-  // `def_mega_now` がメガ後の実効特性・タイプ (Protean 解除込み) を渡す。
-  // 行動は UseMove に正規化済みなので、トリガは引数側にある。
-  let acc = if is_me {
-    attempt_accuracy(
-      pre_state, UseMove(mv_idx), true, my_team, opp_team,
-      attacker_mega_trigger=mega_now, defender_mega_trigger=def_mega_now,
-    )
-  } else {
-    attempt_accuracy(
-      pre_state, UseMove(mv_idx), false, opp_team, my_team,
-      attacker_mega_trigger=mega_now, defender_mega_trigger=def_mega_now,
-    )
-  }
   let result : Array[(Double, SwitchingGameState)] = []
   if flinched {
     // ひるみ成立: 行動しない (命中判定なし)。眠り / 凍結の継続はひるみより先に効く。
@@ -331,6 +320,52 @@ fn resolve_pending_attempt(
     }
     return result
   }
+  // メロメロはひるみの後、まひ / こんらんの前。フラグが無い、または確定で眠っている
+  // ときは下の既存ループのまま (加算順を変えない)。
+  if attract_live_ws(ws, is_me) && !confusion_held_through_sleep(status_now) {
+    return resolve_while_attracted(
+      ws, is_me, mv, mv_idx, mega_now, def_mega_now, pre_state, my_team, opp_team,
+      dmg_cache, foe_move,
+    )
+  }
+  resolve_pending_after_flinch(
+    ws, is_me, mv, mv_idx, mega_now, def_mega_now, pre_state, my_team, opp_team,
+    dmg_cache, foe_move,
+  )
+}
+
+///|
+/// ひるみとメロメロのあとの試行。こんらん、それからまひ・命中。
+/// メロメロが無いときの本体。ここは従来のループのまま。
+fn resolve_pending_after_flinch(
+  ws : TurnWorkspace,
+  is_me : Bool,
+  mv : @model.Move,
+  mv_idx : Int,
+  mega_now : Bool,
+  def_mega_now : Bool,
+  pre_state : SwitchingGameState,
+  my_team : Array[Combatant],
+  opp_team : Array[Combatant],
+  dmg_cache : DamageCache,
+  foe_move : @model.Move?,
+) -> Array[(Double, SwitchingGameState)] {
+  let slot = if is_me { ws.my_active } else { ws.opp_active }
+  let user_team = if is_me { my_team } else { opp_team }
+  let status_now = if is_me { ws.my_status[slot] } else { ws.opp_status[slot] }
+  let thaws = freeze_move_thaws_user(pre_state, is_me, user_team, UseMove(mv_idx))
+  let acc = if is_me {
+    attempt_accuracy(
+      pre_state, UseMove(mv_idx), true, my_team, opp_team,
+      attacker_mega_trigger=mega_now, defender_mega_trigger=def_mega_now,
+    )
+  } else {
+    attempt_accuracy(
+      pre_state, UseMove(mv_idx), false, opp_team, my_team,
+      attacker_mega_trigger=mega_now, defender_mega_trigger=def_mega_now,
+    )
+  }
+  let result : Array[(Double, SwitchingGameState)] = []
   // こんらんはひるみの後、まひの前。カウンタ 0 のときは従来のループのまま。
   // 確定で眠っている / ねむる途中はカウンタを進めず、同じループに落とす。
   let ctime = if is_me { ws.my_confusion } else { ws.opp_confusion }
@@ -395,6 +430,9 @@ priv struct TurnWorkspace {
   // SwitchingGameState のこんらんカウンタ。ws round-trip で落とさない。
   my_confusion : Int
   opp_confusion : Int
+  // SwitchingGameState のメロメロ。ws round-trip で落とさない。0 / 1。
+  my_attract : Int
+  opp_attract : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -451,6 +489,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_flinched: state.opp_flinched,
     my_confusion: state.my_confusion,
     opp_confusion: state.opp_confusion,
+    my_attract: state.my_attract,
+    opp_attract: state.opp_attract,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -498,6 +538,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_flinched: ws.opp_flinched,
     my_confusion: ws.my_confusion,
     opp_confusion: ws.opp_confusion,
+    my_attract: ws.my_attract,
+    opp_attract: ws.opp_attract,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -1023,6 +1065,8 @@ fn clone_state(
     opp_flinched: state.opp_flinched,
     my_confusion: state.my_confusion,
     opp_confusion: state.opp_confusion,
+    my_attract: state.my_attract,
+    opp_attract: state.opp_attract,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1534,6 +1578,10 @@ pub fn transition_with_cache(
   // そのまま。攻撃で付いたこんらんは fanout がこの 0 の上に書く。
   let my_confusion_sw = confusion_after_switch(state, my_action, true)
   let opp_confusion_sw = confusion_after_switch(state, opp_action, false)
+  // 交代が片方でもあれば両方のメロメロを、攻撃より前に捨てる。
+  let (my_attract_sw, opp_attract_sw) = attract_flags_after_switch(
+    state, my_action, opp_action,
+  )
   // 同時登場の同速で、順序によって着地が違うときだけ 2 本に分ける。
   // トレースが無い arm では trace_tie は空のまま。
   if trace_tie.length() >= 2 {
@@ -1577,6 +1625,8 @@ pub fn transition_with_cache(
           opp_flinched: state.opp_flinched,
           my_confusion: my_confusion_sw,
           opp_confusion: opp_confusion_sw,
+          my_attract: my_attract_sw,
+          opp_attract: opp_attract_sw,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1637,6 +1687,8 @@ pub fn transition_with_cache(
     opp_flinched: state.opp_flinched,
     my_confusion: my_confusion_sw,
     opp_confusion: opp_confusion_sw,
+    my_attract: my_attract_sw,
+    opp_attract: opp_attract_sw,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2050,6 +2102,8 @@ fn pass_turn_state(
     opp_flinched: state.opp_flinched,
     my_confusion: state.my_confusion,
     opp_confusion: state.opp_confusion,
+    my_attract: state.my_attract,
+    opp_attract: state.opp_attract,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2335,6 +2389,8 @@ pub fn attempt_turn_with_cache(
         opp_flinched: state.opp_flinched,
         my_confusion: state.my_confusion,
         opp_confusion: state.opp_confusion,
+        my_attract: state.my_attract,
+        opp_attract: state.opp_attract,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2744,6 +2800,8 @@ fn partial_act_outcomes(
     opp_flinched: state.opp_flinched,
     my_confusion: state.my_confusion,
     opp_confusion: state.opp_confusion,
+    my_attract: state.my_attract,
+    opp_attract: state.opp_attract,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3356,6 +3414,8 @@ pub fn switching_game_winrate_stats(
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,

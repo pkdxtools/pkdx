@@ -88,6 +88,7 @@ fn bc_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: @payoff.Gender::Unknown,
   }
 }
 

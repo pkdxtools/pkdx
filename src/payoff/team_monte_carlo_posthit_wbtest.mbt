@@ -72,6 +72,7 @@ fn mk_post_hit_combatant() -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 

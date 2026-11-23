@@ -96,5 +96,6 @@ fn mk_combatant(
     stat_points,
     actual_stats,
     ivs,
+    gender: @payoff.Gender::Unknown,
   }
 }

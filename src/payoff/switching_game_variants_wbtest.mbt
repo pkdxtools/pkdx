@@ -98,6 +98,7 @@ fn sgvw_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -126,6 +127,8 @@ fn sgvw_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

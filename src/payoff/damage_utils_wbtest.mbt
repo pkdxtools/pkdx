@@ -106,6 +106,7 @@ test "build_input_with_ranks: weather~ argument threads into DamageCalcInput.wea
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let mv : @model.Move = {
     name: "かえんほうしゃ",
@@ -209,6 +210,7 @@ test "build_input_with_ranks: field~ argument threads into DamageCalcInput.field
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let mv : @model.Move = {
     name: "10まんボルト",

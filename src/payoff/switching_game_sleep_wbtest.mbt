@@ -83,6 +83,7 @@ fn slp_cmb(pokemon : @model.Pokemon, moves : Array[@model.Move]) -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -114,6 +115,8 @@ fn slp_same_turn_state(
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

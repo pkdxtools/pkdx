@@ -61,6 +61,8 @@ fn b4_state_from_weather(
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: Array::make(my_team.length(), 0),

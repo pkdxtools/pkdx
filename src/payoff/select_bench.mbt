@@ -595,6 +595,7 @@ fn status_roster(n : Int, heavy : Bool) -> Array[Combatant] {
       stat_points: None,
       actual_stats: None,
       ivs: None,
+      gender: Gender::Unknown,
     })
   }
   out
@@ -670,6 +671,7 @@ fn scale_roster(n : Int, nmoves : Int) -> Array[Combatant] {
       stat_points: None,
       actual_stats: None,
       ivs: None,
+      gender: Gender::Unknown,
     })
   }
   out

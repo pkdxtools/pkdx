@@ -99,6 +99,9 @@ pub(all) struct Combatant {
   stat_points : Array[Int]?
   actual_stats : Array[Int]?
   ivs : Array[Int]?
+  // メロメロ用。未指定の構築は Gender::Unknown。性別不明の種族以外は、
+  // 名前の固定性別 (`resolve_gender`) より明示が優先する。
+  gender : Gender
 } derive(Debug)
 
 ///|

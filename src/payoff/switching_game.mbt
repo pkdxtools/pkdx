@@ -159,6 +159,11 @@ pub(all) struct SwitchingGameState {
   // 0 になったら自傷抽選をせず解除する。交代で 0。控えには持たない (場のアクティブだけ)。
   my_confusion : Int
   opp_confusion : Int
+  // メロメロ (揮発。major status ともこんらんとも独立)。0 = していない。1 = している。
+  // ターン数は無い。付与した側が場にいるあいだ、行動前に 50% で技を出せない。
+  // 交代 (付与された側も付与した側も) で 0。控えには持たない。シングルの付与元は相手。
+  my_attract : Int
+  opp_attract : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。
@@ -556,6 +561,8 @@ fn effective_combatant(
         stat_points: c.stat_points,
         actual_stats: post_mega_actual_stats,
         ivs: c.ivs,
+        // 表示名がメガ名に変わる前の性別を残す (メガニャオニクスは名前だけでは決まらない)。
+        gender: resolve_gender(c),
       }
     }
     _ => c
@@ -1399,6 +1406,19 @@ fn apply_damage_variants_fanout(
           attacker_ability=atk_break_ability,
         )
       },
+      // メロメロ。技名が違うときは同じ state を確率 1 で返す。
+      fn(s) {
+        maybe_apply_attract_fanout(
+          s,
+          target_is_me,
+          target_slot,
+          attacker_slot,
+          attacker_team,
+          defender_team,
+          attacker_move,
+          attacker_ability=atk_break_ability,
+        )
+      },
       // こおり: 解凍技 (Scald / Scorching Sands 等) は命中後に相手を解凍する。Showdown
       // `onAfterMoveSecondary` と同順なので、凍っている間は二次効果の状態異常は付かない。
       fn(s) {
@@ -1418,6 +1438,20 @@ fn apply_damage_variants_fanout(
           defender_team,
           attacker_move,
           hits_count=Some(outcome.hits_count),
+        )
+      },
+      // メロメロボディ。特性が違うときは同じ state を確率 1 で返す。
+      // 接触特性の categorical roll には混ぜない (まひ等の加算順を変えない)。
+      fn(s) {
+        maybe_apply_cute_charm_fanout(
+          s,
+          attacker_is_me,
+          attacker_slot,
+          target_slot,
+          attacker_team,
+          defender_team,
+          attacker_move,
+          hits_count=outcome.hits_count,
         )
       },
     ])

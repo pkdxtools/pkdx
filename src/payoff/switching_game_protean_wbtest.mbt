@@ -49,6 +49,7 @@ fn pl_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -77,6 +78,8 @@ fn pl_state() -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -343,6 +346,7 @@ fn pl_fanout_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -371,6 +375,8 @@ fn pl_fanout_state() -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -584,6 +590,7 @@ test "protean defense: ロック後は変化後タイプで被弾 (相性が変�
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let team = [attacker]
   let def_team = [defender]
@@ -692,6 +699,7 @@ fn pl_move_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -899,6 +907,7 @@ fn pl_mega_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -987,6 +996,7 @@ test "protean: メガ発動技に STAB が乗る" {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let defender = pl_move_combatant(
     "defender",

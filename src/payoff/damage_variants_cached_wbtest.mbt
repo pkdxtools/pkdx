@@ -76,6 +76,7 @@ fn dvc_combatant(name : String, mv : @model.Move) -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -189,6 +190,7 @@ test "compute_damage_variants: immune matchup returns one outcome with mean_dama
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let outcomes = compute_damage_variants(atk, dfn, mv, 0, 0)
   @debug.debug_inspect(outcomes.length(), content="1")

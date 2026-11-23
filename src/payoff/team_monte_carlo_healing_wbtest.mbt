@@ -75,6 +75,7 @@ fn mk_combatant(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -281,6 +282,7 @@ test "team_apply_post_hit + tick_and_fire_wish_inplace: Wish heals max/2 2 EOT l
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let attacker_hps = [200]
   let attacker_ranks = [0, 0, 0, 0, 0]

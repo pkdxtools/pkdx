@@ -21,14 +21,23 @@ fn move_turn_sign(
   opp_mega : Bool,
   opp_para : Bool,
   opp_hp : Int,
+  me_item_consumed? : Bool = false,
+  opp_item_consumed? : Bool = false,
 ) -> Int {
   let me_eff = effective_combatant(me, me_mega)
   let opp_eff = effective_combatant(opp, opp_mega)
   let base_me = effective_speed(me_eff.pokemon.spe, me_ranks[4])
   let base_opp = effective_speed(opp_eff.pokemon.spe, opp_ranks[4])
+  // ランク → スカーフ → まひ。スカーフ以外は base そのもの。
+  let scarf_me = speed_after_choice_scarf(base_me, me_eff.item, me_item_consumed)
+  let scarf_opp = speed_after_choice_scarf(
+    base_opp,
+    opp_eff.item,
+    opp_item_consumed,
+  )
   // まひは最終素早さを 1/2 (gen7+ ルール)。ランク補正と重複して反映。
-  let eff_me = if me_para { base_me / 2 } else { base_me }
-  let eff_opp = if opp_para { base_opp / 2 } else { base_opp }
+  let eff_me = if me_para { scarf_me / 2 } else { scarf_me }
+  let eff_opp = if opp_para { scarf_opp / 2 } else { scarf_opp }
   turn_order_sign(
     me_eff,
     effective_priority(me_eff.ability, mv_me, me_hp, me_eff.pokemon.hp),
@@ -436,6 +445,9 @@ priv struct TurnWorkspace {
   // SwitchingGameState のバインド残ターン。ws round-trip で落とさない。0 は未付与。
   my_bind : Int
   opp_bind : Int
+  // こだわりスカーフの技固定。-1 は未固定。ws round-trip で落とさない。
+  my_choice : Int
+  opp_choice : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -496,6 +508,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_attract: state.opp_attract,
     my_bind: state.my_bind,
     opp_bind: state.opp_bind,
+    my_choice: state.my_choice,
+    opp_choice: state.opp_choice,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -547,6 +561,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_attract: ws.opp_attract,
     my_bind: ws.my_bind,
     opp_bind: ws.opp_bind,
+    my_choice: ws.my_choice,
+    opp_choice: ws.opp_choice,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -1076,6 +1092,8 @@ fn clone_state(
     opp_attract: state.opp_attract,
     my_bind: state.my_bind,
     opp_bind: state.opp_bind,
+    my_choice: state.my_choice,
+    opp_choice: state.opp_choice,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1524,6 +1542,8 @@ pub fn transition_with_cache(
         opp_mega_now,
         opp_para,
         state.opp_hps[state.opp_active],
+        me_item_consumed=slot_flag(state.my_item_consumed, state.my_active),
+        opp_item_consumed=slot_flag(state.opp_item_consumed, state.opp_active),
       )
       // Last Resort 解禁判定用に両サイドの move を「使用済み」として記録。
       // resolve_moves は state を ws に変換して回すので、state を新しい mask で
@@ -1642,6 +1662,8 @@ pub fn transition_with_cache(
           opp_attract: opp_attract_sw,
           my_bind: my_bind_sw,
           opp_bind: opp_bind_sw,
+          my_choice: -1,
+          opp_choice: -1,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1706,6 +1728,8 @@ pub fn transition_with_cache(
     opp_attract: opp_attract_sw,
     my_bind: my_bind_sw,
     opp_bind: opp_bind_sw,
+    my_choice: -1,
+    opp_choice: -1,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2123,6 +2147,8 @@ fn pass_turn_state(
     opp_attract: state.opp_attract,
     my_bind: state.my_bind,
     opp_bind: state.opp_bind,
+    my_choice: state.my_choice,
+    opp_choice: state.opp_choice,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2412,6 +2438,8 @@ pub fn attempt_turn_with_cache(
         opp_attract: state.opp_attract,
         my_bind: state.my_bind,
         opp_bind: state.opp_bind,
+        my_choice: state.my_choice,
+        opp_choice: state.opp_choice,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2520,7 +2548,20 @@ pub fn attempt_turn_with_cache(
         let settled = with_turn_fresh(
           ns, state.my_fresh, state.opp_fresh, my_action, opp_action,
         )
-        results.push((joint * p, settled))
+        // こだわりスカーフの固定。スカーフ以外で前後が -1 なら同じ state。
+        // リチャージはターン開始のフラグを見る (clear 後の結果は false)。
+        let locked = apply_choice_locks(
+          settled,
+          state.my_choice,
+          state.opp_choice,
+          my_action,
+          opp_action,
+          my_team_base,
+          opp_team_base,
+          state.my_must_recharge[state.my_active],
+          state.opp_must_recharge[state.opp_active],
+        )
+        results.push((joint * p, locked))
       }
   }
   results
@@ -2825,6 +2866,8 @@ fn partial_act_outcomes(
     opp_attract: state.opp_attract,
     my_bind: state.my_bind,
     opp_bind: state.opp_bind,
+    my_choice: state.my_choice,
+    opp_choice: state.opp_choice,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3203,6 +3246,11 @@ pub fn value(
       state.my_megaed[state.my_active],
       protean_locked_of(state, true, state.my_active),
     ),
+    choice_lock=effective_choice_lock(
+      my_team[state.my_active].item,
+      slot_flag(state.my_item_consumed, state.my_active),
+      state.my_choice,
+    ),
   )
   let actions_opp = alive_actions(
     state.opp_active,
@@ -3217,6 +3265,11 @@ pub fn value(
       state.opp_active < state.opp_megaed.length() &&
       state.opp_megaed[state.opp_active],
       protean_locked_of(state, false, state.opp_active),
+    ),
+    choice_lock=effective_choice_lock(
+      opp_team[state.opp_active].item,
+      slot_flag(state.opp_item_consumed, state.opp_active),
+      state.opp_choice,
     ),
   )
   if actions_me.length() == 0 {
@@ -3455,6 +3508,8 @@ pub fn switching_game_winrate_stats(
     opp_attract: 0,
     my_bind: 0,
     opp_bind: 0,
+    my_choice: -1,
+    opp_choice: -1,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,
@@ -3574,6 +3629,7 @@ pub fn alive_actions(
   must_recharge? : Bool = false,
   moves_used? : Array[Int] = [],
   can_switch? : Bool = true,
+  choice_lock? : Int = -1,
 ) -> Array[ActionKind] {
   let active_alive = hps[active] > 0
   if must_recharge && active_alive {
@@ -3596,12 +3652,19 @@ pub fn alive_actions(
       if last_resort_barred(moves, i, used_for_slot) {
         continue
       }
+      // スカーフ固定。-1 のときは条件が偽で、push 順は従来どおり。
+      if choice_lock >= 0 && i != choice_lock {
+        continue
+      }
       out.push(UseMove(i))
     }
   }
   if active_alive && can_mega(active, hps, team, mega_used) {
     for i in 0..<moves.length() {
       if last_resort_barred(moves, i, used_for_slot) {
+        continue
+      }
+      if choice_lock >= 0 && i != choice_lock {
         continue
       }
       out.push(Mega(i))

@@ -271,16 +271,23 @@ fn entry_speed_of(
   megaed : Array[Bool],
   ranks : Array[Int],
   status : Array[@model.StatusCondition],
+  item_consumed? : Array[Bool] = [],
 ) -> Int {
   if slot < 0 || slot >= team.length() {
     return 0
   }
-  let spe = effective_combatant(team[slot], slot_is_mega(megaed, slot)).pokemon.spe
-  let boosted = if ranks.length() > 4 {
+  let mon = effective_combatant(team[slot], slot_is_mega(megaed, slot))
+  let spe = mon.pokemon.spe
+  let staged = if ranks.length() > 4 {
     effective_speed(spe, ranks[4])
   } else {
     spe
   }
+  let boosted = speed_after_choice_scarf(
+    staged,
+    mon.item,
+    slot_flag(item_consumed, slot),
+  )
   let para = slot < status.length() && is_paralyzed(status[slot])
   if para {
     boosted / 2

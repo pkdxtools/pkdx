@@ -1354,6 +1354,8 @@ fn with_status_set(
     opp_confusion: state.opp_confusion,
     my_attract: state.my_attract,
     opp_attract: state.opp_attract,
+    my_bind: state.my_bind,
+    opp_bind: state.opp_bind,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1761,6 +1763,34 @@ pub fn apply_eot(
   opp_hps[state.opp_active] = opp_hp_new
   opp_status[state.opp_active] = opp_st_new
 
+  // === Step 4-bis: バインド ===
+  // 状態異常 slip の後、ねがいごとの前。両方 0 のときは HP 配列を書かない。
+  // 分母は slip と同じ `status_slip_max_hp`。特性はメガ後。MC はメガ未モデルで raw。
+  // 自分側を先に処理し、そのダメージで付与元が倒れたら相手側は解除だけする。
+  let (my_bind_next, opp_bind_next) = if state.my_bind <= 0 && state.opp_bind <= 0 {
+    (0, 0)
+  } else {
+    let my_mega = state.my_active < state.my_megaed.length() &&
+      state.my_megaed[state.my_active]
+    let opp_mega = state.opp_active < state.opp_megaed.length() &&
+      state.opp_megaed[state.opp_active]
+    let (hp_m, hp_o, b_m, b_o) = apply_bind_eot_pair(
+      state.my_bind,
+      state.opp_bind,
+      my_hps[state.my_active],
+      opp_hps[state.opp_active],
+      status_slip_max_hp(my_team[state.my_active]),
+      status_slip_max_hp(opp_team[state.opp_active]),
+      effective_combatant(my_team[state.my_active], my_mega).ability,
+      effective_combatant(opp_team[state.opp_active], opp_mega).ability,
+      my_team[state.my_active].item,
+      opp_team[state.opp_active].item,
+    )
+    my_hps[state.my_active] = hp_m
+    opp_hps[state.opp_active] = hp_o
+    (b_m, b_o)
+  }
+
   // === Step 5: ねがいごと (Wish) tick + activate (atomic single block) ===
   // wish_turns は per-side の scalar (Int)。pkdx は single battle で各サイド
   // 常に 1 active のため、サイド毎に 1 値で表現する (= 長さ 1 の per-active-
@@ -1877,6 +1907,8 @@ pub fn apply_eot(
     opp_confusion: state.opp_confusion,
     my_attract: state.my_attract,
     opp_attract: state.opp_attract,
+    my_bind: my_bind_next,
+    opp_bind: opp_bind_next,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),

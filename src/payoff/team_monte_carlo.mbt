@@ -165,6 +165,7 @@ fn greedy_team_action(
   opp_protean_locked? : Array[String] = [],
   opp_disguise_busted? : Array[Bool] = [],
   my_flash_fire? : Array[Bool] = [],
+  can_switch? : Bool = true,
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -230,7 +231,10 @@ fn greedy_team_action(
   // ε-greedy: uniform over all legal actions (UseMove for every move + Switch
   // for every alive teammate other than `active`).
   let n_moves = my_team[active].moves.length()
-  let n_switch = {
+  // バインド中は交代を候補に入れない。既定 true のとき従来と同じ本数。
+  let n_switch = if !can_switch {
+    0
+  } else {
     let mut c = 0
     for s in alive_slots {
       if s != active {
@@ -292,7 +296,7 @@ fn greedy_team_action(
   let mut best_switch_value = 0.0
   let zero_ranks = [0, 0, 0, 0, 0]
   for s in alive_slots {
-    if s == active {
+    if !can_switch || s == active {
       continue
     }
     let v = best_expected_damage(
@@ -1494,6 +1498,9 @@ pub fn team_rollout(
   // メロメロは場のアクティブだけ。交代 (どちらが出ても) で両方 0。
   let mut own_attract = 0
   let mut opp_attract = 0
+  // バインドは場のアクティブだけ。交代 (どちらが出ても) で両方 0。
+  let mut own_bind = 0
+  let mut opp_bind = 0
   // ねこだまし。None は未追跡 (select の既定)。Some は交代で true、技の行動で false。
   let mut own_fresh : Bool? = my_fresh
   let mut opp_fresh : Bool? = opp_fresh
@@ -1560,6 +1567,16 @@ pub fn team_rollout(
       opp_protean_locked~,
       opp_disguise_busted~,
       my_flash_fire=own_flash_fire,
+      can_switch=bind_switch_free(
+        own_bind,
+        own[own_active],
+        false,
+        if own_active < own_protean_locked.length() {
+          own_protean_locked[own_active]
+        } else {
+          ""
+        },
+      ),
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -1578,6 +1595,16 @@ pub fn team_rollout(
       opp_protean_locked=own_protean_locked,
       opp_disguise_busted=own_disguise_busted,
       my_flash_fire=opp_flash_fire,
+      can_switch=bind_switch_free(
+        opp_bind,
+        opp[opp_active],
+        false,
+        if opp_active < opp_protean_locked.length() {
+          opp_protean_locked[opp_active]
+        } else {
+          ""
+        },
+      ),
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -1873,6 +1900,8 @@ pub fn team_rollout(
             own_confusion = 0
             own_attract = 0
             opp_attract = 0
+            own_bind = 0
+            opp_bind = 0
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -1900,6 +1929,8 @@ pub fn team_rollout(
             opp_confusion = 0
             own_attract = 0
             opp_attract = 0
+            own_bind = 0
+            opp_bind = 0
             opp_active = i
             reset_ranks(opp_ranks)
           }
@@ -2210,6 +2241,9 @@ pub fn team_rollout(
               )
               own_attract = own_attract_next
               opp_attract = opp_attract_next
+              opp_bind = mc_apply_bind(
+                rng, mv_own, opp_hps[opp_active], opp_bind, res_immune,
+              )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2433,6 +2467,9 @@ pub fn team_rollout(
               )
               opp_attract = opp_attract_next
               own_attract = own_attract_next
+              own_bind = mc_apply_bind(
+                rng, mv_opp, own_hps[own_active], own_bind, res_immune,
+              )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2625,6 +2662,9 @@ pub fn team_rollout(
               )
               opp_attract = opp_attract_next
               own_attract = own_attract_next
+              own_bind = mc_apply_bind(
+                rng, mv_opp, own_hps[own_active], own_bind, res_immune,
+              )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2846,6 +2886,9 @@ pub fn team_rollout(
               )
               own_attract = own_attract_next
               opp_attract = opp_attract_next
+              opp_bind = mc_apply_bind(
+                rng, mv_own, opp_hps[opp_active], opp_bind, res_immune,
+              )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -3000,6 +3043,9 @@ pub fn team_rollout(
             )
             own_attract = own_attract_next
             opp_attract = opp_attract_next
+            opp_bind = mc_apply_bind(
+              rng, mv_own, opp_hps[opp_active], opp_bind, res_immune,
+            )
             mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
@@ -3153,6 +3199,9 @@ pub fn team_rollout(
             )
             opp_attract = opp_attract_next
             own_attract = own_attract_next
+            own_bind = mc_apply_bind(
+              rng, mv_opp, own_hps[own_active], own_bind, res_immune,
+            )
             mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
@@ -3377,6 +3426,28 @@ pub fn team_rollout(
         )
         opp_hps[opp_active] = new_opp_hp
         opp_status[opp_active] = new_opp_st
+
+        // === Step 4.45: バインド ===
+        // DP `apply_eot` の step 4-bis と同じ関数。両方 0 のときは HP を書かない。
+        // MC はメガ未モデルなので特性は raw。分母は slip と同じ HP プール。
+        if own_bind > 0 || opp_bind > 0 {
+          let (hp_m, hp_o, b_m, b_o) = apply_bind_eot_pair(
+            own_bind,
+            opp_bind,
+            own_hps[own_active],
+            opp_hps[opp_active],
+            status_slip_max_hp(own_c),
+            status_slip_max_hp(opp_c),
+            own_c.ability,
+            opp_c.ability,
+            own_c.item,
+            opp_c.item,
+          )
+          own_hps[own_active] = hp_m
+          opp_hps[opp_active] = hp_o
+          own_bind = b_m
+          opp_bind = b_o
+        }
 
         // === Step 4.5: ねがいごと (Wish) 発動 (atomic tick + activate) ===
         // 共通 helper `tick_and_fire_wish_inplace` に集約 (DP 側 `apply_eot`

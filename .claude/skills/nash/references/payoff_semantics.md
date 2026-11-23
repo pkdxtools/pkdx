@@ -692,6 +692,19 @@ Showdown との差 (意図的):
 - メロメロボディは接触特性の categorical roll の外。失敗枝を先に、`1 - (0.7)^hits`。MC はこんらんと同じく 1 回 (30%)。防御側か攻撃側がひんしのヒットでは乱数を引かない。
 - 対象外: ダブルのアロマベール味方、あかいいとの反射、マジックミラー、みがわり、とんぼがえり等の引き技での解除、メロメロ以外の付与技 (データに無い)、キャプティベート、ちょうはつ等の他の揮発。
 
+### バインド (Bound, Champions 規則) — DP / MC
+
+- 本文: `BTR_STATE_SYN_54_02`。「４ー５ターンの間、ターン終わりに最大ＨＰの１／８のダメージ。交代ができない。」英語は "For 4–5 turns ... 1/8 of its max HP ... cannot be switched out of battle." 比率は書かない。4 と 5 を `0.5` / `0.5` で、4 を先に fanout する。Showdown `partiallytrapped` の `random(5, 7)` (5 か 6) は採らない。
+- 技: `wazainfo_syn` が「相手をバインド状態にする。」かつ `waza.json` の `available = 1`。しめつける (020) / まきつく (035) / ほのおのうず (083) / うずしお (250) / すなじごく (328) / まとわりつく (611) / トラバサミ (779)。名前で判定する (`move_binds`)。命中して相手が生き残ったときだけ付く。すでにバインドなら上書きしない。免疫 (`hits_count == 0`) は fanout に来ない。
+- 入れない: からではさむ (`available = 0`、`buf_ref` も本文も無い)。マグマストーム (463) / サンダープリズン (819) は `buf_ref` に 45 があるが `available = 0` で `WAZAINFO` 本文が無い。うずしおの水中 2 倍は水中状態が未モデル。こうそくスピン / キラースピンのバインド解除は未モデル。にげられない状態 (くろいまなざし等) と かげふみは別ステータス。
+- ダメージ: `status_slip_max_hp / 8` の切り捨て。1 未満は 0 (砂・どくと同じ。Showdown の下限 1 は使わない)。しめつけバンド (`ITEMINFO_SYN_544`) を付与した側が持っているときだけ `/ 6`。持続は延ばさない。ねばりのかぎづめもこうこうのしっぽも `itemname` に無い。
+- 順序: `apply_eot` の状態異常 slip の後、ねがいごとの前。自分側を先、相手側を後 (やどりぎと同じ固定順。素早さ順ではない)。自分側のダメージで付与元がひんしなら、相手側はダメージを入れずに解除する。どくが先にひんしにした場合もダメージを入れずカウンタを 0 にする。カウンタが両方 0 のターンは HP 配列を書かない。
+- 解除: どちらかが交代したとき、攻撃の前に両方 0。付与した側の HP が EOT 時点で 0 のときもダメージなしで 0。本文は解除を書かない。Showdown `onResidual` が source 不在 / HP 0 で volatile を消すのに合わせた。
+- 交代不可: `alive_actions` の `can_switch`。バインド 0 は既定 true で行動列は同じ。ひんしの強制交代は残す。きれいなぬけがら (`ITEMINFO_SYN_295`) と にげあし (`TOKUSEIINFO_SYN_050`) は「交代を邪魔する効果を無視して交代できる」。ゴーストはバインド本文に無い。`help_10_05_00` はにげられない状態だけ "Ghost-type Pokémon are unaffected"。Showdown `tryTrap` は partiallytrapped でもゴーストを捕えないので、交代だけ許可しダメージは入れる。判定はメガ後のタイプ・特性と Protean ロック。MC はメガ未モデル。
+- マジックガード (`TOKUSEIINFO_SYN_098`): ダメージ 0、カウンタは減る、交代不可は残る。DP はメガ後の特性、MC は raw。
+- 状態: `my_bind` / `opp_bind`。残りの EOT 回数。控えには残さない。MC は付与が成立したときだけ `rng.int(limit=2)` を 1 回引く。
+- 対象外: ダブルの付与元、こうそくスピン / キラースピン、みがわり、まもる、かげふみ、にげられない状態そのもの、水中状態。
+
 ### ねこだまし (Fake Out, WAZAINFO_SYN_252) — DP / MC
 
 - 本文: `champout/rom-txt/usa/wazainfo_syn.json` 行 4432 (`WAZAINFO_SYN_252`)。"Makes the target flinch. This move fails unless it is the first move used by the user after it enters a battle." `help_syn.json` には該当文が無い。ひるみは「Makes the target flinch」なので確率抽選ではなく、命中すれば既存のひるみ経路で必ず付く (m020 の `flinch_chance` 100)。

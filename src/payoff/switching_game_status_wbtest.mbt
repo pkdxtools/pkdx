@@ -537,6 +537,8 @@ fn mk_test_state(
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }
@@ -870,6 +872,8 @@ fn mk_same_turn_state(
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }
@@ -1429,6 +1433,8 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let outs1 = attempt_turn_with_cache(

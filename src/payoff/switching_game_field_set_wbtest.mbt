@@ -90,6 +90,8 @@ fn mk_field_state() -> SwitchingGameState {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }

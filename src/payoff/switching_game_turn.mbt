@@ -408,6 +408,8 @@ priv struct TurnWorkspace {
   // SwitchingGameState と同じ slot ごとのもらいび状態。ws round-trip で落とさない。
   my_flash_fire : Array[Bool]
   opp_flash_fire : Array[Bool]
+  my_traced : Array[String]
+  opp_traced : Array[String]
   turn : Int
 }
 
@@ -450,6 +452,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     field_turns_left: state.field_turns_left,
     my_flash_fire: state.my_flash_fire.copy(),
     opp_flash_fire: state.opp_flash_fire.copy(),
+    my_traced: state.my_traced.copy(),
+    opp_traced: state.opp_traced.copy(),
     turn: state.turn,
   }
 }
@@ -493,6 +497,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     field_turns_left: ws.field_turns_left,
     my_flash_fire: ws.my_flash_fire.copy(),
     opp_flash_fire: ws.opp_flash_fire.copy(),
+    my_traced: ws.my_traced.copy(),
+    opp_traced: ws.opp_traced.copy(),
     turn: if bump_turn {
       ws.turn + 1
     } else {
@@ -1014,6 +1020,8 @@ fn clone_state(
     field_turns_left: state.field_turns_left,
     my_flash_fire: state.my_flash_fire.copy(),
     opp_flash_fire: state.opp_flash_fire.copy(),
+    my_traced: state.my_traced.copy(),
+    opp_traced: state.opp_traced.copy(),
     turn: state.turn + turn_delta,
   }
 }
@@ -1206,18 +1214,23 @@ pub fn transition_with_cache(
   let opp_flash_fire_new = state.opp_flash_fire.copy()
   let my_protean_locked_new = state.my_protean_locked.copy()
   let opp_protean_locked_new = state.opp_protean_locked.copy()
+  let my_traced_new = state.my_traced.copy()
+  let opp_traced_new = state.opp_traced.copy()
   if my_mega_trigger {
     my_megaed_new[state.my_active] = true
     // Stage 5: mega は Protean ロックを解除し再発動可能にする (megaed と対)。
     if state.my_active < my_protean_locked_new.length() {
       my_protean_locked_new[state.my_active] = ""
     }
+    // メガの瞬間はトレースしない。前のコピーはここで外す。
+    clear_traced_slot(my_traced_new, state.my_active)
   }
   if opp_mega_trigger {
     opp_megaed_new[state.opp_active] = true
     if state.opp_active < opp_protean_locked_new.length() {
       opp_protean_locked_new[state.opp_active] = ""
     }
+    clear_traced_slot(opp_traced_new, state.opp_active)
   }
   // しろいハーブ: メガ進化の直後に両 active を判定する (Showdown onAnyAfterMega)。
   // メガはランクを変えないので、実到達では no-op (held_item_stat_reset.mbt 参照)。
@@ -1229,6 +1242,16 @@ pub fn transition_with_cache(
   }
   let my_mega_used_new = state.my_mega_used || my_mega_trigger
   let opp_mega_used_new = state.opp_mega_used || opp_mega_trigger
+  // トレースが無い（全 "" / 長さ 0）ときは同じ参照。あるときだけ複製する。
+  let my_team_base = my_team
+  let opp_team_base = opp_team
+  let mut my_team = overlay_traced_team(
+    my_team_base, my_traced_new, my_megaed_new,
+  )
+  let mut opp_team = overlay_traced_team(
+    opp_team_base, opp_traced_new, opp_megaed_new,
+  )
+  let mut trace_tie : Array[TraceEntrySnap] = []
   let mut my_active_new = state.my_active
   let mut opp_active_new = state.opp_active
   // Track a single attack event for status fan-out after the state is built.
@@ -1280,21 +1303,39 @@ pub fn transition_with_cache(
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
       }
+      clear_traced_slot(my_traced_new, state.my_active)
+      clear_traced_slot(opp_traced_new, state.opp_active)
       // 再生力: 出ていく slot だけ。同時交代でも互いの回復は独立。ひんしは不発。
+      // 判定はクリア前の実効特性（コピーした再生力を含む view）。
       apply_regenerator_switch_out(
         my_team, state.my_active, my_megaed_new, my_hps_new,
       )
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed_new, opp_hps_new,
       )
-      // 登場時いかく: 双方同時登場は entrant ごとに 1 回ずつ。いかく持ちと
-      // 反射系特性は同一個体に同居しないので呼び出し順は結果に影響しない。
-      apply_intimidate_entry(
-        my_team, i, my_megaed_new, my_ranks_new, opp_team, j, opp_megaed_new, opp_ranks_new,
-      )
-      apply_intimidate_entry(
-        opp_team, j, opp_megaed_new, opp_ranks_new, my_team, i, my_megaed_new, my_ranks_new,
-      )
+      // どちらもトレースでないときは従来どおり自分→相手の順でいかく。
+      // トレースがいるときだけ素早さ順。結果が同じなら分岐を増やさない。
+      match resolve_trace_entries(
+        my_team_base, i, my_megaed_new, my_status_new, my_ranks_new, my_traced_new,
+        opp_team_base, j, opp_megaed_new, opp_status_new, opp_ranks_new, opp_traced_new,
+      ) {
+        None => {
+          apply_intimidate_entry(
+            my_team, i, my_megaed_new, my_ranks_new, opp_team, j, opp_megaed_new, opp_ranks_new,
+          )
+          apply_intimidate_entry(
+            opp_team, j, opp_megaed_new, opp_ranks_new, my_team, i, my_megaed_new, my_ranks_new,
+          )
+        }
+        Some(snaps) =>
+          if snaps.length() == 1 {
+            install_trace_snap(
+              snaps[0], my_ranks_new, opp_ranks_new, my_traced_new, opp_traced_new,
+            )
+          } else {
+            trace_tie = snaps
+          }
+      }
     }
     (Switch(i), UseMove(mj)) => {
       my_active_new = i
@@ -1314,6 +1355,7 @@ pub fn transition_with_cache(
       if state.my_active < my_protean_locked_new.length() {
         my_protean_locked_new[state.my_active] = ""
       }
+      clear_traced_slot(my_traced_new, state.my_active)
       // 再生力: 自分の出ていく slot。交代先 (i) と相手 active は回復しない。
       apply_regenerator_switch_out(
         my_team, state.my_active, my_megaed_new, my_hps_new,
@@ -1329,6 +1371,10 @@ pub fn transition_with_cache(
         state.opp_active,
         opp_megaed_new,
         opp_ranks_new,
+      )
+      apply_trace_after_switch(
+        my_team_base, i, my_megaed_new, my_traced_new, my_ranks_new,
+        opp_team_base, state.opp_active, opp_megaed_new, opp_traced_new, opp_ranks_new,
       )
       // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
       // are deferred to apply_damage_variants_fanout in the Some(...) arm
@@ -1358,6 +1404,7 @@ pub fn transition_with_cache(
       if state.opp_active < opp_protean_locked_new.length() {
         opp_protean_locked_new[state.opp_active] = ""
       }
+      clear_traced_slot(opp_traced_new, state.opp_active)
       // 再生力: 相手の出ていく slot。交代先 (j) と自分 active は回復しない。
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed_new, opp_hps_new,
@@ -1373,6 +1420,10 @@ pub fn transition_with_cache(
         state.my_active,
         my_megaed_new,
         my_ranks_new,
+      )
+      apply_trace_after_switch(
+        opp_team_base, j, opp_megaed_new, opp_traced_new, opp_ranks_new,
+        my_team_base, state.my_active, my_megaed_new, my_traced_new, my_ranks_new,
       )
       // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
       // post-hit effects are handled per-variant in the Some(...) arm.
@@ -1413,6 +1464,11 @@ pub fn transition_with_cache(
           state.opp_active,
           mj,
         ),
+        // resolve_moves は state から workspace を作り直す。メガの瞬間に外した
+        // トレースを渡さないと、出力が発動前のコピーを持ち越す。内容が同じ
+        // （トレース無し / メガ無し）なら参照が変わるだけで値は変わらない。
+        my_traced: my_traced_new,
+        opp_traced: opp_traced_new,
       }
       if s == 0 {
         // Speed tie: return two outcomes so the caller averages successor
@@ -1455,6 +1511,75 @@ pub fn transition_with_cache(
     // Any remaining arm is unreachable — treat as a no-op turn advance.
     (_, _) => ()
   }
+  // 同時登場の同速で、順序によって着地が違うときだけ 2 本に分ける。
+  // トレースが無い arm では trace_tie は空のまま。
+  if trace_tie.length() >= 2 {
+    let outs : Array[(Double, SwitchingGameState)] = []
+    for snap in trace_tie {
+      let my_r = my_ranks_new.copy()
+      let opp_r = opp_ranks_new.copy()
+      let my_t = my_traced_new.copy()
+      let opp_t = opp_traced_new.copy()
+      let my_h = my_hps_new.copy()
+      let opp_h = opp_hps_new.copy()
+      let my_i = my_item_consumed_new.copy()
+      let opp_i = opp_item_consumed_new.copy()
+      install_trace_snap(snap, my_r, opp_r, my_t, opp_t)
+      apply_held_item_stat_reset_pair(
+        my_team_base, my_active_new, my_h, my_r, my_i,
+        opp_team_base, opp_active_new, opp_h, opp_r, opp_i,
+      )
+      outs.push((
+        snap.prob,
+        {
+          my_active: my_active_new,
+          opp_active: opp_active_new,
+          my_hps: my_h,
+          opp_hps: opp_h,
+          my_ranks: my_r,
+          opp_ranks: opp_r,
+          my_mega_used: my_mega_used_new,
+          opp_mega_used: opp_mega_used_new,
+          my_megaed: my_megaed_new,
+          opp_megaed: opp_megaed_new,
+          my_status: my_status_new,
+          opp_status: opp_status_new,
+          my_must_recharge: my_must_recharge_new,
+          opp_must_recharge: opp_must_recharge_new,
+          my_item_consumed: my_i,
+          opp_item_consumed: opp_i,
+          my_disguise_busted: state.my_disguise_busted.copy(),
+          opp_disguise_busted: state.opp_disguise_busted.copy(),
+          my_flinched: state.my_flinched,
+          opp_flinched: state.opp_flinched,
+          my_fresh: state.my_fresh,
+          opp_fresh: state.opp_fresh,
+          my_moves_used: my_moves_used_new,
+          opp_moves_used: opp_moves_used_new,
+          weather: state.weather,
+          weather_turns_left: state.weather_turns_left,
+          my_leech_seeded: my_leech_seeded_new,
+          opp_leech_seeded: opp_leech_seeded_new,
+          my_protean_locked: my_protean_locked_new,
+          opp_protean_locked: opp_protean_locked_new,
+          my_wish_turns: state.my_wish_turns,
+          opp_wish_turns: state.opp_wish_turns,
+          field: state.field,
+          field_turns_left: state.field_turns_left,
+          my_flash_fire: my_flash_fire_new,
+          opp_flash_fire: opp_flash_fire_new,
+          my_traced: my_t,
+          opp_traced: opp_t,
+          turn: state.turn + 1,
+        },
+      ))
+    }
+    return settle_fresh_outcomes(
+      outs, state.my_fresh, state.opp_fresh, my_action, opp_action,
+    )
+  }
+  my_team = overlay_traced_team(my_team_base, my_traced_new, my_megaed_new)
+  opp_team = overlay_traced_team(opp_team_base, opp_traced_new, opp_megaed_new)
   // しろいハーブ: 登場時いかく (Switch arm 内) の直後に両 active を判定する。登場した
   // 個体は技より前に判定されるので、いかく で下がった能力はこのターンの技に効く前に解除される。
   apply_held_item_stat_reset_pair(
@@ -1501,6 +1626,8 @@ pub fn transition_with_cache(
     field_turns_left: state.field_turns_left,
     my_flash_fire: my_flash_fire_new,
     opp_flash_fire: opp_flash_fire_new,
+    my_traced: my_traced_new,
+    opp_traced: opp_traced_new,
     turn: state.turn + 1,
   }
   // fresh はターン開始値から決める。途中のコピーが落としてもここで上書きする。
@@ -1785,6 +1912,28 @@ fn attempt_accuracy(
     state.my_active
   }
   let atk_trigger = attacker_mega_trigger || is_mega_action(action)
+  // 交代先がトレースのときだけ、命中判定の前にコピー後の特性を見せる。
+  // それ以外は defender_team と同じ参照。
+  let (atk_traced, atk_megaed, def_megaed) = if attacker_is_me {
+    (state.my_traced, state.my_megaed, state.opp_megaed)
+  } else {
+    (state.opp_traced, state.opp_megaed, state.my_megaed)
+  }
+  let stayer_ability = traced_slot_ability(
+    attacker_team,
+    attacker_active,
+    atk_megaed,
+    atk_traced,
+    mega_now=atk_trigger,
+  )
+  let def_mega = slot_mega_for_hit(def_megaed, defender_active, defender_mega_trigger)
+  let defender_team = if defender_switch_slot >= 0 {
+    preview_incoming_trace(
+      defender_team, defender_active, def_mega, stayer_ability,
+    )
+  } else {
+    defender_team
+  }
   let skips = match action {
     Switch(_) => false
     UseMove(mi) | Mega(mi) =>
@@ -1888,6 +2037,8 @@ fn pass_turn_state(
     field_turns_left: state.field_turns_left,
     my_flash_fire: state.my_flash_fire.copy(),
     opp_flash_fire: state.opp_flash_fire.copy(),
+    my_traced: state.my_traced.copy(),
+    opp_traced: state.opp_traced.copy(),
     turn: state.turn + 1,
   }
 }
@@ -1916,6 +2067,20 @@ fn turn_start_mega(
   let opp_megaed = state.opp_megaed.copy()
   let my_protean_locked = state.my_protean_locked.copy()
   let opp_protean_locked = state.opp_protean_locked.copy()
+  let my_traced = if my_trigger && state.my_traced.length() > 0 {
+    let t = state.my_traced.copy()
+    clear_traced_slot(t, state.my_active)
+    t
+  } else {
+    state.my_traced
+  }
+  let opp_traced = if opp_trigger && state.opp_traced.length() > 0 {
+    let t = state.opp_traced.copy()
+    clear_traced_slot(t, state.opp_active)
+    t
+  } else {
+    state.opp_traced
+  }
   let my_hps = state.my_hps.copy()
   let opp_hps = state.opp_hps.copy()
   let my_ranks = state.my_ranks.copy()
@@ -1960,6 +2125,8 @@ fn turn_start_mega(
     opp_protean_locked,
     my_item_consumed,
     opp_item_consumed,
+    my_traced,
+    opp_traced,
   }
 }
 
@@ -1998,6 +2165,16 @@ pub fn attempt_turn_with_cache(
   // 命中判定はメガフラグを書く前。このターンの Mega を実効特性・タイプへ渡す。
   let my_mega_trigger = is_mega_action(my_action)
   let opp_mega_trigger = is_mega_action(opp_action)
+  // トレースが無ければ同じ参照。遷移には素の team を渡し、view を base にしない
+  // （クリア後にコピー特性が combatant 側へ残る）。
+  let my_team_base = my_team
+  let opp_team_base = opp_team
+  let my_team = overlay_except_mega_trigger(
+    my_team_base, state.my_traced, state.my_megaed, state.my_active, my_mega_trigger,
+  )
+  let opp_team = overlay_except_mega_trigger(
+    opp_team_base, state.opp_traced, state.opp_megaed, state.opp_active, opp_mega_trigger,
+  )
   let my_acc = attempt_accuracy(
     state, my_action, true, my_team, opp_team,
     attacker_mega_trigger=my_mega_trigger,
@@ -2143,6 +2320,8 @@ pub fn attempt_turn_with_cache(
         field_turns_left: state.field_turns_left,
         my_flash_fire: state.my_flash_fire.copy(),
         opp_flash_fire: state.opp_flash_fire.copy(),
+        my_traced: state.my_traced,
+        opp_traced: state.opp_traced,
         turn: state.turn,
       }
       // メガ進化はターン頭に起きる。両者行動の枝は transition_with_cache が適用するので
@@ -2150,7 +2329,7 @@ pub fn attempt_turn_with_cache(
       let mega_pre = if ma.acts && oa.acts {
         pre_state
       } else {
-        turn_start_mega(pre_state, ma.action, oa.action, my_team, opp_team)
+        turn_start_mega(pre_state, ma.action, oa.action, my_team_base, opp_team_base)
       }
       // 崩れ技 / てっていこうせん の外れ (`SideAttempt.miss`) は使用者の HP 消費を含むので専用経路へ。
       let crash_miss = attempt_has_miss_self_loss(
@@ -2169,19 +2348,19 @@ pub fn attempt_turn_with_cache(
             mega_pre,
             ma.action,
             oa.action,
-            my_team,
-            opp_team,
+            my_team_base,
+            opp_team_base,
             dmg_cache,
             my_pending=ma_pend,
             opp_pending=oa_pend,
           )
         (true, false, false) =>
           partial_act_with_miss_protean(
-            mega_pre, ma, oa, true, my_team, opp_team, dmg_cache,
+            mega_pre, ma, oa, true, my_team_base, opp_team_base, dmg_cache,
           )
         (false, true, false) =>
           partial_act_with_miss_protean(
-            mega_pre, ma, oa, false, my_team, opp_team, dmg_cache,
+            mega_pre, ma, oa, false, my_team_base, opp_team_base, dmg_cache,
           )
         (false, false, false) => {
           let s0 = pass_turn_state(mega_pre, ma.post_status, oa.post_status)
@@ -2214,7 +2393,19 @@ pub fn attempt_turn_with_cache(
           state.opp_active,
           state.opp_must_recharge[state.opp_active],
         )
-        let ns = apply_eot(ns_recharge_cleared, my_team, opp_team)
+        let ns = apply_eot(
+          ns_recharge_cleared,
+          overlay_traced_team(
+            my_team_base,
+            ns_recharge_cleared.my_traced,
+            ns_recharge_cleared.my_megaed,
+          ),
+          overlay_traced_team(
+            opp_team_base,
+            ns_recharge_cleared.opp_traced,
+            ns_recharge_cleared.opp_megaed,
+          ),
+        )
         // 選んだ行動で fresh を更新する。技がひるみ・眠り・まひ・外れで止まっても
         // UseMove / Mega は消費する (Showdown は runMove の入口で数える)。
         // transition 側が先に同じ開始値から決めていても結果は同じ。
@@ -2365,6 +2556,12 @@ fn partial_act_outcomes(
   let opp_protean_locked = state.opp_protean_locked.copy()
   let my_flash_fire = state.my_flash_fire.copy()
   let opp_flash_fire = state.opp_flash_fire.copy()
+  let my_traced = state.my_traced.copy()
+  let opp_traced = state.opp_traced.copy()
+  let my_team_base = my_team
+  let opp_team_base = opp_team
+  let mut my_team = overlay_traced_team(my_team_base, my_traced, my_megaed)
+  let mut opp_team = overlay_traced_team(opp_team_base, opp_traced, opp_megaed)
   let mut my_active = state.my_active
   let mut opp_active = state.opp_active
   let mut my_mega_used = state.my_mega_used
@@ -2389,6 +2586,7 @@ fn partial_act_outcomes(
         my_protean_locked[state.my_active] = ""
       }
       clear_flash_fire_slot(my_flash_fire, state.my_active)
+      clear_traced_slot(my_traced, state.my_active)
       // 再生力: 自分の出ていく slot。相手が skip でも交代で回復する。
       apply_regenerator_switch_out(
         my_team, state.my_active, my_megaed, my_hps,
@@ -2404,6 +2602,10 @@ fn partial_act_outcomes(
         opp_megaed,
         opp_ranks,
       )
+      apply_trace_after_switch(
+        my_team_base, i, my_megaed, my_traced, my_ranks,
+        opp_team_base, state.opp_active, opp_megaed, opp_traced, opp_ranks,
+      )
     }
     (false, Switch(j)) => {
       opp_active = j
@@ -2418,6 +2620,7 @@ fn partial_act_outcomes(
         opp_protean_locked[state.opp_active] = ""
       }
       clear_flash_fire_slot(opp_flash_fire, state.opp_active)
+      clear_traced_slot(opp_traced, state.opp_active)
       // 再生力: 相手の出ていく slot。自分が skip でも交代で回復する。
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed, opp_hps,
@@ -2433,6 +2636,10 @@ fn partial_act_outcomes(
         my_megaed,
         my_ranks,
       )
+      apply_trace_after_switch(
+        opp_team_base, j, opp_megaed, opp_traced, opp_ranks,
+        my_team_base, state.my_active, my_megaed, my_traced, my_ranks,
+      )
     }
     (true, UseMove(mi)) => {
       if mega_trigger {
@@ -2442,6 +2649,7 @@ fn partial_act_outcomes(
         if state.my_active < my_protean_locked.length() {
           my_protean_locked[state.my_active] = ""
         }
+        clear_traced_slot(my_traced, state.my_active)
       }
       // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
       // are handled per-variant in the Some(...) arm via
@@ -2461,6 +2669,7 @@ fn partial_act_outcomes(
         if state.opp_active < opp_protean_locked.length() {
           opp_protean_locked[state.opp_active] = ""
         }
+        clear_traced_slot(opp_traced, state.opp_active)
       }
       // Phase 2-E (#91): see (true, UseMove) for rationale.
       pre_dmg_defender_hp = my_hps[state.my_active]
@@ -2471,6 +2680,8 @@ fn partial_act_outcomes(
     }
     (_, _) => ()
   }
+  my_team = overlay_traced_team(my_team_base, my_traced, my_megaed)
+  opp_team = overlay_traced_team(opp_team_base, opp_traced, opp_megaed)
   // しろいハーブ: 登場時いかく / メガ進化の直後に両 active を判定する (transition_with_cache
   // と同じ位置。ここでは技は撃たれないので、登場・メガの後で判定すれば各判定点を覆う)。
   apply_held_item_stat_reset_pair(
@@ -2516,6 +2727,8 @@ fn partial_act_outcomes(
     field_turns_left: state.field_turns_left,
     my_flash_fire,
     opp_flash_fire,
+    my_traced,
+    opp_traced,
     turn: state.turn + 1,
   }
   match attack_event {
@@ -3125,30 +3338,70 @@ pub fn switching_game_winrate_stats(
     field_turns_left: 0,
     my_flash_fire: Array::make(my_team.length(), false),
     opp_flash_fire: Array::make(opp_team.length(), false),
+    my_traced: Array::make(my_team.length(), ""),
+    opp_traced: Array::make(opp_team.length(), ""),
     turn: 0,
   }
   // 登場時いかく: 先発 lead 同士 (双方 slot 0、megaed 全 false)。再帰前なので
-  // state の rank 配列を直接 mutate してよい。
-  apply_intimidate_entry(
-    my_team,
-    0,
-    state.my_megaed,
-    state.my_ranks,
-    opp_team,
-    0,
-    state.opp_megaed,
-    state.opp_ranks,
-  )
-  apply_intimidate_entry(
-    opp_team,
-    0,
-    state.opp_megaed,
-    state.opp_ranks,
-    my_team,
-    0,
-    state.my_megaed,
-    state.my_ranks,
-  )
+  // state の rank 配列を直接 mutate してよい。どちらもトレースでないときは
+  // 下の 2 呼び出しが従来どおり自分→相手の順。
+  match resolve_trace_entries(
+    my_team, 0, state.my_megaed, state.my_status, state.my_ranks, state.my_traced,
+    opp_team, 0, state.opp_megaed, state.opp_status, state.opp_ranks, state.opp_traced,
+  ) {
+    None => {
+      apply_intimidate_entry(
+        my_team, 0, state.my_megaed, state.my_ranks,
+        opp_team, 0, state.opp_megaed, state.opp_ranks,
+      )
+      apply_intimidate_entry(
+        opp_team, 0, state.opp_megaed, state.opp_ranks,
+        my_team, 0, state.my_megaed, state.my_ranks,
+      )
+    }
+    Some(snaps) =>
+      if snaps.length() >= 2 {
+        let cache : @hashmap.HashMap[SwitchingGameState, Double] = @hashmap.HashMap([])
+        let stats = new_stats_with_progress(progress, dp_log_every)
+        let dmg_cache = new_damage_cache(disk~)
+        let mut v = 0.0
+        for snap in snaps {
+          let my_ranks = state.my_ranks.copy()
+          let opp_ranks = state.opp_ranks.copy()
+          let my_traced = state.my_traced.copy()
+          let opp_traced = state.opp_traced.copy()
+          let my_hps = state.my_hps.copy()
+          let opp_hps = state.opp_hps.copy()
+          let my_item = state.my_item_consumed.copy()
+          let opp_item = state.opp_item_consumed.copy()
+          install_trace_snap(snap, my_ranks, opp_ranks, my_traced, opp_traced)
+          apply_held_item_stat_reset_pair(
+            my_team, 0, my_hps, my_ranks, my_item,
+            opp_team, 0, opp_hps, opp_ranks, opp_item,
+          )
+          let branched = {
+            ..state,
+            my_ranks,
+            opp_ranks,
+            my_traced,
+            opp_traced,
+            my_hps,
+            opp_hps,
+            my_item_consumed: my_item,
+            opp_item_consumed: opp_item,
+          }
+          v = v + snap.prob * value(
+            branched, my_team, opp_team, turn_limit, cache, stats, dmg_cache,
+          )
+        }
+        stats.cached_states = cache.length()
+        return (v, stats, dmg_cache)
+      } else {
+        install_trace_snap(
+          snaps[0], state.my_ranks, state.opp_ranks, state.my_traced, state.opp_traced,
+        )
+      }
+  }
   // しろいハーブ: 先発の登場時いかく直後に両 lead を判定する (rank 配列は state 直書き)。
   apply_held_item_stat_reset_pair(
     my_team, 0, state.my_hps, state.my_ranks, state.my_item_consumed,

@@ -79,6 +79,8 @@ fn h1_state_from_weather_field(
     field_turns_left: 999,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }

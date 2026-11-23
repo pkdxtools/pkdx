@@ -1366,6 +1366,8 @@ fn with_status_set(
     field_turns_left: state.field_turns_left,
     my_flash_fire: state.my_flash_fire.copy(),
     opp_flash_fire: state.opp_flash_fire.copy(),
+    my_traced: state.my_traced.copy(),
+    opp_traced: state.opp_traced.copy(),
     turn: state.turn,
   }
 }
@@ -1886,6 +1888,8 @@ pub fn apply_eot(
     field_turns_left: next_field_turns,
     my_flash_fire: state.my_flash_fire.copy(),
     opp_flash_fire: state.opp_flash_fire.copy(),
+    my_traced: state.my_traced.copy(),
+    opp_traced: state.opp_traced.copy(),
     turn: state.turn,
   }
 }

@@ -161,6 +161,11 @@ pub(all) struct SwitchingGameState {
   my_fresh : Bool?
   opp_fresh : Bool?
   turn : Int
+  // トレースでコピーした特性。"" はその slot が素の特性のまま。
+  // 長さ 0 は未追跡（旧 fixture）。書き込みも、コピーしたいかくも no-op。
+  // 交代で出ていく slot と、そのターンにメガ進化した slot は "" に戻す。
+  my_traced : Array[String]
+  opp_traced : Array[String]
 } derive(Debug, Eq, Hash)
 
 ///|

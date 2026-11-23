@@ -72,6 +72,8 @@ fn f5_state_from_field(
     },
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }

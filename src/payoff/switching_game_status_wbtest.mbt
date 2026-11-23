@@ -40,6 +40,7 @@ fn mk_move(
     weather_set: None,
     field_set: None,
     flinch_chance: 0,
+    confusion_chance: 0,
   }
 }
 
@@ -521,6 +522,8 @@ fn mk_test_state(
     opp_disguise_busted: Array::make(team_size, false),
     my_flinched: false,
     opp_flinched: false,
+    my_confusion: 0,
+    opp_confusion: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -856,6 +859,8 @@ fn mk_same_turn_state(
     opp_disguise_busted: [false],
     my_flinched: false,
     opp_flinched: false,
+    my_confusion: 0,
+    opp_confusion: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -1417,6 +1422,8 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     opp_disguise_busted: [false],
     my_flinched: false,
     opp_flinched: false,
+    my_confusion: 0,
+    opp_confusion: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

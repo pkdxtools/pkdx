@@ -1350,6 +1350,8 @@ fn with_status_set(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: state.my_confusion,
+    opp_confusion: state.opp_confusion,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1558,6 +1560,8 @@ pub fn apply_eot(
   my_team : Array[Combatant],
   opp_team : Array[Combatant],
 ) -> SwitchingGameState {
+  // キーのみ / ラムのみ。こんらんしていないときは同じ state。
+  let state = cure_confusion_berries(state, my_team, opp_team)
   let my_hps = state.my_hps.copy()
   let opp_hps = state.opp_hps.copy()
   let my_status = state.my_status.copy()
@@ -1867,6 +1871,8 @@ pub fn apply_eot(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: state.my_confusion,
+    opp_confusion: state.opp_confusion,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),

@@ -213,7 +213,8 @@ fn attempt_roll_deferred(
   opp_team : Array[Combatant],
 ) -> Bool {
   freeze_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
-  flinch_roll_deferred(state, is_me, action, team, opp_action, opp_team)
+  flinch_roll_deferred(state, is_me, action, team, opp_action, opp_team) ||
+  confusion_roll_deferred(state, is_me, action, team, opp_action, opp_team)
 }
 
 ///|
@@ -330,6 +331,15 @@ fn resolve_pending_attempt(
     }
     return result
   }
+  // こんらんはひるみの後、まひの前。カウンタ 0 のときは従来のループのまま。
+  // 確定で眠っている / ねむる途中はカウンタを進めず、同じループに落とす。
+  let ctime = if is_me { ws.my_confusion } else { ws.opp_confusion }
+  if ctime > 0 && !confusion_held_through_sleep(status_now) {
+    return resolve_while_confused(
+      ws, is_me, mv, mv_idx, mega_now, def_mega_now, pre_state, my_team, opp_team,
+      dmg_cache, foe_move,
+    )
+  }
   for o in per_side_attempt(status_now, false, UseMove(mv_idx), acc, thaws_user=thaws) {
     let s_o = ws_to_state(ws_with_status(ws, is_me, slot, o.post_status), bump_turn=false)
     if o.acts {
@@ -382,6 +392,9 @@ priv struct TurnWorkspace {
   opp_disguise_busted : Array[Bool]
   my_flinched : Bool
   opp_flinched : Bool
+  // SwitchingGameState のこんらんカウンタ。ws round-trip で落とさない。
+  my_confusion : Int
+  opp_confusion : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -436,6 +449,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: state.my_confusion,
+    opp_confusion: state.opp_confusion,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -481,6 +496,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_disguise_busted: ws.opp_disguise_busted.copy(),
     my_flinched: ws.my_flinched,
     opp_flinched: ws.opp_flinched,
+    my_confusion: ws.my_confusion,
+    opp_confusion: ws.opp_confusion,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -577,7 +594,7 @@ fn status_move_fail_state(
   ) {
     None => None
     Some((atk, def)) =>
-      if status_move_fails_on_foe(atk, mv, def, state.weather) {
+      if status_move_fails_on_foe(atk, mv, def, state.weather, field=state.field) {
         Some(
           with_max_hp_recoil(
             with_crash_damage(
@@ -1004,6 +1021,8 @@ fn clone_state(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: state.my_confusion,
+    opp_confusion: state.opp_confusion,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1511,6 +1530,10 @@ pub fn transition_with_cache(
     // Any remaining arm is unreachable — treat as a no-op turn advance.
     (_, _) => ()
   }
+  // 交代した側のこんらんは、このあとの攻撃より前に捨てる。交代していない側は
+  // そのまま。攻撃で付いたこんらんは fanout がこの 0 の上に書く。
+  let my_confusion_sw = confusion_after_switch(state, my_action, true)
+  let opp_confusion_sw = confusion_after_switch(state, opp_action, false)
   // 同時登場の同速で、順序によって着地が違うときだけ 2 本に分ける。
   // トレースが無い arm では trace_tie は空のまま。
   if trace_tie.length() >= 2 {
@@ -1552,6 +1575,8 @@ pub fn transition_with_cache(
           opp_disguise_busted: state.opp_disguise_busted.copy(),
           my_flinched: state.my_flinched,
           opp_flinched: state.opp_flinched,
+          my_confusion: my_confusion_sw,
+          opp_confusion: opp_confusion_sw,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1610,6 +1635,8 @@ pub fn transition_with_cache(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: my_confusion_sw,
+    opp_confusion: opp_confusion_sw,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2021,6 +2048,8 @@ fn pass_turn_state(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: state.my_confusion,
+    opp_confusion: state.opp_confusion,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2304,6 +2333,8 @@ pub fn attempt_turn_with_cache(
         opp_disguise_busted: state.opp_disguise_busted,
         my_flinched: state.my_flinched,
         opp_flinched: state.opp_flinched,
+        my_confusion: state.my_confusion,
+        opp_confusion: state.opp_confusion,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2711,6 +2742,8 @@ fn partial_act_outcomes(
     opp_disguise_busted: state.opp_disguise_busted.copy(),
     my_flinched: state.my_flinched,
     opp_flinched: state.opp_flinched,
+    my_confusion: state.my_confusion,
+    opp_confusion: state.opp_confusion,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3321,6 +3354,8 @@ pub fn switching_game_winrate_stats(
     opp_disguise_busted: Array::make(opp_team.length(), false),
     my_flinched: false,
     opp_flinched: false,
+    my_confusion: 0,
+    opp_confusion: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,

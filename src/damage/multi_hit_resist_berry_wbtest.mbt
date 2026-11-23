@@ -49,6 +49,7 @@ fn rb_move(name : String, type_ : String) -> @model.Move {
     weather_set: None,
     field_set: None,
     flinch_chance: 0,
+    confusion_chance: 0,
   }
 }
 

@@ -155,6 +155,11 @@ pub(all) struct Move {
   // 失う (持ち越さない)。DB では move_meta.flinch_chance (m019) から入る。
   // ゲート (ちからずく / せいしんりょく / りんぷん / HP 減少なし) は payoff 層で掛ける。
   flinch_chance : Int
+  // `confusion_chance` — こんらんを付与する確率 (%)。0 = 付与しない。
+  // 変化技 (あやしいひかり等) は直接効果、ダメージ技 (みずのはどう等) は追加効果。
+  // こんらんは major status と独立した揮発状態なので `status_effect` には入れない。
+  // DB では move_meta.confusion_chance (m022) から入る。省略時の JSON には出さない。
+  confusion_chance : Int
 } derive(Debug, Eq)
 
 ///|

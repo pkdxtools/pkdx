@@ -198,7 +198,13 @@ fn query_moves_legacy(
     has_heal=heal_cols != "",
     has_field=field_cols != "",
   ) {
-    Ok(moves) => Ok(apply_flinch_chance(moves, flinch_chance_map(db, "")))
+    Ok(moves) =>
+      Ok(
+        apply_confusion_chance(
+          apply_flinch_chance(moves, flinch_chance_map(db, "")),
+          confusion_chance_map(db, ""),
+        ),
+      )
     Err(e) => Err(e)
   }
 }
@@ -350,6 +356,7 @@ fn collect_moves_rows(
       weather_set,
       field_set,
       flinch_chance: 0,
+      confusion_chance: 0,
     })
   }
   Ok(moves)
@@ -671,6 +678,7 @@ pub fn query_move(
     weather_set,
     field_set,
     flinch_chance: flinch_chance_of(flinch_chance_map(db, ""), r[0]),
+    confusion_chance: confusion_chance_of(confusion_chance_map(db, ""), r[0]),
   })
 }
 
@@ -735,6 +743,70 @@ fn apply_flinch_chance(
 ///|
 /// 単一技の ひるみ確率。表に無ければ 0。
 fn flinch_chance_of(map : Map[String, Int], name : String) -> Int {
+  match map.get(name) {
+    Some(c) => c
+    None => 0
+  }
+}
+
+///|
+/// m022 が `move_meta` に追加する `confusion_chance` 列の有無。列が無い DB では空表。
+fn move_meta_has_confusion_column(db : Db, qualifier : String) -> Bool {
+  let prefix = if qualifier == "" { "" } else { qualifier + "." }
+  let sql = "PRAGMA " + prefix + "table_info(move_meta)"
+  let rows = match query(db, sql, []) {
+    Ok(r) => r
+    Err(_) => return false
+  }
+  for row in rows {
+    if row.length() > 1 && row[1] == "confusion_chance" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// 技名 → こんらん確率 (%) (`confusion_chance > 0` だけ)。列が無ければ空。
+fn confusion_chance_map(db : Db, qualifier : String) -> Map[String, Int] {
+  let map : Map[String, Int] = Map([])
+  if !move_meta_has_confusion_column(db, qualifier) {
+    return map
+  }
+  let prefix = if qualifier == "" { "" } else { qualifier + "." }
+  let sql = "SELECT name_ja, confusion_chance FROM " + prefix +
+    "move_meta WHERE confusion_chance > 0"
+  match query(db, sql, []) {
+    Ok(rows) =>
+      for row in rows {
+        if row.length() > 1 {
+          map[row[0]] = parse_int(row[1])
+        }
+      }
+    Err(_) => ()
+  }
+  map
+}
+
+///|
+/// 表に無い技は同じ Move を返す。空表なら配列もそのまま。
+fn apply_confusion_chance(
+  moves : Array[@model.Move],
+  map : Map[String, Int],
+) -> Array[@model.Move] {
+  if map.length() == 0 {
+    return moves
+  }
+  moves.map(fn(m) {
+    match map.get(m.name) {
+      Some(c) => { ..m, confusion_chance: c }
+      None => m
+    }
+  })
+}
+
+///|
+fn confusion_chance_of(map : Map[String, Int], name : String) -> Int {
   match map.get(name) {
     Some(c) => c
     None => 0

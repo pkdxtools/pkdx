@@ -174,7 +174,13 @@ pub fn query_champions_moves(
     has_heal=heal_cols != "",
     has_field=field_cols != "",
   ) {
-    Ok(moves) => Ok(apply_flinch_chance(moves, flinch_chance_map(db, "pokedex")))
+    Ok(moves) =>
+      Ok(
+        apply_confusion_chance(
+          apply_flinch_chance(moves, flinch_chance_map(db, "pokedex")),
+          confusion_chance_map(db, "pokedex"),
+        ),
+      )
     Err(e) => Err(e)
   }
 }
@@ -288,6 +294,7 @@ fn collect_champions_moves_rows(
       weather_set,
       field_set,
       flinch_chance: 0,
+      confusion_chance: 0,
     })
   }
   Ok(moves)
@@ -433,6 +440,10 @@ pub fn query_champions_move(
     weather_set,
     field_set,
     flinch_chance: flinch_chance_of(flinch_chance_map(db, "pokedex"), r[0]),
+    confusion_chance: confusion_chance_of(
+      confusion_chance_map(db, "pokedex"),
+      r[0],
+    ),
   })
 }
 

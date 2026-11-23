@@ -542,7 +542,7 @@ JP (`champout/rom-txt/jpn/help_syn.json:23848`): 「ねむり状態になって�
 
 **Showdown との比較** (本文が沈黙する点だけ補う。今回の 33 行は全て本文の確率で足り、Showdown の確率は使っていない。以下は規則の照合のみ、`crash-scratch/freeze-showdown/abilities.ts` と `crash-scratch/mega-showdown/battle-actions.ts`):
 
-- ちからずく: Showdown `sheerforce.onModifyMove` は `move.secondaries` を削除して追加効果を失わせ、`onBasePower` の 1.3 倍 (`[5325, 4096]`) も `hasSheerForce` の技 (= 追加効果のある技) だけに掛ける。pkdx も、今剥がしている追加効果 (`status_effect` と `flinch_chance`) があるダメージ技だけに同じ 5325/4096 を掛ける (`move_has_sheer_force_effect`)。Showdown が追加で落とす `move.self` (自分の能力低下) や `hasSheerForceBoost` (じゅうでん / オーダーアップ) は、pkdx がそれらを剥がしていないので威力も掛けない。下の「ちからずく の威力」。
+- ちからずく: Showdown `sheerforce.onModifyMove` は `move.secondaries` を削除して追加効果を失わせ、`onBasePower` の 1.3 倍 (`[5325, 4096]`) も `hasSheerForce` の技 (= 追加効果のある技) だけに掛ける。pkdx も、今剥がしている追加効果 (`status_effect` と `flinch_chance` と `confusion_chance`) があるダメージ技だけに同じ 5325/4096 を掛ける (`move_has_sheer_force_effect`)。Showdown が追加で落とす `move.self` (自分の能力低下) や `hasSheerForceBoost` (じゅうでん / オーダーアップ) は、pkdx がそれらを剥がしていないので威力も掛けない。下の「ちからずく の威力」。
 - りんぷん: Showdown `shielddust.onModifySecondaries` は `effect.self` でない追加効果を全て落とす。本 PR の規則 (ダメージ技の追加効果を全 kind で止める) と一致。
 
 **判断事項 (Judgment calls)**:
@@ -614,7 +614,7 @@ Showdown との差 (意図的):
 
 ふみん / やるき / スイートベールの眠り・あくびは従来どおり。マグマのよろいのこおりは `ability_blocks_freeze` のまま。
 
-**Champions に無いので入れない**: みずのベール (Water Veil。`TOKUSEI_011` は ちょすい)、パステルベール (Pastel Veil)、ぜったいねむり (Comatose)。マイペース (`TOKUSEIINFO_SYN_020:628`) はこんらん (未モデル) といかく (既存の `ability_blocks_intimidate`) だけなので状態異常ゲートには入れない。
+**Champions に無いので入れない**: みずのベール (Water Veil。`TOKUSEI_011` は ちょすい)、パステルベール (Pastel Veil)、ぜったいねむり (Comatose)。マイペース (`TOKUSEIINFO_SYN_020:628`) はこんらん (下の節) といかく (既存の `ability_blocks_intimidate`) だけなので状態異常ゲートには入れない。
 
 **Showdown fallback** (本文が述べない点):
 
@@ -638,7 +638,7 @@ Showdown との差 (意図的):
 
 **ゲート** (`damage/abilities.mbt` `move_has_sheer_force_effect`、ダメージ式と L2 キーの共通判定):
 
-- ダメージ技 (`power > 0`) で、`status_effect` の chance が 0 より大きい、または `flinch_chance > 0`。
+- ダメージ技 (`power > 0`) で、`status_effect` の chance が 0 より大きい、`flinch_chance > 0`、または `confusion_chance > 0`。
 - この集合は `clear_damaging_secondaries` が消すフィールドと同じ。DP `secondary_gated_move` と MC (`mc_try_apply_status` / `mc_flinch_roll`) の `ability_strips_secondaries` がそれを剥がす。剥がす技はブーストし、ブーストする技は剥がす。
 - 追加効果の無い技 (たいあたり 等) は 1.0 倍。chance 0 の `status_effect` も追加効果に数えない。
 - 変化技 (`power = 0`) の状態異常は直接効果のまま。ちからずく では剥がさず、威力補正も無い。
@@ -647,7 +647,7 @@ Showdown との差 (意図的):
 **Showdown と意図的に違う点** (`data/abilities.ts` の `sheerforce`):
 
 - Showdown は `move.secondaries` に加えて `move.self` (インファイト / オーバーヒート 等の自分の能力低下) を消し、その技も 1.3 倍にする。pkdx の `stat_effects` は剥がしていないので、能力変化だけの技は 1.0 倍のまま能力変化も残る。状態異常やひるみと能力変化が両方ある技は、状態異常 / ひるみだけ剥がして 1.3 倍にし、能力変化は残る。
-- Showdown の `hasSheerForceBoost` (じゅうでん / オーダーアップ) は技側の特別フラグ。Champions 本文は技ごとの例外を述べない。pkdx にはそのフラグが無く、`status_effect` / `flinch_chance` が無ければブーストしない。
+- Showdown の `hasSheerForceBoost` (じゅうでん / オーダーアップ) は技側の特別フラグ。Champions 本文は技ごとの例外を述べない。pkdx にはそのフラグが無く、`status_effect` / `flinch_chance` / `confusion_chance` が無ければブーストしない。
 - 反動・ドレインは Showdown でも secondaries ではない。pkdx も掛けない。
 
 **キャッシュ**: 技名は同じでも select の JSON は追加効果を DB から埋めない。L2 キー (`CacheKeyInput.sheer_force_boost`, prefix `v7`) にゲート結果を入れ、追加効果なしの 1.0 倍が追加効果ありの 1.3 倍を再利用しない。`SCHEMA_VERSION` は 8。ちからずく 以外の技はゲートが常に偽なので、キー上は互いに従来どおり衝突しない (ダメージも変わらない)。
@@ -666,6 +666,19 @@ Showdown との差 (意図的):
 - 未モデル: いびき の「ねむっている間だけ使える」(使用可否は未ゲート。ひるみ率だけ投入)、ドラゴンダイブ のミニマイズ時の威力 2 倍、におい (TOKUSEIINFO_SYN_001: 特性由来の 10% ひるみ、本 PR の仕様外)、てんのめぐみ (追加効果の確率 2 倍、pkdx 全体で未モデル)、3ぼんのや の防御ダウン (既存の `stat_effects` 側の扱い)。ねこだまし と はやてがえし は次の節。
 - 既知の DP / MC 差 (本 PR で確認、ひるみ以前から存在): DP はダメージを平均値 1 点で扱い、MC は 16 乱数を抽選する。KO の閾値付近では終端値 (全滅 ±1) がずれる。例 (HP 200、たいあたり 60、ひるみなし、4 ターン): DP -1.000 / MC -0.937。parity テストは HP 1000 にして閾値を跨がせない (凍結 parity と同じ方針)。HP 1000、50% ひるみ: DP 0.000 / MC 0.001、対照 (ひるみなし) -0.068 / -0.068。
 - 参照テスト: `src/payoff/switching_game_flinch_wbtest.mbt` (確率・ゲート・ふくつのこころ・眠り / まひ / 凍結 / defrost / リチャージ・持ち越し・SSoT 表・多段確率)、`src/payoff/team_monte_carlo_flinch_parity_wbtest.mbt` (MC の真理値表・分布・DP/MC parity と感度ガード)、`src/migrate/m019_flinch_test.mbt` (投入・既存行・冪等)、`src/db/query_moves_flinch_test.mbt` / `query_moves_flinch_wbtest.mbt` (DB 経路)、`src/payoff/cli_select_flinch_wbtest.mbt` (JSON 入力)。
+
+
+### こんらん (confusion, Champions 規則) — DP / MC
+
+- 本文: `champout/rom-txt/jpn/btl_state_syn.json` の `BTR_STATE_SYN_12_02`。「１ー４ターンの間」「１／３の確率で自分を攻撃する。」英語 `rom-txt/usa` は "For 1–4 turns, the Pokémon has a 1-in-3 chance of hurting itself." 自傷威力とカウンタの分布は本文に無い。
+- 採った数値: 自傷確率は本文の 1/3 (`1.0/3.0`。33/100 にはしない)。持続の内部カウンタは Showdown `data/conditions.ts` の `confusion` (`random(2, 6)` の 2, 3, 4, 5 が一様)。行動前に 1 減らし、0 なら解除して技を出す。残っていれば 1/3 で自傷して技は失敗。観測できる自傷ウィンドウは 1, 2, 3, 4 ターンが等確率。自傷は Showdown `getConfusionDamage` のタイプ無し物理・威力 40・急所なし。STAB も相性も乗せない (`???`、`protean_consumed=true`)。ダメージは他の payoff と同じく 16 ロール平均のあと、やけどの物理半減。
+- データ: `move_meta.confusion_chance` (m022、9 技)。100%: あやしいひかり / てんしのキッス / いばる / おだてる / フラフラダンス / ばくれつパンチ (本文は百分率を書かない。「相手をこんらん状態にする。」を確定付与と読む)。20%: みずのはどう。30%: ぼうふう / かかとおとし。JSON は `confusion_chance` を出し、0 の技はキーを省略する。`pkdx select` は同じキーを読む。
+- 状態: `SwitchingGameState.my_confusion` / `opp_confusion`。0 はこんらんしていない。控えには残さない。交代した側は攻撃の前に 0。すでにこんらんの相手には上書きしない。
+- 行動前の順 (Showdown `onBeforeMove` の優先度。本文は順を書かない): 眠り / こおり、ひるみ、まひ、こんらん。まひで動けない枝と、眠り (`Sleep(n>=2)` / `RestSleep`) で行動できない枝はカウンタを進めない。ひるみが先なら自傷しない。
+- 付かない条件: マイペース (かたやぶりはここだけ無効を外す。いかく用の無視リストには入れない)、りんぷん (ダメージ技の追加効果。`defender_ability_for_move` のあと)、ミストフィールド上の地上 (`field_blocks_status` は変えない。ふゆう / ひこうタイプ / ふうせん)、ちからずく (ダメージ技の `confusion_chance` を剥がして 1.3 倍)。変化技のこんらんで能力変化も状態異常も無い技 (あやしいひかり等) は、マイペースとミストの地上では命中抽選の前に失敗する。いばる / おだてるは能力上昇が残る。
+- 回復: ターン終了に キーのみ / ラムのみ。こんらんのときだけ消費してカウンタを 0 にする。ラムは major status を治さない。こんらんしていない所持者は消費しない。自傷の HP 減少には既存のきあいのタスキ / オボン / フィラが乗る。
+- 試行の遅延: すでにこんらん、または相手の技が今ターンこんらんを付与しうるときだけ、まひ・命中の試行を行動時点へ遅らせる。chance が 0 でカウンタも 0 のときは既存の試行木のまま。
+- 対象外: ダブル (フラフラダンスの全体)、みわくのボイス (そのターンに能力が上がった相手だけ)、あばれ / げきりん / はなびらのまいのあばれ後こんらん、ちどりあしの回避 2 倍、フィラのみのこんらん副作用、ラムの状態異常治療、ぼうふうの天候命中、みがわり、プロテアン後タイプの地上判定 (major status と同じ穴)。いのちのたまの自傷反動は payoff 全体で未モデルなので、こんらん自傷にも掛けない (威力補正 5324/4096 はダメージ計算が掛ける)。
 
 ### ねこだまし (Fake Out, WAZAINFO_SYN_252) — DP / MC
 

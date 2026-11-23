@@ -47,6 +47,7 @@ fn pb_move(name : String, type_ : String, power : Int) -> @model.Move {
     weather_set: None,
     field_set: None,
     flinch_chance: 0,
+    confusion_chance: 0,
   }
 }
 

@@ -32,6 +32,7 @@ test "migrations() is the concatenation of pokedex + champions" {
       #|  "019_move_meta_flinch",
       #|  "020_move_meta_fake_out",
       #|  "021_move_meta_upper_hand",
+      #|  "022_move_meta_confusion",
       #|  "008_champions_init_schema",
       #|  "009_champions_pokemon",
       #|  "010_champions_moves",
@@ -72,6 +73,7 @@ test "migrations_pokedex hosts the live pokedex-side entries" {
     "017_move_meta_freeze", "018_move_meta_status", "019_move_meta_flinch",
     "020_move_meta_fake_out",
     "021_move_meta_upper_hand",
+    "022_move_meta_confusion",
   ]
   assert_true(pdx.length() == expected.length())
   for i = 0; i < expected.length(); i = i + 1 {

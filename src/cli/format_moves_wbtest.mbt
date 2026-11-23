@@ -33,6 +33,7 @@ fn fm_move(
     weather_set: None,
     field_set: None,
     flinch_chance,
+    confusion_chance: 0,
   }
 }
 

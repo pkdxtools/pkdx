@@ -154,6 +154,11 @@ pub(all) struct SwitchingGameState {
   // ターン外の状態では常に false (DP のキャッシュ鍵もこの前提で同一になる)。
   my_flinched : Bool
   opp_flinched : Bool
+  // こんらん (揮発。major status とは独立)。0 = こんらんしていない。
+  // 値は行動前のカウンタ (Showdown `random(2, 6)` と同じ 2..5)。行動時に 1 減らし、
+  // 0 になったら自傷抽選をせず解除する。交代で 0。控えには持たない (場のアクティブだけ)。
+  my_confusion : Int
+  opp_confusion : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。
@@ -1382,6 +1387,18 @@ fn apply_damage_variants_fanout(
           attacker_ability=atk_break_ability,
         )
       },
+      // こんらん。chance が 0 の技は同じ state を確率 1 で返す。
+      fn(s) {
+        maybe_apply_confusion_fanout(
+          s,
+          target_is_me,
+          target_slot,
+          defender_team,
+          secondary_move,
+          hits_count=outcome.hits_count,
+          attacker_ability=atk_break_ability,
+        )
+      },
       // こおり: 解凍技 (Scald / Scorching Sands 等) は命中後に相手を解凍する。Showdown
       // `onAfterMoveSecondary` と同順なので、凍っている間は二次効果の状態異常は付かない。
       fn(s) {
@@ -2117,6 +2134,7 @@ fn status_move_fails_on_foe(
   mv : @model.Move,
   def : Combatant,
   weather : @model.Weather,
+  field? : @model.Field = @model.Field::None,
 ) -> Bool {
   if mv.category != @model.Status {
     return false
@@ -2147,6 +2165,9 @@ fn status_move_fails_on_foe(
     if e1 == 0 || e2 == 0 {
       return true
     }
+  }
+  if pure_confusion_move_blocked(atk.ability, def, field, mv) {
+    return true
   }
   match mv.status_effect {
     None => false
@@ -2217,7 +2238,9 @@ fn move_skips_accuracy(
         def_eff.pokemon.type1,
         def_eff.pokemon.type2,
       ) ||
-      status_move_fails_on_foe(atk_eff, mv, def_eff, state.weather)
+      status_move_fails_on_foe(
+        atk_eff, mv, def_eff, state.weather, field=state.field,
+      )
     }
   }
 }

@@ -19,6 +19,7 @@
 ///   - 019:   pokedex.db ターゲット (攻撃技のひるみ確率 flinch_chance 列 + 行 m019_move_meta_flinch)
 ///   - 020:   pokedex.db ターゲット (ねこだまし の flinch_chance 100。失敗ゲートとセットで m020)
 ///   - 021:   pokedex.db ターゲット (はやてがえし の priority 3 と flinch_chance 100。失敗ゲートとセットで m021)
+///   - 022:   pokedex.db ターゲット (こんらん確率 confusion_chance 列 + 行 m022)
 /// 007 → 014 で番号が飛んでいるのは「pokedex / champions の番号空間を
 /// 共有しつつ、ファイルとしては別 DB を触る」設計を採っているため。新規
 /// pokedex.db migration を追加するときは `migrations_champions()` 末尾より
@@ -40,6 +41,7 @@ pub fn migrations_pokedex() -> Array[Migration] {
     { name: "019_move_meta_flinch", run: run_019 },
     { name: "020_move_meta_fake_out", run: run_020 },
     { name: "021_move_meta_upper_hand", run: run_021 },
+    { name: "022_move_meta_confusion", run: run_022 },
   ]
 }
 

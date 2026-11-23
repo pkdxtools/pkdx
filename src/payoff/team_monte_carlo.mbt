@@ -858,6 +858,7 @@ fn mc_attempt_accuracy(
   defender : Combatant,
   weather : @model.Weather,
   defender_protean? : String = "",
+  field? : @model.Field = @model.Field::None,
 ) -> Int {
   let atk_eff = effective_combatant(attacker, false)
   let def_eff0 = effective_combatant(
@@ -878,7 +879,7 @@ fn mc_attempt_accuracy(
       def_eff.pokemon.type1,
       def_eff.pokemon.type2,
     ) ||
-    status_move_fails_on_foe(atk_eff, mv, def_eff, weather) {
+    status_move_fails_on_foe(atk_eff, mv, def_eff, weather, field=field) {
     100
   } else {
     mv.accuracy
@@ -1351,7 +1352,9 @@ fn mc_status_fail_before_hit(
   let def0 = effective_combatant(
     defender, false, protean_locked=defender_protean,
   )
-  status_move_fails_on_foe(atk, mv, defender_for_mold_breaker(atk, def0), weather)
+  status_move_fails_on_foe(
+    atk, mv, defender_for_mold_breaker(atk, def0), weather, field=field,
+  )
 }
 
 // Stage 13: `mc_eot_slip` は削除。MC rollout の EOT 状態異常 slip は DP 側
@@ -1485,6 +1488,9 @@ pub fn team_rollout(
   let opp_item_consumed : Array[Bool] = Array::make(opp.length(), false)
   let mut own_active = 0
   let mut opp_active = 0
+  // こんらんは場のアクティブだけ。交代で 0。控えには残さない。
+  let mut own_confusion = 0
+  let mut opp_confusion = 0
   // ねこだまし。None は未追跡 (select の既定)。Some は交代で true、技の行動で false。
   let mut own_fresh : Bool? = my_fresh
   let mut opp_fresh : Bool? = opp_fresh
@@ -1632,6 +1638,14 @@ pub fn team_rollout(
                 foe_hp=own_hps[own_active],
                 foe_max_hp=own[own_active].pokemon.hp,
               ),
+            ) ||
+            (own_confusion > 0 && !own_start_recharging) ||
+            mc_confusion_can_land(
+              opp[opp_active].moves[mj],
+              opp[opp_active],
+              own[own_active],
+              field_state[0],
+              own_protean_locked[own_active],
             )
           _ => false
         }
@@ -1653,6 +1667,14 @@ pub fn team_rollout(
                 foe_hp=opp_hps[opp_active],
                 foe_max_hp=opp[opp_active].pokemon.hp,
               ),
+            ) ||
+            (opp_confusion > 0 && !opp_start_recharging) ||
+            mc_confusion_can_land(
+              own[own_active].moves[mi],
+              own[own_active],
+              opp[opp_active],
+              field_state[0],
+              opp_protean_locked[opp_active],
             )
           _ => false
         }
@@ -1681,7 +1703,35 @@ pub fn team_rollout(
                 ),
                 weather_state[0],
                 defender_protean=opp_protean_locked[opp_acc_slot],
+                field=field_state[0],
               )
+            } else if own_confusion > 0 {
+              let (st, acts, missed, next, self_hit) = mc_resolve_confused(
+                rng,
+                own_status[own_active],
+                mc_attempt_accuracy(
+                  own[own_active],
+                  own[own_active].moves[mi],
+                  preview_traced_combatant(
+                    opp[opp_acc_slot], opp_switches, own[own_active].ability,
+                  ),
+                  weather_state[0],
+                  defender_protean=opp_protean_locked[opp_acc_slot],
+                  field=field_state[0],
+                ),
+                own_thaws,
+                own_confusion,
+              )
+              own_status[own_active] = st
+              own_confusion = next
+              own_attempt_acts = acts
+              own_missed = missed
+              if self_hit {
+                mc_apply_confusion_self_hit(
+                  own_hps, own_active, own[own_active], own_ranks, st,
+                  weather_state[0], field_state[0], own_item_consumed,
+                )
+              }
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
                 own_status[own_active],
@@ -1693,6 +1743,7 @@ pub fn team_rollout(
                   ),
                   weather_state[0],
                   defender_protean=opp_protean_locked[opp_acc_slot],
+                  field=field_state[0],
                 ),
                 rng,
                 thaws_user=own_thaws,
@@ -1716,7 +1767,35 @@ pub fn team_rollout(
                 ),
                 weather_state[0],
                 defender_protean=own_protean_locked[own_acc_slot],
+                field=field_state[0],
               )
+            } else if opp_confusion > 0 {
+              let (st, acts, missed, next, self_hit) = mc_resolve_confused(
+                rng,
+                opp_status[opp_active],
+                mc_attempt_accuracy(
+                  opp[opp_active],
+                  opp[opp_active].moves[mi],
+                  preview_traced_combatant(
+                    own[own_acc_slot], own_switches, opp[opp_active].ability,
+                  ),
+                  weather_state[0],
+                  defender_protean=own_protean_locked[own_acc_slot],
+                  field=field_state[0],
+                ),
+                opp_thaws,
+                opp_confusion,
+              )
+              opp_status[opp_active] = st
+              opp_confusion = next
+              opp_attempt_acts = acts
+              opp_missed = missed
+              if self_hit {
+                mc_apply_confusion_self_hit(
+                  opp_hps, opp_active, opp[opp_active], opp_ranks, st,
+                  weather_state[0], field_state[0], opp_item_consumed,
+                )
+              }
             } else {
               let (st, acts, missed) = mc_resolve_attempt(
                 opp_status[opp_active],
@@ -1728,6 +1807,7 @@ pub fn team_rollout(
                   ),
                   weather_state[0],
                   defender_protean=own_protean_locked[own_acc_slot],
+                  field=field_state[0],
                 ),
                 rng,
                 thaws_user=opp_thaws,
@@ -1769,6 +1849,7 @@ pub fn team_rollout(
             }
             clear_traced_slot(own_traced, own_active)
             clear_flash_fire_slot(own_flash_fire, own_active)
+            own_confusion = 0
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -1793,6 +1874,7 @@ pub fn team_rollout(
             }
             clear_traced_slot(opp_traced, opp_active)
             clear_flash_fire_slot(opp_flash_fire, opp_active)
+            opp_confusion = 0
             opp_active = i
             reset_ranks(opp_ranks)
           }
@@ -1940,16 +2022,32 @@ pub fn team_rollout(
           if own_first {
             // こおり / ひるみ: 先攻 (own) の遅らせた試行は行動時点 (ここ) で振る。先攻はひるまない。
             if own_pending_on {
-              let (st, acts, missed, _) = mc_resolve_pending_attempt(
-                rng,
-                own_status[own_active],
-                own_pending_acc,
-                own_thaws,
-                own_flinch,
-              )
-              own_status[own_active] = st
-              own_attempt_acts = acts
-              own_missed = missed
+              if own_confusion > 0 && !own_flinch {
+                let (st, acts, missed, next, self_hit) = mc_resolve_confused(
+                  rng, own_status[own_active], own_pending_acc, own_thaws, own_confusion,
+                )
+                own_status[own_active] = st
+                own_confusion = next
+                own_attempt_acts = acts
+                own_missed = missed
+                if self_hit {
+                  mc_apply_confusion_self_hit(
+                    own_hps, own_active, own[own_active], own_ranks, st,
+                    weather_state[0], field_state[0], own_item_consumed,
+                  )
+                }
+              } else {
+                let (st, acts, missed, _) = mc_resolve_pending_attempt(
+                  rng,
+                  own_status[own_active],
+                  own_pending_acc,
+                  own_thaws,
+                  own_flinch,
+                )
+                own_status[own_active] = st
+                own_attempt_acts = acts
+                own_missed = missed
+              }
             }
             let mut opp_blocked_mid_turn = false
             // Stage H: Psychic Terrain priority block — own の priority>0 技は
@@ -2052,6 +2150,18 @@ pub fn team_rollout(
                 attacker_ability=own[own_active].ability,
                 defender_protean=opp_protean_locked[opp_active],
               )
+              opp_confusion = mc_apply_confusion(
+                rng,
+                mv_own,
+                opp[opp_active],
+                opp_hps[opp_active],
+                opp_confusion,
+                field_state[0],
+                res_immune,
+                before - res_hp,
+                own[own_active].ability,
+                opp_protean_locked[opp_active],
+              )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2104,19 +2214,35 @@ pub fn team_rollout(
             }
             // こおり: 後攻 (opp) の遅らせた試行は先攻の技の結果を見てから振る。
             if opp_pending_on && opp_hps[opp_active] > 0 && own_hps[own_active] > 0 {
-              let (st, acts, missed, steadfast) = mc_resolve_pending_attempt(
-                rng,
-                opp_status[opp_active],
-                opp_pending_acc,
-                opp_thaws,
-                opp_flinch,
-              )
-              if steadfast {
-                mc_flinch_speed_boost(opp_ranks, opp[opp_active].ability)
+              if opp_confusion > 0 && !opp_flinch {
+                let (st, acts, missed, next, self_hit) = mc_resolve_confused(
+                  rng, opp_status[opp_active], opp_pending_acc, opp_thaws, opp_confusion,
+                )
+                opp_status[opp_active] = st
+                opp_confusion = next
+                opp_attempt_acts = acts
+                opp_missed = missed
+                if self_hit {
+                  mc_apply_confusion_self_hit(
+                    opp_hps, opp_active, opp[opp_active], opp_ranks, st,
+                    weather_state[0], field_state[0], opp_item_consumed,
+                  )
+                }
+              } else {
+                let (st, acts, missed, steadfast) = mc_resolve_pending_attempt(
+                  rng,
+                  opp_status[opp_active],
+                  opp_pending_acc,
+                  opp_thaws,
+                  opp_flinch,
+                )
+                if steadfast {
+                  mc_flinch_speed_boost(opp_ranks, opp[opp_active].ability)
+                }
+                opp_status[opp_active] = st
+                opp_attempt_acts = acts
+                opp_missed = missed
               }
-              opp_status[opp_active] = st
-              opp_attempt_acts = acts
-              opp_missed = missed
             }
             if opp_hps[opp_active] > 0 &&
               own_hps[own_active] > 0 &&
@@ -2224,6 +2350,18 @@ pub fn team_rollout(
                 attacker_ability=opp[opp_active].ability,
                 defender_protean=own_protean_locked[own_active],
               )
+              own_confusion = mc_apply_confusion(
+                rng,
+                mv_opp,
+                own[own_active],
+                own_hps[own_active],
+                own_confusion,
+                field_state[0],
+                res_immune,
+                before - res_hp,
+                opp[opp_active].ability,
+                own_protean_locked[own_active],
+              )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2254,16 +2392,32 @@ pub fn team_rollout(
           } else {
             // こおり / ひるみ: 先攻 (opp) の遅らせた試行は行動時点 (ここ) で振る。先攻はひるまない。
             if opp_pending_on {
-              let (st, acts, missed, _) = mc_resolve_pending_attempt(
-                rng,
-                opp_status[opp_active],
-                opp_pending_acc,
-                opp_thaws,
-                opp_flinch,
-              )
-              opp_status[opp_active] = st
-              opp_attempt_acts = acts
-              opp_missed = missed
+              if opp_confusion > 0 && !opp_flinch {
+                let (st, acts, missed, next, self_hit) = mc_resolve_confused(
+                  rng, opp_status[opp_active], opp_pending_acc, opp_thaws, opp_confusion,
+                )
+                opp_status[opp_active] = st
+                opp_confusion = next
+                opp_attempt_acts = acts
+                opp_missed = missed
+                if self_hit {
+                  mc_apply_confusion_self_hit(
+                    opp_hps, opp_active, opp[opp_active], opp_ranks, st,
+                    weather_state[0], field_state[0], opp_item_consumed,
+                  )
+                }
+              } else {
+                let (st, acts, missed, _) = mc_resolve_pending_attempt(
+                  rng,
+                  opp_status[opp_active],
+                  opp_pending_acc,
+                  opp_thaws,
+                  opp_flinch,
+                )
+                opp_status[opp_active] = st
+                opp_attempt_acts = acts
+                opp_missed = missed
+              }
             }
             let mut own_blocked_mid_turn = false
             // Stage H: Psychic Terrain priority block — opp の priority>0 技は
@@ -2365,6 +2519,18 @@ pub fn team_rollout(
                 attacker_ability=opp[opp_active].ability,
                 defender_protean=own_protean_locked[own_active],
               )
+              own_confusion = mc_apply_confusion(
+                rng,
+                mv_opp,
+                own[own_active],
+                own_hps[own_active],
+                own_confusion,
+                field_state[0],
+                res_immune,
+                before - res_hp,
+                opp[opp_active].ability,
+                own_protean_locked[own_active],
+              )
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2417,19 +2583,35 @@ pub fn team_rollout(
             }
             // こおり: 後攻 (own) の遅らせた試行は先攻の技の結果を見てから振る。
             if own_pending_on && own_hps[own_active] > 0 && opp_hps[opp_active] > 0 {
-              let (st, acts, missed, steadfast) = mc_resolve_pending_attempt(
-                rng,
-                own_status[own_active],
-                own_pending_acc,
-                own_thaws,
-                own_flinch,
-              )
-              if steadfast {
-                mc_flinch_speed_boost(own_ranks, own[own_active].ability)
+              if own_confusion > 0 && !own_flinch {
+                let (st, acts, missed, next, self_hit) = mc_resolve_confused(
+                  rng, own_status[own_active], own_pending_acc, own_thaws, own_confusion,
+                )
+                own_status[own_active] = st
+                own_confusion = next
+                own_attempt_acts = acts
+                own_missed = missed
+                if self_hit {
+                  mc_apply_confusion_self_hit(
+                    own_hps, own_active, own[own_active], own_ranks, st,
+                    weather_state[0], field_state[0], own_item_consumed,
+                  )
+                }
+              } else {
+                let (st, acts, missed, steadfast) = mc_resolve_pending_attempt(
+                  rng,
+                  own_status[own_active],
+                  own_pending_acc,
+                  own_thaws,
+                  own_flinch,
+                )
+                if steadfast {
+                  mc_flinch_speed_boost(own_ranks, own[own_active].ability)
+                }
+                own_status[own_active] = st
+                own_attempt_acts = acts
+                own_missed = missed
               }
-              own_status[own_active] = st
-              own_attempt_acts = acts
-              own_missed = missed
             }
             if own_hps[own_active] > 0 &&
               opp_hps[opp_active] > 0 &&
@@ -2534,6 +2716,18 @@ pub fn team_rollout(
                 hp_lost=before - res_hp,
                 attacker_ability=own[own_active].ability,
                 defender_protean=opp_protean_locked[opp_active],
+              )
+              opp_confusion = mc_apply_confusion(
+                rng,
+                mv_own,
+                opp[opp_active],
+                opp_hps[opp_active],
+                opp_confusion,
+                field_state[0],
+                res_immune,
+                before - res_hp,
+                own[own_active].ability,
+                opp_protean_locked[opp_active],
               )
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
@@ -2669,6 +2863,18 @@ pub fn team_rollout(
               attacker_ability=own[own_active].ability,
               defender_protean=opp_protean_locked[opp_active],
             )
+            opp_confusion = mc_apply_confusion(
+              rng,
+              mv_own,
+              opp[opp_active],
+              opp_hps[opp_active],
+              opp_confusion,
+              field_state[0],
+              res_immune,
+              before - res_hp,
+              own[own_active].ability,
+              opp_protean_locked[opp_active],
+            )
             mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
@@ -2802,6 +3008,18 @@ pub fn team_rollout(
               attacker_ability=opp[opp_active].ability,
               defender_protean=own_protean_locked[own_active],
             )
+            own_confusion = mc_apply_confusion(
+              rng,
+              mv_opp,
+              own[own_active],
+              own_hps[own_active],
+              own_confusion,
+              field_state[0],
+              res_immune,
+              before - res_hp,
+              opp[opp_active].ability,
+              own_protean_locked[own_active],
+            )
             mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
@@ -2848,6 +3066,17 @@ pub fn team_rollout(
         // None は None のまま (未指定の入力を追跡し始めない)。
         own_fresh = fresh_after_switch(own_fresh_at_turn, own_switches)
         opp_fresh = fresh_after_switch(opp_fresh_at_turn, opp_switches)
+        // キーのみ / ラムのみ。こんらんのときだけ消費する。
+        if own_confusion > 0 {
+          own_confusion = mc_cure_confusion_berry(
+            own, own_active, own_item_consumed, own_confusion,
+          )
+        }
+        if opp_confusion > 0 {
+          opp_confusion = mc_cure_confusion_berry(
+            opp, opp_active, opp_item_consumed, opp_confusion,
+          )
+        }
         // Step 4: end-of-turn — Gen9 公式順序で適用する。DP 側 `apply_eot`
         // (switching_game_effects.mbt) と同じ順序を保つことで、MC と DP の
         // 意味論 parity を保証する。順序:

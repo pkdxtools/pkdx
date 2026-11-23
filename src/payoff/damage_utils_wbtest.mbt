@@ -126,6 +126,7 @@ test "build_input_with_ranks: weather~ argument threads into DamageCalcInput.wea
     weather_set: None,
     field_set: None,
     flinch_chance: 0,
+    confusion_chance: 0,
   }
   // Default (no weather~) must remain Weather::None so the existing 13
   // fixtures and 1078-test baseline stay green without churn.
@@ -228,6 +229,7 @@ test "build_input_with_ranks: field~ argument threads into DamageCalcInput.field
     weather_set: None,
     field_set: None,
     flinch_chance: 0,
+    confusion_chance: 0,
   }
   // Default (no field~) must remain Field::None so existing fixtures stay
   // green without per-call churn.

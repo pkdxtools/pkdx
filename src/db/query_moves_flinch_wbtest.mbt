@@ -25,6 +25,7 @@ fn flinch_wb_move(name : String, flinch_chance : Int) -> @model.Move {
     weather_set: None,
     field_set: None,
     flinch_chance,
+    confusion_chance: 0,
   }
 }
 

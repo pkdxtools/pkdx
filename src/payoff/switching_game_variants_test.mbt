@@ -70,6 +70,7 @@ fn sgvt_move(
     weather_set: None,
     field_set: None,
     flinch_chance: 0,
+    confusion_chance: 0,
   }
 }
 
@@ -117,6 +118,8 @@ fn sgvt_state(my_hp : Int, opp_hp : Int) -> @payoff.SwitchingGameState {
     opp_disguise_busted: [false],
     my_flinched: false,
     opp_flinched: false,
+    my_confusion: 0,
+    opp_confusion: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

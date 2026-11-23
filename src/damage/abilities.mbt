@@ -231,14 +231,19 @@ pub fn get_stab_mult(ability : String) -> Int {
 /// 落とす集合は payoff `secondary_gated_move` / MC の
 /// `ability_strips_secondaries` と同じで、`clear_damaging_secondaries` が
 /// 消すフィールドに限る: ダメージ技 (`power > 0`) の `status_effect`
-/// (chance > 0) と `flinch_chance > 0`。変化技の状態異常は直接効果なので
-/// 対象外。`stat_effects` (能力変化)・反動・ドレインは現行の除去対象に
-/// 入っていないので、ここでも追加効果に数えない。
+/// (chance > 0)、`flinch_chance > 0`、`confusion_chance > 0`。変化技の
+/// 状態異常とこんらんは直接効果なので対象外。`stat_effects` (能力変化)・
+/// 反動・ドレインは現行の除去対象に入っていないので、ここでも追加効果に数えない。
 pub fn move_has_sheer_force_effect(mv : @model.Move) -> Bool {
   if mv.power <= 0 {
     return false
   }
   if mv.flinch_chance > 0 {
+    return true
+  }
+  // こんらんの追加効果 (みずのはどう等)。chance が 0 の技はここを通らず、下の
+  // status 判定だけが従来どおりの真偽を返す。
+  if mv.confusion_chance > 0 {
     return true
   }
   match mv.status_effect {
@@ -259,7 +264,7 @@ pub fn sheer_force_boost_applies(ability : String, mv : @model.Move) -> Bool {
 /// ちからずく が剥がす集合と、HP が減らなかった命中で付かない集合は同じ。
 /// `stat_effects` は触らない。変化技では呼ばない (状態異常は直接効果)。
 pub fn clear_damaging_secondaries(mv : @model.Move) -> @model.Move {
-  { ..mv, status_effect: None, flinch_chance: 0 }
+  { ..mv, status_effect: None, flinch_chance: 0, confusion_chance: 0 }
 }
 
 ///|

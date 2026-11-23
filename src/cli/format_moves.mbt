@@ -42,6 +42,7 @@ fn moves_to_json(moves : Array[@model.Move]) -> String {
       stat_effects_to_json(m.stat_effects) +
       status_effect_to_json(m.status_effect) +
       flinch_chance_to_json(m.flinch_chance) +
+      confusion_chance_to_json(m.confusion_chance) +
       recoil_to_json(m.recoil_num, m.recoil_den) +
       self_ko_to_json(m.self_ko) +
       recharge_to_json(m.recharge) +
@@ -74,6 +75,16 @@ fn status_effect_to_json(se : (@model.StatusKind, Int)?) -> String {
 fn flinch_chance_to_json(chance : Int) -> String {
   if chance > 0 {
     ",\"flinch_chance\":" + chance.to_string()
+  } else {
+    ""
+  }
+}
+
+///|
+/// こんらん確率。0 のときはキー自体を出さない (既存 JSON と同じバイト列)。
+fn confusion_chance_to_json(chance : Int) -> String {
+  if chance > 0 {
+    ",\"confusion_chance\":" + chance.to_string()
   } else {
     ""
   }

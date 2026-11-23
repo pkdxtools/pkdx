@@ -83,6 +83,8 @@ fn im_state(
     opp_disguise_busted: [false, false, false],
     my_flinched: false,
     opp_flinched: false,
+    my_confusion: 0,
+    opp_confusion: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

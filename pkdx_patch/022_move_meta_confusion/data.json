@@ -1,0 +1,11 @@
+[
+  {"name": "あやしいひかり", "confusion_chance": 100},
+  {"name": "てんしのキッス", "confusion_chance": 100},
+  {"name": "いばる", "confusion_chance": 100},
+  {"name": "ばくれつパンチ", "confusion_chance": 100},
+  {"name": "おだてる", "confusion_chance": 100},
+  {"name": "フラフラダンス", "confusion_chance": 100},
+  {"name": "みずのはどう", "confusion_chance": 20},
+  {"name": "ぼうふう", "confusion_chance": 30},
+  {"name": "かかとおとし", "confusion_chance": 30}
+]

@@ -232,7 +232,8 @@ test "ability_blocks_status_flower_veil_grass_self_only" {
 }
 
 ///|
-/// マイペースはこんらん (未モデル) といかくだけ。状態異常は止めない。
+/// マイペースは状態異常を止めない。こんらんは `confusion_blocked`、いかくは
+/// `ability_blocks_intimidate` で別々に止める。
 test "ability_blocks_status_own_tempo_does_not_block_modelled_status" {
   @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.ParalyzeKind), false)
   @debug.assert_eq(@payoff.ability_blocks_status("マイペース", @model.BurnKind), false)

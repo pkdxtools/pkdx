@@ -177,6 +177,7 @@ test "with_post_hit_effects: FixedFraction heals attacker active slot" {
     stat_points: None,
     actual_stats: Some([100, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
   // defender は Combatant 配列を保持する必要は無いが、SwitchingGameState
   // を構築する都合上 hps[opp_active] が参照されるので存在自体は必要。
@@ -203,6 +204,8 @@ test "with_post_hit_effects: FixedFraction heals attacker active slot" {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -288,6 +291,7 @@ fn mk_weather_combatant() -> Combatant {
     stat_points: None,
     actual_stats: Some([100, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -319,6 +323,8 @@ fn mk_weather_state() -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -1273,6 +1279,7 @@ test "with_post_hit_effects: Drain heals attacker by dealt/2" {
     stat_points: None,
     actual_stats: Some([100, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
   let state : SwitchingGameState = {
     my_active: 0,
@@ -1297,6 +1304,8 @@ test "with_post_hit_effects: Drain heals attacker by dealt/2" {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -1362,6 +1371,7 @@ test "with_post_hit_effects: Drain reversed by defender's ヘドロえき" {
     stat_points: None,
     actual_stats: Some([100, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
   let defender_combatant : Combatant = {
     ..attacker_combatant,
@@ -1390,6 +1400,8 @@ test "with_post_hit_effects: Drain reversed by defender's ヘドロえき" {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -1503,6 +1515,7 @@ fn mk_seed_combatant(
     stat_points: None,
     actual_stats: Some([100, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -1533,6 +1546,8 @@ fn mk_seed_state() -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -1685,6 +1700,7 @@ test "with_post_hit_effects: LeechSeed fails on mega-grass defender" {
     stat_points: None,
     actual_stats: Some([100, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
   let defender_team = [defender, mk_seed_combatant()]
   let mv = mk_leech_seed_move()
@@ -1839,6 +1855,7 @@ test "apply_eot: LeechSeed extreme overkill — opp gains exactly drained amount
       [160, 100, 100, 100, 100, 100],
     ),
     ivs: None,
+    gender: Gender::Unknown,
   }
   state = {
     ..state,
@@ -2113,6 +2130,7 @@ fn mk_painsplit_combatant(max_hp? : Int = 100) -> Combatant {
     stat_points: None,
     actual_stats: Some([max_hp, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -2143,6 +2161,8 @@ fn mk_painsplit_state() -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -2401,6 +2421,7 @@ fn mk_wish_combatant(max_hp? : Int = 100) -> Combatant {
     stat_points: None,
     actual_stats: Some([max_hp, 100, 100, 100, 100, 100]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -2431,6 +2452,8 @@ fn mk_wish_state() -> SwitchingGameState {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -2815,6 +2838,7 @@ fn mk_wish_real_combatant(
     stat_points: None,
     actual_stats: Some([max_hp, 100, 100, 100, 100, spe]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -2885,6 +2909,8 @@ test "attempt_turn_with_cache: Wish used on turn T heals at EOT(T+1)" {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -3001,6 +3027,8 @@ test "attempt_turn_with_cache: Switch threads Wish to replacement (real path)" {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -3349,5 +3377,6 @@ fn mk_seed_combatant_with_item(item : String) -> Combatant {
     stat_points: base.stat_points,
     actual_stats: base.actual_stats,
     ivs: base.ivs,
+    gender: base.gender,
   }
 }

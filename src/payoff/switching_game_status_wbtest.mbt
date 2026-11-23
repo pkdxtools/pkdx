@@ -96,6 +96,7 @@ test "compute_mean_damage: burned attacker halves physical damage" {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let dfn : Combatant = {
     pokemon: defender_pokemon,
@@ -109,6 +110,7 @@ test "compute_mean_damage: burned attacker halves physical damage" {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let physical_move = mk_move("じしん", "じめん", @model.Physical, 100)
   let normal = compute_mean_damage(atk, dfn, physical_move, 0, 0)
@@ -169,6 +171,7 @@ test "compute_mean_damage: burned special attacker unchanged" {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let dfn : Combatant = {
     pokemon: defender_pokemon,
@@ -182,6 +185,7 @@ test "compute_mean_damage: burned special attacker unchanged" {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
   let special_move = mk_move(
     "かえんほうしゃ",
@@ -478,6 +482,7 @@ fn mk_test_combatant(pokemon : @model.Pokemon) -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -524,6 +529,8 @@ fn mk_test_state(
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -826,6 +833,7 @@ fn mk_combatant_with_moves(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -861,6 +869,8 @@ fn mk_same_turn_state(
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],
@@ -1424,6 +1434,8 @@ test "attempt_turn_with_cache: forced switch after recharger faints to EOT" {
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

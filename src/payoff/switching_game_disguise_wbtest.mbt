@@ -56,6 +56,7 @@ fn sgd_mimikyu(
     stat_points: None,
     actual_stats: Some([hp, 90, 80, 50, 105, spe]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -131,6 +132,7 @@ fn sgd_attacker(
     stat_points: None,
     actual_stats: Some([hp, 120, 80, 120, 80, spe]),
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 
@@ -164,6 +166,8 @@ fn sgd_state(
     opp_flinched: false,
     my_confusion: 0,
     opp_confusion: 0,
+    my_attract: 0,
+    opp_attract: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

@@ -72,6 +72,7 @@ fn slip_cmb(p : @model.Pokemon, moves : Array[@model.Move]) -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 

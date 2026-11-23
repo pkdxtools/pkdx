@@ -516,6 +516,7 @@ fn parse_combatant_json(
       let stat_points = parse_stat_points_field(m)
       let actual_stats = parse_actual_stats_field(m)
       let ivs = parse_ivs_field(m)
+      let gender = parse_gender_field(m, ctx)
       {
         pokemon: poke,
         moves,
@@ -528,6 +529,7 @@ fn parse_combatant_json(
         stat_points,
         actual_stats,
         ivs,
+        gender,
       }
     }
     _ => raise InvalidJson(ctx + " must be an object")
@@ -703,6 +705,27 @@ fn mk_empty_combatant() -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
+  }
+}
+
+///|
+/// `gender`: `"オス"` / `"メス"` / `"不明"`。欠損は `Unknown` で、
+/// 名前の固定性別 (`resolve_gender`) に任せる。未知の文字列は失敗させる。
+fn parse_gender_field(
+  m : Map[String, Json],
+  ctx : String,
+) -> Gender raise NashCliError {
+  match m.get("gender") {
+    None | Some(Null) => Gender::Unknown
+    Some(String("")) | Some(String("不明")) => Gender::Unknown
+    Some(String("オス")) => Gender::Male
+    Some(String("メス")) => Gender::Female
+    Some(String(s)) =>
+      raise InvalidJson(
+        ctx + ".gender: unknown gender " + s + " (expected オス / メス / 不明)",
+      )
+    Some(_) => raise InvalidJson(ctx + ".gender must be a string")
   }
 }
 

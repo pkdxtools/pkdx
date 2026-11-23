@@ -83,6 +83,7 @@ fn slm_cmb(pokemon : @model.Pokemon, moves : Array[@model.Move]) -> Combatant {
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 

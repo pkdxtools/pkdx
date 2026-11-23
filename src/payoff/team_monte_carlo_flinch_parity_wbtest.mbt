@@ -85,6 +85,7 @@ fn flchm_cmb(
     stat_points: None,
     actual_stats: None,
     ivs: None,
+    gender: Gender::Unknown,
   }
 }
 

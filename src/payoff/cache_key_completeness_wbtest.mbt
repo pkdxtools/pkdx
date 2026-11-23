@@ -415,6 +415,8 @@ fn ck_state_base() -> SwitchingGameState {
     opp_confusion: 0,
     my_attract: 0,
     opp_attract: 0,
+    my_bind: 0,
+    opp_bind: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

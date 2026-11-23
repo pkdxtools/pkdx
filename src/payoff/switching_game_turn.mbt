@@ -433,6 +433,9 @@ priv struct TurnWorkspace {
   // SwitchingGameState のメロメロ。ws round-trip で落とさない。0 / 1。
   my_attract : Int
   opp_attract : Int
+  // SwitchingGameState のバインド残ターン。ws round-trip で落とさない。0 は未付与。
+  my_bind : Int
+  opp_bind : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -491,6 +494,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_confusion: state.opp_confusion,
     my_attract: state.my_attract,
     opp_attract: state.opp_attract,
+    my_bind: state.my_bind,
+    opp_bind: state.opp_bind,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -540,6 +545,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_confusion: ws.opp_confusion,
     my_attract: ws.my_attract,
     opp_attract: ws.opp_attract,
+    my_bind: ws.my_bind,
+    opp_bind: ws.opp_bind,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -1067,6 +1074,8 @@ fn clone_state(
     opp_confusion: state.opp_confusion,
     my_attract: state.my_attract,
     opp_attract: state.opp_attract,
+    my_bind: state.my_bind,
+    opp_bind: state.opp_bind,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1582,6 +1591,10 @@ pub fn transition_with_cache(
   let (my_attract_sw, opp_attract_sw) = attract_flags_after_switch(
     state, my_action, opp_action,
   )
+  // バインドも同じ境界。付与した側が出ても、された側が出ても両方 0。
+  let (my_bind_sw, opp_bind_sw) = bind_flags_after_switch(
+    state, my_action, opp_action,
+  )
   // 同時登場の同速で、順序によって着地が違うときだけ 2 本に分ける。
   // トレースが無い arm では trace_tie は空のまま。
   if trace_tie.length() >= 2 {
@@ -1627,6 +1640,8 @@ pub fn transition_with_cache(
           opp_confusion: opp_confusion_sw,
           my_attract: my_attract_sw,
           opp_attract: opp_attract_sw,
+          my_bind: my_bind_sw,
+          opp_bind: opp_bind_sw,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1689,6 +1704,8 @@ pub fn transition_with_cache(
     opp_confusion: opp_confusion_sw,
     my_attract: my_attract_sw,
     opp_attract: opp_attract_sw,
+    my_bind: my_bind_sw,
+    opp_bind: opp_bind_sw,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2104,6 +2121,8 @@ fn pass_turn_state(
     opp_confusion: state.opp_confusion,
     my_attract: state.my_attract,
     opp_attract: state.opp_attract,
+    my_bind: state.my_bind,
+    opp_bind: state.opp_bind,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2391,6 +2410,8 @@ pub fn attempt_turn_with_cache(
         opp_confusion: state.opp_confusion,
         my_attract: state.my_attract,
         opp_attract: state.opp_attract,
+        my_bind: state.my_bind,
+        opp_bind: state.opp_bind,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2802,6 +2823,8 @@ fn partial_act_outcomes(
     opp_confusion: state.opp_confusion,
     my_attract: state.my_attract,
     opp_attract: state.opp_attract,
+    my_bind: state.my_bind,
+    opp_bind: state.opp_bind,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3173,6 +3196,13 @@ pub fn value(
     state.my_mega_used,
     must_recharge=state.my_must_recharge[state.my_active],
     moves_used=state.my_moves_used,
+    can_switch=bind_switch_free(
+      state.my_bind,
+      my_team[state.my_active],
+      state.my_active < state.my_megaed.length() &&
+      state.my_megaed[state.my_active],
+      protean_locked_of(state, true, state.my_active),
+    ),
   )
   let actions_opp = alive_actions(
     state.opp_active,
@@ -3181,6 +3211,13 @@ pub fn value(
     state.opp_mega_used,
     must_recharge=state.opp_must_recharge[state.opp_active],
     moves_used=state.opp_moves_used,
+    can_switch=bind_switch_free(
+      state.opp_bind,
+      opp_team[state.opp_active],
+      state.opp_active < state.opp_megaed.length() &&
+      state.opp_megaed[state.opp_active],
+      protean_locked_of(state, false, state.opp_active),
+    ),
   )
   if actions_me.length() == 0 {
     return -1.0
@@ -3416,6 +3453,8 @@ pub fn switching_game_winrate_stats(
     opp_confusion: 0,
     my_attract: 0,
     opp_attract: 0,
+    my_bind: 0,
+    opp_bind: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,
@@ -3534,6 +3573,7 @@ pub fn alive_actions(
   mega_used : Bool,
   must_recharge? : Bool = false,
   moves_used? : Array[Int] = [],
+  can_switch? : Bool = true,
 ) -> Array[ActionKind] {
   let active_alive = hps[active] > 0
   if must_recharge && active_alive {
@@ -3567,9 +3607,13 @@ pub fn alive_actions(
       out.push(Mega(i))
     }
   }
-  for i in 0..<hps.length() {
-    if i != active && hps[i] > 0 {
-      out.push(Switch(i))
+  // バインド中の生存アクティブは交代できない。ひんしの強制交代は残す。
+  // `can_switch` の既定 true は、バインドが 0 の呼び出しと同じ行動列になる。
+  if !active_alive || can_switch {
+    for i in 0..<hps.length() {
+      if i != active && hps[i] > 0 {
+        out.push(Switch(i))
+      }
     }
   }
   out

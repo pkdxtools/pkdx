@@ -164,6 +164,11 @@ pub(all) struct SwitchingGameState {
   // 交代 (付与された側も付与した側も) で 0。控えには持たない。シングルの付与元は相手。
   my_attract : Int
   opp_attract : Int
+  // バインド (揮発。major status とも独立)。0 = していない。
+  // 値は残りのターン終了ダメージ回数 (付与時 4 か 5)。EOT で 1 減らし、0 で解除。
+  // 交代 (付与された側も付与した側も) で 0。控えには持たない。シングルの付与元は相手。
+  my_bind : Int
+  opp_bind : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。
@@ -1453,6 +1458,10 @@ fn apply_damage_variants_fanout(
           attacker_move,
           hits_count=outcome.hits_count,
         )
+      },
+      // バインド。技名が違うときは同じ state を確率 1 で返す。
+      fn(s) {
+        maybe_apply_bind_fanout(s, target_is_me, target_slot, attacker_move)
       },
     ])
     for j = 0; j < sub.length(); j = j + 1 {

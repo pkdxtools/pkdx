@@ -705,6 +705,19 @@ Showdown との差 (意図的):
 - 状態: `my_bind` / `opp_bind`。残りの EOT 回数。控えには残さない。MC は付与が成立したときだけ `rng.int(limit=2)` を 1 回引く。
 - 対象外: ダブルの付与元、こうそくスピン / キラースピン、みがわり、まもる、かげふみ、にげられない状態そのもの、水中状態。
 
+### こだわりスカーフ (Choice Scarf) — DP / MC
+
+- 対象は `ITEMNAME_287`「こだわりスカーフ」だけ。`champout` `50e7233` の `rom-txt/jpn/itemname.json`（166 件）に こだわりハチマキ / こだわりメガネ / とつげきチョッキ は無い。技固定も変化技の禁止も、この 3 つには入れない。ダメージ計算の `* 3 / 2`（`src/damage/items.mbt`）は Champions 外の文字列として残す。
+- 本文: `rom-txt/usa/iteminfo_syn.json` の `ITEMINFO_SYN_287`。"Boosts the holder’s Speed stat by 50%. However, once the holder uses a move, it becomes unable to use any other move but that one until it switches out of battle."
+- 素早さ: ランク補正のあと、まひの 1/2 の前に `staged * 3 / 2`（切り捨て。`floor(x * 1.5)`。Showdown `chainModify(1.5)` = `floor(stat * 6144 / 4096)` と同じ整数）。本文に丸めも順番も無い。順番は Showdown `Pokemon#getStat`（`ModifySpe` のあとでまひ）。スカーフ以外と消費済みは `staged` そのものを返す。行動順 (`move_turn_sign` / MC の `turn_order_sign`) とトレースの登場順 (`entry_speed_of`) に入る。
+- 技固定: `my_choice` / `opp_choice`。`-1` が未固定。スカーフを所持し未消費のときだけ `alive_actions` がその index の `UseMove` / `Mega` と交代だけになる。MC の `greedy_team_action` は `choice_lock >= 0` のときだけ別枝。`-1` は既存の ε 抽選と技の走査順のまま。
+- 固定するタイミング: `UseMove` / `Mega` を選んだとき。命中・ひるみ・眠り・まひ・失敗で技本体が止まっても選んだ index。本文は "uses a move"。Showdown は道具の `onBeforeMove` で `choicelock` を立て、失敗より前。ねこだまし / であいがしら / はやてがえしは行動集合から外さず、既存の失敗ゲートに任せる。ふいうちの失敗は payoff に無いので、固定しても失敗させない。
+- リチャージの `UseMove(0)` プレースホルダは選択ではない。ターン開始時にリチャージだった側は前の固定を残す。
+- 解除: 交代（本文 "until it switches out"）。出てきた側は未固定。道具を失ったときも `-1`。本文は書いていない。Showdown の道具 `onEnd` に合わせ、既存の `item_consumed` または持ち物がスカーフでなくなったとき。はたきおとすは威力だけ上げて持ち物は残す。トリック等は未モデル。
+- 書き込み: DP は `attempt_turn_with_cache` の fresh 更新の直後（`value` が使う経路）。`transition` 単体は固定を書かない。MC はターン末の fresh 更新の隣。スカーフ以外で結果が `-1` のままなら同じ state を返す。
+- 固定 index がとっておきのフィルタで消えて交代も無いときは、行動が空の既存終端。わるあがきは入れない。PP は未モデル。
+- 対象外: マジックルーム / ぶきよう / さしおさえ / かるわざ / おいかぜ / はやあし、ダブル、消費済みスカーフのトレース登場順（`resolve_trace_entries` は消費配列を渡さないので、未消費と同じ +50%）。
+
 ### ねこだまし (Fake Out, WAZAINFO_SYN_252) — DP / MC
 
 - 本文: `champout/rom-txt/usa/wazainfo_syn.json` 行 4432 (`WAZAINFO_SYN_252`)。"Makes the target flinch. This move fails unless it is the first move used by the user after it enters a battle." `help_syn.json` には該当文が無い。ひるみは「Makes the target flinch」なので確率抽選ではなく、命中すれば既存のひるみ経路で必ず付く (m020 の `flinch_chance` 100)。

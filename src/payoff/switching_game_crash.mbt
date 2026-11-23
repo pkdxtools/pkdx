@@ -222,6 +222,8 @@ fn attempt_turn_sign(
         opp_mega || is_mega_action(oa.action),
         is_paralyzed(state.opp_status[state.opp_active]),
         state.opp_hps[state.opp_active],
+        me_item_consumed=slot_flag(state.my_item_consumed, state.my_active),
+        opp_item_consumed=slot_flag(state.opp_item_consumed, state.opp_active),
       )
     }
     _ => 0

@@ -34,6 +34,7 @@ fn best_expected_damage(
   atk_hp? : Int = 0,
   atk_max_hp? : Int = 0,
   atk_flash_fire? : Bool = false,
+  only_move? : Int = -1,
 ) -> Double {
   // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
   // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
@@ -56,6 +57,9 @@ fn best_expected_damage(
   let atk_consumed = atk_protean_locked != ""
   let mut best = 0.0
   for i in 0..<atk.moves.length() {
+    if only_move >= 0 && i != only_move {
+      continue
+    }
     let mv = atk.moves[i]
     if mv.power <= 0 {
       continue
@@ -134,6 +138,14 @@ priv enum TeamAction {
 }
 
 ///|
+fn team_action_kind(a : TeamAction) -> ActionKind {
+  match a {
+    TmUseMove(i) => UseMove(i)
+    TmSwitch(i) => Switch(i)
+  }
+}
+
+///|
 /// Pick a TeamAction for the given side under a stay-vs-best-switch greedy
 /// policy with ε-greedy exploration. When `active` is KO-d, returns the
 /// best forced switch (or `None` if the entire side has fainted).
@@ -166,6 +178,7 @@ fn greedy_team_action(
   opp_disguise_busted? : Array[Bool] = [],
   my_flash_fire? : Array[Bool] = [],
   can_switch? : Bool = true,
+  choice_lock? : Int = -1,
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -227,6 +240,115 @@ fn greedy_team_action(
       }
     }
     return Some(TmSwitch(best))
+  }
+  // こだわりスカーフで技固定中。-1 のときは下の既存 ε-greedy をそのまま走る。
+  if choice_lock >= 0 {
+    let moves = my_team[active].moves
+    let move_ok = choice_lock < moves.length()
+    let n_switch = if !can_switch {
+      0
+    } else {
+      let mut c = 0
+      for s in alive_slots {
+        if s != active {
+          c = c + 1
+        }
+      }
+      c
+    }
+    let n_moves = if move_ok { 1 } else { 0 }
+    let total_actions = n_moves + n_switch
+    if total_actions == 0 {
+      return None
+    }
+    let draw = rng.int(limit=1000000).to_double() / 1000000.0
+    if draw < epsilon {
+      let idx = rng.int(limit=total_actions)
+      if move_ok && idx == 0 {
+        return Some(TmUseMove(choice_lock))
+      }
+      let mut k = if move_ok { idx - 1 } else { idx }
+      for s in alive_slots {
+        if s == active {
+          continue
+        }
+        if k == 0 {
+          return Some(TmSwitch(s))
+        }
+        k = k - 1
+      }
+      if move_ok {
+        return Some(TmUseMove(choice_lock))
+      }
+      return None
+    }
+    let opp_hp_denom = {
+      let h = opp_team[opp_active].pokemon.hp
+      if h > 0 {
+        h.to_double()
+      } else {
+        1.0
+      }
+    }
+    let opp_locked = locked_of(opp_protean_locked, opp_active)
+    let active_locked = locked_of(my_protean_locked, active)
+    let stay_raw = if move_ok {
+      best_expected_damage(
+        my_team[active],
+        opp_team[opp_active],
+        my_ranks,
+        opp_ranks,
+        weather~,
+        field~,
+        atk_protean_locked=active_locked,
+        def_protean_locked=opp_locked,
+        def_disguise_intact=opp_def_intact,
+        atk_hp=my_hps[active],
+        atk_max_hp=my_team[active].pokemon.hp,
+        atk_flash_fire=flash_fire_lit(my_flash_fire, active),
+        only_move=choice_lock,
+      )
+    } else {
+      0.0
+    }
+    let stay_value = stay_raw / opp_hp_denom
+    let mut best_switch = -1
+    let mut best_switch_value = 0.0
+    let zero_ranks = [0, 0, 0, 0, 0]
+    for s in alive_slots {
+      if !can_switch || s == active {
+        continue
+      }
+      let v = best_expected_damage(
+          my_team[s],
+          opp_team[opp_active],
+          zero_ranks,
+          opp_ranks,
+          weather~,
+          field~,
+          atk_protean_locked=locked_of(my_protean_locked, s),
+          def_protean_locked=opp_locked,
+          def_disguise_intact=opp_def_intact,
+          atk_hp=my_hps[s],
+          atk_max_hp=my_team[s].pokemon.hp,
+          atk_flash_fire=flash_fire_lit(my_flash_fire, s),
+        ) /
+        opp_hp_denom
+      if v > best_switch_value {
+        best_switch_value = v
+        best_switch = s
+      }
+    }
+    if best_switch >= 0 && best_switch_value > stay_value + SWITCH_HYSTERESIS {
+      return Some(TmSwitch(best_switch))
+    }
+    if move_ok {
+      return Some(TmUseMove(choice_lock))
+    }
+    if best_switch >= 0 {
+      return Some(TmSwitch(best_switch))
+    }
+    return None
   }
   // ε-greedy: uniform over all legal actions (UseMove for every move + Switch
   // for every alive teammate other than `active`).
@@ -1504,6 +1626,9 @@ pub fn team_rollout(
   // ねこだまし。None は未追跡 (select の既定)。Some は交代で true、技の行動で false。
   let mut own_fresh : Bool? = my_fresh
   let mut opp_fresh : Bool? = opp_fresh
+  // こだわりスカーフの技固定。-1 は未固定。スカーフ以外は -1 のまま。
+  let mut own_choice = -1
+  let mut opp_choice = -1
   // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
   // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
   // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
@@ -1577,6 +1702,11 @@ pub fn team_rollout(
           ""
         },
       ),
+      choice_lock=effective_choice_lock(
+        own[own_active].item,
+        slot_flag(own_item_consumed, own_active),
+        own_choice,
+      ),
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -1604,6 +1734,11 @@ pub fn team_rollout(
         } else {
           ""
         },
+      ),
+      choice_lock=effective_choice_lock(
+        opp[opp_active].item,
+        slot_flag(opp_item_consumed, opp_active),
+        opp_choice,
       ),
     )
     match (a_own, a_opp) {
@@ -2027,13 +2162,24 @@ pub fn team_rollout(
           }
           let mv_own = own[own_active].moves[mi_own]
           let mv_opp = opp[opp_active].moves[mi_opp]
-          let base_spe_own = effective_speed(
+          let staged_spe_own = effective_speed(
             own[own_active].pokemon.spe,
             own_ranks[4],
           )
-          let base_spe_opp = effective_speed(
+          let staged_spe_opp = effective_speed(
             opp[opp_active].pokemon.spe,
             opp_ranks[4],
+          )
+          // ランク → スカーフ → まひ。スカーフ以外は staged そのもの。
+          let base_spe_own = speed_after_choice_scarf(
+            staged_spe_own,
+            own[own_active].item,
+            slot_flag(own_item_consumed, own_active),
+          )
+          let base_spe_opp = speed_after_choice_scarf(
+            staged_spe_opp,
+            opp[opp_active].item,
+            slot_flag(opp_item_consumed, opp_active),
           )
           let eff_spe_own = if is_paralyzed(own_status[own_active]) {
             base_spe_own / 2
@@ -3248,6 +3394,22 @@ pub fn team_rollout(
         // None は None のまま (未指定の入力を追跡し始めない)。
         own_fresh = fresh_after_switch(own_fresh_at_turn, own_switches)
         opp_fresh = fresh_after_switch(opp_fresh_at_turn, opp_switches)
+        // スカーフの固定。交代後の active を渡しても Switch は -1。技のときは
+        // active は変わっていない。リチャージ開始ターンは前の固定を残す。
+        own_choice = choice_lock_after_action(
+          own_choice,
+          team_action_kind(ao),
+          own[own_active].item,
+          slot_flag(own_item_consumed, own_active),
+          own_start_recharging,
+        )
+        opp_choice = choice_lock_after_action(
+          opp_choice,
+          team_action_kind(ap),
+          opp[opp_active].item,
+          slot_flag(opp_item_consumed, opp_active),
+          opp_start_recharging,
+        )
         // キーのみ / ラムのみ。こんらんのときだけ消費する。
         if own_confusion > 0 {
           own_confusion = mc_cure_confusion_berry(

@@ -125,6 +125,8 @@ fn sgvt_state(my_hp : Int, opp_hp : Int) -> @payoff.SwitchingGameState {
     opp_attract: 0,
     my_bind: 0,
     opp_bind: 0,
+    my_choice: -1,
+    opp_choice: -1,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

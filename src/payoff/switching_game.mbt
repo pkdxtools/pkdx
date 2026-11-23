@@ -169,6 +169,10 @@ pub(all) struct SwitchingGameState {
   // 交代 (付与された側も付与した側も) で 0。控えには持たない。シングルの付与元は相手。
   my_bind : Int
   opp_bind : Int
+  // こだわりスカーフの技固定。-1 は未固定。スカーフ以外は -1 のまま。
+  // 交代するか持ち物を失うと -1。詳細は choice_item.mbt。
+  my_choice : Int
+  opp_choice : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。

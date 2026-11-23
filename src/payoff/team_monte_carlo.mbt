@@ -1392,8 +1392,8 @@ fn record_protean_lock(
 ///
 /// Mega evolution is not modelled here (screening heuristic).
 pub fn team_rollout(
-  own : Array[Combatant],
-  opp : Array[Combatant],
+  own_in : Array[Combatant],
+  opp_in : Array[Combatant],
   rng : @random.Rand,
   turn_limit? : Int = MC_TURN_LIMIT,
   epsilon? : Double = default_rollout_epsilon,
@@ -1402,6 +1402,12 @@ pub fn team_rollout(
   my_fresh? : Bool? = None,
   opp_fresh? : Bool? = None,
 ) -> Double {
+  let own_base = own_in
+  let opp_base = opp_in
+  let mut own = own_in
+  let mut opp = opp_in
+  let own_traced : Array[String] = Array::make(own.length(), "")
+  let opp_traced : Array[String] = Array::make(opp.length(), "")
   let own_hps = Array::make(own.length(), 0)
   let opp_hps = Array::make(opp.length(), 0)
   for i in 0..<own.length() {
@@ -1486,22 +1492,42 @@ pub fn team_rollout(
   // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
   // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
   // (DP は effective_combatant の mega 後実効特性)。
-  apply_intimidate_on_entry(
-    own[own_active].ability,
-    opp[opp_active].ability,
-    opp_ranks,
-    own_ranks,
-    target_type1=opp[opp_active].pokemon.type1,
-    target_type2=opp[opp_active].pokemon.type2,
-  )
-  apply_intimidate_on_entry(
-    opp[opp_active].ability,
-    own[own_active].ability,
-    own_ranks,
-    opp_ranks,
-    target_type1=own[own_active].pokemon.type1,
-    target_type2=own[own_active].pokemon.type2,
-  )
+  // どちらもトレースでないときは下の 2 呼び出しが従来どおり。rng は消費しない。
+  let own_status_lead : Array[@model.StatusCondition] = [own_status[0]]
+  let opp_status_lead : Array[@model.StatusCondition] = [opp_status[0]]
+  match resolve_trace_entries(
+    own_base, 0, own_megaed, own_status_lead, own_ranks, own_traced,
+    opp_base, 0, opp_megaed, opp_status_lead, opp_ranks, opp_traced,
+  ) {
+    None => {
+      apply_intimidate_on_entry(
+        own[own_active].ability,
+        opp[opp_active].ability,
+        opp_ranks,
+        own_ranks,
+        target_type1=opp[opp_active].pokemon.type1,
+        target_type2=opp[opp_active].pokemon.type2,
+      )
+      apply_intimidate_on_entry(
+        opp[opp_active].ability,
+        own[own_active].ability,
+        own_ranks,
+        opp_ranks,
+        target_type1=own[own_active].pokemon.type1,
+        target_type2=own[own_active].pokemon.type2,
+      )
+    }
+    Some(snaps) => {
+      let snap = if snaps.length() >= 2 && rng.boolean() {
+        snaps[1]
+      } else {
+        snaps[0]
+      }
+      install_trace_snap(snap, own_ranks, opp_ranks, own_traced, opp_traced)
+      own = overlay_traced_team(own_base, own_traced, own_megaed)
+      opp = overlay_traced_team(opp_base, opp_traced, opp_megaed)
+    }
+  }
   // しろいハーブ: 先発の登場時いかく直後に両 lead を判定する (DP の lead 配線と同じ位置)。
   apply_held_item_stat_reset_pair(
     own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -1650,7 +1676,9 @@ pub fn team_rollout(
               own_pending_acc = mc_attempt_accuracy(
                 own[own_active],
                 own[own_active].moves[mi],
-                opp[opp_acc_slot],
+                preview_traced_combatant(
+                  opp[opp_acc_slot], opp_switches, own[own_active].ability,
+                ),
                 weather_state[0],
                 defender_protean=opp_protean_locked[opp_acc_slot],
               )
@@ -1660,7 +1688,9 @@ pub fn team_rollout(
                 mc_attempt_accuracy(
                   own[own_active],
                   own[own_active].moves[mi],
-                  opp[opp_acc_slot],
+                  preview_traced_combatant(
+                    opp[opp_acc_slot], opp_switches, own[own_active].ability,
+                  ),
                   weather_state[0],
                   defender_protean=opp_protean_locked[opp_acc_slot],
                 ),
@@ -1681,7 +1711,9 @@ pub fn team_rollout(
               opp_pending_acc = mc_attempt_accuracy(
                 opp[opp_active],
                 opp[opp_active].moves[mi],
-                own[own_acc_slot],
+                preview_traced_combatant(
+                  own[own_acc_slot], own_switches, opp[opp_active].ability,
+                ),
                 weather_state[0],
                 defender_protean=own_protean_locked[own_acc_slot],
               )
@@ -1691,7 +1723,9 @@ pub fn team_rollout(
                 mc_attempt_accuracy(
                   opp[opp_active],
                   opp[opp_active].moves[mi],
-                  own[own_acc_slot],
+                  preview_traced_combatant(
+                    own[own_acc_slot], own_switches, opp[opp_active].ability,
+                  ),
                   weather_state[0],
                   defender_protean=own_protean_locked[own_acc_slot],
                 ),
@@ -1733,6 +1767,7 @@ pub fn team_rollout(
             if own_active < own_protean_locked.length() {
               own_protean_locked[own_active] = ""
             }
+            clear_traced_slot(own_traced, own_active)
             clear_flash_fire_slot(own_flash_fire, own_active)
             own_active = i
             reset_ranks(own_ranks)
@@ -1756,6 +1791,7 @@ pub fn team_rollout(
             if opp_active < opp_protean_locked.length() {
               opp_protean_locked[opp_active] = ""
             }
+            clear_traced_slot(opp_traced, opp_active)
             clear_flash_fire_slot(opp_flash_fire, opp_active)
             opp_active = i
             reset_ranks(opp_ranks)
@@ -1771,26 +1807,70 @@ pub fn team_rollout(
         // greedy_team_action が返す forced TmSwitch) も上と同じ TmSwitch arm を
         // 通るので追加配線は不要。MC は mega 未モデルなので raw の
         // combatant.ability で判定する (DP は mega 後実効特性)。
-        if own_switches {
-          apply_intimidate_on_entry(
-            own[own_active].ability,
-            opp[opp_active].ability,
-            opp_ranks,
-            own_ranks,
-            target_type1=opp[opp_active].pokemon.type1,
-            target_type2=opp[opp_active].pokemon.type2,
-          )
+        if own_switches && opp_switches {
+          match resolve_trace_entries(
+            own_base, own_active, own_megaed, own_status, own_ranks, own_traced,
+            opp_base, opp_active, opp_megaed, opp_status, opp_ranks, opp_traced,
+          ) {
+            None => {
+              apply_intimidate_on_entry(
+                own[own_active].ability,
+                opp[opp_active].ability,
+                opp_ranks,
+                own_ranks,
+                target_type1=opp[opp_active].pokemon.type1,
+                target_type2=opp[opp_active].pokemon.type2,
+              )
+              apply_intimidate_on_entry(
+                opp[opp_active].ability,
+                own[own_active].ability,
+                own_ranks,
+                opp_ranks,
+                target_type1=own[own_active].pokemon.type1,
+                target_type2=own[own_active].pokemon.type2,
+              )
+            }
+            Some(snaps) => {
+              let snap = if snaps.length() >= 2 && rng.boolean() {
+                snaps[1]
+              } else {
+                snaps[0]
+              }
+              install_trace_snap(snap, own_ranks, opp_ranks, own_traced, opp_traced)
+            }
+          }
+        } else {
+          if own_switches {
+            apply_intimidate_on_entry(
+              own[own_active].ability,
+              opp[opp_active].ability,
+              opp_ranks,
+              own_ranks,
+              target_type1=opp[opp_active].pokemon.type1,
+              target_type2=opp[opp_active].pokemon.type2,
+            )
+            apply_trace_after_switch(
+              own_base, own_active, own_megaed, own_traced, own_ranks,
+              opp_base, opp_active, opp_megaed, opp_traced, opp_ranks,
+            )
+          }
+          if opp_switches {
+            apply_intimidate_on_entry(
+              opp[opp_active].ability,
+              own[own_active].ability,
+              own_ranks,
+              opp_ranks,
+              target_type1=own[own_active].pokemon.type1,
+              target_type2=own[own_active].pokemon.type2,
+            )
+            apply_trace_after_switch(
+              opp_base, opp_active, opp_megaed, opp_traced, opp_ranks,
+              own_base, own_active, own_megaed, own_traced, own_ranks,
+            )
+          }
         }
-        if opp_switches {
-          apply_intimidate_on_entry(
-            opp[opp_active].ability,
-            own[own_active].ability,
-            own_ranks,
-            opp_ranks,
-            target_type1=own[own_active].pokemon.type1,
-            target_type2=own[own_active].pokemon.type2,
-          )
-        }
+        own = overlay_traced_team(own_base, own_traced, own_megaed)
+        opp = overlay_traced_team(opp_base, opp_traced, opp_megaed)
         // しろいハーブ: 登場時いかく (双方の switch 解決後) の直後に両 active を判定する。
         // 技 (Step 3) より前なので、いかく で下がったランクはこのターンの技に効く前に解除される。
         apply_held_item_stat_reset_pair(

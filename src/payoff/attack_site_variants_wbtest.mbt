@@ -131,6 +131,8 @@ fn asv_state(my_hp : Int, opp_hp : Int) -> SwitchingGameState {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }

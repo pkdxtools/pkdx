@@ -68,6 +68,8 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let same : @payoff.SwitchingGameState = {
@@ -107,6 +109,8 @@ test "state_is_hashable_and_distinguishes_meaningful_fields" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let diff_active = { ..base, my_active: 1 }
@@ -170,6 +174,8 @@ test "terminal_value_all_my_fainted_returns_minus_one" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   match @payoff.terminal_value(state, team_a, team_b, 5) {
@@ -219,6 +225,8 @@ test "terminal_value_all_opp_fainted_returns_plus_one" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   match @payoff.terminal_value(state, team_a, team_b, 5) {
@@ -270,6 +278,8 @@ test "terminal_value_turn_limit_reached_returns_hp_ratio_in_signed_range" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 3,
   }
   match @payoff.terminal_value(state, team_a, team_b, 3) {
@@ -319,6 +329,8 @@ test "terminal_value_both_alive_before_limit_returns_none" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   match @payoff.terminal_value(state, team_a, team_b, 5) {
@@ -416,6 +428,8 @@ test "value_returns_terminal_value_for_terminal_state" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 5,
   }
   let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
@@ -482,6 +496,8 @@ test "value_caches_result_via_value_stats" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
@@ -588,6 +604,8 @@ test "transition_attack_vs_attack_resolves_sequentially_by_speed" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, UseMove(0), UseMove(0), [fast], [slow])
@@ -652,6 +670,8 @@ test "transition_attack_vs_switch_damages_newly_switched_target" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, UseMove(0), Switch(1), my_team, opp_team)
@@ -721,6 +741,8 @@ test "transition_switch_vs_switch_updates_actives_only_without_damage" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, Switch(1), Switch(1), my_team, opp_team)
@@ -901,6 +923,8 @@ test "state_ranks_distinguish_otherwise_identical_states" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let boosted = { ..base, my_ranks: [2, 0, 0, 0, 0] }
@@ -975,6 +999,8 @@ test "transition_priority_move_outpaces_faster_opponent" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, UseMove(0), UseMove(0), [slow_prio], [
@@ -1036,6 +1062,8 @@ test "transition_sword_dance_raises_attacker_rank_by_two" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, UseMove(0), UseMove(0), [me], [opp])
@@ -1093,6 +1121,8 @@ test "transition_rank_clamps_to_plus_two_after_two_sword_dances" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   state = @payoff.transition(state, UseMove(0), UseMove(0), [me], [opp])
@@ -1161,6 +1191,8 @@ test "transition_switch_resets_active_ranks_to_zero" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, Switch(1), Switch(1), my_team, opp_team)
@@ -1220,6 +1252,8 @@ test "transition_rank_affects_damage_sword_dance_increases_output" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let boosted : @payoff.SwitchingGameState = { ..neutral, my_ranks: [2, 0, 0, 0, 0] }
@@ -1423,6 +1457,8 @@ fn mk_mega_state_1v1(
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
 }
@@ -1660,6 +1696,8 @@ test "transition_mega_vs_switch_damages_newly_switched_target" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let next = @payoff.transition(state, Mega(0), Switch(1), [me], opp_team)
@@ -1747,6 +1785,8 @@ test "mega_persists_after_switch_out_and_back_in" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   // Turn 1: mega slot 0.
@@ -2023,6 +2063,8 @@ fn switching_game_winrate_no_prune(
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let cache : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
@@ -2157,6 +2199,8 @@ test "value_accepts_explicit_alpha_beta_and_matches_default" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let cache1 : @hashmap.HashMap[@payoff.SwitchingGameState, Double] = @hashmap.HashMap([])
@@ -2328,6 +2372,8 @@ test "Amaeru lowers opp Atk -2 this turn, slower physical damage reduced" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let ns_amaeru = @payoff.transition(state, UseMove(0), UseMove(0), [fast], [slow])
@@ -2398,6 +2444,8 @@ test "recoil 1/2 subtracts half of damage from attacker HP" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let ns = @payoff.transition(state, UseMove(0), UseMove(0), [attacker], [defender])
@@ -2462,6 +2510,8 @@ test "self_ko zeroes attacker HP even when hitting Ghost (dmg=0)" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let ns = @payoff.transition(state, UseMove(0), UseMove(0), [attacker], [ghost])
@@ -2522,6 +2572,8 @@ test "recharge move forces attacker skip on the turn after the hit lands" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let outs1 = @payoff.attempt_turn_with_cache(
@@ -2609,6 +2661,8 @@ test "must_recharge forces attacker UseMove to skip and clears after one turn" {
     field_turns_left: 0,
     my_flash_fire: [],
     opp_flash_fire: [],
+    my_traced: [],
+    opp_traced: [],
     turn: 0,
   }
   let outs = @payoff.attempt_turn_with_cache(

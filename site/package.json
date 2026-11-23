@@ -11,9 +11,9 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@astrojs/sitemap": "3.7.4",
+    "@astrojs/sitemap": "3.7.5",
     "@resvg/resvg-js": "2.6.2",
-    "astro": "7.4.7",
+    "astro": "7.4.12",
     "satori": "0.63.2"
   },
   "devDependencies": {

@@ -448,6 +448,9 @@ priv struct TurnWorkspace {
   // こだわりスカーフの技固定。-1 は未固定。ws round-trip で落とさない。
   my_choice : Int
   opp_choice : Int
+  // SwitchingGameState の 2ターン技ロック。ws round-trip で落とさない。
+  my_two_turn : Int
+  opp_two_turn : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -510,6 +513,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_bind: state.opp_bind,
     my_choice: state.my_choice,
     opp_choice: state.opp_choice,
+    my_two_turn: state.my_two_turn,
+    opp_two_turn: state.opp_two_turn,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -563,6 +568,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_bind: ws.opp_bind,
     my_choice: ws.my_choice,
     opp_choice: ws.opp_choice,
+    my_two_turn: ws.my_two_turn,
+    opp_two_turn: ws.opp_two_turn,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -706,6 +713,19 @@ fn resolve_attacker_leg(
   dmg_cache : DamageCache,
   foe_move : @model.Move?,
 ) -> Array[(Double, SwitchingGameState)] {
+  let attacker_for_tt = if attacker_is_me {
+    my_team[ws.my_active]
+  } else {
+    opp_team[ws.opp_active]
+  }
+  let (ws, tt_phase) = apply_two_turn_to_ws(
+    ws,
+    attacker_is_me,
+    attacker_move,
+    attacker_mv_idx,
+    attacker_for_tt,
+    attacker_mega_now,
+  )
   // Phase 2-E (#91): damage application + post-hit effects + 4 fanout は
   // apply_damage_variants_fanout に統合され、variant ごとに chance-node leaf
   // を生成する。workspace は damage 適用前の状態で state にスナップショット
@@ -745,6 +765,19 @@ fn resolve_attacker_leg(
   }
   let pre_dmg_defender_hp = defender_hps[defender_active]
   let pre_damage_state = ws_to_state(ws, bump_turn=false)
+  let tt_charge = match tt_phase {
+    TtCharge => true
+    _ => false
+  }
+  if tt_charge {
+    return [(1.0, pre_damage_state)]
+  }
+  let tt_def_lock = if attacker_is_me { ws.opp_two_turn } else { ws.my_two_turn }
+  let tt_def_team = if attacker_is_me { opp_team } else { my_team }
+  let tt_def_name = charged_vanish_name(tt_def_team, defender_active, tt_def_lock)
+  if tt_def_name != "" && !two_turn_hits(attacker_move.name, tt_def_name) {
+    return [(1.0, pre_damage_state)]
+  }
   let attacker_team = if attacker_is_me { my_team } else { opp_team }
   let defender_team_eff = if attacker_is_me { opp_team } else { my_team }
   // Stage G-3: Psychic field blocks priority>0 moves against grounded
@@ -853,7 +886,7 @@ fn resolve_attacker_leg(
     attacker_active,
     defender_active,
   )
-  let outcomes = damage_variants_cached(
+  let outcomes_raw = damage_variants_cached(
     dmg_cache,
     attacker_is_me,
     attacker_active,
@@ -875,6 +908,9 @@ fn resolve_attacker_leg(
     def_disguise_intact~,
     atk_flash_fire~,
     def_flash_fire~,
+  )
+  let outcomes = scale_two_turn_outcomes(
+    outcomes_raw, attacker_move.name, ws.weather, tt_def_name,
   )
       apply_damage_variants_fanout(
         pre_damage_state,
@@ -1094,6 +1130,8 @@ fn clone_state(
     opp_bind: state.opp_bind,
     my_choice: state.my_choice,
     opp_choice: state.opp_choice,
+    my_two_turn: state.my_two_turn,
+    opp_two_turn: state.opp_two_turn,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1664,6 +1702,8 @@ pub fn transition_with_cache(
           opp_bind: opp_bind_sw,
           my_choice: -1,
           opp_choice: -1,
+          my_two_turn: -1,
+          opp_two_turn: -1,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1730,6 +1770,8 @@ pub fn transition_with_cache(
     opp_bind: opp_bind_sw,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -1756,6 +1798,38 @@ pub fn transition_with_cache(
     None => [(1.0, base_state)]
     Some((attacker_is_me, target_slot, used_move, mv_idx)) => {
       let attacker_slot = target_active(base_state, attacker_is_me)
+      let atk_team_tt = if attacker_is_me { my_team } else { opp_team }
+      let def_team_tt = if attacker_is_me { opp_team } else { my_team }
+      let atk_lock_tt = if attacker_is_me {
+        state.my_two_turn
+      } else {
+        state.opp_two_turn
+      }
+      let atk_mega_tt = if attacker_is_me { my_mega_now } else { opp_mega_now }
+      let def_lock_tt = -1
+      let base_state = match gate_two_turn_attack(
+          base_state,
+          attacker_is_me,
+          attacker_slot,
+          target_slot,
+          used_move,
+          mv_idx,
+          atk_team_tt,
+          def_team_tt,
+          atk_mega_tt,
+          atk_lock_tt,
+          def_lock_tt,
+        ) {
+        TwoTurnStop(st) =>
+          return settle_fresh_outcomes(
+            [(1.0, st)],
+            state.my_fresh,
+            state.opp_fresh,
+            my_action,
+            opp_action,
+          )
+        TwoTurnGo(st) => st
+      }
       let attacker_ranks = if attacker_is_me {
         base_state.my_ranks
       } else {
@@ -1928,7 +2002,12 @@ pub fn transition_with_cache(
       )
       apply_damage_variants_fanout(
         base_state,
-        outcomes,
+        scale_two_turn_outcomes(
+          outcomes,
+          used_move.name,
+          base_state.weather,
+          charged_vanish_name(def_team_tt, target_slot, def_lock_tt),
+        ),
         attacker_is_me~,
         attacker_active=attacker_slot,
         defender_active=target_slot,
@@ -2056,18 +2135,25 @@ fn attempt_accuracy(
   }
   let skips = match action {
     Switch(_) => false
-    UseMove(mi) | Mega(mi) =>
-      move_skips_accuracy(
-        state,
-        attacker_is_me,
-        attacker_active,
-        defender_active,
-        attacker_team,
-        defender_team,
-        attacker_team[attacker_active].moves[mi],
-        atk_trigger,
-        defender_mega_trigger,
-      )
+    UseMove(mi) | Mega(mi) => {
+      let mv = attacker_team[attacker_active].moves[mi]
+      let lock = if attacker_is_me { state.my_two_turn } else { state.opp_two_turn }
+      if two_turn_is_charging(mv.name, state.weather, lock, mi) {
+        true
+      } else {
+        move_skips_accuracy(
+          state,
+          attacker_is_me,
+          attacker_active,
+          defender_active,
+          attacker_team,
+          defender_team,
+          mv,
+          atk_trigger,
+          defender_mega_trigger,
+        )
+      }
+    }
   }
   if skips {
     100
@@ -2149,6 +2235,8 @@ fn pass_turn_state(
     opp_bind: state.opp_bind,
     my_choice: state.my_choice,
     opp_choice: state.opp_choice,
+    my_two_turn: state.my_two_turn,
+    opp_two_turn: state.opp_two_turn,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2440,6 +2528,8 @@ pub fn attempt_turn_with_cache(
         opp_bind: state.opp_bind,
         my_choice: state.my_choice,
         opp_choice: state.opp_choice,
+        my_two_turn: state.my_two_turn,
+        opp_two_turn: state.opp_two_turn,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2561,7 +2651,10 @@ pub fn attempt_turn_with_cache(
           state.my_must_recharge[state.my_active],
           state.opp_must_recharge[state.opp_active],
         )
-        results.push((joint * p, locked))
+        let finished = settle_interrupted_two_turn(
+          locked, state.my_two_turn, state.opp_two_turn,
+        )
+        results.push((joint * p, finished))
       }
   }
   results
@@ -2868,6 +2961,8 @@ fn partial_act_outcomes(
     opp_bind: state.opp_bind,
     my_choice: state.my_choice,
     opp_choice: state.opp_choice,
+    my_two_turn: state.my_two_turn,
+    opp_two_turn: state.opp_two_turn,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -2892,6 +2987,39 @@ fn partial_act_outcomes(
     None => [(1.0, base_state)]
     Some((attacker_is_me, target_slot, used_move, mv_idx)) => {
       let attacker_slot = target_active(base_state, attacker_is_me)
+      let atk_team_tt = if attacker_is_me { my_team } else { opp_team }
+      let def_team_tt = if attacker_is_me { opp_team } else { my_team }
+      let atk_lock_tt = if attacker_is_me {
+        state.my_two_turn
+      } else {
+        state.opp_two_turn
+      }
+      let def_lock_tt = if attacker_is_me {
+        state.opp_two_turn
+      } else {
+        state.my_two_turn
+      }
+      let atk_mega_tt = if attacker_is_me {
+        base_state.my_megaed[state.my_active]
+      } else {
+        base_state.opp_megaed[state.opp_active]
+      }
+      let base_state = match gate_two_turn_attack(
+          base_state,
+          attacker_is_me,
+          attacker_slot,
+          target_slot,
+          used_move,
+          mv_idx,
+          atk_team_tt,
+          def_team_tt,
+          atk_mega_tt,
+          atk_lock_tt,
+          def_lock_tt,
+        ) {
+        TwoTurnStop(st) => return [(1.0, st)]
+        TwoTurnGo(st) => st
+      }
       let attacker_ranks = if attacker_is_me {
         base_state.my_ranks
       } else {
@@ -3062,7 +3190,12 @@ fn partial_act_outcomes(
       )
       apply_damage_variants_fanout(
         base_state,
-        outcomes,
+        scale_two_turn_outcomes(
+          outcomes,
+          used_move.name,
+          base_state.weather,
+          charged_vanish_name(def_team_tt, target_slot, def_lock_tt),
+        ),
         attacker_is_me~,
         attacker_active=attacker_slot,
         defender_active=target_slot,
@@ -3251,6 +3384,7 @@ pub fn value(
       slot_flag(state.my_item_consumed, state.my_active),
       state.my_choice,
     ),
+    two_turn_lock=state.my_two_turn,
   )
   let actions_opp = alive_actions(
     state.opp_active,
@@ -3271,6 +3405,7 @@ pub fn value(
       slot_flag(state.opp_item_consumed, state.opp_active),
       state.opp_choice,
     ),
+    two_turn_lock=state.opp_two_turn,
   )
   if actions_me.length() == 0 {
     return -1.0
@@ -3510,6 +3645,8 @@ pub fn switching_game_winrate_stats(
     opp_bind: 0,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,
@@ -3630,10 +3767,20 @@ pub fn alive_actions(
   moves_used? : Array[Int] = [],
   can_switch? : Bool = true,
   choice_lock? : Int = -1,
+  two_turn_lock? : Int = -1,
 ) -> Array[ActionKind] {
   let active_alive = hps[active] > 0
   if must_recharge && active_alive {
     return [UseMove(0)]
+  }
+  // 溜め中は同じ技だけ。-1 のときはこの枝に入らず、下の行動列は従来どおり。
+  // ひんしのときはここに入らず、下の強制交代が残る。
+  if two_turn_lock >= 0 && active_alive && two_turn_lock < team[active].moves.length() {
+    let out : Array[ActionKind] = [UseMove(two_turn_lock)]
+    if can_mega(active, hps, team, mega_used) {
+      out.push(Mega(two_turn_lock))
+    }
+    return out
   }
   // とっておき (Last Resort) のフィルタ用に slot ごとの mask を取得。
   // 旧テスト fixture など length 0 の untracked 入力は 0 扱いで

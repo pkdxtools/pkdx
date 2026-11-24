@@ -134,6 +134,8 @@ test "apply_eot: a fainted source clears bind without damage" {
     opp_bind: 4,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
   }
   let next = apply_eot(st, me, opp)
   assert_true(next.opp_hps[0] == 160)
@@ -162,6 +164,8 @@ test "apply_eot: my bind KO removes the source before opp bind deals damage" {
     opp_bind: 1,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
   }
   let next = apply_eot(st, me, opp)
   assert_true(next.my_hps[0] == 0)
@@ -233,6 +237,8 @@ test "bind turn: a switch clears both counters before end of turn chip" {
     opp_bind: 3,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
     my_hps: [200, 200],
     my_megaed: [false, false],
     my_status: [@model.None, @model.None],
@@ -251,6 +257,8 @@ test "bind turn: a switch clears both counters before end of turn chip" {
     opp_bind: 0,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
   }
   let base = attempt_turn_with_cache(
     clear, Switch(1), UseMove(0), [lead, bench], opp, new_damage_cache(),

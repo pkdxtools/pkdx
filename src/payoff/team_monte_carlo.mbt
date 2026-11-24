@@ -179,6 +179,7 @@ fn greedy_team_action(
   my_flash_fire? : Array[Bool] = [],
   can_switch? : Bool = true,
   choice_lock? : Int = -1,
+  two_turn_lock? : Int = -1,
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -240,6 +241,11 @@ fn greedy_team_action(
       }
     }
     return Some(TmSwitch(best))
+  }
+  // 溜め中は同じ技だけ。ε で別の技に逃げない (DP の合法手が 1 つのときと同じ)。
+  // -1 のときはこの枝に入らない。
+  if two_turn_lock >= 0 && two_turn_lock < my_team[active].moves.length() {
+    return Some(TmUseMove(two_turn_lock))
   }
   // こだわりスカーフで技固定中。-1 のときは下の既存 ε-greedy をそのまま走る。
   if choice_lock >= 0 {
@@ -849,6 +855,11 @@ fn team_perform_attack(
   def_protean_locked? : String = "",
   def_disguise_intact? : Bool = false,
   atk_flash_fire? : Bool = false,
+  track_two_turn? : Bool = false,
+  two_turn_lock? : Int = -1,
+  move_index? : Int = -1,
+  defender_charged? : String = "",
+  lock_out? : Array[Int] = [],
 ) -> (Int, Int, Bool, Bool) {
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
@@ -856,6 +867,22 @@ fn team_perform_attack(
     // `team_apply_post_hit` so both branches share one resolver. ばけのかわ は
     // 変化技では剥がれず chip も無い (dmg_for_effects=0, busted=false)。
     return (defender_hp, 0, false, false)
+  }
+  // track_two_turn が false のときはここを通らない。溜めと姿隠しの外れは rng を消費しない。
+  if track_two_turn {
+    let stop = mc_note_two_turn(
+      lock_out,
+      mv.name,
+      weather,
+      two_turn_lock,
+      move_index,
+      atk_ranks,
+      effective_combatant(attacker, false).ability,
+    )
+    if stop ||
+      (defender_charged != "" && !two_turn_hits(mv.name, defender_charged)) {
+      return (defender_hp, 0, false, false)
+    }
   }
   let atk_rank = match mv.category {
     @model.Physical => atk_ranks[0]
@@ -918,7 +945,13 @@ fn team_perform_attack(
   }
 
   let idx = rng.int(limit=16)
-  let raw = r.damages[idx]
+  let rolled = r.damages[idx]
+  let raw = if !track_two_turn {
+    rolled
+  } else {
+    let m = two_turn_power_mod(mv.name, weather, defender_charged)
+    if m == 4096 { rolled } else { @damage.round5(rolled, m) }
+  }
   if def_disguise_intact {
     // ばけのかわ intact: 初段被弾を無効化し、代わりに chip (= 最大HP/8 床) で剥がす。
     // 連続技は初段のみブロック → chip + (このロールの total − 初段) を通す。most-likely
@@ -985,7 +1018,14 @@ fn mc_attempt_accuracy(
   weather : @model.Weather,
   defender_protean? : String = "",
   field? : @model.Field = @model.Field::None,
+  two_turn_lock? : Int = -999,
+  move_index? : Int = -1,
 ) -> Int {
+  // 既定 -999 は従来の呼び出し。溜めターンだけ命中判定をしない。
+  if two_turn_lock != -999 &&
+    two_turn_is_charging(mv.name, weather, two_turn_lock, move_index) {
+    return 100
+  }
   let atk_eff = effective_combatant(attacker, false)
   let def_eff0 = effective_combatant(
     defender, false, protean_locked=defender_protean,
@@ -1629,6 +1669,9 @@ pub fn team_rollout(
   // こだわりスカーフの技固定。-1 は未固定。スカーフ以外は -1 のまま。
   let mut own_choice = -1
   let mut opp_choice = -1
+  // 2ターン技の溜め。-1 は溜めていない。中身を perform が書き換える。
+  let own_two_buf = [-1]
+  let opp_two_buf = [-1]
   // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
   // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
   // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
@@ -1707,6 +1750,7 @@ pub fn team_rollout(
         slot_flag(own_item_consumed, own_active),
         own_choice,
       ),
+      two_turn_lock=own_two_buf[0],
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -1740,6 +1784,7 @@ pub fn team_rollout(
         slot_flag(opp_item_consumed, opp_active),
         opp_choice,
       ),
+      two_turn_lock=opp_two_buf[0],
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -1762,6 +1807,8 @@ pub fn team_rollout(
         let opp_start_active = opp_active
         let own_start_recharging = own_must_recharge[own_start_active]
         let opp_start_recharging = opp_must_recharge[opp_start_active]
+        let own_two_start = own_two_buf[0]
+        let opp_two_start = opp_two_buf[0]
         // ねこだまし / であいがしら の判定はターン開始時の値を見る。更新はターン末 (Step 4 の前)。
         let own_fresh_at_turn = own_fresh
         let opp_fresh_at_turn = opp_fresh
@@ -1887,6 +1934,8 @@ pub fn team_rollout(
                 weather_state[0],
                 defender_protean=opp_protean_locked[opp_acc_slot],
                 field=field_state[0],
+                two_turn_lock=own_two_buf[0],
+                move_index=mi,
               )
             } else if own_confusion > 0 {
               let (st, acts, missed, next, self_hit) = mc_resolve_confused(
@@ -1901,6 +1950,8 @@ pub fn team_rollout(
                   weather_state[0],
                   defender_protean=opp_protean_locked[opp_acc_slot],
                   field=field_state[0],
+                  two_turn_lock=own_two_buf[0],
+                  move_index=mi,
                 ),
                 own_thaws,
                 own_confusion,
@@ -1927,6 +1978,8 @@ pub fn team_rollout(
                   weather_state[0],
                   defender_protean=opp_protean_locked[opp_acc_slot],
                   field=field_state[0],
+                  two_turn_lock=own_two_buf[0],
+                  move_index=mi,
                 ),
                 rng,
                 thaws_user=own_thaws,
@@ -1951,6 +2004,8 @@ pub fn team_rollout(
                 weather_state[0],
                 defender_protean=own_protean_locked[own_acc_slot],
                 field=field_state[0],
+                two_turn_lock=opp_two_buf[0],
+                move_index=mi,
               )
             } else if opp_confusion > 0 {
               let (st, acts, missed, next, self_hit) = mc_resolve_confused(
@@ -1965,6 +2020,8 @@ pub fn team_rollout(
                   weather_state[0],
                   defender_protean=own_protean_locked[own_acc_slot],
                   field=field_state[0],
+                  two_turn_lock=opp_two_buf[0],
+                  move_index=mi,
                 ),
                 opp_thaws,
                 opp_confusion,
@@ -1991,6 +2048,8 @@ pub fn team_rollout(
                   weather_state[0],
                   defender_protean=own_protean_locked[own_acc_slot],
                   field=field_state[0],
+                  two_turn_lock=opp_two_buf[0],
+                  move_index=mi,
                 ),
                 rng,
                 thaws_user=opp_thaws,
@@ -2037,6 +2096,7 @@ pub fn team_rollout(
             opp_attract = 0
             own_bind = 0
             opp_bind = 0
+            own_two_buf[0] = -1
             own_active = i
             reset_ranks(own_ranks)
           }
@@ -2066,6 +2126,7 @@ pub fn team_rollout(
             opp_attract = 0
             own_bind = 0
             opp_bind = 0
+            opp_two_buf[0] = -1
             opp_active = i
             reset_ranks(opp_ranks)
           }
@@ -2326,6 +2387,11 @@ pub fn team_rollout(
                 def_protean_locked=opp_protean_locked[opp_active],
                 def_disguise_intact=opp_intact,
                 atk_flash_fire=flash_fire_lit(own_flash_fire, own_active),
+                track_two_turn=true,
+                two_turn_lock=own_two_buf[0],
+                move_index=mi_own,
+                defender_charged=charged_vanish_name(opp, opp_active, opp_two_buf[0]),
+                lock_out=own_two_buf,
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2552,6 +2618,11 @@ pub fn team_rollout(
                 def_protean_locked=own_protean_locked[own_active],
                 def_disguise_intact=own_intact,
                 atk_flash_fire=flash_fire_lit(opp_flash_fire, opp_active),
+                track_two_turn=true,
+                two_turn_lock=opp_two_buf[0],
+                move_index=mi_opp,
+                defender_charged=charged_vanish_name(own, own_active, own_two_buf[0]),
+                lock_out=opp_two_buf,
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2747,6 +2818,11 @@ pub fn team_rollout(
                 def_protean_locked=own_protean_locked[own_active],
                 def_disguise_intact=own_intact,
                 atk_flash_fire=flash_fire_lit(opp_flash_fire, opp_active),
+                track_two_turn=true,
+                two_turn_lock=opp_two_buf[0],
+                move_index=mi_opp,
+                defender_charged=charged_vanish_name(own, own_active, own_two_buf[0]),
+                lock_out=opp_two_buf,
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2971,6 +3047,11 @@ pub fn team_rollout(
                 def_protean_locked=opp_protean_locked[opp_active],
                 def_disguise_intact=opp_intact,
                 atk_flash_fire=flash_fire_lit(own_flash_fire, own_active),
+                track_two_turn=true,
+                two_turn_lock=own_two_buf[0],
+                move_index=mi_own,
+                defender_charged=charged_vanish_name(opp, opp_active, opp_two_buf[0]),
+                lock_out=own_two_buf,
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3128,6 +3209,11 @@ pub fn team_rollout(
               def_protean_locked=opp_protean_locked[opp_active],
               def_disguise_intact=opp_intact,
               atk_flash_fire=flash_fire_lit(own_flash_fire, own_active),
+              track_two_turn=true,
+              two_turn_lock=own_two_buf[0],
+              move_index=mi_own,
+              defender_charged=charged_vanish_name(opp, opp_active, opp_two_buf[0]),
+              lock_out=own_two_buf,
             )
             opp_hps[opp_active] = res_hp
             mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3284,6 +3370,11 @@ pub fn team_rollout(
               def_protean_locked=own_protean_locked[own_active],
               def_disguise_intact=own_intact,
               atk_flash_fire=flash_fire_lit(opp_flash_fire, opp_active),
+              track_two_turn=true,
+              two_turn_lock=opp_two_buf[0],
+              move_index=mi_opp,
+              defender_charged=charged_vanish_name(own, own_active, own_two_buf[0]),
+              lock_out=opp_two_buf,
             )
             own_hps[own_active] = res_hp
             mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3410,6 +3501,14 @@ pub fn team_rollout(
           slot_flag(opp_item_consumed, opp_active),
           opp_start_recharging,
         )
+        // ターン開始時に溜めていて、解放も交代もしていないなら外す。
+        // 開始が -1 の新規の溜めは buf に残っているので触らない。
+        if own_two_start >= 0 && own_two_buf[0] == own_two_start {
+          own_two_buf[0] = -1
+        }
+        if opp_two_start >= 0 && opp_two_buf[0] == opp_two_start {
+          opp_two_buf[0] = -1
+        }
         // キーのみ / ラムのみ。こんらんのときだけ消費する。
         if own_confusion > 0 {
           own_confusion = mc_cure_confusion_berry(

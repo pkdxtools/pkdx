@@ -860,7 +860,17 @@ fn team_perform_attack(
   move_index? : Int = -1,
   defender_charged? : String = "",
   lock_out? : Array[Int] = [],
+  defender_guard? : Int = 0,
+  protect_io? : Array[Int] = [],
+  contact_hps? : Array[Int] = [],
+  contact_status? : Array[@model.StatusCondition] = [],
+  contact_slot? : Int = 0,
 ) -> (Int, Int, Bool, Bool) {
+  // まもる自体。バッファを渡したときだけ stall を進める。渡さない既存呼び出しは従来の return。
+  if protect_io.length() >= 2 && is_protect_move(mv.name) {
+    mc_commit_protect(mv.name, protect_io, rng)
+    return (defender_hp, 0, false, false)
+  }
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
     // applies `stat_effects` (with opp_alive gating) via
@@ -882,6 +892,28 @@ fn team_perform_attack(
     if stop ||
       (defender_charged != "" && !two_turn_hits(mv.name, defender_charged)) {
       return (defender_hp, 0, false, false)
+    }
+  }
+  // 相手の守りが 0 のときはこの先のダメージロールも従来どおり。
+  let mut protect_quarter = false
+  if defender_guard != 0 {
+    match protect_interaction(defender_guard, mv, attacker.ability) {
+      PvBlock => {
+        mc_apply_protect_contact(
+          defender_guard,
+          mv,
+          attacker,
+          contact_hps,
+          contact_status,
+          atk_ranks,
+          contact_slot,
+          weather,
+          field,
+        )
+        return (defender_hp, 0, false, true)
+      }
+      PvQuarter => protect_quarter = true
+      PvBreak | PvThrough => ()
     }
   }
   let atk_rank = match mv.category {
@@ -968,7 +1000,12 @@ fn team_perform_attack(
       None => raw
     }
     let later = if raw - first_hit > 0 { raw - first_hit } else { 0 }
-    let dealt = chip + burn_halve(later)
+    let dealt0 = chip + burn_halve(later)
+    let dealt = if protect_quarter {
+      @damage.round5(dealt0, 1024)
+    } else {
+      dealt0
+    }
     let new_hp = if defender_hp - dealt < 0 { 0 } else { defender_hp - dealt }
     // dmg_for_effects = actual_dealt - chip (DP と同 semantics)。単発ブロック時は
     // actual_dealt = chip なので 0 → recoil / drain 0。0 床でクランプ。
@@ -978,14 +1015,31 @@ fn team_perform_attack(
     } else {
       0
     }
+    if protect_quarter {
+      mc_apply_protect_contact(
+        defender_guard, mv, attacker, contact_hps, contact_status, atk_ranks,
+        contact_slot, weather, field,
+      )
+    }
     return (new_hp, dmg_for_effects, true, false)
   }
   // 非 ばけのかわ: 従来どおり (単一ロール、burn 半減、0 床クランプ)。rng 消費は
   // intact 分岐と同じ 1 回 (`idx`) なので、非 disguise チームの決定性は bit-exact。
   // overkill 分が dmg_for_effects で過大計上されないよう、HP を 0 床にした差分
   // (= actual dealt = min(dmg, defender_hp)) を dmg_for_effects として返す。
-  let dmg = burn_halve(raw)
+  let dmg0 = burn_halve(raw)
+  let dmg = if protect_quarter {
+    @damage.round5(dmg0, 1024)
+  } else {
+    dmg0
+  }
   let new_hp = if defender_hp - dmg < 0 { 0 } else { defender_hp - dmg }
+  if protect_quarter {
+    mc_apply_protect_contact(
+      defender_guard, mv, attacker, contact_hps, contact_status, atk_ranks,
+      contact_slot, weather, field,
+    )
+  }
   (new_hp, defender_hp - new_hp, false, false)
 }
 
@@ -1408,6 +1462,10 @@ fn mc_psychic_priority_blocked(
   attacker_hp? : Int = 0,
   attacker_max_hp? : Int = 0,
 ) -> Bool {
+  // まもるは自分対象。サイコフィールドは相手への先制を止める。
+  if is_protect_move(mv.name) {
+    return false
+  }
   // 省略時は補正 0。既存の base priority>0 テストはそのまま。
   if effective_priority(attacker_ability, mv, attacker_hp, attacker_max_hp) <= 0 {
     return false
@@ -1672,6 +1730,9 @@ pub fn team_rollout(
   // 2ターン技の溜め。-1 は溜めていない。中身を perform が書き換える。
   let own_two_buf = [-1]
   let opp_two_buf = [-1]
+  // まもる系。[stall, guard]。guard はターン末に 0。まもるを撃たないときは 0 のまま。
+  let own_prot = [0, 0]
+  let opp_prot = [0, 0]
   // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
   // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
   // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
@@ -2096,6 +2157,8 @@ pub fn team_rollout(
             opp_attract = 0
             own_bind = 0
             opp_bind = 0
+            own_prot[0] = 0
+            own_prot[1] = 0
             own_two_buf[0] = -1
             own_active = i
             reset_ranks(own_ranks)
@@ -2126,6 +2189,8 @@ pub fn team_rollout(
             opp_attract = 0
             own_bind = 0
             opp_bind = 0
+            opp_prot[0] = 0
+            opp_prot[1] = 0
             opp_two_buf[0] = -1
             opp_active = i
             reset_ranks(opp_ranks)
@@ -2392,6 +2457,11 @@ pub fn team_rollout(
                 move_index=mi_own,
                 defender_charged=charged_vanish_name(opp, opp_active, opp_two_buf[0]),
                 lock_out=own_two_buf,
+                defender_guard=opp_prot[1],
+                protect_io=own_prot,
+                contact_hps=own_hps,
+                contact_status=own_status,
+                contact_slot=own_active,
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2623,6 +2693,11 @@ pub fn team_rollout(
                 move_index=mi_opp,
                 defender_charged=charged_vanish_name(own, own_active, own_two_buf[0]),
                 lock_out=opp_two_buf,
+                defender_guard=own_prot[1],
+                protect_io=opp_prot,
+                contact_hps=opp_hps,
+                contact_status=opp_status,
+                contact_slot=opp_active,
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2823,6 +2898,11 @@ pub fn team_rollout(
                 move_index=mi_opp,
                 defender_charged=charged_vanish_name(own, own_active, own_two_buf[0]),
                 lock_out=opp_two_buf,
+                defender_guard=own_prot[1],
+                protect_io=opp_prot,
+                contact_hps=opp_hps,
+                contact_status=opp_status,
+                contact_slot=opp_active,
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3052,6 +3132,11 @@ pub fn team_rollout(
                 move_index=mi_own,
                 defender_charged=charged_vanish_name(opp, opp_active, opp_two_buf[0]),
                 lock_out=own_two_buf,
+                defender_guard=opp_prot[1],
+                protect_io=own_prot,
+                contact_hps=own_hps,
+                contact_status=own_status,
+                contact_slot=own_active,
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3214,6 +3299,11 @@ pub fn team_rollout(
               move_index=mi_own,
               defender_charged=charged_vanish_name(opp, opp_active, opp_two_buf[0]),
               lock_out=own_two_buf,
+              defender_guard=opp_prot[1],
+              protect_io=own_prot,
+              contact_hps=own_hps,
+              contact_status=own_status,
+              contact_slot=own_active,
             )
             opp_hps[opp_active] = res_hp
             mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3375,6 +3465,11 @@ pub fn team_rollout(
               move_index=mi_opp,
               defender_charged=charged_vanish_name(own, own_active, own_two_buf[0]),
               lock_out=opp_two_buf,
+              defender_guard=own_prot[1],
+              protect_io=opp_prot,
+              contact_hps=opp_hps,
+              contact_status=opp_status,
+              contact_slot=opp_active,
             )
             own_hps[own_active] = res_hp
             mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3509,6 +3604,16 @@ pub fn team_rollout(
         if opp_two_start >= 0 && opp_two_buf[0] == opp_two_start {
           opp_two_buf[0] = -1
         }
+        // まもるを成功させていなければ stall を戻す。旗はターンを跨がない。
+        // 両方 0 のときは代入しても値は変わらない。
+        if own_prot[1] == 0 {
+          own_prot[0] = 0
+        }
+        if opp_prot[1] == 0 {
+          opp_prot[0] = 0
+        }
+        own_prot[1] = 0
+        opp_prot[1] = 0
         // キーのみ / ラムのみ。こんらんのときだけ消費する。
         if own_confusion > 0 {
           own_confusion = mc_cure_confusion_berry(

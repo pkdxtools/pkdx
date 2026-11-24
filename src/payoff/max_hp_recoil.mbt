@@ -11,7 +11,7 @@
 /// - 外れ / 免疫 (`MoveFail`): 対象が生存していること (対象不在なら
 ///   `battle-actions.ts` の `!target` / `!targets.length` で早期 return し
 ///   `MoveFail` に届かない)。
-/// Protect 系はモデルしていない (payoff 層に Protect 無し)。
+/// 守るで防がれたときも、対象が生存していれば反動する (`protect_blocked_state`)。
 ///
 /// マジックガード: 技以外のダメージを受けない (Champions `tokuseiinfo_syn.json:3442`)。
 /// Showdown でも `magicguard.onDamage` が `effect.effectType !== 'Move'` を弾く

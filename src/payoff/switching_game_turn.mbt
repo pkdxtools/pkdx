@@ -451,6 +451,11 @@ priv struct TurnWorkspace {
   // SwitchingGameState の 2ターン技ロック。ws round-trip で落とさない。
   my_two_turn : Int
   opp_two_turn : Int
+  // まもる系。ws round-trip で落とさない。0 は未使用。
+  my_stall : Int
+  opp_stall : Int
+  my_protect : Int
+  opp_protect : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -515,6 +520,10 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_choice: state.opp_choice,
     my_two_turn: state.my_two_turn,
     opp_two_turn: state.opp_two_turn,
+    my_stall: state.my_stall,
+    opp_stall: state.opp_stall,
+    my_protect: state.my_protect,
+    opp_protect: state.opp_protect,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -570,6 +579,10 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_choice: ws.opp_choice,
     my_two_turn: ws.my_two_turn,
     opp_two_turn: ws.opp_two_turn,
+    my_stall: ws.my_stall,
+    opp_stall: ws.opp_stall,
+    my_protect: ws.my_protect,
+    opp_protect: ws.opp_protect,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -772,6 +785,18 @@ fn resolve_attacker_leg(
   if tt_charge {
     return [(1.0, pre_damage_state)]
   }
+  // まもるは攻撃ではない。姿隠しの外れやサイコフィールドより前に解決する。
+  // まもる以外はこの if に入らない。
+  if is_protect_move(attacker_move.name) {
+    let protect_team = if attacker_is_me { my_team } else { opp_team }
+    return protect_use_outcomes(
+      pre_damage_state,
+      attacker_is_me,
+      attacker_active,
+      protect_team,
+      attacker_move,
+    )
+  }
   let tt_def_lock = if attacker_is_me { ws.opp_two_turn } else { ws.my_two_turn }
   let tt_def_team = if attacker_is_me { opp_team } else { my_team }
   let tt_def_name = charged_vanish_name(tt_def_team, defender_active, tt_def_lock)
@@ -846,6 +871,32 @@ fn resolve_attacker_leg(
     Some(st) => return [(1.0, st)]
     None => ()
   }
+  // 相手がこのターンに守っているときだけ。旗が 0 なら従来のダメージ経路。
+  let def_guard = if attacker_is_me { ws.opp_protect } else { ws.my_protect }
+  let mut protect_quarter = false
+  if def_guard != 0 {
+    let atk_ab = effective_combatant(atk_c, atk_is_mega).ability
+    match protect_interaction(def_guard, attacker_move, atk_ab) {
+      PvBlock =>
+        return [
+          (
+            1.0,
+            protect_blocked_state(
+              pre_damage_state,
+              attacker_is_me,
+              attacker_active,
+              defender_active,
+              attacker_team,
+              attacker_move,
+              def_guard,
+              pre_dmg_defender_hp > 0,
+            ),
+          ),
+        ]
+      PvQuarter => protect_quarter = true
+      PvBreak | PvThrough => ()
+    }
+  }
   // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
   // 被弾側スロットの type は変化後タイプ (防御相性) に override する。攻撃側の
   // 配列は attacker_is_me で決まり、被弾側はその逆。index は active スロット。
@@ -909,11 +960,16 @@ fn resolve_attacker_leg(
     atk_flash_fire~,
     def_flash_fire~,
   )
-  let outcomes = scale_two_turn_outcomes(
+  let scaled = scale_two_turn_outcomes(
     outcomes_raw, attacker_move.name, ws.weather, tt_def_name,
   )
-      apply_damage_variants_fanout(
-        pre_damage_state,
+  let outcomes = if protect_quarter {
+    scale_protect_quarter(scaled)
+  } else {
+    scaled
+  }
+  let leaves = apply_damage_variants_fanout(
+    pre_damage_state,
     outcomes,
     attacker_is_me~,
     attacker_active~,
@@ -923,6 +979,18 @@ fn resolve_attacker_leg(
     defender_team=defender_team_eff,
     pre_dmg_defender_hp~,
   )
+  if protect_quarter {
+    map_protect_contact(
+      leaves,
+      attacker_is_me,
+      attacker_active,
+      attacker_team,
+      attacker_move,
+      def_guard,
+    )
+  } else {
+    leaves
+  }
 }
 
 ///|
@@ -1132,6 +1200,10 @@ fn clone_state(
     opp_choice: state.opp_choice,
     my_two_turn: state.my_two_turn,
     opp_two_turn: state.opp_two_turn,
+    my_stall: state.my_stall,
+    opp_stall: state.opp_stall,
+    my_protect: state.my_protect,
+    opp_protect: state.opp_protect,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1704,6 +1776,10 @@ pub fn transition_with_cache(
           opp_choice: -1,
           my_two_turn: -1,
           opp_two_turn: -1,
+          my_stall: stall_after_switch(state.my_stall, my_action),
+          opp_stall: stall_after_switch(state.opp_stall, opp_action),
+          my_protect: 0,
+          opp_protect: 0,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1772,6 +1848,10 @@ pub fn transition_with_cache(
     opp_choice: -1,
     my_two_turn: -1,
     opp_two_turn: -1,
+    my_stall: stall_after_switch(state.my_stall, my_action),
+    opp_stall: stall_after_switch(state.opp_stall, opp_action),
+    my_protect: 0,
+    opp_protect: 0,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -1851,6 +1931,21 @@ pub fn transition_with_cache(
         base_state.opp_megaed[target_slot]
       } else {
         base_state.my_megaed[target_slot]
+      }
+      if is_protect_move(used_move.name) {
+        return settle_fresh_outcomes(
+          protect_use_outcomes(
+            base_state,
+            attacker_is_me,
+            attacker_slot,
+            attacker_team,
+            used_move,
+          ),
+          state.my_fresh,
+          state.opp_fresh,
+          my_action,
+          opp_action,
+        )
       }
       // Stage G-3: resolve_attacker_leg と同じ Psychic-priority guard を
       // Switch-vs-UseMove の DP path にも適用する。これがないと priority 技が
@@ -2237,6 +2332,10 @@ fn pass_turn_state(
     opp_choice: state.opp_choice,
     my_two_turn: state.my_two_turn,
     opp_two_turn: state.opp_two_turn,
+    my_stall: state.my_stall,
+    opp_stall: state.opp_stall,
+    my_protect: state.my_protect,
+    opp_protect: state.opp_protect,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2530,6 +2629,10 @@ pub fn attempt_turn_with_cache(
         opp_choice: state.opp_choice,
         my_two_turn: state.my_two_turn,
         opp_two_turn: state.opp_two_turn,
+        my_stall: state.my_stall,
+        opp_stall: state.opp_stall,
+        my_protect: state.my_protect,
+        opp_protect: state.opp_protect,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2651,8 +2754,10 @@ pub fn attempt_turn_with_cache(
           state.my_must_recharge[state.my_active],
           state.opp_must_recharge[state.opp_active],
         )
-        let finished = settle_interrupted_two_turn(
-          locked, state.my_two_turn, state.opp_two_turn,
+        let finished = settle_protect(
+          settle_interrupted_two_turn(
+            locked, state.my_two_turn, state.opp_two_turn,
+          ),
         )
         results.push((joint * p, finished))
       }
@@ -2963,6 +3068,10 @@ fn partial_act_outcomes(
     opp_choice: state.opp_choice,
     my_two_turn: state.my_two_turn,
     opp_two_turn: state.opp_two_turn,
+    my_stall: state.my_stall,
+    opp_stall: state.opp_stall,
+    my_protect: state.my_protect,
+    opp_protect: state.opp_protect,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3041,6 +3150,11 @@ fn partial_act_outcomes(
         base_state.opp_megaed[target_slot]
       } else {
         base_state.my_megaed[target_slot]
+      }
+      if is_protect_move(used_move.name) {
+        return protect_use_outcomes(
+          base_state, attacker_is_me, attacker_slot, attacker_team, used_move,
+        )
       }
       // Stage G-3: partial-act (相手が para/sleep/miss で skip) でも actor の
       // priority 技は Psychic 下の grounded defender に当たってはならない。
@@ -3647,6 +3761,10 @@ pub fn switching_game_winrate_stats(
     opp_choice: -1,
     my_two_turn: -1,
     opp_two_turn: -1,
+    my_stall: 0,
+    opp_stall: 0,
+    my_protect: 0,
+    opp_protect: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,

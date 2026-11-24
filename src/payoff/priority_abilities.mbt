@@ -67,7 +67,7 @@ pub fn combatant_move_priority(
 
 ///|
 /// 変化技が相手に効くペイロードを持つか。自分強化・天候・フィールドだけでは false。
-/// 効果未モデルの変化技 (まもる 等) も false。あく無効はここが true のときだけ掛ける。
+/// 相手への効果を持たない変化技 (まもる を含む) も false。あく無効はここが true のときだけ掛ける。
 fn status_move_hits_foe(mv : @model.Move) -> Bool {
   match mv.status_effect {
     Some(_) => return true

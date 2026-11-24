@@ -177,6 +177,13 @@ pub(all) struct SwitchingGameState {
   // 姿隠しの種類は技名から引く。詳細は two_turn.mbt。
   my_two_turn : Int
   opp_two_turn : Int
+  // まもる系の連続カウンタ。0 は次が初回 (確率 1)。詳細は protect.mbt。
+  // フィールド初期値は無い。完全リテラルは 0 を書き、`{ ..state }` はコピーする。
+  my_stall : Int
+  opp_stall : Int
+  // このターンに成功した守りの種類。0 は無し。ターン末で 0 に戻す。
+  my_protect : Int
+  opp_protect : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。

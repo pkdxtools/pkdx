@@ -167,6 +167,7 @@ fn build_input_with_ranks(
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
   protean_consumed? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> @model.DamageCalcInput {
   let (atk_idx, def_idx) = attack_defense_stat_indices(mv)
   let atk_stat_override = match atk.actual_stats {
@@ -203,7 +204,7 @@ fn build_input_with_ranks(
     fainted_count: 0,
     is_double: false,
     stat_system: atk.stat_system,
-    wall: @model.Wall::NoWall,
+    wall,
     screen_pierce: false,
     atk_status_condition: @model.StatusCondition::None,
     def_status_condition: @model.StatusCondition::None,

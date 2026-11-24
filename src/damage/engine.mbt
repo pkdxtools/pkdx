@@ -486,8 +486,8 @@ pub fn calc_damage(input : @model.DamageCalcInput) -> @model.DamageCalcResult {
       // Walls (Reflect / Light Screen / Aurora Veil).
       // Inserted between ability finals and Tinted Lens — matches the
       // Showdown final-mod chain. Critical, screen_pierce (move-side bypass),
-      // and mold-breaker-family abilities each skip the multiplier
-      // independently.
+      // and すりぬけ each skip the multiplier independently. Singles use
+      // 2048/4096 (champout help_11_05_03 半減). Doubles use 2732/4096.
       let wall_ok = wall_applies(input.wall, is_physical) &&
         !input.critical &&
         !input.screen_pierce &&

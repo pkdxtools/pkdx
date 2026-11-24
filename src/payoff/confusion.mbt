@@ -499,7 +499,8 @@ fn push_confused_move(
       } else {
         s_o
       }
-      result.push((prob * o.prob, s_m))
+      let s_out = shatter_defender_state(s_m, is_me, mv)
+      result.push((prob * o.prob, s_out))
     }
   }
 }

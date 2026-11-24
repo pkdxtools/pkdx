@@ -27,11 +27,11 @@ test "wall_applies: AuroraVeil on both categories" {
 }
 
 ///|
-test "wall bypass: mold breaker family flags" {
-  assert_true(is_wall_bypass_ability("かたやぶり"))
+test "wall bypass: infiltrator only" {
   assert_true(is_wall_bypass_ability("すりぬけ"))
-  assert_true(is_wall_bypass_ability("ターボブレイズ"))
-  assert_true(is_wall_bypass_ability("テラボルテージ"))
+  assert_true(!is_wall_bypass_ability("かたやぶり"))
+  assert_true(!is_wall_bypass_ability("ターボブレイズ"))
+  assert_true(!is_wall_bypass_ability("テラボルテージ"))
 }
 
 ///|

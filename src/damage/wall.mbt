@@ -3,9 +3,9 @@
 ///
 /// `wall_applies` answers "does this wall affect the current move given its
 /// physicality?" The engine additionally checks `critical`, `screen_pierce`
-/// (move-side bypass) and `is_wall_bypass_ability` (attacker-side bypass)
-/// before multiplying, so this helper stays focused on the wall-kind / move-
-/// kind pairing.
+/// (move-side bypass) and `is_wall_bypass_ability` (すりぬけ) before
+/// multiplying, so this helper stays focused on the wall-kind / move-kind
+/// pairing.
 ///
 /// In the 16-roll loop the multiplier itself is 2048/4096 (= 0.5) in singles
 /// and 2732/4096 (≈ 0.667) in doubles. `round5` is the shared integer
@@ -24,11 +24,11 @@ pub fn wall_applies(wall : @model.Wall, is_physical : Bool) -> Bool {
 
 ///|
 /// Abilities that let the attacker ignore the defender's walls.
-/// Move-side bypass (かわらわり, サイコファング等) is encoded separately via
-/// the `screen_pierce` input flag because it's not an ability.
+///
+/// champout `50e7233` `TOKUSEIINFO_SYN_151` (すりぬけ): ひかりのかべ /
+/// リフレクター / オーロラベールを無視して技を使う。かたやぶり系は特性を
+/// 無視する本文で、壁は書かない。Move-side bypass (かわらわり等) は
+/// `screen_pierce`。
 pub fn is_wall_bypass_ability(ability : String) -> Bool {
-  ability == "かたやぶり" ||
-  ability == "すりぬけ" ||
-  ability == "ターボブレイズ" ||
-  ability == "テラボルテージ"
+  ability == "すりぬけ"
 }

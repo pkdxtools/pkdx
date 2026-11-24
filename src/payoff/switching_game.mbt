@@ -184,6 +184,14 @@ pub(all) struct SwitchingGameState {
   // このターンに成功した守りの種類。0 は無し。ターン末で 0 に戻す。
   my_protect : Int
   opp_protect : Int
+  // 壁の残りターン。0 は無し。交代しても残る。詳細は screen.mbt。
+  // フィールド初期値は 0。完全リテラルは 0 を書き、`{ ..state }` はコピーする。
+  my_reflect : Int
+  opp_reflect : Int
+  my_light : Int
+  opp_light : Int
+  my_aurora : Int
+  opp_aurora : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。
@@ -808,6 +816,7 @@ fn compute_mean_damage(
   def_disguise_intact? : Bool = false,
   atk_flash_fire? : Bool = false,
   def_flash_fire? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> Int {
   weighted_mean_floor(
     compute_damage_variants(
@@ -825,6 +834,7 @@ fn compute_mean_damage(
       def_disguise_intact~,
       atk_flash_fire~,
       def_flash_fire~,
+      wall~,
     ),
   )
 }
@@ -857,6 +867,7 @@ fn compute_damage_variants(
   def_disguise_intact? : Bool = false,
   atk_flash_fire? : Bool = false,
   def_flash_fire? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> Array[@model.DamageOutcome] {
   // Status moves and zero-power moves never deal damage. Mirror the early
   // return in `mean_damage_cached` so the variants pipeline does not invent
@@ -928,6 +939,7 @@ fn compute_damage_variants(
       weather~,
       field~,
       protean_consumed~,
+      wall~,
     ),
   )
   if r.is_immune {

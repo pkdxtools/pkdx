@@ -2,9 +2,7 @@
 /// はやてがえし (WAZAINFO_SYN_918)。相手の選択が priority > 0 の技のときだけ
 /// 成功し、命中すれば既存のひるみ経路でひるむ。priority <= 0 と交代は失敗する。
 ///
-/// まもる などの変化先制はゲート helper だけを見る。Protect は payoff が
-/// 技を止めない (`max_hp_recoil.mbt`) ので、ターン解決で「守って無効」は
-/// 正直にテストできない。
+/// まもる は priority 4 の変化技としてゲートを通る。攻撃を止めるのは protect.mbt。
 
 ///|
 fn uh_move() -> @model.Move {
@@ -37,7 +35,7 @@ test "upper_hand_fails: priority > 0 connects, including a status move" {
   assert_true(!upper_hand_fails(uh, Some(uh_at("でんこうせっか", 1))))
   assert_true(!upper_hand_fails(uh, Some(uh_at("しんそく", 2))))
   assert_true(!upper_hand_fails(uh, Some(uh_at("ねこだまし", 3))))
-  // まもる は変化技だが priority 4。Protect 自体は未モデルなので helper だけ。
+  // まもる は変化技だが priority 4。ゲートは成功側。守って無効にするのは protect.mbt。
   assert_true(!upper_hand_fails(uh, Some(uh_status("まもる", 4))))
   assert_true(upper_hand_fails(uh, Some(uh_at("たいあたり", 0))))
   assert_true(upper_hand_fails(uh, Some(uh_at("トリックルーム", -6))))

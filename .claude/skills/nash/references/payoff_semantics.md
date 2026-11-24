@@ -386,7 +386,7 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
 
 - **消費量**: `max(1, floor(maxHP / 2))`。Showdown は `this.damage(source.baseMaxhp / 2, …)` を `spreadDamage` の `clampIntRange(_, 1)` に通す (`sim/battle.ts:2130`)。`clampIntRange` は `Math.floor` の後に下限 1 を掛ける (`lib/utils.ts:320-326`)。pkdx は `effective_hp` (実効最大 HP) を使う。Mind Blown / Steel Beam の `Math.round(maxhp / 2)` とは丸めが違う (対象外)。
 - **発生する leg**: (a) 外れ (命中判定の失敗。眠りの目覚め枝で技を使って外れた場合も含む: DP は `wake_outs` の `miss = true`、MC は `mc_resolve_attempt` の `missed`)、(b) タイプ / 特性で無効な leg (免疫 leg、`hits_count = 0`)、(c) 吸収 leg (`onTryHit` が null)。どれも Showdown では対象が空になり `trySpreadMoveHit` が false を返すので、`useMove` の `!moveResult` 分岐 (`battle-actions.ts:589-596`) で `MoveFail` (崩れ) が走る。ゴーストへの とびひざげり、じめんへの サンダーダイブ、ちくでん / ひらいしん / でんきエンジン への サンダーダイブ が該当する。吸収 leg では崩れと同時に回復またはランク上昇が起きる (DP は `with_absorb_effects` のあと `with_crash_damage`。MC は `res_immune` で `mc_apply_crash` してから `team_apply_post_hit` が回復する。ダメージ技の吸収は `check_def_immunity` で immune なので、MC は吸収側で二度崩さない)。
-- **発生しない leg**: 命中 (ダメージを与えた leg)、眠り / まひ / 反動による行動不能 (`per_side_attempt` の skip は `SideAttempt.miss = false`)、再使用 (`must_recharge`)。Protect (未モデル) は含まない。
+- **発生しない leg**: 命中 (ダメージを与えた leg)、眠り / まひ / 反動による行動不能 (`per_side_attempt` の skip は `SideAttempt.miss = false`)、再使用 (`must_recharge`)。まもるで防がれた leg は崩れが起きる (`protect_blocked_state`)。
 - **マジックガード**: 消費 0。Showdown `magicguard.onDamage` は `effect.effectType !== 'Move'` で `false` を返す (`data/abilities.ts:2466-2477`)。崩れのエフェクトは `dex.conditions.get('High Jump Kick')` で作られる `Condition` (`effectType` 既定 `'Condition'`、`sim/dex-data.ts:126`) なので対象になる。`ability_blocks_crash_damage` が唯一の判定。ほかの `onDamage` は崩れを防がない: Sturdy / Disguise / Ice Face は `effectType === 'Move'` 限定、Rock Head は `recoil` 限定 (`abilities.ts:3908`)。
 - **ひんし**: 現 HP ≤ 消費量なら HP 0。反動 (recoil) と同じく HP 0 で表現し、交代は既存の瀕死処理に任せる。HP は `clamp_zero`。
 - **行動順**: 崩れは使用者の行動枠で起きる (`MoveFail` は技の最後)。行動の速い側の崩れは相手の行動より前、遅い側は後。DP は `crash_miss_outcomes` で `move_turn_sign` を使い、同速は両順序の平均 (0.5 / 0.5)。切り替え (Switch) は常に先に解決するので、切り替えの相手がいる外れは崩れが後。MC は Step 3 の `own_first` の順に、各 leg の直後で適用する。
@@ -396,7 +396,7 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
 - **MC の実装位置**: 外れ = `mc_resolve_attempt` の 3 番目 (`missed`) → 各 leg 直後の `mc_apply_crash`。免疫 = `team_perform_attack` の 4 番目 (`immune`) → leg 内の `mc_apply_crash`。`team_perform_attack` の戻り値は 4 要素。
 - **既知の差 (DP / MC 共通の既存差分)**: 先の leg で使用者が ひんし になった後、残りの leg の扱いが DP と MC で違う。MC は後の leg を target 生存でゲートする (`own_hps > 0 && opp_hps > 0`)。DP は actor の生存だけを見る (`resolve_moves` の `second_attacker_hps`)。崩れで先行の使用者が ひんし になるケースも、反動による ひんし と同じくこの差分に含まれる。parity テストは相手が行動しない (眠り / 交代) か、後行の使用者が崩れる構成に限っている。
 - **テスト**: `switching_game_crash_wbtest.mbt` (DP: 免疫 / 外れ / マジックガード / 両者外れ / 行動順 / 眠り / 同速の確率質量 など) と `team_monte_carlo_crash_parity_wbtest.mbt` (MC の leg 単位 + DP / MC parity の感度ガード)。
-- **未対応 (open)**: Mind Blown / Steel Beam (DB に無い)、Protect、みがわり、Substitute。
+- **未対応 (open)**: Mind Blown / Steel Beam (DB に無い)、みがわり、Substitute。まもるで防がれた崩れは `protect.mbt`。
 
 ### タイプ / 特性で無効な技 (immune leg) — DP / MC
 
@@ -422,10 +422,23 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
   - 免疫 / 外れ (`MoveFail`): 対象が生存しているとき。対象不在 (`!target` は `battle-actions.ts:525`、`!targets.length` は `:574`) は `MoveFail` (`:591`) に届かず反動なし。外れは `per_side_attempt` の `SideAttempt.miss` (命中判定の外れだけ true。麻痺・睡眠の不発は false。崩れ技と同じフラグを使う)。
   - 行動しない (麻痺・睡眠・反動硬直・ひんし): 技が使われないので反動なし。着弾ターンに眠らされた使用者 (`action_blocked_by_fresh_status`) の外れも同じく反動なしで、眠りの 1 回目が消費される (崩れ技と同じ規則。DP は `miss_self_loss_outcomes` の後攻枝、MC は `*_blocked_mid_turn`)。
 - **マジックガード**: 反動を無効化する。Showdown では `magicguard.onDamage` が `effect.effectType !== 'Move'` で弾き、steelbeam の condition は `effectType: 'Condition'` (`dex-conditions.ts`)。Champions `tokuseiinfo_syn.json:3442` "The Pokémon takes damage only from attacks." と一致。DP は mega 後の実効特性、MC は raw 特性 (MC は mega 未モデル)。
-- **対象外**: Protect / Detect 系 (payoff 層に無い)。Showdown では Protect で `moveResult = false` になり反動は発動する (`moves.ts` の protect `onTryHit` が `NOT_FAIL` (= `''`) を返し、`hitStepTryHitEvent` (`battle-actions.ts:705-713`) で対象が落ちる)。Champions 側の文言は沈黙 (SILENT) のため、Protect を実装するときに同じ扱いにする。
+- **まもる**: 防がれた命中は対象が生存していれば反動する (`protect_blocked_state`)。Showdown では Protect で `moveResult = false` になり反動は発動する (`moves.ts` の protect `onTryHit` が `NOT_FAIL` (= `''`) を返し、`hitStepTryHitEvent` (`battle-actions.ts:705-713`) で対象が落ちる)。Champions の技説明は反動に触れないので、この Showdown の扱いを採る。
 - **順序**: 反動は使用者の leg の位置 (行動順) で適用する。DP は崩れ技と同じ `miss_self_loss_outcomes` (`switching_game_crash.mbt`) が外れ leg を行動順に挿入し、同速は両順序を 0.5 ずつ平均する。両者とも外した場合、崩れ技同士は順序に依らないが、反動は対象の生死を見るため両 leg を行動順に解決する (先に倒れた側には反動が入らない)。MC は `team_rollout` Step 3 の各 leg (`own_missed` / `opp_missed` → `mc_apply_miss_self_loss`)。
 - **自己 KO**: HP は 0 床でクランプ。反動は実ダメージ適用の後 (対象の KO が先) に入る。MC は all-KO で即 return する既存 leg と同じ扱い。
 - **参照テスト**: `src/payoff/switching_game_max_hp_recoil_wbtest.mbt` (DP: 命中・奇数丸め・感度・マジックガード・自己 KO・対象不在・免疫・外れの順序・外れ確率・`miss` フラグ)、`src/payoff/switching_game_miss_self_loss_wbtest.mbt` (DP: 崩れ技とてっていこうせんの同時外し・両者外しの行動順・同速の平均・着弾ターンの眠り)、`src/payoff/team_monte_carlo_max_hp_recoil_parity_wbtest.mbt` (MC leg 単位・ばけのかわ・`mc_resolve_attempt` の `missed`・DP/MC 値の parity・着弾ターンの眠り parity)、`src/damage/steelbeam_flags_test.mbt` (メガランチャー対象外・フラグ)、`src/migrate/m016_steelbeam_test.mbt` (データ)。
+
+### まもる系 (Protect) — DP / MC
+
+シングルの全身ガードだけ。`src/payoff/protect.mbt`。champout `50e7233` の `available = 1`。
+
+- **技**: まもる (`WAZAINFO_SYN_182`) / みきり (`_197`) は技を防ぐ。キングシールド (`_588`) は攻撃を防ぎ、接触で攻撃 -1。ニードルガード (`_596`) は技を防ぎ、接触で最大 HP の 1/8。トーチカ (`_661`) は技を防ぎ、接触でどく。優先度は `waza.json` の +4。行動順は既存の実効優先度。
+- **連続成功率**: 本文「連続で使うと成功率が前に使った時の１／３」。初回は連続ではないので確率 1 の 1 枚 (分岐を作らない)。次は 1/3、1/9、…。下限 1/729 は本文に無い。Showdown `conditions.ts` の stall (`counterMax` 729) で止める。失敗・不使用・自分の交代で 0。相手の交代では残す。
+- **解除と貫通**: フェイント (`_364`) とゴーストダイブの解放 (`_566`) は守りを解除して当たる。接触の追加効果は出さない。なみだめ (`_715`) は無視して当たり、本文は解除と書かないので旗は残す。ふかしのこぶし (`TOKUSEIINFO_SYN_260`) とかんつうドリル (`_311`) は接触ダメージを 1/4 にし、守りの追加効果は残す。1/4 の丸めは本文に無い。`round5(_, 1024)`。えんかく (`_203`) は接触ではない。
+- **防いだ技**: ダメージと技の追加効果は無い。プロテアン、自爆、崩れ、てっていこうせん (対象が生存しているとき) は残る。
+- **行動前の順**: ひるみ、メロメロ、こんらん、まひ、命中のあとに技が解決する。まもるは行動できたときだけ成功する。バインドは行動を止めない。2ターン技の溜めは攻撃ではない。ゴーストダイブの姿隠し中は当たらず、解放だけ守るを貫通する。
+- **サイコフィールド**: まもる系は自分対象なので、優先度 > 0 の無効より前に解決する。他の優先度技は従来どおり。
+- **状態**: `my_stall` / `opp_stall` と `my_protect` / `opp_protect`。旗はターン末で 0。全部 0 のとき `settle_protect` は同じ state を返す。まもる系が選択肢に無い入力は、この分岐にも確率の加算順の変更にも入らない。
+- **入れない**: `available = 0` のブロッキング、スレッドトラップ、かえんのまもり、シャドーダイブ、ハイパードリル、パワフルエッジ、たたみがえし、トリックガード。パワフルハーブは itemname に無い。こらえるは同じ 1/3 文だが攻撃を無効にしない。ワイドガード / ファストガード / サイドチェンジはダブル。くちばしキャノン、キングシールドのシールドフォルム、Showdown の「最後に行動したまもるは失敗」は入れない。
 
 ### ねむり (Champions 規則) — DP / MC
 
@@ -703,7 +716,7 @@ Showdown との差 (意図的):
 - 交代不可: `alive_actions` の `can_switch`。バインド 0 は既定 true で行動列は同じ。ひんしの強制交代は残す。きれいなぬけがら (`ITEMINFO_SYN_295`) と にげあし (`TOKUSEIINFO_SYN_050`) は「交代を邪魔する効果を無視して交代できる」。ゴーストはバインド本文に無い。`help_10_05_00` はにげられない状態だけ "Ghost-type Pokémon are unaffected"。Showdown `tryTrap` は partiallytrapped でもゴーストを捕えないので、交代だけ許可しダメージは入れる。判定はメガ後のタイプ・特性と Protean ロック。MC はメガ未モデル。
 - マジックガード (`TOKUSEIINFO_SYN_098`): ダメージ 0、カウンタは減る、交代不可は残る。DP はメガ後の特性、MC は raw。
 - 状態: `my_bind` / `opp_bind`。残りの EOT 回数。控えには残さない。MC は付与が成立したときだけ `rng.int(limit=2)` を 1 回引く。
-- 対象外: ダブルの付与元、こうそくスピン / キラースピン、みがわり、まもる、かげふみ、にげられない状態そのもの、水中状態。
+- 対象外: ダブルの付与元、こうそくスピン / キラースピン、みがわり、かげふみ、にげられない状態そのもの、水中状態。まもるはバインドを解除しない。バインドもまもるの行動を止めない (`protect.mbt`)。ダメージと交代不可は従来どおり。
 
 ### こだわりスカーフ (Choice Scarf) — DP / MC
 
@@ -751,7 +764,7 @@ Showdown との差 (意図的):
 - 「about to use」/「使っていない」はロックした選択を見る。その後にひるみ・眠り・まひ・リチャージで打てなくても、選択の実効優先度 > 0 なら成功する。交代は先制攻撃ではない。
 - 「priority attack」/「先制できる攻撃」は選択技の実効優先度 > 0。変化の先制 (まもる +4、みきり +4、ファストガード +3、ねこだまし +3) を含む。本文の attack / 攻撃は説明文の言い方で、カテゴリでは切らない。特性が優先度を上げた技 (次節) も先制できる。サイコフィールドが後から相手の先制技を無効にしても、ゲートは選択時点の実効優先度を見る (本文は地形に触れない)。はやてがえし 自身は priority 3 なので、地上の相手への自分の技は既存のサイコフィールド無効 (G-3) のまま。
 - 現在の Showdown (`data/moves.ts` の `upperhand.onTry`) は `priority <= 0.1` に加え `category === 'Status'` でも失敗する。整数の priority では `<= 0` と同じ閾値だが、変化技の除外は Champions 本文に無く、本実装は入れない。`queue.willMove` がロックした選択を見る点は同じ。PP は Showdown が 15、champout が 16。move 行は変えない。Showdown は gen>5 で行動の `move.priority` に特性補正を書き戻してからこのゲートを見る。本実装も実効優先度を見るが、Status 除外はコピーしない。そのためいたずらごころのでんじは (base 0、実効 +1、変化) にははやてがえしが成功する。Showdown は Status で失敗する。
-- 未モデル: であいがしら は fresh の失敗ゲート (前節) で、この priority ゲートの対象外。まもる は payoff が技を止めないので、ターン解決では「守って無効」をテストしない (helper が priority 4 の変化技を成功側と判定するだけ)。カウンター / ミラーコート / メタルバーストの `compute_p_slow` は相手技の `Move.priority` のまま (特性補正は見ていない)。優先度特性そのものは次節。
+- 未モデル: であいがしら は fresh の失敗ゲート (前節) で、この priority ゲートの対象外。まもる は priority 4 の変化技としてこのゲートを通る。ターン解決で攻撃を止めるのは `protect.mbt`。カウンター / ミラーコート / メタルバーストの `compute_p_slow` は相手技の `Move.priority` のまま (特性補正は見ていない)。優先度特性そのものは次節。
 - select は DB から priority も `flinch_chance` も埋めない。入力 JSON が正。名前が はやてがえし でも、入力の `flinch_chance` が 0 ならひるまない。既存の select 入力にこの技は無く、行列は変わらない。
 - 参照テスト: `src/payoff/switching_game_upper_hand_wbtest.mbt`、`src/migrate/m021_upper_hand_test.mbt`、`src/payoff/priority_abilities_wbtest.mbt`。
 
@@ -776,13 +789,13 @@ Showdown との差 (意図的):
 
 - 実効特性がいたずらごころの変化技で、相手に効くペイロードを持ち、相手の実効タイプ (メガ後 + へんげんじざいのロック。テラスタルは既存どおりタイプを置き換えない) の type1 か type2 が `あく` のとき、技全体が無効 (サイコフィールド / はやてがえし失敗と同じ no-effect leaf)。
 - 相手に効くペイロード: `status_effect` がある、`stat_effects` の `target != 0` がある、`healing` が `LeechSeed` か `PainSplit`。
-- 自分対象だけ (つるぎのまい の target 0)、天候、フィールド、ペイロードの無い変化技 (まもる 等、効果自体が未モデル) は失敗させない。「には」は相手のあくポケモンに対して効かない、という意味に読んだ。
+- 自分対象だけ (つるぎのまい の target 0)、天候、フィールド、相手へのペイロードが無い変化技 (まもる系の効果は `protect.mbt`。あく無効の対象ではない) は失敗させない。「には」は相手のあくポケモンに対して効かない、という意味に読んだ。
 - Showdown (`battle-actions.ts` `hitStepTryImmunity`, gen>=7) は `pranksterBoosted` かつ使用者に prankster かつ対象が味方でなく `getImmunity('prankster')` が無い (あく) ときに失敗する。自分対象は ally なので通る。この範囲は本文と一致する。未モデルの変化技まで Dark 免疫を広げる材料は本文に無いので、上のペイロードに限る。
 
 **サイコフィールド** (既存 G-3 を実効優先度に差し替えただけ):
 
 - 実効優先度 > 0 の技は、地上の相手には止まる。満タンのはやてのつばさのひこう技、いたずらごころの変化技を含む。priority 0 のままのひこう技は止まらない。ひこうタイプの相手は grounded でないので止まらない。
-- 既存の限界はそのまま: 自分対象の priority>0 (つるぎのまい) も地上相手がいると止まる。Showdown は自分対象を除外する。target をモデル化するまで絞らない。
+- まもる系は自分対象なので、このゲートの前に解決する (`protect.mbt`)。それ以外の自分対象 priority>0 (つるぎのまい) は地上相手がいると止まる。Showdown は自分対象を除外する。target をモデル化するまで、まもる系以外は絞らない。
 
 **見送り**:
 

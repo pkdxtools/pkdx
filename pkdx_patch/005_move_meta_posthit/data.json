@@ -35,6 +35,8 @@
   { "name": "ブラストバーン", "priority": 0, "stat_effects": [], "recharge": true },
   { "name": "ハイドロカノン", "priority": 0, "stat_effects": [], "recharge": true },
   { "name": "ハードプラント", "priority": 0, "stat_effects": [], "recharge": true },
+  { "name": "がんせきほう", "priority": 0, "stat_effects": [], "recharge": true },
+  { "name": "スターアサルト", "priority": 0, "stat_effects": [], "recharge": true },
 
   { "name": "しんそく", "priority": 2, "stat_effects": [] },
   { "name": "であいがしら", "priority": 2, "stat_effects": [] },

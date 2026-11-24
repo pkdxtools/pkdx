@@ -88,6 +88,8 @@ fn pl_parity_state(
     opp_bind: 0,
     my_choice: -1,
     opp_choice: -1,
+    my_two_turn: -1,
+    opp_two_turn: -1,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: Array::make(my_team.length(), 0),

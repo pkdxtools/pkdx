@@ -35,6 +35,9 @@ fn best_expected_damage(
   atk_max_hp? : Int = 0,
   atk_flash_fire? : Bool = false,
   only_move? : Int = -1,
+  def_reflect? : Int = 0,
+  def_light? : Int = 0,
+  def_aurora? : Int = 0,
 ) -> Double {
   // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
   // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
@@ -89,6 +92,9 @@ fn best_expected_damage(
       @model.Status => 0
     }
     let atk_for_calc = attacker_for_flash_fire(atk_eff, mv, weather, atk_flash_fire)
+    let hit_wall = screen_wall(
+      def_reflect, def_light, def_aurora, mv.category, atk.ability, mv.name,
+    )
     let r = @damage.calc_damage(
       build_input_with_ranks(
         atk_for_calc,
@@ -99,6 +105,7 @@ fn best_expected_damage(
         weather~,
         field~,
         protean_consumed=atk_consumed,
+        wall=hit_wall,
       ),
     )
     // ばけのかわ (Disguise) greedy コヒーレンス: defender が intact な ばけのかわ
@@ -180,6 +187,9 @@ fn greedy_team_action(
   can_switch? : Bool = true,
   choice_lock? : Int = -1,
   two_turn_lock? : Int = -1,
+  def_reflect? : Int = 0,
+  def_light? : Int = 0,
+  def_aurora? : Int = 0,
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -234,6 +244,9 @@ fn greedy_team_action(
         atk_hp=my_hps[s],
         atk_max_hp=my_team[s].pokemon.hp,
         atk_flash_fire=flash_fire_lit(my_flash_fire, s),
+        def_reflect~,
+        def_light~,
+        def_aurora~,
       )
       if score > best_score {
         best_score = score
@@ -313,6 +326,9 @@ fn greedy_team_action(
         atk_max_hp=my_team[active].pokemon.hp,
         atk_flash_fire=flash_fire_lit(my_flash_fire, active),
         only_move=choice_lock,
+        def_reflect~,
+        def_light~,
+        def_aurora~,
       )
     } else {
       0.0
@@ -338,6 +354,9 @@ fn greedy_team_action(
           atk_hp=my_hps[s],
           atk_max_hp=my_team[s].pokemon.hp,
           atk_flash_fire=flash_fire_lit(my_flash_fire, s),
+          def_reflect~,
+          def_light~,
+          def_aurora~,
         ) /
         opp_hp_denom
       if v > best_switch_value {
@@ -418,6 +437,9 @@ fn greedy_team_action(
       atk_hp=my_hps[active],
       atk_max_hp=my_team[active].pokemon.hp,
       atk_flash_fire=flash_fire_lit(my_flash_fire, active),
+      def_reflect~,
+      def_light~,
+      def_aurora~,
     ) /
     opp_hp_denom
   let mut best_switch = -1
@@ -440,6 +462,9 @@ fn greedy_team_action(
         atk_hp=my_hps[s],
         atk_max_hp=my_team[s].pokemon.hp,
         atk_flash_fire=flash_fire_lit(my_flash_fire, s),
+        def_reflect~,
+        def_light~,
+        def_aurora~,
       ) /
       opp_hp_denom
     if v > best_switch_value {
@@ -467,6 +492,9 @@ fn greedy_team_action(
       atk_hp=my_hps[active],
       atk_max_hp=my_team[active].pokemon.hp,
       atk_flash_fire=flash_fire_lit(my_flash_fire, active),
+      def_reflect~,
+      def_light~,
+      def_aurora~,
     ) {
     Some(i) => Some(TmUseMove(i))
     None => Some(TmUseMove(0))
@@ -865,10 +893,31 @@ fn team_perform_attack(
   contact_hps? : Array[Int] = [],
   contact_status? : Array[@model.StatusCondition] = [],
   contact_slot? : Int = 0,
+  attacker_is_own? : Bool = true,
+  screen_io? : Array[Int] = [],
 ) -> (Int, Int, Bool, Bool) {
   // まもる自体。バッファを渡したときだけ stall を進める。渡さない既存呼び出しは従来の return。
   if protect_io.length() >= 2 && is_protect_move(mv.name) {
     mc_commit_protect(mv.name, protect_io, rng)
+    return (defender_hp, 0, false, false)
+  }
+  // 壁を張る技。長さ 6 のバッファを渡したときだけ。まもるで防がれたときは張らない。
+  // オーロラベールはゆき以外では張らない。
+  if mc_screen_ok(screen_io) && is_screen_move(mv.name) {
+    if defender_guard != 0 {
+      match protect_interaction(defender_guard, mv, attacker.ability) {
+        PvBlock => return (defender_hp, 0, false, true)
+        _ => ()
+      }
+    }
+    if !(mv.name == "オーロラベール" && weather != @model.Weather::Snow) {
+      mc_set_screen(
+        screen_io,
+        attacker_is_own,
+        screen_kind(mv.name),
+        screen_duration(attacker.item),
+      )
+    }
     return (defender_hp, 0, false, false)
   }
   if mv.power <= 0 {
@@ -876,6 +925,10 @@ fn team_perform_attack(
     // applies `stat_effects` (with opp_alive gating) via
     // `team_apply_post_hit` so both branches share one resolver. ばけのかわ は
     // 変化技では剥がれず chip も無い (dmg_for_effects=0, busted=false)。
+    // きりばらいなど威力 0 の壁破壊。バッファが無いときは no-op。
+    if breaks_screens(mv.name) {
+      mc_clear_defender(screen_io, attacker_is_own)
+    }
     return (defender_hp, 0, false, false)
   }
   // track_two_turn が false のときはここを通らない。溜めと姿隠しの外れは rng を消費しない。
@@ -916,6 +969,21 @@ fn team_perform_attack(
       PvBreak | PvThrough => ()
     }
   }
+  // 命中前に割る。まもるで防がれたときは上で return している。
+  if breaks_screens(mv.name) {
+    mc_clear_defender(screen_io, attacker_is_own)
+  }
+  let (def_reflect, def_light, def_aurora) = mc_defender_turns(
+    screen_io, attacker_is_own,
+  )
+  let hit_wall = screen_wall(
+    def_reflect,
+    def_light,
+    def_aurora,
+    mv.category,
+    attacker.ability,
+    mv.name,
+  )
   let atk_rank = match mv.category {
     @model.Physical => atk_ranks[0]
     @model.Special => atk_ranks[2]
@@ -955,6 +1023,7 @@ fn team_perform_attack(
       weather~,
       field~,
       protean_consumed=atk_consumed,
+      wall=hit_wall,
     ),
   )
   if r.is_immune {
@@ -1710,6 +1779,8 @@ pub fn team_rollout(
   // 同じ slot-bound・戦闘持続 semantics (交代で回復しない)。Switch arm ではリセットしない。
   let own_item_consumed : Array[Bool] = Array::make(own.length(), false)
   let opp_item_consumed : Array[Bool] = Array::make(opp.length(), false)
+  // 壁。0..2 が自分、3..5 が相手。交代では消さない。
+  let screen_buf : Array[Int] = [0, 0, 0, 0, 0, 0]
   let mut own_active = 0
   let mut opp_active = 0
   // こんらんは場のアクティブだけ。交代で 0。控えには残さない。
@@ -1812,6 +1883,9 @@ pub fn team_rollout(
         own_choice,
       ),
       two_turn_lock=own_two_buf[0],
+      def_reflect=screen_buf[3],
+      def_light=screen_buf[4],
+      def_aurora=screen_buf[5],
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -1846,6 +1920,9 @@ pub fn team_rollout(
         opp_choice,
       ),
       two_turn_lock=opp_two_buf[0],
+      def_reflect=screen_buf[0],
+      def_light=screen_buf[1],
+      def_aurora=screen_buf[2],
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
@@ -2462,6 +2539,8 @@ pub fn team_rollout(
                 contact_hps=own_hps,
                 contact_status=own_status,
                 contact_slot=own_active,
+                attacker_is_own=true,
+                screen_io=screen_buf,
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2558,6 +2637,9 @@ pub fn team_rollout(
               }
             }
             if own_missed && own_hps[own_active] > 0 {
+              if breaks_screens(mv_own.name) {
+                mc_clear_defender(screen_buf, true)
+              }
               record_protean_lock(
                 own_protean_locked,
                 own_active,
@@ -2698,6 +2780,8 @@ pub fn team_rollout(
                 contact_hps=opp_hps,
                 contact_status=opp_status,
                 contact_slot=opp_active,
+                attacker_is_own=false,
+                screen_io=screen_buf,
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2771,6 +2855,9 @@ pub fn team_rollout(
               }
             }
             if opp_missed && opp_hps[opp_active] > 0 && !opp_blocked_mid_turn {
+              if breaks_screens(mv_opp.name) {
+                mc_clear_defender(screen_buf, false)
+              }
               record_protean_lock(
                 opp_protean_locked,
                 opp_active,
@@ -2903,6 +2990,8 @@ pub fn team_rollout(
                 contact_hps=opp_hps,
                 contact_status=opp_status,
                 contact_slot=opp_active,
+                attacker_is_own=false,
+                screen_io=screen_buf,
               )
               own_hps[own_active] = res_hp
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -2999,6 +3088,9 @@ pub fn team_rollout(
               }
             }
             if opp_missed && opp_hps[opp_active] > 0 {
+              if breaks_screens(mv_opp.name) {
+                mc_clear_defender(screen_buf, false)
+              }
               record_protean_lock(
                 opp_protean_locked,
                 opp_active,
@@ -3137,6 +3229,8 @@ pub fn team_rollout(
                 contact_hps=own_hps,
                 contact_status=own_status,
                 contact_slot=own_active,
+                attacker_is_own=true,
+                screen_io=screen_buf,
               )
               opp_hps[opp_active] = res_hp
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3210,6 +3304,9 @@ pub fn team_rollout(
               }
             }
             if own_missed && own_hps[own_active] > 0 && !own_blocked_mid_turn {
+              if breaks_screens(mv_own.name) {
+                mc_clear_defender(screen_buf, true)
+              }
               record_protean_lock(
                 own_protean_locked,
                 own_active,
@@ -3304,6 +3401,8 @@ pub fn team_rollout(
               contact_hps=own_hps,
               contact_status=own_status,
               contact_slot=own_active,
+              attacker_is_own=true,
+              screen_io=screen_buf,
             )
             opp_hps[opp_active] = res_hp
             mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3377,6 +3476,9 @@ pub fn team_rollout(
             }
           }
           if own_missed && own_hps[own_active] > 0 {
+            if breaks_screens(mv_own.name) {
+              mc_clear_defender(screen_buf, true)
+            }
             record_protean_lock(
               own_protean_locked,
               own_active,
@@ -3470,6 +3572,8 @@ pub fn team_rollout(
               contact_hps=opp_hps,
               contact_status=opp_status,
               contact_slot=opp_active,
+              attacker_is_own=false,
+              screen_io=screen_buf,
             )
             own_hps[own_active] = res_hp
             mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
@@ -3543,6 +3647,9 @@ pub fn team_rollout(
             }
           }
           if opp_missed && opp_hps[opp_active] > 0 {
+            if breaks_screens(mv_opp.name) {
+              mc_clear_defender(screen_buf, false)
+            }
             record_protean_lock(
               opp_protean_locked,
               opp_active,
@@ -3853,6 +3960,8 @@ pub fn team_rollout(
             field_turns_state[0] = dec
           }
         }
+        // 壁は天候・フィールドのあと。0 のときは関数内で何もしない。
+        mc_tick_screens(screen_buf)
         // しろいハーブ: 残り HP 処理 (Showdown onResidual)。EOT はランクを変えないので
         // 実到達では no-op。DP の apply_eot と同じ判定点を置く。
         apply_held_item_stat_reset_pair(

@@ -60,6 +60,9 @@ pub(all) struct DamageKey {
   // 炎技が無い入力では計算結果が従来と一致する。
   atk_flash_fire : Bool
   def_flash_fire : Bool
+  // 0 = 壁なし。壁がある計算と無い計算を同じキーに載せない。
+  // 0 のときダメージ式は壁なしと同じ経路。
+  wall_id : Int
 } derive(Eq, Hash)
 
 ///|
@@ -174,6 +177,7 @@ fn combatant_to_cache_key_input(
   field? : @model.Field = @model.Field::None,
   atk_protean_locked? : String = "",
   def_protean_locked? : String = "",
+  wall_label? : String = "",
 ) -> @damage_cache.CacheKeyInput {
   let input = build_input_with_ranks(
     atk,
@@ -239,7 +243,8 @@ fn combatant_to_cache_key_input(
     fainted_count: 0,
     // rev2: payoff never varies any of these. Defaults keep pre-rev2 cache
     // semantics for disk entries recomputed under the extended key.
-    wall: "",
+    // 壁なしは "" のまま。ラベルを足すのは壁があるときだけ。
+    wall: wall_label,
     screen_pierce: false,
     atk_status: "",
     def_status: "",
@@ -308,6 +313,7 @@ fn mean_damage_via_disk(
   def_protean_locked? : String = "",
   atk_flash_fire? : Bool = false,
   def_flash_fire? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> Int {
   // 反射技は L2 disk を経由しない。@damage.calc_damage に incoming=None で
   // 渡すと反射 fallback が走り 0 ダメージの JSON が書き込まれてしまうため、
@@ -346,6 +352,7 @@ fn mean_damage_via_disk(
         protean_consumed~,
         atk_flash_fire~,
         def_flash_fire~,
+        wall~,
       )
   }
   let key_input = combatant_to_cache_key_input(
@@ -358,6 +365,7 @@ fn mean_damage_via_disk(
     field~,
     atk_protean_locked~,
     def_protean_locked~,
+    wall_label=wall_cache_label(wall),
   )
   let key = match @damage_cache.build_cache_key(key_input) {
     Ok(k) => k
@@ -374,6 +382,7 @@ fn mean_damage_via_disk(
         protean_consumed~,
         atk_flash_fire~,
         def_flash_fire~,
+        wall~,
       )
   }
   match @damage_cache.get(disk, key) {
@@ -401,6 +410,7 @@ fn mean_damage_via_disk(
             weather~,
             field~,
             protean_consumed~,
+            wall~,
           )
         }
       }
@@ -418,6 +428,7 @@ fn mean_damage_via_disk(
         weather~,
         field~,
         protean_consumed~,
+        wall~,
       )
     }
   }
@@ -445,6 +456,7 @@ fn compute_and_populate_disk(
   weather? : @model.Weather = @model.Weather::None,
   field? : @model.Field = @model.Field::None,
   protean_consumed? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> Int {
   let input = build_input_with_ranks(
     attacker,
@@ -455,6 +467,7 @@ fn compute_and_populate_disk(
     weather~,
     field~,
     protean_consumed~,
+    wall~,
   )
   let r = @damage.calc_damage(input)
   let json_format = @cli.parse_output_format("json")
@@ -500,6 +513,7 @@ fn prepare_damage_lookup(
   def_disguise_intact? : Bool = false,
   atk_flash_fire? : Bool = false,
   def_flash_fire? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> (Bool, DamageKey, Combatant, Combatant, @model.Move) {
   let raw_attacker_full = if my_attacker {
     my_team[atk_idx]
@@ -548,6 +562,7 @@ fn prepare_damage_lookup(
       def_disguise_intact,
       atk_flash_fire,
       def_flash_fire,
+      wall_id: wall_id(wall),
     }
     return (true, dummy_key, raw_attacker, raw_defender, mv)
   }
@@ -580,6 +595,7 @@ fn prepare_damage_lookup(
     def_disguise_intact,
     atk_flash_fire,
     def_flash_fire,
+    wall_id: wall_id(wall),
   }
   (false, key, raw_attacker, raw_defender, mv)
 }
@@ -769,6 +785,7 @@ fn damage_variants_cached(
   def_disguise_intact? : Bool = false,
   atk_flash_fire? : Bool = false,
   def_flash_fire? : Bool = false,
+  wall? : @model.Wall = @model.Wall::NoWall,
 ) -> Array[@model.DamageOutcome] {
   let (early, key, raw_attacker, raw_defender, mv) = prepare_damage_lookup(
     my_attacker,
@@ -791,6 +808,7 @@ fn damage_variants_cached(
     def_disguise_intact~,
     atk_flash_fire~,
     def_flash_fire~,
+    wall~,
   )
   if early {
     return [{ probability: 1.0, mean_damage: 0, hits_count: 1, hit_steps: [] }]
@@ -833,6 +851,7 @@ fn damage_variants_cached(
         def_disguise_intact~,
         atk_flash_fire~,
         def_flash_fire~,
+        wall~,
       )
       cache.variants_data[key] = v
       // Touch the L2 disk cache so cross-session damage entries stay
@@ -866,6 +885,7 @@ fn damage_variants_cached(
               def_protean_locked~,
               atk_flash_fire~,
               def_flash_fire~,
+              wall~,
             )
           }
           None => ()

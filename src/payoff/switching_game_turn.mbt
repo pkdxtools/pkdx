@@ -402,7 +402,8 @@ fn resolve_pending_after_flinch(
       } else {
         s_o
       }
-      result.push((o.prob, s_m))
+      // 壊す技の外れ。壁が無いときは同じ state。
+      result.push((o.prob, shatter_defender_state(s_m, is_me, mv)))
     }
   }
   result
@@ -456,6 +457,13 @@ priv struct TurnWorkspace {
   opp_stall : Int
   my_protect : Int
   opp_protect : Int
+  // 壁の残りターン。ws round-trip で落とさない。0 は無し。
+  my_reflect : Int
+  opp_reflect : Int
+  my_light : Int
+  opp_light : Int
+  my_aurora : Int
+  opp_aurora : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -524,6 +532,12 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_stall: state.opp_stall,
     my_protect: state.my_protect,
     opp_protect: state.opp_protect,
+    my_reflect: state.my_reflect,
+    opp_reflect: state.opp_reflect,
+    my_light: state.my_light,
+    opp_light: state.opp_light,
+    my_aurora: state.my_aurora,
+    opp_aurora: state.opp_aurora,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -583,6 +597,12 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_stall: ws.opp_stall,
     my_protect: ws.my_protect,
     opp_protect: ws.opp_protect,
+    my_reflect: ws.my_reflect,
+    opp_reflect: ws.opp_reflect,
+    my_light: ws.my_light,
+    opp_light: ws.opp_light,
+    my_aurora: ws.my_aurora,
+    opp_aurora: ws.opp_aurora,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -897,6 +917,30 @@ fn resolve_attacker_leg(
       PvBreak | PvThrough => ()
     }
   }
+  // 壁を張る技だけ。まもるで防がれたときは上で return している。
+  if is_screen_move(attacker_move.name) {
+    return screen_use_outcomes(
+      pre_damage_state,
+      attacker_is_me,
+      attacker_active,
+      attacker_team,
+      attacker_move,
+      atk_consumed,
+    )
+  }
+  // 壊す技で受け側に壁があるときだけ割る。無いときは同じ workspace / state。
+  let screen_broken = breaks_screens(attacker_move.name) &&
+    defender_has_screen(ws, attacker_is_me)
+  let ws_hit = if screen_broken {
+    clear_defender_screens_ws(ws, attacker_is_me)
+  } else {
+    ws
+  }
+  let hit_state = if screen_broken {
+    ws_to_state(ws_hit, bump_turn=false)
+  } else {
+    pre_damage_state
+  }
   // Protean/Libero: 攻撃側スロットの type は変化後タイプ (attacker STAB) に、
   // 被弾側スロットの type は変化後タイプ (防御相性) に override する。攻撃側の
   // 配列は attacker_is_me で決まり、被弾側はその逆。index は active スロット。
@@ -937,6 +981,19 @@ fn resolve_attacker_leg(
     attacker_active,
     defender_active,
   )
+  let (def_reflect, def_light, def_aurora) = if attacker_is_me {
+    (ws_hit.opp_reflect, ws_hit.opp_light, ws_hit.opp_aurora)
+  } else {
+    (ws_hit.my_reflect, ws_hit.my_light, ws_hit.my_aurora)
+  }
+  let hit_wall = screen_wall(
+    def_reflect,
+    def_light,
+    def_aurora,
+    attacker_move.category,
+    effective_combatant(atk_c, atk_is_mega).ability,
+    attacker_move.name,
+  )
   let outcomes_raw = damage_variants_cached(
     dmg_cache,
     attacker_is_me,
@@ -959,6 +1016,7 @@ fn resolve_attacker_leg(
     def_disguise_intact~,
     atk_flash_fire~,
     def_flash_fire~,
+    wall=hit_wall,
   )
   let scaled = scale_two_turn_outcomes(
     outcomes_raw, attacker_move.name, ws.weather, tt_def_name,
@@ -969,7 +1027,7 @@ fn resolve_attacker_leg(
     scaled
   }
   let leaves = apply_damage_variants_fanout(
-    pre_damage_state,
+    hit_state,
     outcomes,
     attacker_is_me~,
     attacker_active~,
@@ -1204,6 +1262,12 @@ fn clone_state(
     opp_stall: state.opp_stall,
     my_protect: state.my_protect,
     opp_protect: state.opp_protect,
+    my_reflect: state.my_reflect,
+    opp_reflect: state.opp_reflect,
+    my_light: state.my_light,
+    opp_light: state.opp_light,
+    my_aurora: state.my_aurora,
+    opp_aurora: state.opp_aurora,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1780,6 +1844,12 @@ pub fn transition_with_cache(
           opp_stall: stall_after_switch(state.opp_stall, opp_action),
           my_protect: 0,
           opp_protect: 0,
+          my_reflect: state.my_reflect,
+          opp_reflect: state.opp_reflect,
+          my_light: state.my_light,
+          opp_light: state.opp_light,
+          my_aurora: state.my_aurora,
+          opp_aurora: state.opp_aurora,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1852,6 +1922,12 @@ pub fn transition_with_cache(
     opp_stall: stall_after_switch(state.opp_stall, opp_action),
     my_protect: 0,
     opp_protect: 0,
+    my_reflect: state.my_reflect,
+    opp_reflect: state.opp_reflect,
+    my_light: state.my_light,
+    opp_light: state.opp_light,
+    my_aurora: state.my_aurora,
+    opp_aurora: state.opp_aurora,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2336,6 +2412,12 @@ fn pass_turn_state(
     opp_stall: state.opp_stall,
     my_protect: state.my_protect,
     opp_protect: state.opp_protect,
+    my_reflect: state.my_reflect,
+    opp_reflect: state.opp_reflect,
+    my_light: state.my_light,
+    opp_light: state.opp_light,
+    my_aurora: state.my_aurora,
+    opp_aurora: state.opp_aurora,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2633,6 +2715,12 @@ pub fn attempt_turn_with_cache(
         opp_stall: state.opp_stall,
         my_protect: state.my_protect,
         opp_protect: state.opp_protect,
+        my_reflect: state.my_reflect,
+        opp_reflect: state.opp_reflect,
+        my_light: state.my_light,
+        opp_light: state.opp_light,
+        my_aurora: state.my_aurora,
+        opp_aurora: state.opp_aurora,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -2820,6 +2908,57 @@ fn partial_act_with_miss_protean(
   match missed_move_of(idle, idle_team, idle_active) {
     None => act(state)
     Some(mv) => {
+      // 壁が無い、または壊す技でないときは下の既存の Protean 経路のまま。
+      if breaks_screens(mv.name) &&
+        state_defender_has_screen(state, idle_is_me) {
+        let pre = fn(s : SwitchingGameState) -> SwitchingGameState {
+          let typed = if protean_miss_would_lock(
+            s, idle_is_me, idle_active, idle_team, mv,
+          ) {
+            with_protean_on_use_state(s, idle_is_me, idle_active, idle_team, mv)
+          } else {
+            s
+          }
+          shatter_defender_state(typed, idle_is_me, mv)
+        }
+        let post = fn(outs : Array[(Double, SwitchingGameState)]) -> Array[(Double, SwitchingGameState)] {
+          let next : Array[(Double, SwitchingGameState)] = []
+          for out in outs {
+            let typed = if protean_miss_would_lock(
+              out.1, idle_is_me, idle_active, idle_team, mv,
+            ) {
+              with_protean_on_use_state(
+                out.1, idle_is_me, idle_active, idle_team, mv,
+              )
+            } else {
+              out.1
+            }
+            next.push((out.0, shatter_defender_state(typed, idle_is_me, mv)))
+          }
+          next
+        }
+        let missed_first = match actor_action {
+          Switch(_) => -1
+          _ => {
+            let sign = attempt_turn_sign(state, ma, oa, my_team, opp_team)
+            if idle_is_me { sign } else { -sign }
+          }
+        }
+        if missed_first > 0 {
+          return act(pre(state))
+        }
+        if missed_first < 0 {
+          return post(act(state))
+        }
+        let outs : Array[(Double, SwitchingGameState)] = []
+        for x in act(pre(state)) {
+          outs.push((0.5 * x.0, x.1))
+        }
+        for x in post(act(state)) {
+          outs.push((0.5 * x.0, x.1))
+        }
+        return outs
+      }
       if !protean_miss_would_lock(
         state, idle_is_me, idle_active, idle_team, mv,
       ) {
@@ -3072,6 +3211,12 @@ fn partial_act_outcomes(
     opp_stall: state.opp_stall,
     my_protect: state.my_protect,
     opp_protect: state.opp_protect,
+    my_reflect: state.my_reflect,
+    opp_reflect: state.opp_reflect,
+    my_light: state.my_light,
+    opp_light: state.opp_light,
+    my_aurora: state.my_aurora,
+    opp_aurora: state.opp_aurora,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3765,6 +3910,12 @@ pub fn switching_game_winrate_stats(
     opp_stall: 0,
     my_protect: 0,
     opp_protect: 0,
+    my_reflect: 0,
+    opp_reflect: 0,
+    my_light: 0,
+    opp_light: 0,
+    my_aurora: 0,
+    opp_aurora: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,

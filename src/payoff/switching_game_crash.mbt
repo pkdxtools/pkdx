@@ -240,7 +240,7 @@ fn with_accuracy_miss_effects(
   user_slot : Int,
   user_team : Array[Combatant],
 ) -> SwitchingGameState {
-  match missed_self_loss_move(attempt, user_team, user_slot) {
+  let s = match missed_self_loss_move(attempt, user_team, user_slot) {
     Some(mv) => with_miss_self_loss(state, user_is_me, user_slot, user_team, mv)
     None =>
       match missed_move_of(attempt, user_team, user_slot) {
@@ -250,6 +250,10 @@ fn with_accuracy_miss_effects(
           )
         None => state
       }
+  }
+  match missed_move_of(attempt, user_team, user_slot) {
+    Some(mv) => shatter_defender_state(s, user_is_me, mv)
+    None => s
   }
 }
 

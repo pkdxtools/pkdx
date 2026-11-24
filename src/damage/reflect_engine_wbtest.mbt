@@ -486,3 +486,18 @@ test "reflect: def_hp_override drives reflect-target percent denominator" {
   let expected_pct = r.damages[0].to_double() / 100.0 * 100.0
   @debug.debug_inspect(r.percents[0] == expected_pct, content="true")
 }
+
+///|
+/// 急所は壁を掛けない (champout help_11_01_01)。無壁の急所と壁あり急所は同じロール。
+test "critical hit skips reflect" {
+  let atk = rf_pokemon("Atk", "ノーマル", "", 180, 180, 100, 100, 100, 100)
+  let def = rf_pokemon("Def", "ノーマル", "", 180, 100, 120, 100, 120, 80)
+  let mv = rf_move("たいあたり", "ノーマル", @model.Physical, 80)
+  let base = rf_input(atk, mv, def, mv)
+  let plain = calc_damage({ ..base, critical: true })
+  let crit_wall = calc_damage({ ..base, critical: true, wall: @model.Wall::Reflect })
+  let wall = calc_damage({ ..base, wall: @model.Wall::Reflect })
+  assert_false(plain.is_immune)
+  assert_eq(plain.damages[0], crit_wall.damages[0])
+  assert_true(wall.damages[0] < plain.damages[0])
+}

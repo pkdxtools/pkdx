@@ -1364,6 +1364,12 @@ fn with_status_set(
     opp_stall: state.opp_stall,
     my_protect: state.my_protect,
     opp_protect: state.opp_protect,
+    my_reflect: state.my_reflect,
+    opp_reflect: state.opp_reflect,
+    my_light: state.my_light,
+    opp_light: state.opp_light,
+    my_aurora: state.my_aurora,
+    opp_aurora: state.opp_aurora,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1880,6 +1886,13 @@ pub fn apply_eot(
   } else {
     (state.field, 0)
   }
+  // 壁のカウントは天候・フィールドの後。0 のときは tick_screen が 0 を返す。
+  let my_reflect_next = tick_screen(state.my_reflect)
+  let opp_reflect_next = tick_screen(state.opp_reflect)
+  let my_light_next = tick_screen(state.my_light)
+  let opp_light_next = tick_screen(state.opp_light)
+  let my_aurora_next = tick_screen(state.my_aurora)
+  let opp_aurora_next = tick_screen(state.opp_aurora)
   // しろいハーブ: 残り HP 処理 (Showdown onResidual)。EOT はランクを変えないので、
   // 実到達では no-op。判定点の対応を残すために両 active で呼ぶ (held_item_stat_reset.mbt)。
   let my_ranks = state.my_ranks.copy()
@@ -1925,6 +1938,12 @@ pub fn apply_eot(
     opp_stall: state.opp_stall,
     my_protect: state.my_protect,
     opp_protect: state.opp_protect,
+    my_reflect: my_reflect_next,
+    opp_reflect: opp_reflect_next,
+    my_light: my_light_next,
+    opp_light: opp_light_next,
+    my_aurora: my_aurora_next,
+    opp_aurora: opp_aurora_next,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),

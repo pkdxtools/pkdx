@@ -51,6 +51,9 @@ pub fn pick_best_move(
   atk_hp? : Int = 0,
   atk_max_hp? : Int = 0,
   atk_flash_fire? : Bool = false,
+  def_reflect? : Int = 0,
+  def_light? : Int = 0,
+  def_aurora? : Int = 0,
 ) -> Int? {
   // Stage 7 (Protean / Libero MC parity): greedy 選択も `best_expected_damage` /
   // `team_perform_attack` と同じ Protean override を見る。ロック中の Protean 個体は
@@ -105,6 +108,9 @@ pub fn pick_best_move(
       @model.Status => 0
     }
     let atk_for_calc = attacker_for_flash_fire(atk_eff, mv, weather, atk_flash_fire)
+    let hit_wall = screen_wall(
+      def_reflect, def_light, def_aurora, mv.category, atk.ability, mv.name,
+    )
     let r = @damage.calc_damage(
       build_input_with_ranks(
         atk_for_calc,
@@ -115,6 +121,7 @@ pub fn pick_best_move(
         weather~,
         field~,
         protean_consumed=atk_consumed,
+        wall=hit_wall,
       ),
     )
     // ばけのかわ (Disguise) greedy コヒーレンス: defender が intact な ばけのかわ

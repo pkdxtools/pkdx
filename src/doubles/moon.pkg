@@ -1,0 +1,10 @@
+import {
+  "pkdxtools/pkdx/src/db" @db,
+  "moonbitlang/core/string" @string,
+}
+
+import {
+  "moonbitlang/core/debug" @debug,
+} for "test"
+
+supported_targets = "native"

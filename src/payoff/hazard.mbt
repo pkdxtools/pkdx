@@ -386,6 +386,8 @@ fn with_hazards_swapped(state : SwitchingGameState) -> SwitchingGameState {
     opp_toxic: state.my_toxic,
     my_web: state.opp_web,
     opp_web: state.my_web,
+    my_perish: state.my_perish,
+    opp_perish: state.opp_perish,
   }
 }
 

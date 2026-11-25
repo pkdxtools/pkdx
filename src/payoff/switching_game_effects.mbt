@@ -1378,6 +1378,8 @@ fn with_status_set(
     opp_toxic: state.opp_toxic,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: state.my_perish,
+    opp_perish: state.opp_perish,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1858,6 +1860,36 @@ pub fn apply_eot(
     opp_wish_turns_new = -1
   }
 
+  // ほろびのうた。両方 0 のときは HP を書かない。ねがいごとのあと、天候カウンタの前。
+  let (my_perish_next, opp_perish_next) = if state.my_perish <= 0 &&
+    state.opp_perish <= 0 {
+    (0, 0)
+  } else {
+    let my_i = state.my_active
+    let opp_i = state.opp_active
+    let (hp_m, hp_o, c_m, c_o) = apply_perish_eot_pair(
+      state.my_perish,
+      state.opp_perish,
+      my_hps[my_i],
+      opp_hps[opp_i],
+      my_team[my_i],
+      opp_team[opp_i],
+      slot_flag(state.my_megaed, my_i),
+      slot_flag(state.opp_megaed, opp_i),
+      state.my_ranks,
+      state.opp_ranks,
+      is_paralyzed(my_status[my_i]),
+      is_paralyzed(opp_status[opp_i]),
+      slot_flag(state.my_item_consumed, my_i),
+      slot_flag(state.opp_item_consumed, opp_i),
+      perish_other_alive(my_hps, my_i),
+      perish_other_alive(opp_hps, opp_i),
+    )
+    my_hps[my_i] = hp_m
+    opp_hps[opp_i] = hp_o
+    (c_m, c_o)
+  }
+
   // === Step 6: 天候カウンタ tick ===
   // `weather_turns_left > 0` ならデクリメント、`0` になった瞬間に
   // `Weather::None` へリセット。`weather == None` 状態では既に `turns_left=0`
@@ -1960,6 +1992,8 @@ pub fn apply_eot(
     opp_toxic: state.opp_toxic,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: my_perish_next,
+    opp_perish: opp_perish_next,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),

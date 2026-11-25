@@ -1,6 +1,6 @@
 name = "pkdxtools/pkdx"
 
-version = "0.7.4"
+version = "0.7.5"
 
 import {
   "moonbitlang/x@0.5.6",

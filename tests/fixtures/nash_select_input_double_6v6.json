@@ -1,0 +1,296 @@
+{
+  "team": [
+    {
+      "name": "WaveA",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 160,
+      "atk": 80,
+      "def": 90,
+      "spa": 160,
+      "spd": 90,
+      "spe": 140,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 90,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    },
+    {
+      "name": "WaveB",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 170,
+      "atk": 80,
+      "def": 90,
+      "spa": 145,
+      "spd": 90,
+      "spe": 120,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 90,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    },
+    {
+      "name": "QuakeC",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 175,
+      "atk": 155,
+      "def": 90,
+      "spa": 70,
+      "spd": 90,
+      "spe": 110,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "じしん",
+          "type": "じめん",
+          "category": "物理",
+          "power": 100,
+          "accuracy": 100,
+          "target": 4
+        }
+      ]
+    },
+    {
+      "name": "WaveD",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 165,
+      "atk": 70,
+      "def": 90,
+      "spa": 150,
+      "spd": 90,
+      "spe": 100,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 95,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    },
+    {
+      "name": "QuakeE",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 180,
+      "atk": 140,
+      "def": 90,
+      "spa": 60,
+      "spd": 90,
+      "spe": 90,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "じしん",
+          "type": "じめん",
+          "category": "物理",
+          "power": 100,
+          "accuracy": 100,
+          "target": 4
+        }
+      ]
+    },
+    {
+      "name": "WaveF",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 155,
+      "atk": 75,
+      "def": 90,
+      "spa": 135,
+      "spd": 90,
+      "spe": 80,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 80,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    }
+  ],
+  "opponent": [
+    {
+      "name": "OWaveA",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 165,
+      "atk": 75,
+      "def": 90,
+      "spa": 150,
+      "spd": 90,
+      "spe": 135,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 90,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    },
+    {
+      "name": "OQuakeB",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 170,
+      "atk": 160,
+      "def": 90,
+      "spa": 65,
+      "spd": 90,
+      "spe": 125,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "じしん",
+          "type": "じめん",
+          "category": "物理",
+          "power": 100,
+          "accuracy": 100,
+          "target": 4
+        }
+      ]
+    },
+    {
+      "name": "OWaveC",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 160,
+      "atk": 70,
+      "def": 90,
+      "spa": 140,
+      "spd": 90,
+      "spe": 115,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 85,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    },
+    {
+      "name": "OQuakeD",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 185,
+      "atk": 145,
+      "def": 90,
+      "spa": 60,
+      "spd": 90,
+      "spe": 105,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "じしん",
+          "type": "じめん",
+          "category": "物理",
+          "power": 90,
+          "accuracy": 100,
+          "target": 4
+        }
+      ]
+    },
+    {
+      "name": "OWaveE",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 150,
+      "atk": 70,
+      "def": 90,
+      "spa": 155,
+      "spd": 90,
+      "spe": 95,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 90,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    },
+    {
+      "name": "OWaveF",
+      "type1": "ノーマル",
+      "type2": "",
+      "hp": 175,
+      "atk": 80,
+      "def": 90,
+      "spa": 130,
+      "spd": 90,
+      "spe": 85,
+      "ability": "",
+      "item": "",
+      "tera": "",
+      "moves": [
+        {
+          "name": "なみのり",
+          "type": "みず",
+          "category": "特殊",
+          "power": 80,
+          "accuracy": 100,
+          "target": 5
+        }
+      ]
+    }
+  ],
+  "format": "double",
+  "team_payoff_model": "double_turn"
+}

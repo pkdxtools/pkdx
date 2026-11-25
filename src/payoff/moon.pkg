@@ -7,6 +7,7 @@ import {
   "pkdxtools/pkdx/src/types" @types,
   "pkdxtools/pkdx/src/process" @process,
   "pkdxtools/pkdx/src/db" @db,
+  "pkdxtools/pkdx/src/doubles" @doubles,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/math" @math,
   "moonbitlang/core/random" @random,

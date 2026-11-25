@@ -1,7 +1,7 @@
 ///|
 /// Helper: build a small team JSON with `n` normalised Pokemon distinguished
-/// only by speed. `run_select` evaluates them under `SwitchingGame(1)` /
-/// `ScreenedSwitchingGame(1)` (the only remaining `team_payoff_model` variants).
+/// only by speed. Callers pass `team_payoff_model`. The default below is
+/// `switching_game:1`. `double_turn` is a separate format=double path.
 fn build_team_json(n : Int, prefix : String, speeds : Array[Int]) -> String {
   let mut s = "["
   for i in 0..<n {
@@ -92,9 +92,9 @@ test "select_6v6_single_outputs_3pick_distribution" {
 
 ///|
 test "select_6v6_double_format_currently_unsupported" {
-  // After removing the pairwise payoff models, both `SwitchingGame(1)` and
-  // `ScreenedSwitchingGame(1)` are Single-only. `format = "double"` must raise
-  // until a team-level Double model exists.
+  // `switching_game` and `screened_switching_game` stay single-active.
+  // `format = "double"` with those models still raises. Doubles go through
+  // `double_turn`.
   let team_sp = [100, 95, 105, 90, 110, 85]
   let opp_sp = [100, 100, 100, 100, 100, 100]
   let errored = try {

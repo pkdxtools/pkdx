@@ -2,6 +2,14 @@
 /// Whitebox tests for the `team_payoff_model` CLI string parser.
 
 ///|
+test "parse_team_payoff_model_recognizes_double_turn" {
+  match parse_team_payoff_model("double_turn") {
+    DoubleTurnGame(AllTargets) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
 test "parse_team_payoff_model_recognizes_switching_game_string" {
   match parse_team_payoff_model("switching_game") {
     SwitchingGame(n) => @debug.assert_eq(n, DP_TURN_LIMIT)

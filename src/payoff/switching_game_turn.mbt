@@ -464,6 +464,15 @@ priv struct TurnWorkspace {
   opp_light : Int
   my_aurora : Int
   opp_aurora : Int
+  // 設置。ws round-trip で落とさない。0 は無し。詳細は hazard.mbt。
+  my_stealth : Int
+  opp_stealth : Int
+  my_spikes : Int
+  opp_spikes : Int
+  my_toxic : Int
+  opp_toxic : Int
+  my_web : Int
+  opp_web : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -538,6 +547,14 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_light: state.opp_light,
     my_aurora: state.my_aurora,
     opp_aurora: state.opp_aurora,
+    my_stealth: state.my_stealth,
+    opp_stealth: state.opp_stealth,
+    my_spikes: state.my_spikes,
+    opp_spikes: state.opp_spikes,
+    my_toxic: state.my_toxic,
+    opp_toxic: state.opp_toxic,
+    my_web: state.my_web,
+    opp_web: state.opp_web,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -603,6 +620,14 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_light: ws.opp_light,
     my_aurora: ws.my_aurora,
     opp_aurora: ws.opp_aurora,
+    my_stealth: ws.my_stealth,
+    opp_stealth: ws.opp_stealth,
+    my_spikes: ws.my_spikes,
+    opp_spikes: ws.opp_spikes,
+    my_toxic: ws.my_toxic,
+    opp_toxic: ws.opp_toxic,
+    my_web: ws.my_web,
+    opp_web: ws.opp_web,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -928,15 +953,37 @@ fn resolve_attacker_leg(
       atk_consumed,
     )
   }
+  // 設置を張る技だけ。まもるで防がれたときは上で return している。
+  if is_hazard_setter(attacker_move.name) {
+    return hazard_set_outcomes(
+      pre_damage_state,
+      attacker_is_me,
+      attacker_active,
+      defender_active,
+      attacker_team,
+      defender_team_eff,
+      attacker_move,
+    )
+  }
   // 壊す技で受け側に壁があるときだけ割る。無いときは同じ workspace / state。
+  // きりばらいは相手側に設置があるときだけ外す。0 なら #243 の壁だけ。
+  let hazard_cleared = attacker_move.name == "きりばらい" &&
+    defender_has_hazard_ws(ws, attacker_is_me)
   let screen_broken = breaks_screens(attacker_move.name) &&
     defender_has_screen(ws, attacker_is_me)
   let ws_hit = if screen_broken {
-    clear_defender_screens_ws(ws, attacker_is_me)
+    let cleared = clear_defender_screens_ws(ws, attacker_is_me)
+    if hazard_cleared {
+      clear_defender_hazards_ws(cleared, attacker_is_me)
+    } else {
+      cleared
+    }
+  } else if hazard_cleared {
+    clear_defender_hazards_ws(ws, attacker_is_me)
   } else {
     ws
   }
-  let hit_state = if screen_broken {
+  let hit_state = if screen_broken || hazard_cleared {
     ws_to_state(ws_hit, bump_turn=false)
   } else {
     pre_damage_state
@@ -1037,7 +1084,7 @@ fn resolve_attacker_leg(
     defender_team=defender_team_eff,
     pre_dmg_defender_hp~,
   )
-  if protect_quarter {
+  let after_protect = if protect_quarter {
     map_protect_contact(
       leaves,
       attacker_is_me,
@@ -1049,6 +1096,17 @@ fn resolve_attacker_leg(
   } else {
     leaves
   }
+  // 設置でも除去でもない技は同じ配列を返す。
+  hazard_after_hit_leaves(
+    after_protect,
+    attacker_is_me,
+    attacker_active,
+    defender_active,
+    attacker_team,
+    defender_team_eff,
+    attacker_move,
+    effective_combatant(atk_c, atk_is_mega).ability,
+  )
 }
 
 ///|
@@ -1268,6 +1326,14 @@ fn clone_state(
     opp_light: state.opp_light,
     my_aurora: state.my_aurora,
     opp_aurora: state.opp_aurora,
+    my_stealth: state.my_stealth,
+    opp_stealth: state.opp_stealth,
+    my_spikes: state.my_spikes,
+    opp_spikes: state.opp_spikes,
+    my_toxic: state.my_toxic,
+    opp_toxic: state.opp_toxic,
+    my_web: state.my_web,
+    opp_web: state.opp_web,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1529,6 +1595,9 @@ pub fn transition_with_cache(
   // damage sites so apply_item_pre/post_damage_proc_fanout can reconstruct
   // the dealt damage (= pre - post) and gate full-HP triggers (きあいのタスキ).
   let mut pre_dmg_defender_hp : Int = 0
+  // どくびしの吸収だけ層が減る。0 のままなら下のリテラルは従来と同じ値。
+  let mut my_toxic_now = state.my_toxic
+  let mut opp_toxic_now = state.opp_toxic
   match (my_core, opp_core) {
     (Switch(i), Switch(j)) => {
       my_active_new = i
@@ -1577,28 +1646,62 @@ pub fn transition_with_cache(
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed_new, opp_hps_new,
       )
-      // どちらもトレースでないときは従来どおり自分→相手の順でいかく。
-      // トレースがいるときだけ素早さ順。結果が同じなら分岐を増やさない。
-      match resolve_trace_entries(
-        my_team_base, i, my_megaed_new, my_status_new, my_ranks_new, my_traced_new,
-        opp_team_base, j, opp_megaed_new, opp_status_new, opp_ranks_new, opp_traced_new,
-      ) {
-        None => {
+      // 設置はランクリセットの後、いかくの前。層が 0 なら配列もフラグも変わらない。
+      let (my_tx, my_dead) = note_switch_hazards(
+        my_team, i, my_megaed_new, my_hps_new, my_status_new, my_ranks_new,
+        state.my_stealth, state.my_spikes, my_toxic_now, state.my_web, state.weather,
+      )
+      let (opp_tx, opp_dead) = note_switch_hazards(
+        opp_team, j, opp_megaed_new, opp_hps_new, opp_status_new, opp_ranks_new,
+        state.opp_stealth, state.opp_spikes, opp_toxic_now, state.opp_web, state.weather,
+      )
+      my_toxic_now = my_tx
+      opp_toxic_now = opp_tx
+      // どちらも生きているときは従来のトレース解決をそのまま通す。
+      if !my_dead && !opp_dead {
+        // どちらもトレースでないときは従来どおり自分→相手の順でいかく。
+        // トレースがいるときだけ素早さ順。結果が同じなら分岐を増やさない。
+        match resolve_trace_entries(
+          my_team_base, i, my_megaed_new, my_status_new, my_ranks_new, my_traced_new,
+          opp_team_base, j, opp_megaed_new, opp_status_new, opp_ranks_new, opp_traced_new,
+        ) {
+          None => {
+            apply_intimidate_entry(
+              my_team, i, my_megaed_new, my_ranks_new, opp_team, j, opp_megaed_new, opp_ranks_new,
+            )
+            apply_intimidate_entry(
+              opp_team, j, opp_megaed_new, opp_ranks_new, my_team, i, my_megaed_new, my_ranks_new,
+            )
+          }
+          Some(snaps) =>
+            if snaps.length() == 1 {
+              install_trace_snap(
+                snaps[0], my_ranks_new, opp_ranks_new, my_traced_new, opp_traced_new,
+              )
+            } else {
+              trace_tie = snaps
+            }
+        }
+      } else {
+        // 設置でひんしになった側のいかくは撃たない。生きている側だけ。
+        if !my_dead {
           apply_intimidate_entry(
             my_team, i, my_megaed_new, my_ranks_new, opp_team, j, opp_megaed_new, opp_ranks_new,
           )
+          apply_trace_after_switch(
+            my_team_base, i, my_megaed_new, my_traced_new, my_ranks_new,
+            opp_team_base, j, opp_megaed_new, opp_traced_new, opp_ranks_new,
+          )
+        }
+        if !opp_dead {
           apply_intimidate_entry(
             opp_team, j, opp_megaed_new, opp_ranks_new, my_team, i, my_megaed_new, my_ranks_new,
           )
+          apply_trace_after_switch(
+            opp_team_base, j, opp_megaed_new, opp_traced_new, opp_ranks_new,
+            my_team_base, i, my_megaed_new, my_traced_new, my_ranks_new,
+          )
         }
-        Some(snaps) =>
-          if snaps.length() == 1 {
-            install_trace_snap(
-              snaps[0], my_ranks_new, opp_ranks_new, my_traced_new, opp_traced_new,
-            )
-          } else {
-            trace_tie = snaps
-          }
       }
     }
     (Switch(i), UseMove(mj)) => {
@@ -1624,31 +1727,39 @@ pub fn transition_with_cache(
       apply_regenerator_switch_out(
         my_team, state.my_active, my_megaed_new, my_hps_new,
       )
-      // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。この
-      // 直後の opp の物理技は A-1 の opp_ranks_new で計算される。
-      apply_intimidate_entry(
-        my_team,
-        i,
-        my_megaed_new,
-        my_ranks_new,
-        opp_team,
-        state.opp_active,
-        opp_megaed_new,
-        opp_ranks_new,
+      let (tx, dead) = note_switch_hazards(
+        my_team, i, my_megaed_new, my_hps_new, my_status_new, my_ranks_new,
+        state.my_stealth, state.my_spikes, my_toxic_now, state.my_web, state.weather,
       )
-      apply_trace_after_switch(
-        my_team_base, i, my_megaed_new, my_traced_new, my_ranks_new,
-        opp_team_base, state.opp_active, opp_megaed_new, opp_traced_new, opp_ranks_new,
-      )
-      // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
-      // are deferred to apply_damage_variants_fanout in the Some(...) arm
-      // below, which fans the chance-node leaves across hit-count variants.
-      // Only the pre-damage HP snapshot survives in the local mut so the
-      // post-hit fanouts can gate full-HP triggers (resist berry / sash).
-      pre_dmg_defender_hp = my_hps_new[i]
-      attack_event = Some((false, i, opp_team[state.opp_active].moves[mj], mj))
-      // Last Resort 解禁判定用に opp が選択した move を「使用済み」として記録。
-      mark_move_used_inplace(opp_moves_used_new, state.opp_active, mj)
+      my_toxic_now = tx
+      // 設置でひんしなら相手の技もいかくも撃たない。層 0 では dead は false。
+      if !dead {
+        // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。この
+        // 直後の opp の物理技は A-1 の opp_ranks_new で計算される。
+        apply_intimidate_entry(
+          my_team,
+          i,
+          my_megaed_new,
+          my_ranks_new,
+          opp_team,
+          state.opp_active,
+          opp_megaed_new,
+          opp_ranks_new,
+        )
+        apply_trace_after_switch(
+          my_team_base, i, my_megaed_new, my_traced_new, my_ranks_new,
+          opp_team_base, state.opp_active, opp_megaed_new, opp_traced_new, opp_ranks_new,
+        )
+        // Phase 2-E (#91): damage application + post-hit effects + 4 fanout
+        // are deferred to apply_damage_variants_fanout in the Some(...) arm
+        // below, which fans the chance-node leaves across hit-count variants.
+        // Only the pre-damage HP snapshot survives in the local mut so the
+        // post-hit fanouts can gate full-HP triggers (resist berry / sash).
+        pre_dmg_defender_hp = my_hps_new[i]
+        attack_event = Some((false, i, opp_team[state.opp_active].moves[mj], mj))
+        // Last Resort 解禁判定用に opp が選択した move を「使用済み」として記録。
+        mark_move_used_inplace(opp_moves_used_new, state.opp_active, mj)
+      }
     }
     (UseMove(mi), Switch(j)) => {
       opp_active_new = j
@@ -1673,28 +1784,36 @@ pub fn transition_with_cache(
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed_new, opp_hps_new,
       )
-      // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。my の
-      // 物理技は A-1 の my_ranks_new で計算される。
-      apply_intimidate_entry(
-        opp_team,
-        j,
-        opp_megaed_new,
-        opp_ranks_new,
-        my_team,
-        state.my_active,
-        my_megaed_new,
-        my_ranks_new,
+      let (tx, dead) = note_switch_hazards(
+        opp_team, j, opp_megaed_new, opp_hps_new, opp_status_new, opp_ranks_new,
+        state.opp_stealth, state.opp_spikes, opp_toxic_now, state.opp_web, state.weather,
       )
-      apply_trace_after_switch(
-        opp_team_base, j, opp_megaed_new, opp_traced_new, opp_ranks_new,
-        my_team_base, state.my_active, my_megaed_new, my_traced_new, my_ranks_new,
-      )
-      // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
-      // post-hit effects are handled per-variant in the Some(...) arm.
-      pre_dmg_defender_hp = opp_hps_new[j]
-      attack_event = Some((true, j, my_team[state.my_active].moves[mi], mi))
-      // Last Resort 解禁判定用に my が選択した move を「使用済み」として記録。
-      mark_move_used_inplace(my_moves_used_new, state.my_active, mi)
+      opp_toxic_now = tx
+      // 設置でひんしなら自分の技もいかくも撃たない。層 0 では dead は false。
+      if !dead {
+        // 登場時いかく: base_state 構築前 (= 交代→いかく→技 の本家順序)。my の
+        // 物理技は A-1 の my_ranks_new で計算される。
+        apply_intimidate_entry(
+          opp_team,
+          j,
+          opp_megaed_new,
+          opp_ranks_new,
+          my_team,
+          state.my_active,
+          my_megaed_new,
+          my_ranks_new,
+        )
+        apply_trace_after_switch(
+          opp_team_base, j, opp_megaed_new, opp_traced_new, opp_ranks_new,
+          my_team_base, state.my_active, my_megaed_new, my_traced_new, my_ranks_new,
+        )
+        // Phase 2-E (#91): see (Switch, UseMove) for rationale — damage and
+        // post-hit effects are handled per-variant in the Some(...) arm.
+        pre_dmg_defender_hp = opp_hps_new[j]
+        attack_event = Some((true, j, my_team[state.my_active].moves[mi], mi))
+        // Last Resort 解禁判定用に my が選択した move を「使用済み」として記録。
+        mark_move_used_inplace(my_moves_used_new, state.my_active, mi)
+      }
     }
     (UseMove(mi), UseMove(mj)) => {
       let me = my_team[state.my_active]
@@ -1850,6 +1969,14 @@ pub fn transition_with_cache(
           opp_light: state.opp_light,
           my_aurora: state.my_aurora,
           opp_aurora: state.opp_aurora,
+          my_stealth: state.my_stealth,
+          opp_stealth: state.opp_stealth,
+          my_spikes: state.my_spikes,
+          opp_spikes: state.opp_spikes,
+          my_toxic: my_toxic_now,
+          opp_toxic: opp_toxic_now,
+          my_web: state.my_web,
+          opp_web: state.opp_web,
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -1928,6 +2055,14 @@ pub fn transition_with_cache(
     opp_light: state.opp_light,
     my_aurora: state.my_aurora,
     opp_aurora: state.opp_aurora,
+    my_stealth: state.my_stealth,
+    opp_stealth: state.opp_stealth,
+    my_spikes: state.my_spikes,
+    opp_spikes: state.opp_spikes,
+    my_toxic: my_toxic_now,
+    opp_toxic: opp_toxic_now,
+    my_web: state.my_web,
+    opp_web: state.opp_web,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2418,6 +2553,14 @@ fn pass_turn_state(
     opp_light: state.opp_light,
     my_aurora: state.my_aurora,
     opp_aurora: state.opp_aurora,
+    my_stealth: state.my_stealth,
+    opp_stealth: state.opp_stealth,
+    my_spikes: state.my_spikes,
+    opp_spikes: state.opp_spikes,
+    my_toxic: state.my_toxic,
+    opp_toxic: state.opp_toxic,
+    my_web: state.my_web,
+    opp_web: state.opp_web,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2721,6 +2864,14 @@ pub fn attempt_turn_with_cache(
         opp_light: state.opp_light,
         my_aurora: state.my_aurora,
         opp_aurora: state.opp_aurora,
+        my_stealth: state.my_stealth,
+        opp_stealth: state.opp_stealth,
+        my_spikes: state.my_spikes,
+        opp_spikes: state.opp_spikes,
+        my_toxic: state.my_toxic,
+        opp_toxic: state.opp_toxic,
+        my_web: state.my_web,
+        opp_web: state.opp_web,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -3058,6 +3209,8 @@ fn partial_act_outcomes(
   let mut attack_event : (Bool, Int, @model.Move, Int)? = None
   // P5 (#97): pre-damage defender HP — see transition_with_cache for rationale.
   let mut pre_dmg_defender_hp : Int = 0
+  let mut my_toxic_now = state.my_toxic
+  let mut opp_toxic_now = state.opp_toxic
   match (me_is_actor, core) {
     (true, Switch(i)) => {
       my_active = i
@@ -3077,21 +3230,29 @@ fn partial_act_outcomes(
       apply_regenerator_switch_out(
         my_team, state.my_active, my_megaed, my_hps,
       )
-      // 登場時いかく: 相手が skip でも交代登場で発動する。
-      apply_intimidate_entry(
-        my_team,
-        i,
-        my_megaed,
-        my_ranks,
-        opp_team,
-        state.opp_active,
-        opp_megaed,
-        opp_ranks,
+      let (tx, dead) = note_switch_hazards(
+        my_team, i, my_megaed, my_hps, my_status_copy, my_ranks,
+        state.my_stealth, state.my_spikes, my_toxic_now, state.my_web, state.weather,
       )
-      apply_trace_after_switch(
-        my_team_base, i, my_megaed, my_traced, my_ranks,
-        opp_team_base, state.opp_active, opp_megaed, opp_traced, opp_ranks,
-      )
+      my_toxic_now = tx
+      // 層 0 では dead は false。ひんしの登場はいかくを撃たない。
+      if !dead {
+        // 登場時いかく: 相手が skip でも交代登場で発動する。
+        apply_intimidate_entry(
+          my_team,
+          i,
+          my_megaed,
+          my_ranks,
+          opp_team,
+          state.opp_active,
+          opp_megaed,
+          opp_ranks,
+        )
+        apply_trace_after_switch(
+          my_team_base, i, my_megaed, my_traced, my_ranks,
+          opp_team_base, state.opp_active, opp_megaed, opp_traced, opp_ranks,
+        )
+      }
     }
     (false, Switch(j)) => {
       opp_active = j
@@ -3111,21 +3272,28 @@ fn partial_act_outcomes(
       apply_regenerator_switch_out(
         opp_team, state.opp_active, opp_megaed, opp_hps,
       )
-      // 登場時いかく: 相手が skip でも交代登場で発動する。
-      apply_intimidate_entry(
-        opp_team,
-        j,
-        opp_megaed,
-        opp_ranks,
-        my_team,
-        state.my_active,
-        my_megaed,
-        my_ranks,
+      let (tx, dead) = note_switch_hazards(
+        opp_team, j, opp_megaed, opp_hps, opp_status_copy, opp_ranks,
+        state.opp_stealth, state.opp_spikes, opp_toxic_now, state.opp_web, state.weather,
       )
-      apply_trace_after_switch(
-        opp_team_base, j, opp_megaed, opp_traced, opp_ranks,
-        my_team_base, state.my_active, my_megaed, my_traced, my_ranks,
-      )
+      opp_toxic_now = tx
+      if !dead {
+        // 登場時いかく: 相手が skip でも交代登場で発動する。
+        apply_intimidate_entry(
+          opp_team,
+          j,
+          opp_megaed,
+          opp_ranks,
+          my_team,
+          state.my_active,
+          my_megaed,
+          my_ranks,
+        )
+        apply_trace_after_switch(
+          opp_team_base, j, opp_megaed, opp_traced, opp_ranks,
+          my_team_base, state.my_active, my_megaed, my_traced, my_ranks,
+        )
+      }
     }
     (true, UseMove(mi)) => {
       if mega_trigger {
@@ -3217,6 +3385,14 @@ fn partial_act_outcomes(
     opp_light: state.opp_light,
     my_aurora: state.my_aurora,
     opp_aurora: state.opp_aurora,
+    my_stealth: state.my_stealth,
+    opp_stealth: state.opp_stealth,
+    my_spikes: state.my_spikes,
+    opp_spikes: state.opp_spikes,
+    my_toxic: my_toxic_now,
+    opp_toxic: opp_toxic_now,
+    my_web: state.my_web,
+    opp_web: state.opp_web,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3916,6 +4092,14 @@ pub fn switching_game_winrate_stats(
     opp_light: 0,
     my_aurora: 0,
     opp_aurora: 0,
+    my_stealth: 0,
+    opp_stealth: 0,
+    my_spikes: 0,
+    opp_spikes: 0,
+    my_toxic: 0,
+    opp_toxic: 0,
+    my_web: 0,
+    opp_web: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,

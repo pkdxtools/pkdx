@@ -192,6 +192,17 @@ pub(all) struct SwitchingGameState {
   opp_light : Int
   my_aurora : Int
   opp_aurora : Int
+  // 設置技のサイド状態。交代しても残る。0 は無し。詳細は hazard.mbt。
+  // ステルスロック / ねばねばネットは 0 か 1。まきびしは 0..3。どくびしは 0..2。
+  // フィールド初期値は 0。完全リテラルは 0 を書き、`{ ..state }` はコピーする。
+  my_stealth : Int
+  opp_stealth : Int
+  my_spikes : Int
+  opp_spikes : Int
+  my_toxic : Int
+  opp_toxic : Int
+  my_web : Int
+  opp_web : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。

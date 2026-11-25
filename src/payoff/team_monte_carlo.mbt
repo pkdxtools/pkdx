@@ -567,6 +567,7 @@ fn team_apply_post_hit(
   dmg : Int,
   immune? : Bool = false,
   defender_flash_fire? : Array[Bool] = [],
+  defender_status? : Array[@model.StatusCondition] = [],
 ) -> Unit {
   // 吸収 (そうしょく / ちくでん / ちょすい / かんそうはだ / でんきエンジン /
   // ひらいしん / もらいび): 技は当たらない。防御側のランク上昇と 1/4 回復だけ行い、
@@ -755,6 +756,46 @@ fn team_apply_post_hit(
     }
     None => ()
   }
+  // こうそくスピンの素早さ、おかたづけの攻撃・素早さ、キラースピンのどく。
+  // Move 側に同じ効果があるときは足さない。設置が無くても除去技なので適用する。
+  if !immune {
+    let ab = attacker_team[attacker_active].ability
+    if mv.name == "こうそくスピン" && !move_has_self_stat(mv, 4) {
+      attacker_ranks[4] = clamp_rank_for(
+        ab, attacker_ranks[4] + self_stage_delta(ab, 1),
+      )
+    }
+    if mv.name == "おかたづけ" {
+      if !move_has_self_stat(mv, 0) {
+        attacker_ranks[0] = clamp_rank_for(
+          ab, attacker_ranks[0] + self_stage_delta(ab, 1),
+        )
+      }
+      if !move_has_self_stat(mv, 4) {
+        attacker_ranks[4] = clamp_rank_for(
+          ab, attacker_ranks[4] + self_stage_delta(ab, 1),
+        )
+      }
+    }
+    if mv.name == "キラースピン" &&
+      mv.status_effect is None &&
+      defender_active < defender_status.length() &&
+      defender_hps[defender_active] > 0 &&
+      defender_status[defender_active] == @model.None {
+      let def = defender_team[defender_active]
+      let kind = @model.PoisonKind
+      if !@model.immune_to_status(kind, def.pokemon.type1, def.pokemon.type2) &&
+        !ability_blocks_status(
+          def.ability,
+          kind,
+          weather=weather_state[0],
+          type1=def.pokemon.type1,
+          type2=def.pokemon.type2,
+        ) {
+        defender_status[defender_active] = @model.inflict_status(kind)
+      }
+    }
+  }
 }
 
 ///|
@@ -895,6 +936,7 @@ fn team_perform_attack(
   contact_slot? : Int = 0,
   attacker_is_own? : Bool = true,
   screen_io? : Array[Int] = [],
+  hazard_io? : Array[Int] = [],
 ) -> (Int, Int, Bool, Bool) {
   // まもる自体。バッファを渡したときだけ stall を進める。渡さない既存呼び出しは従来の return。
   if protect_io.length() >= 2 && is_protect_move(mv.name) {
@@ -920,6 +962,17 @@ fn team_perform_attack(
     }
     return (defender_hp, 0, false, false)
   }
+  // 設置を張る技。長さ 8 のバッファを渡したときだけ。無いときは下の威力 0 経路。
+  if mc_hazard_ok(hazard_io) && is_hazard_setter(mv.name) {
+    if defender_guard != 0 {
+      match protect_interaction(defender_guard, mv, attacker.ability) {
+        PvBlock => return (defender_hp, 0, false, true)
+        _ => ()
+      }
+    }
+    mc_commit_setter(hazard_io, attacker_is_own, attacker, defender, mv)
+    return (defender_hp, 0, false, false)
+  }
   if mv.power <= 0 {
     // Status moves: no damage and no in-place stat mutation. The caller
     // applies `stat_effects` (with opp_alive gating) via
@@ -928,6 +981,17 @@ fn team_perform_attack(
     // きりばらいなど威力 0 の壁破壊。バッファが無いときは no-op。
     if breaks_screens(mv.name) {
       mc_clear_defender(screen_io, attacker_is_own)
+    }
+    // 設置が 0 のときは clear / swap が no-op。きりばらいの外れはこの関数に来ない。
+    if mc_hazard_ok(hazard_io) {
+      if mv.name == "きりばらい" {
+        mc_clear_side(hazard_io, !attacker_is_own)
+      } else if mv.name == "コートチェンジ" {
+        mc_swap_hazards(hazard_io)
+      } else if mv.name == "おかたづけ" {
+        mc_clear_side(hazard_io, true)
+        mc_clear_side(hazard_io, false)
+      }
     }
     return (defender_hp, 0, false, false)
   }
@@ -1090,6 +1154,7 @@ fn team_perform_attack(
         contact_slot, weather, field,
       )
     }
+    mc_on_damaging_hazard(hazard_io, attacker_is_own, attacker, mv)
     return (new_hp, dmg_for_effects, true, false)
   }
   // 非 ばけのかわ: 従来どおり (単一ロール、burn 半減、0 床クランプ)。rng 消費は
@@ -1109,6 +1174,7 @@ fn team_perform_attack(
       contact_slot, weather, field,
     )
   }
+  mc_on_damaging_hazard(hazard_io, attacker_is_own, attacker, mv)
   (new_hp, defender_hp - new_hp, false, false)
 }
 
@@ -1781,6 +1847,8 @@ pub fn team_rollout(
   let opp_item_consumed : Array[Bool] = Array::make(opp.length(), false)
   // 壁。0..2 が自分、3..5 が相手。交代では消さない。
   let screen_buf : Array[Int] = [0, 0, 0, 0, 0, 0]
+  // 設置。0..3 が自分、4..7 が相手 (ステルスロック, まきびし, どくびし, ねばねばネット)。
+  let hazard_buf : Array[Int] = [0, 0, 0, 0, 0, 0, 0, 0]
   let mut own_active = 0
   let mut opp_active = 0
   // こんらんは場のアクティブだけ。交代で 0。控えには残さない。
@@ -2274,6 +2342,21 @@ pub fn team_rollout(
           }
           _ => ()
         }
+        // 設置はランクリセットの後、いかくの前。層が 0 なら HP もフラグも変わらない。
+        let mut own_entry_ko = false
+        let mut opp_entry_ko = false
+        if own_switches {
+          own_entry_ko = mc_entry_hazards(
+            hazard_buf, true, own, own_active, own_hps, own_status, own_ranks,
+            weather_state[0],
+          )
+        }
+        if opp_switches {
+          opp_entry_ko = mc_entry_hazards(
+            hazard_buf, false, opp, opp_active, opp_hps, opp_status, opp_ranks,
+            weather_state[0],
+          )
+        }
         // 登場時いかく: 双方の switch 解決 (active 更新 + rank reset) が済んだ
         // 後に entrant ごとに 1 回ずつ適用する。両者同時 switch でも相手側の
         // reset が先に完了しているため、いかくの -1 が reset で消されない (DP
@@ -2283,12 +2366,42 @@ pub fn team_rollout(
         // greedy_team_action が返す forced TmSwitch) も上と同じ TmSwitch arm を
         // 通るので追加配線は不要。MC は mega 未モデルなので raw の
         // combatant.ability で判定する (DP は mega 後実効特性)。
+        // 設置でひんしになった側はいかくを撃たない。両方生きているときは従来の分岐。
         if own_switches && opp_switches {
-          match resolve_trace_entries(
-            own_base, own_active, own_megaed, own_status, own_ranks, own_traced,
-            opp_base, opp_active, opp_megaed, opp_status, opp_ranks, opp_traced,
-          ) {
-            None => {
+          if !own_entry_ko && !opp_entry_ko {
+            match resolve_trace_entries(
+              own_base, own_active, own_megaed, own_status, own_ranks, own_traced,
+              opp_base, opp_active, opp_megaed, opp_status, opp_ranks, opp_traced,
+            ) {
+              None => {
+                apply_intimidate_on_entry(
+                  own[own_active].ability,
+                  opp[opp_active].ability,
+                  opp_ranks,
+                  own_ranks,
+                  target_type1=opp[opp_active].pokemon.type1,
+                  target_type2=opp[opp_active].pokemon.type2,
+                )
+                apply_intimidate_on_entry(
+                  opp[opp_active].ability,
+                  own[own_active].ability,
+                  own_ranks,
+                  opp_ranks,
+                  target_type1=own[own_active].pokemon.type1,
+                  target_type2=own[own_active].pokemon.type2,
+                )
+              }
+              Some(snaps) => {
+                let snap = if snaps.length() >= 2 && rng.boolean() {
+                  snaps[1]
+                } else {
+                  snaps[0]
+                }
+                install_trace_snap(snap, own_ranks, opp_ranks, own_traced, opp_traced)
+              }
+            }
+          } else {
+            if !own_entry_ko {
               apply_intimidate_on_entry(
                 own[own_active].ability,
                 opp[opp_active].ability,
@@ -2297,6 +2410,12 @@ pub fn team_rollout(
                 target_type1=opp[opp_active].pokemon.type1,
                 target_type2=opp[opp_active].pokemon.type2,
               )
+              apply_trace_after_switch(
+                own_base, own_active, own_megaed, own_traced, own_ranks,
+                opp_base, opp_active, opp_megaed, opp_traced, opp_ranks,
+              )
+            }
+            if !opp_entry_ko {
               apply_intimidate_on_entry(
                 opp[opp_active].ability,
                 own[own_active].ability,
@@ -2305,18 +2424,14 @@ pub fn team_rollout(
                 target_type1=own[own_active].pokemon.type1,
                 target_type2=own[own_active].pokemon.type2,
               )
-            }
-            Some(snaps) => {
-              let snap = if snaps.length() >= 2 && rng.boolean() {
-                snaps[1]
-              } else {
-                snaps[0]
-              }
-              install_trace_snap(snap, own_ranks, opp_ranks, own_traced, opp_traced)
+              apply_trace_after_switch(
+                opp_base, opp_active, opp_megaed, opp_traced, opp_ranks,
+                own_base, own_active, own_megaed, own_traced, own_ranks,
+              )
             }
           }
         } else {
-          if own_switches {
+          if own_switches && !own_entry_ko {
             apply_intimidate_on_entry(
               own[own_active].ability,
               opp[opp_active].ability,
@@ -2330,7 +2445,7 @@ pub fn team_rollout(
               opp_base, opp_active, opp_megaed, opp_traced, opp_ranks,
             )
           }
-          if opp_switches {
+          if opp_switches && !opp_entry_ko {
             apply_intimidate_on_entry(
               opp[opp_active].ability,
               own[own_active].ability,
@@ -2541,8 +2656,15 @@ pub fn team_rollout(
                 contact_slot=own_active,
                 attacker_is_own=true,
                 screen_io=screen_buf,
+                hazard_io=hazard_buf,
               )
               opp_hps[opp_active] = res_hp
+              if !res_immune && clears_user_hazards(mv_own.name) {
+                own_bind = 0
+                if own_active < own_leech_seeded.length() {
+                  own_leech_seeded[own_active] = false
+                }
+              }
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
@@ -2556,6 +2678,7 @@ pub fn team_rollout(
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_own, res_eff, immune=res_immune,
                 defender_flash_fire=opp_flash_fire,
+                defender_status=opp_status,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2782,8 +2905,15 @@ pub fn team_rollout(
                 contact_slot=opp_active,
                 attacker_is_own=false,
                 screen_io=screen_buf,
+                hazard_io=hazard_buf,
               )
               own_hps[own_active] = res_hp
+              if !res_immune && clears_user_hazards(mv_opp.name) {
+                opp_bind = 0
+                if opp_active < opp_leech_seeded.length() {
+                  opp_leech_seeded[opp_active] = false
+                }
+              }
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
@@ -2797,6 +2927,7 @@ pub fn team_rollout(
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_opp, res_eff, immune=res_immune,
                 defender_flash_fire=own_flash_fire,
+                defender_status=own_status,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -2992,8 +3123,15 @@ pub fn team_rollout(
                 contact_slot=opp_active,
                 attacker_is_own=false,
                 screen_io=screen_buf,
+                hazard_io=hazard_buf,
               )
               own_hps[own_active] = res_hp
+              if !res_immune && clears_user_hazards(mv_opp.name) {
+                opp_bind = 0
+                if opp_active < opp_leech_seeded.length() {
+                  opp_leech_seeded[opp_active] = false
+                }
+              }
               mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && own_active < own_disguise_busted.length() {
                 own_disguise_busted[own_active] = true
@@ -3007,6 +3145,7 @@ pub fn team_rollout(
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_opp, res_eff, immune=res_immune,
                 defender_flash_fire=own_flash_fire,
+                defender_status=own_status,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -3231,8 +3370,15 @@ pub fn team_rollout(
                 contact_slot=own_active,
                 attacker_is_own=true,
                 screen_io=screen_buf,
+                hazard_io=hazard_buf,
               )
               opp_hps[opp_active] = res_hp
+              if !res_immune && clears_user_hazards(mv_own.name) {
+                own_bind = 0
+                if own_active < own_leech_seeded.length() {
+                  own_leech_seeded[own_active] = false
+                }
+              }
               mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
               if res_bust && opp_active < opp_disguise_busted.length() {
                 opp_disguise_busted[opp_active] = true
@@ -3246,6 +3392,7 @@ pub fn team_rollout(
                 weather_state, weather_turns_state, field_state, field_turns_state,
                 mv_own, res_eff, immune=res_immune,
                 defender_flash_fire=opp_flash_fire,
+                defender_status=opp_status,
               )
               apply_held_item_stat_reset_pair(
                 own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -3326,7 +3473,7 @@ pub fn team_rollout(
               }
             }
           }
-        } else if !own_switches {
+        } else if !own_switches && !opp_entry_ko {
           let mi_own = match ao {
             TmUseMove(i) => i
             _ => -1
@@ -3403,8 +3550,15 @@ pub fn team_rollout(
               contact_slot=own_active,
               attacker_is_own=true,
               screen_io=screen_buf,
+                hazard_io=hazard_buf,
             )
             opp_hps[opp_active] = res_hp
+            if !res_immune && clears_user_hazards(mv_own.name) {
+              own_bind = 0
+              if own_active < own_leech_seeded.length() {
+                own_leech_seeded[own_active] = false
+              }
+            }
             mc_thaw_on_fire_hit(opp_status, opp_active, mv_own, weather_state[0], own[own_active].ability, !res_immune && !res_bust && res_hp < before)
             if res_bust && opp_active < opp_disguise_busted.length() {
               opp_disguise_busted[opp_active] = true
@@ -3418,6 +3572,7 @@ pub fn team_rollout(
               weather_state, weather_turns_state, field_state, field_turns_state,
               mv_own, res_eff, immune=res_immune,
               defender_flash_fire=opp_flash_fire,
+                defender_status=opp_status,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,
@@ -3497,7 +3652,7 @@ pub fn team_rollout(
               return -1.0
             }
           }
-        } else if !opp_switches {
+        } else if !opp_switches && !own_entry_ko {
           let mi_opp = match ap {
             TmUseMove(i) => i
             _ => -1
@@ -3574,8 +3729,15 @@ pub fn team_rollout(
               contact_slot=opp_active,
               attacker_is_own=false,
               screen_io=screen_buf,
+                hazard_io=hazard_buf,
             )
             own_hps[own_active] = res_hp
+            if !res_immune && clears_user_hazards(mv_opp.name) {
+              opp_bind = 0
+              if opp_active < opp_leech_seeded.length() {
+                opp_leech_seeded[opp_active] = false
+              }
+            }
             mc_thaw_on_fire_hit(own_status, own_active, mv_opp, weather_state[0], opp[opp_active].ability, !res_immune && !res_bust && res_hp < before)
             if res_bust && own_active < own_disguise_busted.length() {
               own_disguise_busted[own_active] = true
@@ -3589,6 +3751,7 @@ pub fn team_rollout(
               weather_state, weather_turns_state, field_state, field_turns_state,
               mv_opp, res_eff, immune=res_immune,
               defender_flash_fire=own_flash_fire,
+                defender_status=own_status,
             )
             apply_held_item_stat_reset_pair(
               own, own_active, own_hps, own_ranks, own_item_consumed,

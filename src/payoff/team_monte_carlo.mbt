@@ -5,9 +5,9 @@
 ///
 /// Returned value is in `[-1, +1]` (own-side utility): +1 = own sweeps,
 /// -1 = own swept, otherwise the HP-ratio difference clamped to that range
-/// when the rollout hits `turn_limit`. Mega evolution is intentionally
-/// ignored — this is a rough screening pass; precise refinement is the
-/// job of the SwitchingGame DP downstream.
+/// when the rollout hits `turn_limit`. Mega evolution uses the same rules as
+/// SwitchingGame: once per side, before the move, on the post-mega species.
+/// The rollout only adds a mega action when `can_mega` is true.
 
 ///|
 /// Switch hysteresis threshold: only switch when the best alternative slot's
@@ -40,8 +40,9 @@ fn best_expected_damage(
   def_aurora? : Int = 0,
 ) -> Double {
   // Stage 7 (Protean / Libero MC parity): override attacker / defender combatant
-  // 経由で Protean ロックを適用する。MC は mega を未モデルなので is_mega=false
-  // 固定で DP 側 `effective_combatant` を再利用する (SSoT 共有)。`protean_locked`
+  // 経由で Protean ロックを適用する。メガ評価は呼び出し側が flatten 済みの
+  // combatant を渡すので、ここは is_mega=false のまま `effective_combatant` を
+  // 再利用する (SSoT)。`protean_locked`
   // が "" のときは override 無し (= 元 combatant そのまま、bit-exact)。
   // `protean_consumed = (locked != "")` を build_input_with_ranks に渡し、ロック中は
   // engine の Protean STAB gate を止める (override 済み type1 で通常 STAB 経路を
@@ -136,19 +137,207 @@ fn best_expected_damage(
 }
 
 ///|
-/// Team action chosen for one rollout turn: `UseMove(mv_idx)` or
-/// `Switch(slot_idx)`. Simpler than `ActionKind` in `switching_game.mbt` —
-/// no Mega support in the screening rollout.
+/// Team action chosen for one rollout turn: `UseMove(mv_idx)`, `Mega(mv_idx)`,
+/// or `Switch(slot_idx)`. `TmMega` is legal only while `can_mega` is true.
+/// `team_rollout` commits the form change and then treats it as `TmUseMove`.
 priv enum TeamAction {
   TmUseMove(Int)
+  TmMega(Int)
   TmSwitch(Int)
 }
 
 ///|
 fn team_action_kind(a : TeamAction) -> ActionKind {
   match a {
-    TmUseMove(i) => UseMove(i)
+    TmUseMove(i) | TmMega(i) => UseMove(i)
     TmSwitch(i) => Switch(i)
+  }
+}
+
+///|
+/// Same gate as SwitchingGame `can_mega`: the side has not mega evolved, the
+/// active is alive, and that active has `mega_form = Some`.
+fn mc_side_can_mega(
+  active : Int,
+  hps : Array[Int],
+  team : Array[Combatant],
+  mega_used : Bool,
+) -> Bool {
+  if active < 0 || active >= hps.length() || active >= team.length() {
+    return false
+  }
+  can_mega(active, hps, team, mega_used)
+}
+
+///|
+/// Post-mega species written onto the combatant. HP stays at the base value.
+/// `mega_form` is cleared so a later `effective_combatant(_, true)` does not
+/// rebuild the species and drop a Trace overlay that was written onto
+/// `ability`. Callers that still pass `is_mega=false` then read this species.
+fn mc_flatten_mega(c : Combatant) -> Combatant {
+  let e = effective_combatant(c, true)
+  { ..e, mega_form: None }
+}
+
+///|
+/// Expected damage of `atk` after mega, and the move index that damage came
+/// from. Protean is cleared, matching the commit in `team_rollout`.
+/// `only_move >= 0` scores that move alone (choice lock / two-turn lock).
+fn mc_mega_damage(
+  atk : Combatant,
+  dfn : Combatant,
+  atk_ranks : Array[Int],
+  def_ranks : Array[Int],
+  weather : @model.Weather,
+  field : @model.Field,
+  def_protean : String,
+  def_team : Array[Combatant],
+  def_slot : Int,
+  def_disguise_busted : Array[Bool],
+  atk_hp : Int,
+  atk_max_hp : Int,
+  atk_flash_fire : Bool,
+  only_move : Int,
+  def_reflect : Int,
+  def_light : Int,
+  def_aurora : Int,
+) -> (Double, Int) {
+  let view = mc_flatten_mega(atk)
+  let intact = disguise_intact_mc(
+    def_team,
+    def_slot,
+    def_disguise_busted,
+    attacker_ability=view.ability,
+  )
+  let dmg = best_expected_damage(
+    view,
+    dfn,
+    atk_ranks,
+    def_ranks,
+    weather~,
+    field~,
+    atk_protean_locked="",
+    def_protean_locked=def_protean,
+    def_disguise_intact=intact,
+    atk_hp~,
+    atk_max_hp~,
+    atk_flash_fire~,
+    only_move~,
+    def_reflect~,
+    def_light~,
+    def_aurora~,
+  )
+  if only_move >= 0 {
+    return (dmg, only_move)
+  }
+  let idx = match
+    pick_best_move(
+      view,
+      dfn,
+      atk_ranks~,
+      def_ranks~,
+      weather~,
+      field~,
+      atk_protean_locked="",
+      def_protean_locked=def_protean,
+      def_disguise_intact=intact,
+      atk_hp~,
+      atk_max_hp~,
+      atk_flash_fire~,
+      def_reflect~,
+      def_light~,
+      def_aurora~,
+    ) {
+    Some(i) => i
+    None => 0
+  }
+  (dmg, idx)
+}
+
+///|
+/// Greedy mega choice. Returns `(stay_value, -1)` when mega is illegal or the
+/// post-mega damage is not strictly greater, so the caller's stay-vs-switch
+/// comparison is unchanged.
+fn mc_prefer_mega(
+  stay_value : Double,
+  opp_hp_denom : Double,
+  legal : Bool,
+  atk : Combatant,
+  dfn : Combatant,
+  atk_ranks : Array[Int],
+  def_ranks : Array[Int],
+  weather : @model.Weather,
+  field : @model.Field,
+  def_protean : String,
+  def_team : Array[Combatant],
+  def_slot : Int,
+  def_disguise_busted : Array[Bool],
+  atk_hp : Int,
+  atk_max_hp : Int,
+  atk_flash_fire : Bool,
+  only_move : Int,
+  def_reflect : Int,
+  def_light : Int,
+  def_aurora : Int,
+) -> (Double, Int) {
+  if !legal {
+    return (stay_value, -1)
+  }
+  let (raw, idx) = mc_mega_damage(
+    atk,
+    dfn,
+    atk_ranks,
+    def_ranks,
+    weather,
+    field,
+    def_protean,
+    def_team,
+    def_slot,
+    def_disguise_busted,
+    atk_hp,
+    atk_max_hp,
+    atk_flash_fire,
+    only_move,
+    def_reflect,
+    def_light,
+    def_aurora,
+  )
+  let mega_value = raw / opp_hp_denom
+  if mega_value > stay_value {
+    (mega_value, idx)
+  } else {
+    (stay_value, -1)
+  }
+}
+
+///|
+/// Commit `TmMega` before accuracy, switches, and moves. The returned action
+/// is `TmUseMove` of the same index. A side that cannot mega is unchanged,
+/// including the array reference, so a rollout with no mega keeps the same
+/// team objects.
+fn mc_apply_mega_action(
+  action : TeamAction,
+  base : Array[Combatant],
+  traced : Array[String],
+  protean : Array[String],
+  active : Int,
+  hps : Array[Int],
+  mega_used : Bool,
+) -> (TeamAction, Array[Combatant], Bool, Bool) {
+  match action {
+    TmMega(i) => {
+      if !mc_side_can_mega(active, hps, base, mega_used) {
+        return (TmUseMove(i), base, mega_used, false)
+      }
+      let next = base.copy()
+      next[active] = mc_flatten_mega(next[active])
+      if active < protean.length() {
+        protean[active] = ""
+      }
+      clear_traced_slot(traced, active)
+      (TmUseMove(i), next, true, true)
+    }
+    other => (other, base, mega_used, false)
   }
 }
 
@@ -190,6 +379,7 @@ fn greedy_team_action(
   def_reflect? : Int = 0,
   def_light? : Int = 0,
   def_aurora? : Int = 0,
+  mega_used? : Bool = false,
 ) -> TeamAction? {
   // Stage 7 (Protean / Libero MC parity): per-slot ロックを greedy 評価に
   // 渡すための helper。slot が範囲外 / 配列未指定 (テスト用 default [] ) のとき
@@ -256,8 +446,51 @@ fn greedy_team_action(
     return Some(TmSwitch(best))
   }
   // 溜め中は同じ技だけ。ε で別の技に逃げない (DP の合法手が 1 つのときと同じ)。
-  // -1 のときはこの枝に入らない。
+  // -1 のときはこの枝に入らない。メガできるときは、その技のメガ後期待ダメージが
+  // 厳密に大きいときだけ TmMega。乱数は消費しない。
   if two_turn_lock >= 0 && two_turn_lock < my_team[active].moves.length() {
+    if mc_side_can_mega(active, my_hps, my_team, mega_used) {
+      let (mega_raw, _) = mc_mega_damage(
+        my_team[active],
+        opp_team[opp_active],
+        my_ranks,
+        opp_ranks,
+        weather,
+        field,
+        locked_of(opp_protean_locked, opp_active),
+        opp_team,
+        opp_active,
+        opp_disguise_busted,
+        my_hps[active],
+        my_team[active].pokemon.hp,
+        flash_fire_lit(my_flash_fire, active),
+        two_turn_lock,
+        def_reflect,
+        def_light,
+        def_aurora,
+      )
+      let base_raw = best_expected_damage(
+        my_team[active],
+        opp_team[opp_active],
+        my_ranks,
+        opp_ranks,
+        weather~,
+        field~,
+        atk_protean_locked=locked_of(my_protean_locked, active),
+        def_protean_locked=locked_of(opp_protean_locked, opp_active),
+        def_disguise_intact=opp_def_intact,
+        atk_hp=my_hps[active],
+        atk_max_hp=my_team[active].pokemon.hp,
+        atk_flash_fire=flash_fire_lit(my_flash_fire, active),
+        only_move=two_turn_lock,
+        def_reflect~,
+        def_light~,
+        def_aurora~,
+      )
+      if mega_raw > base_raw {
+        return Some(TmMega(two_turn_lock))
+      }
+    }
     return Some(TmUseMove(two_turn_lock))
   }
   // こだわりスカーフで技固定中。-1 のときは下の既存 ε-greedy をそのまま走る。
@@ -276,7 +509,14 @@ fn greedy_team_action(
       c
     }
     let n_moves = if move_ok { 1 } else { 0 }
-    let total_actions = n_moves + n_switch
+    // メガは固定中の技 1 本だけ。持てないときは 0 で、下の idx は従来と同じ。
+    let n_mega = if move_ok &&
+      mc_side_can_mega(active, my_hps, my_team, mega_used) {
+      1
+    } else {
+      0
+    }
+    let total_actions = n_moves + n_mega + n_switch
     if total_actions == 0 {
       return None
     }
@@ -286,7 +526,10 @@ fn greedy_team_action(
       if move_ok && idx == 0 {
         return Some(TmUseMove(choice_lock))
       }
-      let mut k = if move_ok { idx - 1 } else { idx }
+      if n_mega > 0 && idx == n_moves {
+        return Some(TmMega(choice_lock))
+      }
+      let mut k = idx - n_moves - n_mega
       for s in alive_slots {
         if s == active {
           continue
@@ -364,8 +607,33 @@ fn greedy_team_action(
         best_switch = s
       }
     }
-    if best_switch >= 0 && best_switch_value > stay_value + SWITCH_HYSTERESIS {
+    let (active_value, mega_idx) = mc_prefer_mega(
+      stay_value,
+      opp_hp_denom,
+      move_ok && mc_side_can_mega(active, my_hps, my_team, mega_used),
+      my_team[active],
+      opp_team[opp_active],
+      my_ranks,
+      opp_ranks,
+      weather,
+      field,
+      opp_locked,
+      opp_team,
+      opp_active,
+      opp_disguise_busted,
+      my_hps[active],
+      my_team[active].pokemon.hp,
+      flash_fire_lit(my_flash_fire, active),
+      choice_lock,
+      def_reflect,
+      def_light,
+      def_aurora,
+    )
+    if best_switch >= 0 && best_switch_value > active_value + SWITCH_HYSTERESIS {
       return Some(TmSwitch(best_switch))
+    }
+    if mega_idx >= 0 {
+      return Some(TmMega(mega_idx))
     }
     if move_ok {
       return Some(TmUseMove(choice_lock))
@@ -375,8 +643,9 @@ fn greedy_team_action(
     }
     return None
   }
-  // ε-greedy: uniform over all legal actions (UseMove for every move + Switch
-  // for every alive teammate other than `active`).
+  // ε-greedy: uniform over all legal actions (UseMove for every move, Mega
+  // for every move when `can_mega`, and Switch for every alive teammate
+  // other than `active`). `n_mega = 0` keeps the old index layout.
   let n_moves = my_team[active].moves.length()
   // バインド中は交代を候補に入れない。既定 true のとき従来と同じ本数。
   let n_switch = if !can_switch {
@@ -390,7 +659,12 @@ fn greedy_team_action(
     }
     c
   }
-  let total_actions = n_moves + n_switch
+  let n_mega = if mc_side_can_mega(active, my_hps, my_team, mega_used) {
+    n_moves
+  } else {
+    0
+  }
+  let total_actions = n_moves + n_mega + n_switch
   if total_actions == 0 {
     return None
   }
@@ -400,8 +674,11 @@ fn greedy_team_action(
     if idx < n_moves {
       return Some(TmUseMove(idx))
     }
-    // find the idx-n_moves-th switch slot in alive_slots order
-    let mut k = idx - n_moves
+    if idx < n_moves + n_mega {
+      return Some(TmMega(idx - n_moves))
+    }
+    // find the (idx - moves - megas)-th switch slot in alive_slots order
+    let mut k = idx - n_moves - n_mega
     for s in alive_slots {
       if s == active {
         continue
@@ -472,8 +749,35 @@ fn greedy_team_action(
       best_switch = s
     }
   }
-  if best_switch >= 0 && best_switch_value > stay_value + SWITCH_HYSTERESIS {
+  let (active_value, mega_idx) = mc_prefer_mega(
+    stay_value,
+    opp_hp_denom,
+    mc_side_can_mega(active, my_hps, my_team, mega_used),
+    my_team[active],
+    opp_team[opp_active],
+    my_ranks,
+    opp_ranks,
+    weather,
+    field,
+    opp_locked,
+    opp_team,
+    opp_active,
+    opp_disguise_busted,
+    my_hps[active],
+    my_team[active].pokemon.hp,
+    flash_fire_lit(my_flash_fire, active),
+    -1,
+    def_reflect,
+    def_light,
+    def_aurora,
+  )
+  if best_switch >= 0 && best_switch_value > active_value + SWITCH_HYSTERESIS {
     return Some(TmSwitch(best_switch))
+  }
+  // メガ後の期待ダメージがメガ前を厳密に上回るときだけメガする。
+  // 同点は従来の UseMove（防御や素早さだけのメガは ε 側でサンプルする）。
+  if mega_idx >= 0 {
+    return Some(TmMega(mega_idx))
   }
   // UseMove: greedy max-damage move. Fall back to move 0 if no damaging move.
   // Stage 7: ロック中の Protean 個体は active_locked / opp_locked を渡して
@@ -532,11 +836,10 @@ fn greedy_team_action(
 /// `tick_and_fire_wish_inplace` が active slot へ向けて発動する。DP 側
 /// (`SwitchingGameState.my_wish_turns : Int`) と同じ slot-bound 仕様。
 /// `attacker_status` は Rest が `RestSleep(2)` を上書きするために必要。
-/// `defender_megaed` は LeechSeed くさ判定の mega 後 type 解決に渡す
-/// (MC では常に false 固定の dummy 配列だが、シグネチャは DP 側
-/// `effective_combatant` 経路と整合)。MC は attacker mega を解決しないため
-/// attacker_megaed は受け取らない (現状の MC は mega 未モデル、`apply_healing`
-/// 側は attacker_ability を raw に読むので mega 後 ability の解決も不要)。
+/// `defender_megaed` は LeechSeed くさ判定の mega 後 type 解決に渡す。
+/// メガした slot は種族へ書き戻して `mega_form` を外してあるので、
+/// megaed が真でも偽でも `effective_combatant` は同じ種族を返す。
+/// attacker の回復特性も、書き戻した combatant の raw ability を読む。
 ///
 /// `applied for both damaging and status moves` — `team_perform_attack` は
 /// status moves で damage を返さないが、本関数の全 phase (stat_effects 〜
@@ -634,7 +937,7 @@ fn team_apply_post_hit(
     attacker_ability,
     defender_team[defender_active].ability,
   )
-  // MC は mega 未モデルなので raw のタイプ。フラワーベール以外は
+  // メガ後は書き戻した種族のタイプ。フラワーベール以外は
   // ability_blocks_opp_stat_drop が type を読まない。
   let defender_mon = defender_team[defender_active].pokemon
   apply_stat_effects(
@@ -661,9 +964,9 @@ fn team_apply_post_hit(
   let attacker_max = effective_hp(attacker_team[attacker_active])
   let weather = weather_state[0]
   // Stage H (terrain × sleep): Rest がエレキ / ミストフィールド下で grounded
-  // 使用者に失敗する DP 挙動を MC でも再現する。MC は mega を模さないため raw
-  // combatant で grounded を解く (DP の `effective_combatant(_, false)` に相当
-  // — mc_psychic_priority_blocked と同方針)。field は現在の field_state[0]。
+  // 使用者に失敗する DP 挙動を MC でも再現する。grounded は書き戻し後の
+  // raw combatant で解く (メガ前は素の種族。`effective_combatant(_, false)`
+  // と同値)。field は現在の field_state[0]。
   let attacker_c = attacker_team[attacker_active]
   let attacker_grounded = @damage.is_grounded(
     type1=attacker_c.pokemon.type1,
@@ -836,9 +1139,9 @@ pub fn tick_and_fire_wish_inplace(
 ///|
 /// MC 版 ばけのかわ (Disguise) intact 判定。`defender_slot` の被弾側が ばけのかわ を
 /// 持ち、かつ `busted[defender_slot]` が false (まだ剥がれていない) なら true。DP 側
-/// `disguise_intact_of` (switching_game_turn.mbt) と semantics 一致 — MC は mega を
-/// 未モデルなので raw ability を読む (ばけのかわ を持つ mega form は存在しないため
-/// raw = mega 後実効と常に一致)。bounds check は他の per-slot ヘルパーと同じ防御スタ
+/// `disguise_intact_of` (switching_game_turn.mbt) と semantics 一致 — raw ability
+/// を読む。メガ後は書き戻した種族なので、ばけのかわ を持つ mega form が無い限り
+/// raw = mega 後実効。bounds check は他の per-slot ヘルパーと同じ防御スタ
 /// イル。`busted` が空配列 (greedy の default) のときは busted 未設定 = intact 扱い。
 fn disguise_intact_mc(
   defender_team : Array[Combatant],
@@ -1061,8 +1364,9 @@ fn team_perform_attack(
   // Stage 7 (Protean / Libero MC parity): 実ダメージ解決も greedy 選択
   // (`best_expected_damage` / `pick_best_move`) と **同一の** Protean override を
   // 適用する。片側だけ override すると greedy と実ダメージが乖離して DP / MC
-  // parity が崩れる (過去類似バグ)。MC は mega 未モデルなので is_mega=false 固定で
-  // `effective_combatant` を再利用 (SSoT)。"" のときは override 無しで bit-exact。
+  // parity が崩れる (過去類似バグ)。メガ済みの combatant は flatten 済みなので
+  // is_mega=false の `effective_combatant` がその種族を返す (SSoT)。
+  // "" のときは override 無しで bit-exact。
   let attacker_eff = effective_combatant(
     attacker,
     false,
@@ -1413,7 +1717,7 @@ fn mc_resolve_pending_attempt(
 
 ///|
 /// ふくつのこころ (MC): ひるみで行動を止められた側の素早さランクを +1 する (DP
-/// `ws_with_flinch_speed_boost` と同じ `clamp_rank_for`)。MC は mega を模さないので生の特性を読む。
+/// `ws_with_flinch_speed_boost` と同じ `clamp_rank_for`)。特性は書き戻し後の raw。
 fn mc_flinch_speed_boost(ranks : Array[Int], ability : String) -> Unit {
   if ability_flinch_speed_boost(ability) {
     ranks[4] = clamp_rank_for(ability, ranks[4] + 1)
@@ -1470,8 +1774,8 @@ fn mc_thaw_target_after_secondary(
 /// Misty Terrain block (switching_game_effects.mbt Stage G-2) を移植する。
 /// ミストフィールド下で grounded な defender には major status + confusion +
 /// freeze-dry の凍りが付与されない。grounded SSoT は `@damage.is_grounded`。
-/// MC は mega を未モデルなので raw combatant をそのまま読む (= DP の
-/// `effective_combatant(c, false)` と一致)。これが無いと ScreenedSwitchingGame
+/// raw combatant を読む。メガ後は書き戻した種族なので
+/// `effective_combatant(c, false)` と一致する。これが無いと ScreenedSwitchingGame
 /// の MC screening phase が Misty 下で status 技を過大評価し、DP refine phase と
 /// payoff が割れる。
 fn mc_try_apply_status(
@@ -1540,7 +1844,7 @@ fn mc_try_apply_status(
     return
   }
   // 特性の状態異常免疫。DP `status_blocked_by_holder_ability` と同じ
-  // `ability_blocks_status`。MC は mega を模さないので raw combatant
+  // `ability_blocks_status`。特性は書き戻し後の raw combatant
   // (変化技だけ Protean でタイプを上書きした eff)。
   if ability_blocks_status(
     defender_ability_for_move(attacker_ability, imm_ab),
@@ -1552,7 +1856,7 @@ fn mc_try_apply_status(
     return
   }
   // りんぷん: ダメージ技の追加効果を全 kind で止める。こおり だけ はれ / マグマのよろい も止める
-  // (DP `secondary_blocked_by_holder` と同じ規則)。MC は mega を模さないので raw combatant の特性。
+  // (DP `secondary_blocked_by_holder` と同じ規則)。特性は書き戻し後の raw。
   let seen_ability = defender_ability_for_move(attacker_ability, c.ability)
   if mv.power > 0 && ability_blocks_secondary(seen_ability) {
     return
@@ -1564,7 +1868,7 @@ fn mc_try_apply_status(
   // Stage H: terrain (Misty / Electric) は grounded defender への状態異常付与を
   // 阻止する (DP `maybe_apply_status_fanout` Stage G-2 / H と semantics 一致)。
   // 阻止対象 kind は `field_blocks_status` に集約: Misty は全状態、Electric は
-  // ねむり / あくび予告 のみ。MC は mega を模さないため raw combatant で判定。
+  // ねむり / あくび予告 のみ。判定は書き戻し後の raw combatant。
   if field_blocks_status(field, kind) {
     if @damage.is_grounded(
         type1=c.pokemon.type1,
@@ -1726,7 +2030,7 @@ fn mc_status_fail_before_hit(
 /// スロットへ Protean ロックを記録する。DP 側 `protean_lock_type` と同じ条件
 /// (解決後タイプ、単タイプ一致では消費しない、テラスタル中は非発動)。命中・
 /// 無効・吸収に加え、命中外れでも呼ぶ (Showdown `PrepareHit` は Accuracy より前)。
-/// MC は mega 未モデルなので raw ability。
+/// 特性は書き戻し後の raw ability（メガしたターンは先にロックを外してある）。
 fn record_protean_lock(
   locked : Array[String],
   active : Int,
@@ -1752,7 +2056,7 @@ fn record_protean_lock(
 ///   `turn_limit` elapses with both sides still alive (same draw convention
 ///   as the DP `terminal_value`)
 ///
-/// Mega evolution is not modelled here (screening heuristic).
+/// Mega evolution follows SwitchingGame: once per side, before the move.
 pub fn team_rollout(
   own_in : Array[Combatant],
   opp_in : Array[Combatant],
@@ -1764,8 +2068,8 @@ pub fn team_rollout(
   my_fresh? : Bool? = None,
   opp_fresh? : Bool? = None,
 ) -> Double {
-  let own_base = own_in
-  let opp_base = opp_in
+  let mut own_base = own_in
+  let mut opp_base = opp_in
   let mut own = own_in
   let mut opp = opp_in
   let own_traced : Array[String] = Array::make(own.length(), "")
@@ -1801,8 +2105,9 @@ pub fn team_rollout(
   //   - *_leech_seeded[i]: i 番スロットがやどりぎ tick を受けるか
   //   - *_wish_turns: per-side scalar (1-element 配列で mutable に渡す)。
   //     active slot に貼り付く Wish を表現する (DP 側 Int と同 semantics)。
-  // mega は MC では未モデル化 (screening 用) なので megaed は false 固定の
-  // dummy 配列を用意 (effective_combatant + LeechSeed くさ判定で使う)。
+  // メガした slot は combatant へ種族を書き戻し、mega_form を外す。
+  // megaed は DP と同じく slot フラグ。書き戻し後は effective_combatant が
+  // 恒等なので、raw 読みと megaed 読みが同じ種族を見る。
   // Stage H: caller-provided initial weather / field を seed して MC を回す。
   // 既存 default (Weather::None / Field::None + turns=0) 動作は引数省略時に
   // bit-exact 維持される。caller が `Sun` を渡せば、Sun の効果が damage 計算 +
@@ -1825,6 +2130,8 @@ pub fn team_rollout(
   let opp_wish_turns : Array[Int] = [-1]
   let own_megaed : Array[Bool] = Array::make(own.length(), false)
   let opp_megaed : Array[Bool] = Array::make(opp.length(), false)
+  let mut own_mega_used = false
+  let mut opp_mega_used = false
   // ばけのかわ (Disguise): per-slot 消費フラグ。false = intact (初段被弾を無効化)。
   // ミミッキュ が初めてダメージ技を受けたとき chip で剥がれ true になる。1 戦闘
   // 1 回のみ・交代しても回復しないため、Switch arm では **リセットしない** (DP 側
@@ -1835,7 +2142,7 @@ pub fn team_rollout(
   // リベロ 使用者が初手で撃った技のタイプを記録し、以降の攻撃 STAB / 被弾相性に
   // override で効かせる (DP 側 `SwitchingGameState.{my,opp}_protean_locked` と同じ
   // slot-bound semantics)。"" = 未ロック。switch-out で "" に戻る (once per
-  // switch-in)。MC は mega 未モデルなので mega リセットは無い。
+  // switch-in)。メガしたターンは `mc_apply_mega_action` が先にロックを外す。
   let own_protean_locked : Array[String] = Array::make(own.length(), "")
   let opp_protean_locked : Array[String] = Array::make(opp.length(), "")
   // もらいび状態。炎技を吸収した slot だけ true。交代で出ていく slot は false。
@@ -1876,9 +2183,8 @@ pub fn team_rollout(
   let own_prot = [0, 0]
   let opp_prot = [0, 0]
   // 登場時いかく: 先発 lead 同士 (双方 slot 0)。DP 側 switching_game_winrate_stats
-  // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。MC は mega
-  // 未モデル (megaed 常 false) なので raw の combatant.ability で判定する
-  // (DP は effective_combatant の mega 後実効特性)。
+  // の初期 lead 配線 (apply_intimidate_entry x2) と同 semantics。
+  // 先発はまだメガしていないので raw ability はメガ前。メガでは再発動しない。
   // どちらもトレースでないときは下の 2 呼び出しが従来どおり。rng は消費しない。
   let own_status_lead : Array[@model.StatusCondition] = [own_status[0]]
   let opp_status_lead : Array[@model.StatusCondition] = [opp_status[0]]
@@ -1957,6 +2263,7 @@ pub fn team_rollout(
       def_reflect=screen_buf[3],
       def_light=screen_buf[4],
       def_aurora=screen_buf[5],
+      mega_used=own_mega_used,
     )
     let a_opp = greedy_team_action(
       opp_active,
@@ -1994,11 +2301,58 @@ pub fn team_rollout(
       def_reflect=screen_buf[0],
       def_light=screen_buf[1],
       def_aurora=screen_buf[2],
+      mega_used=opp_mega_used,
     )
     match (a_own, a_opp) {
       (None, _) => return -1.0
       (_, None) => return 1.0
-      (Some(ao), Some(ap)) => {
+      (Some(ao_picked), Some(ap_picked)) => {
+        // 技の命中・状態・交代より前。外れてもメガは戻さない (DP turn_start_mega)。
+        let (ao, own_base_next, own_mega_next, own_mega_now) = mc_apply_mega_action(
+          ao_picked,
+          own_base,
+          own_traced,
+          own_protean_locked,
+          own_active,
+          own_hps,
+          own_mega_used,
+        )
+        let (ap, opp_base_next, opp_mega_next, opp_mega_now) = mc_apply_mega_action(
+          ap_picked,
+          opp_base,
+          opp_traced,
+          opp_protean_locked,
+          opp_active,
+          opp_hps,
+          opp_mega_used,
+        )
+        own_base = own_base_next
+        opp_base = opp_base_next
+        own_mega_used = own_mega_next
+        opp_mega_used = opp_mega_next
+        if own_mega_now && own_active < own_megaed.length() {
+          own_megaed[own_active] = true
+        }
+        if opp_mega_now && opp_active < opp_megaed.length() {
+          opp_megaed[opp_active] = true
+        }
+        if own_mega_now || opp_mega_now {
+          own = overlay_traced_team(own_base, own_traced, own_megaed)
+          opp = overlay_traced_team(opp_base, opp_traced, opp_megaed)
+          // しろいハーブ。メガはランクを変えないので、負ランクが残っていない限り no-op。
+          apply_held_item_stat_reset_pair(
+            own,
+            own_active,
+            own_hps,
+            own_ranks,
+            own_item_consumed,
+            opp,
+            opp_active,
+            opp_hps,
+            opp_ranks,
+            opp_item_consumed,
+          )
+        }
         let own_switches = match ao {
           TmSwitch(_) => true
           _ => false
@@ -2278,8 +2632,8 @@ pub fn team_rollout(
         match ao {
           TmSwitch(i) => {
             // 再生力: 出ていく slot。DP の Switch arm と同じく active 更新前。
-            // MC は mega 未モデルなので raw ability + pokemon.hp（megaed=false
-            // の DP と一致）。ひんしの死に出しは helper が HP<=0 で不発にする。
+            // 特性は書き戻し後の raw。HP はメガでも変わらない。
+            // ひんしの死に出しは helper が HP<=0 で不発にする。
             apply_regenerator_on_switch_out(
               own[own_active].ability,
               own_hps,
@@ -2369,8 +2723,8 @@ pub fn team_rollout(
         // では Step 3 の move 解決より前 = 交代→いかく→技 の本家順序 (直後の
         // 物理技は A-1 の rank で計算される)。死に出し (KO 後に
         // greedy_team_action が返す forced TmSwitch) も上と同じ TmSwitch arm を
-        // 通るので追加配線は不要。MC は mega 未モデルなので raw の
-        // combatant.ability で判定する (DP は mega 後実効特性)。
+        // 通るので追加配線は不要。特性は書き戻し後の raw
+        // （メガ後特性。メガではいかくを再発動しない）。
         // 設置でひんしになった側はいかくを撃たない。両方生きているときは従来の分岐。
         if own_switches && opp_switches {
           if !own_entry_ko && !opp_entry_ko {
@@ -4142,7 +4496,7 @@ pub fn team_rollout(
 
         // === Step 4.45: バインド ===
         // DP `apply_eot` の step 4-bis と同じ関数。両方 0 のときは HP を書かない。
-        // MC はメガ未モデルなので特性は raw。分母は slip と同じ HP プール。
+        // 特性は書き戻し後の raw。分母は slip と同じ HP プール。
         if own_bind > 0 || opp_bind > 0 {
           let (hp_m, hp_o, b_m, b_o) = apply_bind_eot_pair(
             own_bind,

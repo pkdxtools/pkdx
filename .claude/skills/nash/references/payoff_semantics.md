@@ -190,11 +190,12 @@ Team-level の 2 段階パイプライン。SwitchingGame DP (refine turn_limit 
 - 値域は **[-1, +1] (own 視点の value)**。winrate 名の関数は用意しない
 - 各ターン両者が独立に action を選ぶ:
   - active KO → forced switch (相手 active への avg best-damage / hp 比最大の alive スロット)
-  - active alive → ε-greedy。ε 確率で全 alive action (UseMove + Switch) から uniform、1-ε で greedy
-  - greedy 基準: `stay_value = best_expected_damage(active, opp_active) / opp_hp`、`switch_value = max over alive others s of best_expected_damage(s, opp_active) / opp_hp`。`switch_value > stay_value + SWITCH_HYSTERESIS` (0.05) のとき Switch、それ以外は best move を UseMove
-- 行動解決: switch-switch は damage なし、switch-move は switch 側が fresh active で受ける、move-move は `turn_order_sign` 逐次解決
+  - active alive → ε-greedy。ε 確率で全 alive action (UseMove + Mega + Switch) から uniform、1-ε で greedy。Mega は `can_mega`（生存・`mega_form = Some`・サイド未使用）のときだけ候補に入る。リチャージ中はメガしない。溜め中とスカーフ固定中は、その技の Mega だけ
+  - greedy 基準: `stay_value = best_expected_damage(active, opp_active) / opp_hp`、`switch_value = max over alive others s of best_expected_damage(s, opp_active) / opp_hp`。メガできるときは `mega_value` をプロテアンを外したメガ後種族の同じスカラーで計算し、`mega_value > stay_value` のとき stay を mega に置き換える。`switch_value > stay + SWITCH_HYSTERESIS` (0.05) のとき Switch、それ以外で mega が勝っていれば `TmMega`、なければ best move を UseMove。溜め中は ε を振らず、その技のメガ後ダメージが厳密に大きいときだけ Mega
+  - 方策が見るのは与ダメージだけ。同ターンの相手メガ、防御専用、素早さ専用の得は greedy では選ばない（ε は一様なので Mega を引くことがある）
+- 行動解決: 選ばれた Mega は命中・状態・交代より前に種族へ書き戻す（HP は据え置き、`mega_form` は外す、`megaed` とサイドの使用済みを立てる、その slot のプロテアンとトレースを外す、しろいハーブを見る）。外れ・まひ・ねむり・こおりでも戻さない。いかくは再発動しない。天候を呼ぶ特性は DP がメガで発動させないので MC も同じ。素早さと優先度は書き戻した種族。switch-switch は damage なし、switch-move は switch 側が fresh active で受ける、move-move は `turn_order_sign` 逐次解決
 - 終了: 全滅 ±1、turn_limit 到達 → `hp_ratio_own - hp_ratio_opp` を [-1, +1] clamp
-- mega 進化は screening では無視 (精度は refine で担保)
+- `mega_form` が無い入力は行動数も乱数もダメージも変えない。メガ持ちが screening を通ると MC の値が変わり、残す選出が変わり得る
 
 ### 計算量
 
@@ -342,7 +343,7 @@ post-hit 処理順 (`resolve_post_hit_effects` / team_monte_carlo の `team_appl
 - **フラワーベール** (`TOKUSEIINFO_SYN_166`, usa `tokuseiinfo_syn.json:5470`, jpn `:5326`): 「味方のくさタイプのポケモンは能力が下がらず状態異常にもならない。」/ "cannot have their stats lowered." シングルでは味方が自分だけなので、所持者自身の `type1` / `type2` がくさのとき、クリアボディと同じく相手由来の負のランクを全能力で不発にする (`ability_blocks_opp_stat_drop`)。いかくもこの条件で不発 (`apply_intimidate_on_entry` の専用 arm。`ability_blocks_intimidate` には入れない)。くさでない所持者 (Champions のフラワーベール種はフェアリー) は従来どおり下がる。自己ダウン (`target = 0`、ばかぢから等) は不発にしない。判定タイプは能力と同じく DP はメガ後 (`effective_combatant`)、MC は raw。テラスタル後のタイプとダブルの味方は見ない
 - **通す特性**: いかく 専用の防御特性 (どんかん / マイペース / せいしんりょく / きもったま) は Showdown で `effect.name === 'Intimidate'` に限定されるため技由来のダウンは防がない。ばんけん (Guard Dog) も いかく 専用で、技由来のダウンは通る
 - **未対応**: ミラーアーマー (技由来のダウンを使用者へ反射する) は別経路で未モデル (下記「MVP 対象外」)
-- **判定に使う特性**: DP は mega 後の実効特性 (`effective_combatant`)。メタグロス (クリアボディ) はメガ進化で かたいツメ になり、ブロックしなくなる。MC は mega 未モデル (`megaed` 常に false) なので raw の特性で判定する (MC の mega 未モデル化と同じ境界)。いかく の登場時判定も DP は mega 後実効特性
+- **判定に使う特性**: DP は mega 後の実効特性 (`effective_combatant`)。メタグロス (クリアボディ) はメガ進化で かたいツメ になり、ブロックしなくなる。MC はメガした slot を種族へ書き戻すので、以降の raw 特性はそのメガ後特性。メガ前は素の特性。いかくは登場時だけ評価し、メガでは再発動しない
 
 ### 吸収特性 — DP / MC
 
@@ -362,7 +363,7 @@ Champions `tokuseiinfo_syn.json` (`champout` `50e7233`) で吸収経路に載せ
 
 よびみず は `tokusei.json` に無いので、特攻 +1 は付けない。ダメージ計算の水無効 (`check_def_immunity`) だけが残る。変化技のみずは命中判定が残る。どしょく (じめんで 1/4) と うなぎのぼり は本文があるが、この変更の対象外。
 
-かんそうはだのターン終了は `apply_dry_skin_weather_active`（DP `apply_eot` と MC Step 4.1 が同じ関数）。分母は水吸収・砂チップと同じ `effective_hp`。切り捨ての 1/8 で、1 未満は 0（砂の max/16 と同じ。Showdown の間接ダメージ下限 1 は使わない）。ひんしは不変。控えは動かない。判定は DP ではメガ後の実効特性、MC はメガ未モデルで raw。大雨・大日照とばんのうがさはモデルに無い。出力が変わるのは、場にかんそうはだがいて雨か日照のターン終了を迎えるときと、かんそうはだがほのお技を受けるときだけ。
+かんそうはだのターン終了は `apply_dry_skin_weather_active`（DP `apply_eot` と MC Step 4.1 が同じ関数）。分母は水吸収・砂チップと同じ `effective_hp`。切り捨ての 1/8 で、1 未満は 0（砂の max/16 と同じ。Showdown の間接ダメージ下限 1 は使わない）。ひんしは不変。控えは動かない。判定は DP ではメガ後の実効特性、MC は書き戻し後の raw。大雨・大日照とばんのうがさはモデルに無い。出力が変わるのは、場にかんそうはだがいて雨か日照のターン終了を迎えるときと、かんそうはだがほのお技を受けるときだけ。
 
 - **吸収される技**: 防御側の特性 (DP は mega 後の実効特性) が上表のどれかで、技の解決タイプ (`resolve_effective_move_type`、engine と同じ前段) が対応タイプ、かつ技が相手を狙う。ダメージ技と変化技の両方が対象 (Showdown の `onTryHit` は両方で走る)。生存時の回復は `min(現HP + floor(最大HP / 4), 最大HP)`。満タンでも吸収は起きる。ランクは +6 で頭打ちだが、吸収自体は起きる。
 - **吸収されない技** (`is_absorb_non_foe_target_move`、`src/damage/move_flags.mbt`): 自分・味方・フィールド・相手側に作用する技。くさ側は `is_grass_non_foe_target_move` (ねをはる / こうごうせい / せいちょう / コットンガード / ニードルガード / グラスフィールド / アロマセラピー / ジャングルヒール)。ほかは champout `waza.json` (`available=1`) の target 7 自分 (アクアリング / じゅうでん / でんじふゆう)、6 味方 (いのちのしずく / じばそうさ)、10 フィールド (あまごい / にほんばれ / エレキフィールド)、11 相手側 (まきびし)。`pokedex.db` には target 列がないため、同じ名前表で判定する。
@@ -378,7 +379,7 @@ Champions `tokuseiinfo_syn.json` (`champout` `50e7233`) で吸収経路に載せ
 - **あまのじゃく**: 所持者は特性を 1 つしか持たないため、所持者側の反転は起きない。使用者があまのじゃくでも吸収された技は自己効果を出さないので、反転対象がない (`switching_game_sap_sipper_wbtest.mbt` で確認)。
 - **かたやぶり**: 技の解決中だけ、受け手の breakable な特性を見ない (`defender_ability_for_move`)。攻撃側の実効特性が `かたやぶり` で受け手が無視対象のときだけ能力名を外す。それ以外は同じ文字列、同じ Combatant を返す。登場時いかくとターン終了は対象外。ターボブレイズ / テラボルテージは champout `50e7233` の tokusei に無い。L2 の `def_ability` も同じ条件で空にする。
 - **瀕死の保持者**: 保持者が瀕死 (HP 0) ならランクは上がらず回復もしない (Showdown は瀕死の対象に技が通らない)。DP (`with_absorb_effects`) と MC (`team_apply_post_hit`) の両方で、生存時のみ上昇と回復を適用する。
-- **MC**: mega 未モデルなので raw の特性で判定する (DP は mega 後実効特性)。ダメージ技のタイプ / 特性無効を命中 100 にする規則は DP と同じで、防御側の Protean ロックも見る。
+- **MC**: 書き戻し後の raw 特性で判定する (DP は mega 後実効特性。メガ前は同じ)。ダメージ技のタイプ / 特性無効を命中 100 にする規則は DP と同じで、防御側の Protean ロックも見る。
 
 ### 崩れ技 (Crash damage) — DP / MC
 
@@ -410,7 +411,7 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
   - しろいハーブ の判定: DP は通らず、MC は通る。理由は「しろいハーブ」節の「吸収 / 免疫 leg」。
 - **ifHit の自爆は発動しない**: Memento (おきみやげ) / Final Gambit / Healing Wish (いやしのねがい) / Lunar Dance (みかづきのまい) は `selfdestruct: 'ifHit'` で、`runMoveEffects` の `damage[i] !== false` でしか倒れない (`battle-actions.ts:1342-1344`)。pkdx の `self_ko` は DB (`move_meta`) 上 じばく / だいばくはつ だけなので、この区別を持つ必要はない。
 - **未対応: 先の leg で対象が ひんし になった場合**: 2 本目の leg は攻撃側の HP だけを見て解決される (`switching_game_turn.mbt:469`)。Showdown は `getMoveTargets` が空を返して技を失敗させる (`pokemon.ts:841-862`) ので、Protean 記録も崩れ技も起きない。本変更の対象外。
-- **命中**: ダメージ技 (`power > 0`) のタイプ無効と `check_def_immunity` は命中判定より前 (`TypeImmunity` / `TryImmunity`)。DP の `attempt_accuracy` と MC の `mc_attempt_accuracy` は命中率を 100 にする。防御側は技が着弾するポケモンの `effective_combatant` (DP はメガ後のタイプ・特性。Protean ロックはメガ中は外し、それ以外は上書き。MC はメガ未モデルで raw 特性 + Protean ロック)。交代は技より先に解決するので、判定対象は交代先であり、出ていくポケモンの無効では交代先への外れを消さない。出ていく側が無効でなくても、交代先が無効なら外れ枝は無い。変化技 (`power <= 0`) で、受け手が状態異常・タイプ・いたずらごころで無効なものは命中率を 100 にし、効果なしの単一 leaf にする (`status_move_fails_on_foe`)。判定は `immune_to_status` / `ability_blocks_status` / こおりの `ability_blocks_freeze` と はれ / `prankster_status_blocked` をそのまま使う。でんじはだけ `move_effectiveness_slots_x4` の 0 倍 (じめん。まひのタイプ免疫はでんきだけで、にらみつけるはじめんに当たる)。受け手は着弾側の `effective_combatant` (メガ後。Protean はメガ中は外す。交代先)。吸収は無効 leaf にしない。命中でも外れでも効果がない入力は分岐が潰れて 1 ULP ずれることがある。粉技（champout `waza.json` classification 6: どくのこな・しびれごな・ねむりごな・キノコのほうし・わたほうし・いかりのこな・ふんじん・まほうのこな。`help_11_15_01` / `help_10_03_00`）は、受け手がくさタイプまたは特性ぼうじんのとき `powder_move_blocked` 経由で命中分岐を作らず効果なし。吸収より後なのでそうしょくは先に吸収する。ぼうじんゴーグルは Champions の道具に無い。ほうしは接触特性の経路のまま。どくタイプのどくどく必中、フィールド、すでに状態異常の相手は命中率を変えない。吸収特性は別。交代先の そうしょく / ちくでん / ひらいしん は対応する変化技を外れの前に吸収し、出ていく側の吸収では交代先への外れを消さない。よびみず は Champions に無く、ダメージ技の水無効だけが残る。
+- **命中**: ダメージ技 (`power > 0`) のタイプ無効と `check_def_immunity` は命中判定より前 (`TypeImmunity` / `TryImmunity`)。DP の `attempt_accuracy` と MC の `mc_attempt_accuracy` は命中率を 100 にする。防御側は技が着弾するポケモンの `effective_combatant` (DP はメガ後のタイプ・特性。Protean ロックはメガ中は外し、それ以外は上書き。MC は書き戻した種族の raw 特性 + Protean ロック。メガしたターンは先にロックを外す)。交代は技より先に解決するので、判定対象は交代先であり、出ていくポケモンの無効では交代先への外れを消さない。出ていく側が無効でなくても、交代先が無効なら外れ枝は無い。変化技 (`power <= 0`) で、受け手が状態異常・タイプ・いたずらごころで無効なものは命中率を 100 にし、効果なしの単一 leaf にする (`status_move_fails_on_foe`)。判定は `immune_to_status` / `ability_blocks_status` / こおりの `ability_blocks_freeze` と はれ / `prankster_status_blocked` をそのまま使う。でんじはだけ `move_effectiveness_slots_x4` の 0 倍 (じめん。まひのタイプ免疫はでんきだけで、にらみつけるはじめんに当たる)。受け手は着弾側の `effective_combatant` (メガ後。Protean はメガ中は外す。交代先)。吸収は無効 leaf にしない。命中でも外れでも効果がない入力は分岐が潰れて 1 ULP ずれることがある。粉技（champout `waza.json` classification 6: どくのこな・しびれごな・ねむりごな・キノコのほうし・わたほうし・いかりのこな・ふんじん・まほうのこな。`help_11_15_01` / `help_10_03_00`）は、受け手がくさタイプまたは特性ぼうじんのとき `powder_move_blocked` 経由で命中分岐を作らず効果なし。吸収より後なのでそうしょくは先に吸収する。ぼうじんゴーグルは Champions の道具に無い。ほうしは接触特性の経路のまま。どくタイプのどくどく必中、フィールド、すでに状態異常の相手は命中率を変えない。吸収特性は別。交代先の そうしょく / ちくでん / ひらいしん は対応する変化技を外れの前に吸収し、出ていく側の吸収では交代先への外れを消さない。よびみず は Champions に無く、ダメージ技の水無効だけが残る。
 - **参照テスト**: `src/payoff/switching_game_immune_wbtest.mbt` (DP、対照・Protean・そうしょく+しろいハーブ を含む)、`src/payoff/team_monte_carlo_immune_parity_wbtest.mbt` (MC と DP/MC parity)、`src/payoff/switching_game_mega_absorb_wbtest.mbt` (メガターンの吸収 / 無効と命中 100)、`src/payoff/switching_game_immune_switch_wbtest.mbt` (交代先で命中を判定する。出ていく側の無効では外れを消さない。そうしょく の交代先吸収と、じめん から出たあとの かみなりのキバ の外れを含む)。`src/payoff/switching_game_status_immunity_accuracy_wbtest.mbt` (無効な変化技は命中分岐を作らず効果なし。当たる変化技・吸収・交代先は従来どおり)。`src/payoff/switching_game_powder_wbtest.mbt` (粉技はくさタイプとぼうじんに命中分岐なし。そうしょくは先に吸収。どくどく・おにび・あくびは従来どおり)。
 
 ### てっていこうせん (最大 HP 1/2 反動) — DP / MC
@@ -421,7 +422,7 @@ Showdown の `hasCrashDamage` + `onMoveFail` (`data/moves.ts`): **技が命中�
   - 命中: 実ダメージ (`dmg_for_effects`) > 0 のとき。`applyRecoilDamage` は `move.totalDamage` が真のときだけ呼ばれる (`battle-actions.ts:1040-1041`、量は `:1438`)。ばけのかわ の初撃ブロックは 0 ダメージなので反動なし。
   - 免疫 / 外れ (`MoveFail`): 対象が生存しているとき。対象不在 (`!target` は `battle-actions.ts:525`、`!targets.length` は `:574`) は `MoveFail` (`:591`) に届かず反動なし。外れは `per_side_attempt` の `SideAttempt.miss` (命中判定の外れだけ true。麻痺・睡眠の不発は false。崩れ技と同じフラグを使う)。
   - 行動しない (麻痺・睡眠・反動硬直・ひんし): 技が使われないので反動なし。着弾ターンに眠らされた使用者 (`action_blocked_by_fresh_status`) の外れも同じく反動なしで、眠りの 1 回目が消費される (崩れ技と同じ規則。DP は `miss_self_loss_outcomes` の後攻枝、MC は `*_blocked_mid_turn`)。
-- **マジックガード**: 反動を無効化する。Showdown では `magicguard.onDamage` が `effect.effectType !== 'Move'` で弾き、steelbeam の condition は `effectType: 'Condition'` (`dex-conditions.ts`)。Champions `tokuseiinfo_syn.json:3442` "The Pokémon takes damage only from attacks." と一致。DP は mega 後の実効特性、MC は raw 特性 (MC は mega 未モデル)。
+- **マジックガード**: 反動を無効化する。Showdown では `magicguard.onDamage` が `effect.effectType !== 'Move'` で弾き、steelbeam の condition は `effectType: 'Condition'` (`dex-conditions.ts`)。Champions `tokuseiinfo_syn.json:3442` "The Pokémon takes damage only from attacks." と一致。DP は mega 後の実効特性。MC は書き戻した種族の raw 特性（メガ前は素の特性）。
 - **まもる**: 防がれた命中は対象が生存していれば反動する (`protect_blocked_state`)。Showdown では Protect で `moveResult = false` になり反動は発動する (`moves.ts` の protect `onTryHit` が `NOT_FAIL` (= `''`) を返し、`hitStepTryHitEvent` (`battle-actions.ts:705-713`) で対象が落ちる)。Champions の技説明は反動に触れないので、この Showdown の扱いを採る。
 - **順序**: 反動は使用者の leg の位置 (行動順) で適用する。DP は崩れ技と同じ `miss_self_loss_outcomes` (`switching_game_crash.mbt`) が外れ leg を行動順に挿入し、同速は両順序を 0.5 ずつ平均する。両者とも外した場合、崩れ技同士は順序に依らないが、反動は対象の生死を見るため両 leg を行動順に解決する (先に倒れた側には反動が入らない)。MC は `team_rollout` Step 3 の各 leg (`own_missed` / `opp_missed` → `mc_apply_miss_self_loss`)。
 - **自己 KO**: HP は 0 床でクランプ。反動は実ダメージ適用の後 (対象の KO が先) に入る。MC は all-KO で即 return する既存 leg と同じ扱い。
@@ -713,7 +714,7 @@ Showdown との差 (意図的):
 - ダメージ: `status_slip_max_hp / 8` の切り捨て。1 未満は 0 (砂・どくと同じ。Showdown の下限 1 は使わない)。しめつけバンド (`ITEMINFO_SYN_544`) を付与した側が持っているときだけ `/ 6`。持続は延ばさない。ねばりのかぎづめもこうこうのしっぽも `itemname` に無い。
 - 順序: `apply_eot` の状態異常 slip の後、ねがいごとの前。自分側を先、相手側を後 (やどりぎと同じ固定順。素早さ順ではない)。自分側のダメージで付与元がひんしなら、相手側はダメージを入れずに解除する。どくが先にひんしにした場合もダメージを入れずカウンタを 0 にする。カウンタが両方 0 のターンは HP 配列を書かない。
 - 解除: どちらかが交代したとき、攻撃の前に両方 0。付与した側の HP が EOT 時点で 0 のときもダメージなしで 0。本文は解除を書かない。Showdown `onResidual` が source 不在 / HP 0 で volatile を消すのに合わせた。
-- 交代不可: `alive_actions` の `can_switch`。バインド 0 は既定 true で行動列は同じ。ひんしの強制交代は残す。きれいなぬけがら (`ITEMINFO_SYN_295`) と にげあし (`TOKUSEIINFO_SYN_050`) は「交代を邪魔する効果を無視して交代できる」。ゴーストはバインド本文に無い。`help_10_05_00` はにげられない状態だけ "Ghost-type Pokémon are unaffected"。Showdown `tryTrap` は partiallytrapped でもゴーストを捕えないので、交代だけ許可しダメージは入れる。判定はメガ後のタイプ・特性と Protean ロック。MC はメガ未モデル。
+- 交代不可: `alive_actions` の `can_switch`。バインド 0 は既定 true で行動列は同じ。ひんしの強制交代は残す。きれいなぬけがら (`ITEMINFO_SYN_295`) と にげあし (`TOKUSEIINFO_SYN_050`) は「交代を邪魔する効果を無視して交代できる」。ゴーストはバインド本文に無い。`help_10_05_00` はにげられない状態だけ "Ghost-type Pokémon are unaffected"。Showdown `tryTrap` は partiallytrapped でもゴーストを捕えないので、交代だけ許可しダメージは入れる。判定はメガ後のタイプ・特性と Protean ロック。MC は書き戻し後の raw。
 - マジックガード (`TOKUSEIINFO_SYN_098`): ダメージ 0、カウンタは減る、交代不可は残る。DP はメガ後の特性、MC は raw。
 - 状態: `my_bind` / `opp_bind`。残りの EOT 回数。控えには残さない。MC は付与が成立したときだけ `rng.int(limit=2)` を 1 回引く。
 - 対象外: ダブルの付与元、こうそくスピン / キラースピン、みがわり、かげふみ、にげられない状態そのもの、水中状態。まもるはバインドを解除しない。バインドもまもるの行動を止めない (`protect.mbt`)。ダメージと交代不可は従来どおり。
@@ -783,7 +784,7 @@ Showdown との差 (意図的):
 - いたずらごころ: 変化技 (`category == Status`) なら +1。ダメージ技は +0。トリックルーム (-7) は -6。まもる (+4) は +5。
 - はやてのつばさ: 技タイプが `ひこう` かつ満タンなら +1。ダメージ技も変化技 (はねやすめ) も本文は「ひこうタイプの技」。
 - 満タンは戦闘状態の HP がスロット初期値 `pokemon.hp` 以上 (`hp >= pokemon.hp` かつ `max_hp > 0`)。`effective_hp` (ダメ計の実数値) は初期 HP とスケールが違うので使わない。回復が状態上の最大を超えても満タン。`max_hp <= 0` は満タンにしない。省略した HP 引数の既定は 0 なので、既存呼び出しははやてのつばさが乗らない。
-- DP はメガ後の実効特性 (`effective_combatant`)。メガは `pokemon.hp` を変えない。MC は mega 未モデルなので raw ability。
+- DP はメガ後の実効特性 (`effective_combatant`)。メガは `pokemon.hp` を変えない。MC は書き戻した種族の raw ability（メガ前は素の特性）。
 
 **あく無効** (本文の第 2 文。Showdown からの追加ではない):
 
@@ -935,7 +936,7 @@ override を末尾に置くことで mega 解決結果にも一律でかぶせ�
 
 ### MC parity
 
-team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装。greedy 選択 (`pick_best_move` / `best_expected_damage` / `greedy_team_action`) と実ダメージ解決 (`team_perform_attack`) が **同一の** Protean override を共有し、ロック中の Protean 個体はロックタイプ技を選ぶ greedy が実ダメージと一致する。MC は mega 未モデルなので `is_mega=false` 固定で DP 側 `effective_combatant` を再利用 (SSoT)。
+team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装。greedy 選択 (`pick_best_move` / `best_expected_damage` / `greedy_team_action`) と実ダメージ解決 (`team_perform_attack`) が **同一の** Protean override を共有し、ロック中の Protean 個体はロックタイプ技を選ぶ greedy が実ダメージと一致する。メガした slot は先に種族へ書き戻すので、`is_mega=false` の `effective_combatant` がその種族を返す (SSoT)。
 
 ### 検証範囲
 
@@ -1003,7 +1004,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 - **消費状態**: 既存の `my_item_consumed` / `opp_item_consumed` (P5 の per-slot 持ち物消費フラグ) を流用する。しろいハーブ の所持者が消費したときだけ値が変わるので、他の matchup では状態キーも状態数も変わらない。消費後は交代を跨いで持続し、2 回目以降の負のランクは解除されない (1 戦闘 1 回)。
 - **ダメージ計算への影響**: 消費済みの持ち物は DP では `damage_cache_layer` が itemless として扱い、MC では `consumed_item_view` が同じ swap を行う。しろいハーブ自体はダメージ補正を持たないので威力は変わらないが、はたきおとす (相手が持ち物を持つと威力 ×1.5) は消費後は効かなくなる (Showdown と一致)。
 - **ひんし**: hp が 0 の所持者は判定しない (Showdown の `getAllActive` は ひんし を除外する)。技の効果で自分が ひんし になる場合 (自爆 / 自己 KO) は判定されず、消費もされない。
-- **MC**: 同じ helper を技の効果 (6 leg)・登場 (lead / switch)・EOT の後に呼ぶ。MC は mega 未モデルなので (3) のメガ判定は持たない。MC の単一 rollout と DP の値は、parity テストで感度ガード付きに確認する。
+- **MC**: 同じ helper を技の効果 (6 leg)・登場 (lead / switch)・EOT の後に呼ぶ。メガを書き戻した直後にも呼ぶ（ランクが変わっていなければ no-op）。MC の単一 rollout と DP の値は、parity テストで感度ガード付きに確認する。
 - **吸収 / 免疫 leg**: DP は `with_absorb_effects` / `with_immune_effects` の単一 leaf で判定 (2) を通らず、MC は通る。観測できない: この leg は負のランクを作らず、負のランクを作る経路 (登場時いかく・`apply_stat_effects`) は直後に判定されるので、消費前の保持者に解除対象が残らない。
 - **未モデル**: なげつける で しろいハーブ を投げたときの効果 (使用者の負のランク解除と持ち物の消失、Showdown の `fling.effect`)。持ち物の移動 (トリック / ついばむ 等) による所持者の変化。
 
@@ -1020,7 +1021,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 
 ### MC parity
 
-`team_monte_carlo.mbt` が 3 特性とも DP と同一セマンティクスを実装。MC は mega 未モデルなので **raw ability** (`is_mega = false`) を使い、screening 用に **単一ロール近似** (variant 加重平均 = `avg_damage` 相当) で評価する。
+`team_monte_carlo.mbt` が 3 特性とも DP と同一セマンティクスを実装。MC はメガした slot を種族へ書き戻したうえで **raw ability** (`is_mega = false`) を使い、screening 用に **単一ロール近似** (variant 加重平均 = `avg_damage` 相当) で評価する。
 
 - **いかく**: `apply_intimidate_on_entry` を初期 lead 2 コール (`own`/`opp`) と交代 (voluntary / forced) の各 entry で呼ぶ (DP と同じ truth table を共有)。
 - **あまのじゃく**: `apply_stat_effects` を DP と共有 (SSoT)。

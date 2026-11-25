@@ -1789,7 +1789,7 @@ pub fn apply_eot(
 
   // === Step 4-bis: バインド ===
   // 状態異常 slip の後、ねがいごとの前。両方 0 のときは HP 配列を書かない。
-  // 分母は slip と同じ `status_slip_max_hp`。特性はメガ後。MC はメガ未モデルで raw。
+  // 分母は slip と同じ `status_slip_max_hp`。特性はメガ後。MC は書き戻し後の raw。
   // 自分側を先に処理し、そのダメージで付与元が倒れたら相手側は解除だけする。
   let (my_bind_next, opp_bind_next) = if state.my_bind <= 0 && state.opp_bind <= 0 {
     (0, 0)
@@ -2192,7 +2192,7 @@ pub fn reset_toxic_counter_on_switch(
 /// `max_hp` は payoff の HP プール上限（`pokemon.hp`。初期 HP・terminal ratio・
 /// きあいのタスキの満タン判定と同じ）。メガは HP を変えない。`effective_hp`
 /// （Lv50 実数値）は初期 HP より大きく、満タン交代でも回復して比率が 1 を
-/// 超えるため使わない。DP は mega 後実効特性、MC は mega 未モデルで raw ability。
+/// 超えるため使わない。DP は mega 後実効特性、MC は書き戻し後の raw ability。
 pub fn apply_regenerator_on_switch_out(
   ability : String,
   hps : Array[Int],

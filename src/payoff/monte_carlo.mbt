@@ -58,7 +58,7 @@ pub fn pick_best_move(
   // Stage 7 (Protean / Libero MC parity): greedy 選択も `best_expected_damage` /
   // `team_perform_attack` と同じ Protean override を見る。ロック中の Protean 個体は
   // ロックタイプ技だけが STAB を保つので、ロックタイプ技を選ぶ greedy が
-  // 実ダメージと一致する。MC は mega 未モデルなので is_mega=false 固定で
+  // 実ダメージと一致する。メガ後は書き戻した種族を渡すので is_mega=false 固定で
   // `effective_combatant` を再利用 (SSoT)。"" のときは override 無しで bit-exact。
   let atk_eff = effective_combatant(
     atk,

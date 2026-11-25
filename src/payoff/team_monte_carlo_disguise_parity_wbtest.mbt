@@ -25,7 +25,7 @@
 /// ミミッキュ は受け側 (はねる のみ) で、攻撃側の 1 発が chip でブロックされる分
 /// が terminal HP 比率差にそのまま現れる (±1 に飽和しない)。DP は minimax、MC は
 /// ε-greedy だが、単発 1 ターンなので方策乖離は無く value-tol で厳密に一致する。
-/// MC は mega 未モデルなので raw ability を読む (ばけのかわ を持つ mega form は
+/// MC は書き戻し後の raw ability を読む (ばけのかわ を持つ mega form は
 /// 存在しないため raw = 実効)。連続技の初段ブロックは most-likely variant の初段
 /// を単一ロールで近似する点のみ DP (variant 加重) と厳密一致しないため、本 fixture
 /// では単発技のみを使う。

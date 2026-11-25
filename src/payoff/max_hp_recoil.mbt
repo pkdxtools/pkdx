@@ -81,7 +81,7 @@ fn with_max_hp_recoil(
 
 ///|
 /// MC: 使用者 HP 配列 `attacker_hps[attacker_active]` に最大 HP の 1/2 反動を
-/// in-place で適用する (MC は mega を未モデルなので raw combatant を読む)。
+/// in-place で適用する (MC は書き戻し後の raw combatant を読む)。
 fn team_apply_max_hp_recoil(
   attacker_hps : Array[Int],
   attacker_active : Int,

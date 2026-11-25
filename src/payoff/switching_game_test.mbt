@@ -549,6 +549,7 @@ test "team_payoff_model_enum_exhaustive_match" {
     match m {
       SwitchingGame(_) => "switching_game"
       ScreenedSwitchingGame(_, _, _, _) => "screened_switching_game"
+      DoubleTurnGame(_) => "double_turn"
     }
   })
   let mut joined = ""

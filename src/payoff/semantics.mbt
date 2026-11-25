@@ -51,9 +51,23 @@ pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 ///   below `keep_top_quantile` (by mean screening value), then evaluates only
 ///   the retained sub-matrix with SwitchingGame DP (`DP_TURN_LIMIT`).
 ///   `keep_top_quantile >= 1.0` short-circuits to the plain SwitchingGame path.
+/// - `DoubleTurnGame` はダブルの 1 ターン。先発 2 体の同時行動を Nash で評価し、
+///   選出は `double_brings` の 90 行。シングルの SwitchingGame とは別経路。
+pub(all) enum DoubleTurnMode {
+  AllTargets
+} derive(Debug, Eq)
+
+///|
+pub extend DoubleTurnMode with Debug::{to_repr}
+
+///|
+pub extend DoubleTurnMode with Eq::{not_equal, equal}
+
+///|
 pub(all) enum TeamPayoffModel {
   SwitchingGame(Int)
   ScreenedSwitchingGame(Int, UInt64, Double, Int)
+  DoubleTurnGame(DoubleTurnMode)
 } derive(Debug, Eq)
 
 ///|

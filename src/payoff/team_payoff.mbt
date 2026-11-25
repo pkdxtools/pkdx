@@ -260,5 +260,9 @@ pub fn team_payoff_matrix_with_team_model(
       raise UnsupportedFormat(
         "screened_switching_game must be dispatched via compute_select_with_team_model (retained indices required)",
       )
+    DoubleTurnGame(_) =>
+      raise UnsupportedFormat(
+        "double_turn must be dispatched via compute_select_with_team_model",
+      )
   }
 }

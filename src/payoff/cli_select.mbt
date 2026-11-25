@@ -810,11 +810,14 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
     }
     None => ()
   }
+  if s == "double_turn" {
+    return DoubleTurnGame(AllTargets)
+  }
   match s.strip_prefix("screened_switching_game:") {
     Some(rest) => parse_screened_spec(rest.to_owned())
     None =>
       raise InvalidJson(
-        "team_payoff_model must be 'switching_game' or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
+        "team_payoff_model must be 'switching_game', 'double_turn', or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
 }
@@ -1043,6 +1046,7 @@ pub fn compute_select_with_team_model(
   mc_turn_limit? : Int = MC_TURN_LIMIT,
   my_fresh? : Bool? = None,
   opp_fresh? : Bool? = None,
+  move_targets? : (Array[Array[Int]], Array[Array[Int]])? = None,
 ) -> (SelectResult, @nash.FiniteMatrix) raise NashCliError {
   if team.length() != REQUIRED_TEAM_SIZE ||
     opponent.length() != REQUIRED_TEAM_SIZE {
@@ -1055,6 +1059,30 @@ pub fn compute_select_with_team_model(
       opponent.length().to_string() +
       ")",
     )
+  }
+  match team_model {
+    DoubleTurnGame(mode) => {
+      match format {
+        Single =>
+          raise InvalidJson("double_turn supports only format double")
+        Double => ()
+      }
+      let (my_t, opp_t) = match move_targets {
+        Some(pair) => pair
+        None =>
+          raise InvalidJson(
+            "double_turn requires a move target for every move",
+          )
+      }
+      let matrix = double_selection_matrix(
+        team, opponent, my_t, opp_t, mode, nash_config,
+      )
+      let result = build_double_select_result(
+        team, opponent, matrix, nash_config~,
+      )
+      return (result, matrix)
+    }
+    _ => ()
   }
   let (matrix, retained_rows, retained_cols) = match team_model {
     ScreenedSwitchingGame(trials, seed, keep_top, refine_tl) =>
@@ -1230,6 +1258,230 @@ fn format_label(f : BattleFormat) -> String {
 }
 
 ///|
+/// 先発 2 + 控え 2。並びは `double_brings` と同じで、先頭 2 つが先発、後ろ 2 つが控え。
+fn bring_index_row(b : @doubles.DoubleBring) -> Array[Int] {
+  [b.leads.0, b.leads.1, b.bench.0, b.bench.1]
+}
+
+///|
+fn bring_name_row(
+  team : Array[Combatant],
+  b : @doubles.DoubleBring,
+) -> Array[String] {
+  let idx = bring_index_row(b)
+  let out = Array::make(idx.length(), "")
+  for i in 0..<idx.length() {
+    out[i] = team[idx[i]].pokemon.name_ja
+  }
+  out
+}
+
+///|
+fn build_double_select_result(
+  team : Array[Combatant],
+  opponent : Array[Combatant],
+  matrix : @nash.FiniteMatrix,
+  nash_config? : NashSolverConfig = NashSolverConfig::default(),
+) -> SelectResult raise NashCliError {
+  let result = solve_with_fallback(matrix, config=nash_config)
+  let brings_team = @doubles.double_brings(team.length())
+  let brings_opp = @doubles.double_brings(opponent.length())
+  let sel_team = Array::make(brings_team.length(), ([] : Array[Int]))
+  let sel_team_names = Array::make(brings_team.length(), ([] : Array[String]))
+  for i in 0..<brings_team.length() {
+    sel_team[i] = bring_index_row(brings_team[i])
+    sel_team_names[i] = bring_name_row(team, brings_team[i])
+  }
+  let sel_opp = Array::make(brings_opp.length(), ([] : Array[Int]))
+  let sel_opp_names = Array::make(brings_opp.length(), ([] : Array[String]))
+  for j in 0..<brings_opp.length() {
+    sel_opp[j] = bring_index_row(brings_opp[j])
+    sel_opp_names[j] = bring_name_row(opponent, brings_opp[j])
+  }
+  {
+    format: Double,
+    value: result.value,
+    exploitability: result.exploitability,
+    solver_path: result.solver_path,
+    team_size: team.length(),
+    opp_size: opponent.length(),
+    selections: sel_team,
+    selection_names: sel_team_names,
+    opp_selections: sel_opp,
+    opp_selection_names: sel_opp_names,
+    row_strategy: strategy_to_array(result.row_strategy),
+    col_strategy: strategy_to_array(result.col_strategy),
+  }
+}
+
+///|
+fn json_team(obj : Map[String, Json], field : String) -> Json raise NashCliError {
+  match obj.get(field) {
+    Some(j) => j
+    None => raise MissingField(field)
+  }
+}
+
+///|
+fn resolve_move_target(
+  m : Map[String, Json],
+  ctx : String,
+  table : Map[String, Int]?,
+) -> Int raise NashCliError {
+  let name = match m.get("name") {
+    Some(String(s)) => s
+    _ => ""
+  }
+  match m.get("target") {
+    Some(Number(n, ..)) => {
+      let i = n.to_int()
+      if i.to_double() != n || i < 0 || i > 14 {
+        raise InvalidJson(ctx + ".target must be an integer 0..14")
+      }
+      i
+    }
+    Some(_) => raise InvalidJson(ctx + ".target must be an integer 0..14")
+    None =>
+      match table {
+        None =>
+          raise InvalidJson(
+            ctx + " (" + name + ") has no target and champions.db was not loaded",
+          )
+        Some(t) =>
+          match t.get(name) {
+            Some(code) => code
+            None =>
+              raise InvalidJson(
+                ctx + " (" + name + ") is not in the champions move target table",
+              )
+          }
+      }
+  }
+}
+
+///|
+fn team_move_targets(
+  team_json : Json,
+  ctx : String,
+  table : Map[String, Int]?,
+) -> Array[Array[Int]] raise NashCliError {
+  match team_json {
+    Array(arr) => {
+      let out : Array[Array[Int]] = []
+      for i in 0..<arr.length() {
+        let mon_obj = match arr[i] {
+          Object(m) => m
+          _ => raise InvalidJson(ctx + "[" + i.to_string() + "] must be an object")
+        }
+        let moves = match mon_obj.get("moves") {
+          Some(Array(ms)) => ms
+          _ =>
+            raise MissingField(ctx + "[" + i.to_string() + "].moves")
+        }
+        let codes : Array[Int] = []
+        for k in 0..<moves.length() {
+          let mv = match moves[k] {
+            Object(m) => m
+            _ =>
+              raise InvalidJson(
+                ctx +
+                "[" +
+                i.to_string() +
+                "].moves[" +
+                k.to_string() +
+                "] must be an object",
+              )
+          }
+          codes.push(
+            resolve_move_target(
+              mv,
+              ctx +
+              "[" +
+              i.to_string() +
+              "].moves[" +
+              k.to_string() +
+              "]",
+              table,
+            ),
+          )
+        }
+        out.push(codes)
+      }
+      out
+    }
+    _ => raise InvalidJson(ctx + " must be an array")
+  }
+}
+
+///|
+fn targets_are_explicit(team_json : Json) -> Bool {
+  match team_json {
+    Array(arr) => {
+      for mon_json in arr {
+        match mon_json {
+          Object(m) =>
+            match m.get("moves") {
+              Some(Array(ms)) =>
+                for mv in ms {
+                  match mv {
+                    Object(mm) =>
+                      match mm.get("target") {
+                        Some(Number(_, ..)) => ()
+                        _ => return false
+                      }
+                    _ => return false
+                  }
+                }
+              _ => return false
+            }
+          _ => return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn load_champions_move_targets() -> Map[String, Int]? {
+  let path = "pokedex/champions.db"
+  if !@db.file_exists(path) {
+    return None
+  }
+  match @db.open(path) {
+    Err(_) => None
+    Ok(db) => {
+      let loaded = @doubles.load_move_target_table(db)
+      @db.close(db)
+      match loaded {
+        Ok(t) => Some(t)
+        Err(_) => None
+      }
+    }
+  }
+}
+
+///|
+/// 技の `target` が JSON にあればそれを使う。無い技があるときだけ
+/// `pokedex/champions.db` の `move.target` を引く。
+fn parse_double_move_targets(
+  obj : Map[String, Json],
+) -> (Array[Array[Int]], Array[Array[Int]]) raise NashCliError {
+  let team_json = json_team(obj, "team")
+  let opp_json = json_team(obj, "opponent")
+  let table = if targets_are_explicit(team_json) && targets_are_explicit(opp_json) {
+    None
+  } else {
+    load_champions_move_targets()
+  }
+  (
+    team_move_targets(team_json, "team", table),
+    team_move_targets(opp_json, "opponent", table),
+  )
+}
+
+///|
 /// Parse `stat_system` field: `"champions"` (default) or `"standard"`.
 fn parse_stat_system_field(s : String) -> @model.StatSystem raise NashCliError {
   match s {
@@ -1297,7 +1549,13 @@ pub fn run_select_typed(
       raise InvalidJson(
         "screened_switching_game does not support double format (single-active model only)",
       )
+    (Single, DoubleTurnGame(_)) =>
+      raise InvalidJson("double_turn supports only format double")
     _ => ()
+  }
+  let move_targets = match team_model {
+    DoubleTurnGame(_) => Some(parse_double_move_targets(obj))
+    _ => None
   }
   let nash_config = parse_nash_solver_config(obj.get("nash_solver_config"))
   let mc_turn_limit = match obj.get("mc_turn_limit") {
@@ -1357,6 +1615,7 @@ pub fn run_select_typed(
     mc_turn_limit~,
     my_fresh~,
     opp_fresh~,
+    move_targets~,
   )
   let bits = if emit_matrix_bits { matrix_bits_json(matrix) } else { "" }
   if input_path.length() > 0 {
@@ -1409,6 +1668,12 @@ pub fn serialize_select_result(
   out = out + ",\"opp_selection_names\":" + fmt_string_2d(r.opp_selection_names)
   out = out + ",\"row_strategy\":" + fmt_double_array(r.row_strategy)
   out = out + ",\"col_strategy\":" + fmt_double_array(r.col_strategy)
+  // ダブルだけ。シングルの JSON にはこのフィールドを足さない。
+  match r.format {
+    Double =>
+      out = out + ",\"selection_roles\":[\"lead\",\"lead\",\"bench\",\"bench\"]"
+    Single => ()
+  }
   if matrix_bits.length() > 0 {
     out = out + ",\"matrix_bits\":" + matrix_bits
   }
@@ -1559,6 +1824,10 @@ pub fn run_select_shard(
     SwitchingGame(_) =>
       raise InvalidJson(
         "__select-shard requires a ScreenedSwitchingGame team_payoff_model; got plain SwitchingGame. The orchestrator should auto-upgrade before fanning out.",
+      )
+    DoubleTurnGame(_) =>
+      raise InvalidJson(
+        "__select-shard does not run double_turn",
       )
   }
   // CLI overrides win when present. The orchestrator passes them so that

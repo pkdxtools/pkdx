@@ -1860,6 +1860,9 @@ pub fn team_rollout(
   // バインドは場のアクティブだけ。交代 (どちらが出ても) で両方 0。
   let mut own_bind = 0
   let mut opp_bind = 0
+  // ほろびのうたは場のアクティブだけ。交代した側だけ 0。相手側は残る。
+  let mut own_perish = 0
+  let mut opp_perish = 0
   // ねこだまし。None は未追跡 (select の既定)。Some は交代で true、技の行動で false。
   let mut own_fresh : Bool? = my_fresh
   let mut opp_fresh : Bool? = opp_fresh
@@ -2302,6 +2305,7 @@ pub fn team_rollout(
             opp_attract = 0
             own_bind = 0
             opp_bind = 0
+            own_perish = 0
             own_prot[0] = 0
             own_prot[1] = 0
             own_two_buf[0] = -1
@@ -2334,6 +2338,7 @@ pub fn team_rollout(
             opp_attract = 0
             own_bind = 0
             opp_bind = 0
+            opp_perish = 0
             opp_prot[0] = 0
             opp_prot[1] = 0
             opp_two_buf[0] = -1
@@ -2728,6 +2733,18 @@ pub fn team_rollout(
               opp_bind = mc_apply_bind(
                 rng, mv_own, opp_hps[opp_active], opp_bind, res_immune,
               )
+              let (own_perish_n, opp_perish_n) = mc_apply_perish(
+                mv_own,
+                own[own_active],
+                own_hps[own_active],
+                own_perish,
+                opp[opp_active],
+                opp_hps[opp_active],
+                opp_perish,
+                charged_vanish_name(opp, opp_active, opp_two_buf[0]),
+              )
+              own_perish = own_perish_n
+              opp_perish = opp_perish_n
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -2977,6 +2994,18 @@ pub fn team_rollout(
               own_bind = mc_apply_bind(
                 rng, mv_opp, own_hps[own_active], own_bind, res_immune,
               )
+              let (opp_perish_n, own_perish_n) = mc_apply_perish(
+                mv_opp,
+                opp[opp_active],
+                opp_hps[opp_active],
+                opp_perish,
+                own[own_active],
+                own_hps[own_active],
+                own_perish,
+                charged_vanish_name(own, own_active, own_two_buf[0]),
+              )
+              opp_perish = opp_perish_n
+              own_perish = own_perish_n
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -3195,6 +3224,18 @@ pub fn team_rollout(
               own_bind = mc_apply_bind(
                 rng, mv_opp, own_hps[own_active], own_bind, res_immune,
               )
+              let (opp_perish_n, own_perish_n) = mc_apply_perish(
+                mv_opp,
+                opp[opp_active],
+                opp_hps[opp_active],
+                opp_perish,
+                own[own_active],
+                own_hps[own_active],
+                own_perish,
+                charged_vanish_name(own, own_active, own_two_buf[0]),
+              )
+              opp_perish = opp_perish_n
+              own_perish = own_perish_n
               mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -3442,6 +3483,18 @@ pub fn team_rollout(
               opp_bind = mc_apply_bind(
                 rng, mv_own, opp_hps[opp_active], opp_bind, res_immune,
               )
+              let (own_perish_n, opp_perish_n) = mc_apply_perish(
+                mv_own,
+                own[own_active],
+                own_hps[own_active],
+                own_perish,
+                opp[opp_active],
+                opp_hps[opp_active],
+                opp_perish,
+                charged_vanish_name(opp, opp_active, opp_two_buf[0]),
+              )
+              own_perish = own_perish_n
+              opp_perish = opp_perish_n
               mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
               if all_ko(own_hps) {
                 return -1.0
@@ -3622,6 +3675,18 @@ pub fn team_rollout(
             opp_bind = mc_apply_bind(
               rng, mv_own, opp_hps[opp_active], opp_bind, res_immune,
             )
+            let (own_perish_n, opp_perish_n) = mc_apply_perish(
+              mv_own,
+              own[own_active],
+              own_hps[own_active],
+              own_perish,
+              opp[opp_active],
+              opp_hps[opp_active],
+              opp_perish,
+              charged_vanish_name(opp, opp_active, opp_two_buf[0]),
+            )
+            own_perish = own_perish_n
+            opp_perish = opp_perish_n
             mc_thaw_target_after_secondary(opp_status, opp_active, mv_own, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
@@ -3801,6 +3866,18 @@ pub fn team_rollout(
             own_bind = mc_apply_bind(
               rng, mv_opp, own_hps[own_active], own_bind, res_immune,
             )
+            let (opp_perish_n, own_perish_n) = mc_apply_perish(
+              mv_opp,
+              opp[opp_active],
+              opp_hps[opp_active],
+              opp_perish,
+              own[own_active],
+              own_hps[own_active],
+              own_perish,
+              charged_vanish_name(own, own_active, own_two_buf[0]),
+            )
+            opp_perish = opp_perish_n
+            own_perish = own_perish_n
             mc_thaw_target_after_secondary(own_status, own_active, mv_opp, !res_immune && !res_bust && res_hp < before)
             if all_ko(own_hps) {
               return -1.0
@@ -4091,6 +4168,32 @@ pub fn team_rollout(
         // を呼んで HP の実加算を直接観測できる。
         tick_and_fire_wish_inplace(own_wish_turns, own_hps, own_active, own)
         tick_and_fire_wish_inplace(opp_wish_turns, opp_hps, opp_active, opp)
+
+        // ほろびのうた。両方 0 のときは HP を書かない。DP の apply_eot と同じ位置。
+        if own_perish > 0 || opp_perish > 0 {
+          let (hp_m, hp_o, c_m, c_o) = apply_perish_eot_pair(
+            own_perish,
+            opp_perish,
+            own_hps[own_active],
+            opp_hps[opp_active],
+            own[own_active],
+            opp[opp_active],
+            false,
+            false,
+            own_ranks,
+            opp_ranks,
+            is_paralyzed(own_status[own_active]),
+            is_paralyzed(opp_status[opp_active]),
+            slot_flag(own_item_consumed, own_active),
+            slot_flag(opp_item_consumed, opp_active),
+            perish_other_alive(own_hps, own_active),
+            perish_other_alive(opp_hps, opp_active),
+          )
+          own_hps[own_active] = hp_m
+          opp_hps[opp_active] = hp_o
+          own_perish = c_m
+          opp_perish = c_o
+        }
 
         // === Step 4.6: 天候カウンタ tick ===
         // weather_turns_left > 0 ならデクリメント、0 になった瞬間に

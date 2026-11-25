@@ -473,6 +473,9 @@ priv struct TurnWorkspace {
   opp_toxic : Int
   my_web : Int
   opp_web : Int
+  // SwitchingGameState のほろびカウント。ws round-trip で落とさない。0 は未付与。
+  my_perish : Int
+  opp_perish : Int
   // ターン開始時の ねこだまし / であいがしら 初行動フラグ。行動の成否では途中更新しない。
   my_fresh : Bool?
   opp_fresh : Bool?
@@ -555,6 +558,8 @@ fn ws_from_state(state : SwitchingGameState) -> TurnWorkspace {
     opp_toxic: state.opp_toxic,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: state.my_perish,
+    opp_perish: state.opp_perish,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -628,6 +633,8 @@ fn ws_to_state(ws : TurnWorkspace, bump_turn~ : Bool) -> SwitchingGameState {
     opp_toxic: ws.opp_toxic,
     my_web: ws.my_web,
     opp_web: ws.opp_web,
+    my_perish: ws.my_perish,
+    opp_perish: ws.opp_perish,
     my_fresh: ws.my_fresh,
     opp_fresh: ws.opp_fresh,
     my_moves_used: ws.my_moves_used.copy(),
@@ -845,7 +852,11 @@ fn resolve_attacker_leg(
   let tt_def_lock = if attacker_is_me { ws.opp_two_turn } else { ws.my_two_turn }
   let tt_def_team = if attacker_is_me { opp_team } else { my_team }
   let tt_def_name = charged_vanish_name(tt_def_team, defender_active, tt_def_lock)
-  if tt_def_name != "" && !two_turn_hits(attacker_move.name, tt_def_name) {
+  // ほろびのうた以外は従来どおり姿隠しで技全体が不発。ほろびのうたは相手だけ外し、
+  // 自分のカウントは下の perish_song_outcomes で付ける。
+  let foe_vanished = tt_def_name != "" &&
+    !two_turn_hits(attacker_move.name, tt_def_name)
+  if foe_vanished && !is_perish_song(attacker_move.name) {
     return [(1.0, pre_damage_state)]
   }
   let attacker_team = if attacker_is_me { my_team } else { opp_team }
@@ -915,6 +926,20 @@ fn resolve_attacker_leg(
   ) {
     Some(st) => return [(1.0, st)]
     None => ()
+  }
+  // ほろびのうたはまもるより前。音技一般はここを通らない。
+  // サイコフィールド / 状態異常の不発より後なので、それらで技全体が落ちたときは付かない。
+  if is_perish_song(attacker_move.name) {
+    return perish_song_outcomes(
+      pre_damage_state,
+      attacker_is_me,
+      attacker_active,
+      defender_active,
+      attacker_team,
+      defender_team_eff,
+      attacker_move,
+      foe_vanished,
+    )
   }
   // 相手がこのターンに守っているときだけ。旗が 0 なら従来のダメージ経路。
   let def_guard = if attacker_is_me { ws.opp_protect } else { ws.my_protect }
@@ -1334,6 +1359,8 @@ fn clone_state(
     opp_toxic: state.opp_toxic,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: state.my_perish,
+    opp_perish: state.opp_perish,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -1977,6 +2004,8 @@ pub fn transition_with_cache(
           opp_toxic: opp_toxic_now,
           my_web: state.my_web,
           opp_web: state.opp_web,
+          my_perish: perish_after_switch(state.my_perish, my_action),
+          opp_perish: perish_after_switch(state.opp_perish, opp_action),
           my_fresh: state.my_fresh,
           opp_fresh: state.opp_fresh,
           my_moves_used: my_moves_used_new,
@@ -2063,6 +2092,8 @@ pub fn transition_with_cache(
     opp_toxic: opp_toxic_now,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: perish_after_switch(state.my_perish, my_action),
+    opp_perish: perish_after_switch(state.opp_perish, opp_action),
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: my_moves_used_new,
@@ -2231,6 +2262,22 @@ pub fn transition_with_cache(
             state.opp_fresh,
             my_action,
             opp_action,
+          )
+        None => ()
+      }
+      match perish_song_or_none(
+        base_state,
+        attacker_is_me,
+        attacker_slot,
+        target_slot,
+        attacker_team,
+        defender_team_eff,
+        used_move,
+        charged_vanish_name(def_team_tt, target_slot, def_lock_tt),
+      ) {
+        Some(outs) =>
+          return settle_fresh_outcomes(
+            outs, state.my_fresh, state.opp_fresh, my_action, opp_action,
           )
         None => ()
       }
@@ -2561,6 +2608,8 @@ fn pass_turn_state(
     opp_toxic: state.opp_toxic,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: state.my_perish,
+    opp_perish: state.opp_perish,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used: state.my_moves_used.copy(),
@@ -2872,6 +2921,8 @@ pub fn attempt_turn_with_cache(
         opp_toxic: state.opp_toxic,
         my_web: state.my_web,
         opp_web: state.opp_web,
+        my_perish: state.my_perish,
+        opp_perish: state.opp_perish,
         my_fresh: state.my_fresh,
         opp_fresh: state.opp_fresh,
         my_moves_used: state.my_moves_used,
@@ -3393,6 +3444,8 @@ fn partial_act_outcomes(
     opp_toxic: opp_toxic_now,
     my_web: state.my_web,
     opp_web: state.opp_web,
+    my_perish: state.my_perish,
+    opp_perish: state.opp_perish,
     my_fresh: state.my_fresh,
     opp_fresh: state.opp_fresh,
     my_moves_used,
@@ -3549,6 +3602,19 @@ fn partial_act_outcomes(
         foe_hp_partial,
       ) {
         Some(st) => return [(1.0, st)]
+        None => ()
+      }
+      match perish_song_or_none(
+        base_state,
+        attacker_is_me,
+        attacker_slot,
+        target_slot,
+        attacker_team,
+        defender_team_eff,
+        used_move,
+        charged_vanish_name(def_team_tt, target_slot, def_lock_tt),
+      ) {
+        Some(outs) => return outs
         None => ()
       }
       let attacker_burn = if attacker_is_me {
@@ -4100,6 +4166,8 @@ pub fn switching_game_winrate_stats(
     opp_toxic: 0,
     my_web: 0,
     opp_web: 0,
+    my_perish: 0,
+    opp_perish: 0,
     // 省略時は None。バトル開始のリードで ねこだまし / であいがしら を撃たせるときは Some(true)。
     my_fresh: my_fresh,
     opp_fresh: opp_fresh,

@@ -103,6 +103,8 @@ fn mk_field_state() -> SwitchingGameState {
     opp_toxic: 0,
     my_web: 0,
     opp_web: 0,
+    my_perish: 0,
+    opp_perish: 0,
     my_fresh: None,
     opp_fresh: None,
     my_moves_used: [],

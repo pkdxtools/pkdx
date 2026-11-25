@@ -203,6 +203,10 @@ pub(all) struct SwitchingGameState {
   opp_toxic : Int
   my_web : Int
   opp_web : Int
+  // ほろびのうたの残カウント。0 は付いていない。場のアクティブだけ。
+  // 交代した側は 0。詳細は perish.mbt。ダメージ計算には使わない。
+  my_perish : Int
+  opp_perish : Int
   // ねこだまし (WAZAINFO_SYN_252) の「登場後の最初の技」ゲート。
   // `None` は未指定 (select の既定)。失敗もひるみも掛けず、交代しても None のまま。
   // バトル開始のリードで撃たせるときは呼び出し側が Some(true) を渡す。
@@ -2293,6 +2297,11 @@ fn move_skips_accuracy(
   attacker_mega_trigger : Bool,
   defender_mega_trigger : Bool,
 ) -> Bool {
+  // waza.json の accuracy 101 は必中。101/100 は命中枝が 1.01 になるので、
+  // ほろびのうただけ 100 扱いにする。他の技の命中は変えない。
+  if is_perish_song(mv.name) {
+    return true
+  }
   match effective_hit_pair(
     state,
     attacker_is_me,

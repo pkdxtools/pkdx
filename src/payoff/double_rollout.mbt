@@ -29,9 +29,12 @@
 /// 乱数は `seeded_rng`。同じ seed と同じ評価順なら同じ値になる。
 /// `turn_limit <= 1` は段階 1 の HP 比と一致する（続きを引かない）。
 ///
-/// 入れないもの: 状態異常、メガシンカ、まもる、てだすけ、ワイドガード、
-/// このゆびとまれ、いかく、設置、反動、回復、追加効果。いかくは補充時にも
-/// 掛けない。
+/// まもるの連続成功率は場の stall。てだすけとワイドガードも `double_guard.mbt`。
+/// 分母が 1 のときは `sample_hit` を呼ばない。ε = 0 の方策はこれらの技の
+/// 期待ダメージを 0 と見る。選ばれたときの解決は `resolve_actor_sampled`。
+///
+/// 入れないもの: 状態異常、メガシンカ、ファストガード、このゆびとまれ、いかく、
+/// 設置、反動、回復、追加効果。いかくは補充時にも掛けない。
 
 ///|
 /// シングル `team_monte_carlo.mbt` の `SWITCH_HYSTERESIS` と同じ幅。
@@ -488,7 +491,9 @@ fn apply_snapshot_switch(
   match action {
     Some(@doubles.BenchTo(i)) =>
       if i >= 0 && i < bench_ids.length() {
-        state.pos[slot_index(acting_slot(is_me, is_left))] = bench_ids[i]
+        set_slot_squad(
+          state, slot_index(acting_slot(is_me, is_left)), bench_ids[i],
+        )
       }
     _ => ()
   }
@@ -569,6 +574,26 @@ fn resolve_actor_sampled(
   my : Array[Combatant],
   opp : Array[Combatant],
 ) -> Unit {
+  match move_of_actor(actor, my, opp) {
+    Some(mv) =>
+      if is_helping_hand(mv.name) {
+        mark_helping_hand(state, actor)
+        return
+      } else if is_wide_guard(mv.name) {
+        mark_wide_guard(state, actor.slot)
+        return
+      } else if is_protect_move(mv.name) {
+        let den = stall_denominator(stall_at(state, actor.slot))
+        let ok = if den <= 1 {
+          true
+        } else {
+          sample_hit(rng, 1.0 / den.to_double())
+        }
+        mark_protect_result(state, actor.slot, ok, protect_kind(mv.name))
+        return
+      }
+    None => ()
+  }
   let mon = squad_mon(actor.is_me, actor.squad, my, opp)
   let acc = if actor.move_idx >= 0 && actor.move_idx < mon.moves.length() {
     mon.moves[actor.move_idx].accuracy
@@ -636,7 +661,7 @@ fn send_best_bench(
     }
   }
   if best_i >= 0 {
-    state.pos[slot_index(slot)] = ids[best_i]
+    set_slot_squad(state, slot_index(slot), ids[best_i])
   }
 }
 
@@ -688,6 +713,7 @@ fn play_policy_turn(
       resolve_actor_sampled(cache, state, actor, rng, my, opp)
     }
   }
+  settle_double_guard(state)
 }
 
 ///|
@@ -762,6 +788,7 @@ fn expected_scripted_turn(
   push_mover(actors, false, false, opp_right, opp, opp_targets)
   let orders = action_orders(actors)
   if orders.length() == 0 {
+    settle_double_guard(state)
     return finish(state)
   }
   let mut sum = 0.0

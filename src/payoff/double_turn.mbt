@@ -24,7 +24,9 @@
 ///
 /// 終端はシングルの turn_limit 終端と同じ式。片方の 4 体が全員ひんしなら ±1。
 /// そうでなければ `(my_ratio - opp_ratio) / 2` を [-1, 1] に収める。分母は
-/// `pokemon.hp`。1 ターンでこの終端を返す。
+/// `pokemon.hp`。この経路は 1 ターンでその終端を返す。`eval_turn` の終端関数は
+/// ここへ HP 比を渡す。`double_rollout` は同じ解決のあと、その状態から
+/// ロールアウトした値を渡す。終端関数は HP を書き換えない。
 ///
 /// 入れないもの: 状態異常、設置、メガ、ばけのかわ、反動、自滅、回復、追加効果、
 /// てだすけ、ワイドガード、このゆびとまれ、いかく。L2 ディスクには書かない。
@@ -49,8 +51,63 @@ priv struct DoubleFieldHp {
 }
 
 ///|
+///|
+/// ダメージ平均のキャッシュキー。文字列を連結せず、既存の文字列参照と
+/// 数値だけを持つ。`double_move_mean` が読む項目に揃える。
+priv struct DoubleMeanKey {
+  atk_name : String
+  atk_t1 : String
+  atk_t2 : String
+  atk_hp : Int
+  atk_atk : Int
+  atk_def : Int
+  atk_spa : Int
+  atk_spd : Int
+  atk_spe : Int
+  atk_weight : Double
+  atk_ability : String
+  atk_item : String
+  atk_tera : String
+  atk_sys : Int
+  atk_nature : String
+  atk_s0 : Int
+  atk_s1 : Int
+  atk_s2 : Int
+  atk_s3 : Int
+  atk_s4 : Int
+  atk_s5 : Int
+  def_name : String
+  def_t1 : String
+  def_t2 : String
+  def_hp : Int
+  def_atk : Int
+  def_def : Int
+  def_spa : Int
+  def_spd : Int
+  def_spe : Int
+  def_weight : Double
+  def_ability : String
+  def_item : String
+  def_tera : String
+  def_sys : Int
+  def_nature : String
+  def_s0 : Int
+  def_s1 : Int
+  def_s2 : Int
+  def_s3 : Int
+  def_s4 : Int
+  def_s5 : Int
+  mv_name : String
+  mv_type : String
+  mv_cat : Int
+  mv_power : Int
+  mv_acc : Int
+  mv_pri : Int
+} derive(Eq, Hash)
+
+///|
 priv struct DoubleEvalCache {
-  dmg : @hashmap.HashMap[String, Int]
+  dmg : @hashmap.HashMap[DoubleMeanKey, Int]
   cell : @hashmap.HashMap[String, Double]
 }
 
@@ -285,25 +342,92 @@ fn mon_cache_key(c : Combatant, targets : Array[Int]) -> String {
 }
 
 ///|
-fn mean_cache_key(atk : Combatant, def : Combatant, mv : @model.Move) -> String {
-  let cat = match mv.category {
-    @model.Physical => "p"
-    @model.Special => "s"
-    @model.Status => "z"
+fn stat_at(c : Combatant, i : Int) -> Int {
+  match c.actual_stats {
+    Some(arr) => if i < arr.length() { arr[i] } else { -1 }
+    None => -1
   }
-  mon_cache_key(atk, []) +
-  ">" +
-  mon_cache_key(def, []) +
-  ">" +
-  mv.name +
-  ":" +
-  cat +
-  ":" +
-  mv.type_ +
-  ":" +
-  mv.power.to_string() +
-  ":" +
-  mv.accuracy.to_string()
+}
+
+///|
+fn sys_id(c : Combatant) -> Int {
+  match c.stat_system {
+    @model.Champions => 1
+    @model.Standard => 0
+  }
+}
+
+///|
+fn nature_id(c : Combatant) -> String {
+  match c.nature {
+    Some(n) => n.name_ja
+    None => ""
+  }
+}
+
+///|
+fn cat_id(mv : @model.Move) -> Int {
+  match mv.category {
+    @model.Physical => 0
+    @model.Special => 1
+    @model.Status => 2
+  }
+}
+
+///|
+fn mean_cache_key(atk : Combatant, def : Combatant, mv : @model.Move) -> DoubleMeanKey {
+  let ap = atk.pokemon
+  let dp = def.pokemon
+  {
+    atk_name: ap.name_ja,
+    atk_t1: ap.type1,
+    atk_t2: ap.type2,
+    atk_hp: ap.hp,
+    atk_atk: ap.atk,
+    atk_def: ap.def_,
+    atk_spa: ap.spa,
+    atk_spd: ap.spd,
+    atk_spe: ap.spe,
+    atk_weight: ap.weight,
+    atk_ability: atk.ability,
+    atk_item: atk.item,
+    atk_tera: atk.tera_type,
+    atk_sys: sys_id(atk),
+    atk_nature: nature_id(atk),
+    atk_s0: stat_at(atk, 0),
+    atk_s1: stat_at(atk, 1),
+    atk_s2: stat_at(atk, 2),
+    atk_s3: stat_at(atk, 3),
+    atk_s4: stat_at(atk, 4),
+    atk_s5: stat_at(atk, 5),
+    def_name: dp.name_ja,
+    def_t1: dp.type1,
+    def_t2: dp.type2,
+    def_hp: dp.hp,
+    def_atk: dp.atk,
+    def_def: dp.def_,
+    def_spa: dp.spa,
+    def_spd: dp.spd,
+    def_spe: dp.spe,
+    def_weight: dp.weight,
+    def_ability: def.ability,
+    def_item: def.item,
+    def_tera: def.tera_type,
+    def_sys: sys_id(def),
+    def_nature: nature_id(def),
+    def_s0: stat_at(def, 0),
+    def_s1: stat_at(def, 1),
+    def_s2: stat_at(def, 2),
+    def_s3: stat_at(def, 3),
+    def_s4: stat_at(def, 4),
+    def_s5: stat_at(def, 5),
+    mv_name: mv.name,
+    mv_type: mv.type_,
+    mv_cat: cat_id(mv),
+    mv_power: mv.power,
+    mv_acc: mv.accuracy,
+    mv_pri: mv.priority,
+  }
 }
 
 ///|
@@ -488,6 +612,8 @@ fn hit_probability(accuracy : Int) -> Double {
 }
 
 ///|
+/// 1 ターンの技を優先度と素早さの順に解決し、動き終わった状態を `finish` に渡す。
+/// 命中と対象ランダムと同速は、状態ではなく `finish` の値を確率で平均する。
 fn eval_turn(
   cache : DoubleEvalCache,
   state : DoubleFieldHp,
@@ -498,11 +624,12 @@ fn eval_turn(
   in_hits : Bool,
   my : Array[Combatant],
   opp : Array[Combatant],
+  finish : (DoubleFieldHp) -> Double,
 ) -> Double {
   if in_hits {
     if hit_idx >= pending.length() {
       return eval_turn(
-        cache, state, actors, actor_idx + 1, [], 0, false, my, opp,
+        cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
       )
     }
     let actor = actors[actor_idx]
@@ -517,42 +644,48 @@ fn eval_turn(
     if p >= 1.0 {
       apply_hit(cache, state, actor, target, my, opp)
       return eval_turn(
-        cache, state, actors, actor_idx, pending, hit_idx + 1, true, my, opp,
+        cache, state, actors, actor_idx, pending, hit_idx + 1, true, my, opp, finish,
       )
     }
     if p <= 0.0 {
       return eval_turn(
-        cache, state, actors, actor_idx, pending, hit_idx + 1, true, my, opp,
+        cache, state, actors, actor_idx, pending, hit_idx + 1, true, my, opp, finish,
       )
     }
     let hit_state = copy_field(state)
     apply_hit(cache, hit_state, actor, target, my, opp)
     let v_hit = eval_turn(
-      cache, hit_state, actors, actor_idx, pending, hit_idx + 1, true, my, opp,
+      cache, hit_state, actors, actor_idx, pending, hit_idx + 1, true, my, opp, finish,
     )
     let v_miss = eval_turn(
-      cache, state, actors, actor_idx, pending, hit_idx + 1, true, my, opp,
+      cache, state, actors, actor_idx, pending, hit_idx + 1, true, my, opp, finish,
     )
     return p * v_hit + (1.0 - p) * v_miss
   }
   if actor_idx >= actors.length() {
-    return double_terminal(state, my, opp)
+    return finish(state)
   }
   let actor = actors[actor_idx]
   if hp_at(state, actor.slot) <= 0 {
     return eval_turn(
-      cache, state, actors, actor_idx + 1, [], 0, false, my, opp,
+      cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
     )
   }
   match strike_plan(state, actor, my, opp) {
     Miss =>
-      eval_turn(cache, state, actors, actor_idx + 1, [], 0, false, my, opp)
+      eval_turn(
+        cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+      )
     All(slots) =>
-      eval_turn(cache, state, actors, actor_idx, slots, 0, true, my, opp)
+      eval_turn(
+        cache, state, actors, actor_idx, slots, 0, true, my, opp, finish,
+      )
     OneOf(cands) => {
       let n = cands.length()
       if n == 0 {
-        eval_turn(cache, state, actors, actor_idx + 1, [], 0, false, my, opp)
+        eval_turn(
+          cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+        )
       } else {
         let p = 1.0 / n.to_double()
         let mut acc = 0.0
@@ -562,7 +695,7 @@ fn eval_turn(
           acc = acc +
             p *
             eval_turn(
-              cache, branch, actors, actor_idx, one, 0, true, my, opp,
+              cache, branch, actors, actor_idx, one, 0, true, my, opp, finish,
             )
         }
         acc
@@ -797,7 +930,10 @@ fn scripted_value_and_hp(
   let mut first_opp = copy_hp_row(state.opp_hp)
   for i in 0..<orders.length() {
     let branch = copy_field(state)
-    let v = eval_turn(cache, branch, orders[i], 0, [], 0, false, my, opp)
+    let v = eval_turn(
+      cache, branch, orders[i], 0, [], 0, false, my, opp,
+      fn(s) { double_terminal(s, my, opp) },
+    )
     if i == 0 {
       first_my = copy_hp_row(branch.my_hp)
       first_opp = copy_hp_row(branch.opp_hp)
@@ -1105,9 +1241,6 @@ fn double_selection_matrix(
   mode : DoubleTurnMode,
   config : NashSolverConfig,
 ) -> @nash.FiniteMatrix raise NashCliError {
-  match mode {
-    AllTargets => ()
-  }
   if my_targets.length() != team.length() ||
     opp_targets.length() != opponent.length() {
     raise InvalidJson("double move targets must align with team members")
@@ -1119,14 +1252,40 @@ fn double_selection_matrix(
   }
   let cache = new_double_eval()
   let data : Array[Array[Double]] = []
-  for i in 0..<n {
-    let (my_sq, my_tg) = take4(team, my_targets, brings[i])
-    let row = Array::make(n, 0.0)
-    for j in 0..<n {
-      let (op_sq, op_tg) = take4(opponent, opp_targets, brings[j])
-      row[j] = cached_lead_value(cache, my_sq, op_sq, my_tg, op_tg, config)
+  match mode {
+    AllTargets =>
+      for i in 0..<n {
+        let (my_sq, my_tg) = take4(team, my_targets, brings[i])
+        let row = Array::make(n, 0.0)
+        for j in 0..<n {
+          let (op_sq, op_tg) = take4(opponent, opp_targets, brings[j])
+          row[j] = cached_lead_value(cache, my_sq, op_sq, my_tg, op_tg, config)
+        }
+        data.push(row)
+      }
+    Rollout(trials, seed, turn_limit) => {
+      let rng = seeded_rng(seed)
+      for i in 0..<n {
+        let (my_sq, my_tg) = take4(team, my_targets, brings[i])
+        let row = Array::make(n, 0.0)
+        for j in 0..<n {
+          let (op_sq, op_tg) = take4(opponent, opp_targets, brings[j])
+          row[j] = double_joint_rollout_value(
+            cache,
+            my_sq,
+            op_sq,
+            my_tg,
+            op_tg,
+            config,
+            rng,
+            trials,
+            turn_limit,
+            default_rollout_epsilon,
+          )
+        }
+        data.push(row)
+      }
     }
-    data.push(row)
   }
   match @nash.FiniteMatrix::new(data) {
     Ok(m) => m

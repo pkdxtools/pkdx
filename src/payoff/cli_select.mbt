@@ -813,13 +813,54 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
   if s == "double_turn" {
     return DoubleTurnGame(AllTargets)
   }
+  match s.strip_prefix("double_rollout:") {
+    Some(rest) => return parse_double_rollout_spec(rest.to_owned())
+    None => ()
+  }
   match s.strip_prefix("screened_switching_game:") {
     Some(rest) => parse_screened_spec(rest.to_owned())
     None =>
       raise InvalidJson(
-        "team_payoff_model must be 'switching_game', 'double_turn', or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
+        "team_payoff_model must be 'switching_game', 'double_turn', 'double_rollout:<trials>:<seed>:<turn_limit>', or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
+}
+
+///|
+/// `"<trials>:<seed>:<turn_limit>"` を `DoubleTurnGame(Rollout(...))` にする。
+/// `trials` と `turn_limit` は正。seed は UInt64。
+fn parse_double_rollout_spec(rest : String) -> TeamPayoffModel raise NashCliError {
+  let (trials_str, after_trials) = match rest.split_once(":") {
+    Some((a, b)) => (a.to_owned(), b.to_owned())
+    None =>
+      raise InvalidJson(
+        "double_rollout must be 'double_rollout:<trials>:<seed>:<turn_limit>'",
+      )
+  }
+  let (seed_str, turn_str) = match after_trials.split_once(":") {
+    Some((a, b)) => (a.to_owned(), b.to_owned())
+    None =>
+      raise InvalidJson(
+        "double_rollout must be 'double_rollout:<trials>:<seed>:<turn_limit>'",
+      )
+  }
+  let trials = @string.parse_int(trials_str) catch {
+    _ => raise InvalidJson("double_rollout trials must be a positive integer")
+  }
+  if trials <= 0 {
+    raise InvalidJson("double_rollout trials must be a positive integer")
+  }
+  let seed = @string.parse_uint64(seed_str) catch {
+    _ => raise InvalidJson("double_rollout seed must be a UInt64 literal")
+  }
+  let turn_limit = @string.parse_int(turn_str) catch {
+    _ =>
+      raise InvalidJson("double_rollout turn_limit must be a positive integer")
+  }
+  if turn_limit <= 0 {
+    raise InvalidJson("double_rollout turn_limit must be a positive integer")
+  }
+  DoubleTurnGame(Rollout(trials, seed, turn_limit))
 }
 
 ///|
@@ -1550,7 +1591,9 @@ pub fn run_select_typed(
         "screened_switching_game does not support double format (single-active model only)",
       )
     (Single, DoubleTurnGame(_)) =>
-      raise InvalidJson("double_turn supports only format double")
+      raise InvalidJson(
+        "double_turn and double_rollout support only format double",
+      )
     _ => ()
   }
   let move_targets = match team_model {
@@ -1827,7 +1870,7 @@ pub fn run_select_shard(
       )
     DoubleTurnGame(_) =>
       raise InvalidJson(
-        "__select-shard does not run double_turn",
+        "__select-shard does not run double_turn or double_rollout",
       )
   }
   // CLI overrides win when present. The orchestrator passes them so that

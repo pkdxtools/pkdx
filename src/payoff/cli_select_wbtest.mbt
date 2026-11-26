@@ -108,6 +108,52 @@ test "auto_upgrade_promotes_switching_game_at_or_above_threshold" {
 }
 
 ///|
+test "parse_team_payoff_model_recognizes_double_rollout" {
+  match parse_team_payoff_model("double_rollout:4:42:3") {
+    DoubleTurnGame(Rollout(trials, seed, turn_limit)) => {
+      @debug.assert_eq(trials, 4)
+      @debug.assert_eq(seed, 42UL)
+      @debug.assert_eq(turn_limit, 3)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse_team_payoff_model_rejects_double_rollout_without_turn_limit" {
+  let errored = try {
+    let _ = parse_team_payoff_model("double_rollout:4:42")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "parse_team_payoff_model_rejects_double_rollout_with_zero_trials" {
+  let errored = try {
+    let _ = parse_team_payoff_model("double_rollout:0:1:2")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "auto_upgrade_preserves_double_rollout" {
+  match auto_upgrade_team_model(DoubleTurnGame(Rollout(2, 8UL, 4))) {
+    DoubleTurnGame(Rollout(trials, seed, turn_limit)) => {
+      @debug.assert_eq(trials, 2)
+      @debug.assert_eq(seed, 8UL)
+      @debug.assert_eq(turn_limit, 4)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
 test "auto_upgrade_preserves_explicit_screened_switching_game" {
   let explicit = ScreenedSwitchingGame(500, 7UL, 0.5, 8)
   match auto_upgrade_team_model(explicit) {

@@ -51,10 +51,15 @@ pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 ///   below `keep_top_quantile` (by mean screening value), then evaluates only
 ///   the retained sub-matrix with SwitchingGame DP (`DP_TURN_LIMIT`).
 ///   `keep_top_quantile >= 1.0` short-circuits to the plain SwitchingGame path.
-/// - `DoubleTurnGame` はダブルの 1 ターン。先発 2 体の同時行動を Nash で評価し、
-///   選出は `double_brings` の 90 行。シングルの SwitchingGame とは別経路。
+/// - `DoubleTurnGame(AllTargets)` はダブルの 1 ターン。先発 2 体の同時行動を
+///   Nash で評価し、終端は HP 比。選出は `double_brings` の 90 行。
+///   シングルの SwitchingGame とは別経路。
+/// - `DoubleTurnGame(Rollout(trials, seed, turn_limit))` は同じ同時行動行列の
+///   終端を、先発 1 ターンを含めて `turn_limit` ターン先までのモンテカルロ
+///   期待値にする。CLI は `double_rollout:<trials>:<seed>:<turn_limit>`。
 pub(all) enum DoubleTurnMode {
   AllTargets
+  Rollout(Int, UInt64, Int)
 } derive(Debug, Eq)
 
 ///|

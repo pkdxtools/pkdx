@@ -41,7 +41,9 @@ test "query_move: たいあたり has flinch_chance 0 (no row, default)" {
 }
 
 ///|
-test "query_move: ねこだまし is not flinch-modelled (conditional, no m019 row)" {
+/// m019 は行を作らない。m020 が失敗ゲートとセットで `flinch_chance` 100 を入れる。
+/// `query_move` はその列をそのまま返す。初回行動以外で外すのは payoff 側。
+test "query_move: ねこだまし flinch_chance is 100 after m020" {
   let db_path = match find_test_db() {
     Some(p) => p
     None => return
@@ -53,7 +55,7 @@ test "query_move: ねこだまし is not flinch-modelled (conditional, no m019 r
   let result = @db.query_move(db, "ねこだまし", @model.Other("scarlet_violet"))
   @db.close(db)
   match result {
-    Ok(mv) => assert_true(mv.flinch_chance == 0)
+    Ok(mv) => assert_true(mv.flinch_chance == 100)
     Err(e) => fail("query_move failed: " + e)
   }
 }

@@ -33,8 +33,11 @@
 /// 分母が 1 のときは `sample_hit` を呼ばない。ε = 0 の方策はこれらの技の
 /// 期待ダメージを 0 と見る。選ばれたときの解決は `resolve_actor_sampled`。
 ///
-/// 入れないもの: 状態異常、メガシンカ、ファストガード、このゆびとまれ、いかく、
-/// 設置、反動、回復、追加効果。いかくは補充時にも掛けない。
+/// このゆびとまれ・いかりのこなといかくは `double_entry.mbt`。補充と自発交代の
+/// あと、技の前に一度だけ登場いかくを掛ける。途中で入れ替わった 1 体は撃たない。
+///
+/// 入れないもの: 状態異常、メガシンカ、ファストガード、ひらいしんの引きつけ、
+/// こうげき以外の能力ランク変化技、設置、反動、回復、追加効果。
 
 ///|
 /// シングル `team_monte_carlo.mbt` の `SWITCH_HYSTERESIS` と同じ幅。
@@ -222,7 +225,13 @@ fn slot_score(
   if max_hp <= 0 {
     return 0.0
   }
-  let dmg = cached_move_mean(cache, atk, def, mv)
+  let dmg = cached_move_mean(
+    cache,
+    atk,
+    def,
+    mv,
+    stage=stage_for_move(mv, read_ranks(state, slot_index(actor))),
+  )
   let ratio = dmg.to_double() / max_hp.to_double()
   if foe_of(actor, slot) {
     ratio
@@ -533,7 +542,7 @@ fn push_policy_actor(
     target_code: code_at(targets_of(all_targets, squad), move_idx),
     chosen,
     priority: double_actor_priority(mon, mv),
-    speed: double_actor_speed(mon),
+    speed: double_actor_speed_at(mon, spe_rank_at(state, slot)),
   })
 }
 
@@ -591,6 +600,12 @@ fn resolve_actor_sampled(
         }
         mark_protect_result(state, actor.slot, ok, protect_kind(mv.name))
         return
+      } else if is_follow_me(mv.name) {
+        mark_follow(state, actor.slot)
+        return
+      } else if is_rage_powder(mv.name) {
+        mark_rage(state, actor.slot)
+        return
       }
     None => ()
   }
@@ -601,7 +616,7 @@ fn resolve_actor_sampled(
     100
   }
   let p = hit_probability(acc)
-  match strike_plan(state, actor, my, opp) {
+  match strike_with_draw(state, actor, my, opp) {
     Miss => ()
     All(slots) =>
       for slot in slots {
@@ -666,7 +681,8 @@ fn send_best_bench(
 }
 
 ///|
-/// 左を先に埋める。いかくは掛けない。
+/// 左を先に埋める。いかくはここでは撃たず、`play_policy_turn` が
+/// 自発交代のあとにまとめて撃つ。
 fn replace_fainted(
   cache : DoubleEvalCache,
   state : DoubleFieldHp,
@@ -702,6 +718,7 @@ fn play_policy_turn(
   apply_snapshot_switch(state, true, false, my_right, my_ids)
   apply_snapshot_switch(state, false, true, opp_left, opp_ids)
   apply_snapshot_switch(state, false, false, opp_right, opp_ids)
+  fire_entry_intimidate(state, my, opp)
   let actors : Array[DoubleActor] = []
   push_policy_actor(actors, state, true, true, my_left, my_targets, my, opp)
   push_policy_actor(actors, state, true, false, my_right, my_targets, my, opp)
@@ -781,11 +798,12 @@ fn expected_scripted_turn(
   apply_switch(state, true, false, my_right)
   apply_switch(state, false, true, opp_left)
   apply_switch(state, false, false, opp_right)
+  fire_entry_intimidate(state, my, opp)
   let actors : Array[DoubleActor] = []
-  push_mover(actors, true, true, my_left, my, my_targets)
-  push_mover(actors, true, false, my_right, my, my_targets)
-  push_mover(actors, false, true, opp_left, opp, opp_targets)
-  push_mover(actors, false, false, opp_right, opp, opp_targets)
+  push_mover(actors, true, true, my_left, my, my_targets, state)
+  push_mover(actors, true, false, my_right, my, my_targets, state)
+  push_mover(actors, false, true, opp_left, opp, opp_targets, state)
+  push_mover(actors, false, false, opp_right, opp, opp_targets, state)
   let orders = action_orders(actors)
   if orders.length() == 0 {
     settle_double_guard(state)

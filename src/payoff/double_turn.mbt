@@ -33,9 +33,14 @@
 /// 1 ターン評価の直前の連続使用は `scripted_value_and_hp_stall` の
 /// `opening_stall`（自陣左、自陣右、相手左、相手右）。空なら全員 0。
 ///
+/// このゆびとまれ・いかりのこなといかくは `double_entry.mbt`。優先度は技の
+/// `priority` を `effective_priority` に通す。ランクはスロットの 5 段階。
+/// ダメージの攻撃側段階は、その技が参照する能力だけを渡す。
+///
 /// 入れないもの: 状態異常、設置、メガ、ばけのかわ、反動、自滅、回復、追加効果、
-/// ファストガード、このゆびとまれ、いかく。キングシールドの攻撃低下、
-/// トーチカのどく、ゴーストダイブの溜めは入れない。L2 ディスクには書かない。
+/// ファストガード、ひらいしんの引きつけ、こうげき以外の能力ランク変化技。
+/// キングシールドの攻撃低下、トーチカのどく、ゴーストダイブの溜めは入れない。
+/// L2 ディスクには書かない。
 
 ///|
 priv struct DoubleActor {
@@ -59,6 +64,13 @@ priv struct DoubleFieldHp {
   wide : Array[Int]
   hand : Array[Int]
   broken : Array[Int]
+  ranks : Array[Int]
+  entered : Array[Int]
+  follow : Array[Int]
+  rage : Array[Int]
+  follow_at : Array[Int]
+  rage_at : Array[Int]
+  draw_clock : Array[Int]
 }
 
 ///|
@@ -114,6 +126,7 @@ priv struct DoubleMeanKey {
   mv_power : Int
   mv_acc : Int
   mv_pri : Int
+  atk_stage : Int
 } derive(Eq, Hash)
 
 ///|
@@ -154,6 +167,13 @@ fn copy_field(s : DoubleFieldHp) -> DoubleFieldHp {
     wide: copy_hp_row(s.wide),
     hand: copy_hp_row(s.hand),
     broken: copy_hp_row(s.broken),
+    ranks: copy_hp_row(s.ranks),
+    entered: copy_hp_row(s.entered),
+    follow: copy_hp_row(s.follow),
+    rage: copy_hp_row(s.rage),
+    follow_at: copy_hp_row(s.follow_at),
+    rage_at: copy_hp_row(s.rage_at),
+    draw_clock: copy_hp_row(s.draw_clock),
   }
 }
 
@@ -214,6 +234,9 @@ fn set_hp(s : DoubleFieldHp, slot : @doubles.DoubleSlot, hp : Int) -> Unit {
     s.my_hp[squad] = next
   } else {
     s.opp_hp[squad] = next
+  }
+  if next <= 0 {
+    clear_draw_slot(s, slot)
   }
 }
 
@@ -395,7 +418,12 @@ fn cat_id(mv : @model.Move) -> Int {
 }
 
 ///|
-fn mean_cache_key(atk : Combatant, def : Combatant, mv : @model.Move) -> DoubleMeanKey {
+fn mean_cache_key(
+  atk : Combatant,
+  def : Combatant,
+  mv : @model.Move,
+  stage : Int,
+) -> DoubleMeanKey {
   let ap = atk.pokemon
   let dp = def.pokemon
   {
@@ -447,17 +475,24 @@ fn mean_cache_key(atk : Combatant, def : Combatant, mv : @model.Move) -> DoubleM
     mv_power: mv.power,
     mv_acc: mv.accuracy,
     mv_pri: mv.priority,
+    atk_stage: stage,
   }
 }
 
 ///|
 /// ダブルの整数期待ダメージ。`is_double: true` 以外はシングルの
-/// `build_input_with_ranks` と同じ入力。変化技は 0。
-fn double_move_mean(atk : Combatant, def : Combatant, mv : @model.Move) -> Int {
+/// `build_input_with_ranks` と同じ入力。`stage` はその技が参照する攻撃側段階。
+/// 変化技は 0。
+fn double_move_mean(
+  atk : Combatant,
+  def : Combatant,
+  mv : @model.Move,
+  stage? : Int = 0,
+) -> Int {
   if mv.category == @model.Status {
     return 0
   }
-  let input = { ..build_input_with_ranks(atk, def, mv, 0, 0), is_double: true }
+  let input = { ..build_input_with_ranks(atk, def, mv, stage, 0), is_double: true }
   let r = @damage.calc_damage(input)
   if r.is_immune {
     return 0
@@ -471,12 +506,13 @@ fn cached_move_mean(
   atk : Combatant,
   def : Combatant,
   mv : @model.Move,
+  stage? : Int = 0,
 ) -> Int {
-  let key = mean_cache_key(atk, def, mv)
+  let key = mean_cache_key(atk, def, mv, stage)
   match cache.dmg.get(key) {
     Some(v) => v
     None => {
-      let v = double_move_mean(atk, def, mv)
+      let v = double_move_mean(atk, def, mv, stage=stage)
       cache.dmg[key] = v
       v
     }
@@ -498,8 +534,8 @@ fn squad_mon(
 }
 
 ///|
-fn double_actor_speed(c : Combatant) -> Int {
-  let staged = effective_speed(c.pokemon.spe, 0)
+fn double_actor_speed_at(c : Combatant, spe_rank : Int) -> Int {
+  let staged = effective_speed(c.pokemon.spe, spe_rank)
   speed_after_choice_scarf(staged, c.item, false)
 }
 
@@ -621,14 +657,15 @@ fn apply_hit(
     mv
   }
   let def = defender_of(s, target, my, opp)
+  let stage = stage_for_move(boosted, read_ranks(s, slot_index(actor.slot)))
   match double_guard_hit(s, actor, target, mv, atk.ability) {
     GuardThrough => {
-      let dmg = cached_move_mean(cache, atk, def, boosted)
+      let dmg = cached_move_mean(cache, atk, def, boosted, stage=stage)
       set_hp(s, target, hp_at(s, target) - dmg)
     }
     GuardQuarter => {
       let dmg = @damage.round5(
-        cached_move_mean(cache, atk, def, boosted),
+        cached_move_mean(cache, atk, def, boosted, stage=stage),
         1024,
       )
       set_hp(s, target, hp_at(s, target) - dmg)
@@ -725,10 +762,20 @@ fn eval_turn(
         return eval_protect_turn(
           cache, state, actors, actor_idx, my, opp, finish, mv,
         )
+      } else if is_follow_me(mv.name) {
+        mark_follow(state, actor.slot)
+        return eval_turn(
+          cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+        )
+      } else if is_rage_powder(mv.name) {
+        mark_rage(state, actor.slot)
+        return eval_turn(
+          cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+        )
       }
     None => ()
   }
-  match strike_plan(state, actor, my, opp) {
+  match strike_with_draw(state, actor, my, opp) {
     Miss =>
       eval_turn(
         cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
@@ -876,6 +923,7 @@ fn push_mover(
   action : @doubles.DoubleAction?,
   squad : Array[Combatant],
   targets : Array[Array[Int]],
+  state : DoubleFieldHp,
 ) -> Unit {
   let squad_idx = if is_left { 0 } else { 1 }
   let slot = if is_me {
@@ -915,7 +963,7 @@ fn push_mover(
     target_code: code,
     chosen,
     priority: double_actor_priority(mon, mv),
-    speed: double_actor_speed(mon),
+    speed: double_actor_speed_at(mon, spe_rank_at(state, slot)),
   })
 }
 
@@ -952,7 +1000,7 @@ fn fresh_field(my : Array[Combatant], opp : Array[Combatant]) -> DoubleFieldHp {
   for i in 0..<opp.length() {
     opp_hp[i] = opp[i].pokemon.hp
   }
-  {
+  let s = {
     pos: [0, 1, 0, 1],
     my_hp,
     opp_hp,
@@ -961,7 +1009,19 @@ fn fresh_field(my : Array[Combatant], opp : Array[Combatant]) -> DoubleFieldHp {
     wide: guard_zeros(2),
     hand: guard_zeros(4),
     broken: guard_zeros(4),
+    ranks: guard_zeros(20),
+    entered: guard_zeros(4),
+    follow: Array::make(2, -1),
+    rage: Array::make(2, -1),
+    follow_at: guard_zeros(2),
+    rage_at: guard_zeros(2),
+    draw_clock: guard_zeros(1),
   }
+  for i in 0..<4 {
+    s.entered[i] = 1
+  }
+  fire_entry_intimidate(s, my, opp)
+  s
 }
 
 ///|
@@ -1023,11 +1083,12 @@ fn scripted_turn_field(
   apply_switch(state, true, false, my_right)
   apply_switch(state, false, true, opp_left)
   apply_switch(state, false, false, opp_right)
+  fire_entry_intimidate(state, my, opp)
   let actors : Array[DoubleActor] = []
-  push_mover(actors, true, true, my_left, my, my_targets)
-  push_mover(actors, true, false, my_right, my, my_targets)
-  push_mover(actors, false, true, opp_left, opp, opp_targets)
-  push_mover(actors, false, false, opp_right, opp, opp_targets)
+  push_mover(actors, true, true, my_left, my, my_targets, state)
+  push_mover(actors, true, false, my_right, my, my_targets, state)
+  push_mover(actors, false, true, opp_left, opp, opp_targets, state)
+  push_mover(actors, false, false, opp_right, opp, opp_targets, state)
   let orders = action_orders(actors)
   if orders.length() == 0 {
     settle_double_guard(state)

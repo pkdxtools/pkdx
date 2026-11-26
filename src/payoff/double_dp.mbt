@@ -16,17 +16,19 @@
 /// 深さの終端は HP 比（`double_terminal`）。ロールアウトは終端に使わない。
 /// `turn_limit <= 1` は段階 1 の `joint_matrix_value` と同じ経路。
 ///
-/// メモはシングルの `value` と同じく、状態（位置・HP・残りターン）から値への
-/// 写像。ダメージ平均は段階 1 の `DoubleEvalCache`。選出行列では
+/// メモはシングルの `value` と同じく、状態（位置・HP・まもるの stall・残り
+/// ターン）から値への写像。ターン内の盾・ワイドガード・てだすけはキーに
+/// 入れない。ダメージ平均は段階 1 の `DoubleEvalCache`。選出行列では
 /// `V(A,B) = -V(B,A)` を使い、同じ 4 対 4 を二度解かない。
 /// 葉（残り 1 ターン）では、同じ優先度・命中・範囲で、どの生存相手にも
-/// ダメージが劣る技を落とす。零和の値は変わらない。それより前のターンでは
-/// 同じ効果の重複だけを落とす。KO すると次に強い控えが出るため、弱い技を
-/// 値の前に捨てると厳密でなくなる。行列を埋めたあと、厳密に支配される純戦略と
-/// 純鞍点はシングル DP と同じく LP の前に処理する。
+/// ダメージが劣る技を落とす。まもる・てだすけ・ワイドガードはダメージ 0 でも
+/// 残す。零和の値は変わらない。それより前のターンでは同じ効果の重複だけを
+/// 落とす。KO すると次に強い控えが出るため、弱い技を値の前に捨てると厳密で
+/// なくなる。行列を埋めたあと、厳密に支配される純戦略と純鞍点はシングル DP
+/// と同じく LP の前に処理する。
 ///
-/// 入れないもの: 状態異常、メガシンカ、まもる、てだすけ、ワイドガード、
-/// このゆびとまれ、いかく、設置、反動、回復、追加効果。
+/// 入れないもの: 状態異常、メガシンカ、ファストガード、このゆびとまれ、いかく、
+/// 設置、反動、回復、追加効果。
 
 ///|
 const DOUBLE_DP_SADDLE_TOL : Double = 1.0e-10
@@ -45,6 +47,10 @@ priv struct DoubleDpKey {
   o1 : Int
   o2 : Int
   o3 : Int
+  s0 : Int
+  s1 : Int
+  s2 : Int
+  s3 : Int
   turns : Int
 } derive(Eq, Hash)
 
@@ -90,13 +96,44 @@ fn dp_key_of(s : DoubleFieldHp, turns : Int) -> DoubleDpKey {
     o1: at_or0(s.opp_hp, 1),
     o2: at_or0(s.opp_hp, 2),
     o3: at_or0(s.opp_hp, 3),
+    s0: at_or0(s.stall, 0),
+    s1: at_or0(s.stall, 1),
+    s2: at_or0(s.stall, 2),
+    s3: at_or0(s.stall, 3),
     turns,
   }
 }
 
 ///|
 fn state_at(s : DoubleFieldHp, pos : Array[Int]) -> DoubleFieldHp {
-  { pos: copy_hp_row(pos), my_hp: copy_hp_row(s.my_hp), opp_hp: copy_hp_row(s.opp_hp) }
+  let next = {
+    pos: copy_hp_row(pos),
+    my_hp: copy_hp_row(s.my_hp),
+    opp_hp: copy_hp_row(s.opp_hp),
+    stall: copy_hp_row(s.stall),
+    shield: copy_hp_row(s.shield),
+    wide: copy_hp_row(s.wide),
+    hand: copy_hp_row(s.hand),
+    broken: copy_hp_row(s.broken),
+  }
+  let n = if pos.length() < 4 { pos.length() } else { 4 }
+  for i in 0..<n {
+    if at_or0(s.pos, i) != at_or0(pos, i) {
+      if i < next.stall.length() {
+        next.stall[i] = 0
+      }
+      if i < next.shield.length() {
+        next.shield[i] = 0
+      }
+      if i < next.hand.length() {
+        next.hand[i] = 0
+      }
+      if i < next.broken.length() {
+        next.broken[i] = 0
+      }
+    }
+  }
+  next
 }
 
 ///|
@@ -300,6 +337,7 @@ fn damages_cover(
 
 ///|
 /// 葉では劣る技と、攻撃があるときの「何もしない」を落とす。
+/// まもる・てだすけ・ワイドガードは葉でも残す。こらえるは残さない。
 /// それ以外のターンは同じ効果の重複だけを落とす。
 fn prune_slot_actions(
   cache : DoubleEvalCache,
@@ -335,8 +373,10 @@ fn prune_slot_actions(
           None => drop[i] = true
           Some(mv) => {
             let code = action_code_of(targets, actions[i])
-            let blank = mv.category == @model.Status ||
-              (foe_only_code(code) && max_vs(cache, mon, mv, foes) == 0)
+            let is_guard = is_double_guard_move(mv.name)
+            let blank = !is_guard &&
+              (mv.category == @model.Status ||
+                (foe_only_code(code) && max_vs(cache, mon, mv, foes) == 0))
             if blank {
               if leaf && any_safe {
                 drop[i] = true
@@ -608,6 +648,7 @@ fn turn_after_joint(
     }
   }
   if orders.length() == 0 {
+    settle_double_guard(branch)
     return finish(branch)
   }
   let mut sum = 0.0

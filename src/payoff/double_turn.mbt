@@ -28,8 +28,14 @@
 /// ここへ HP 比を渡す。`double_rollout` は同じ解決のあと、その状態から
 /// ロールアウトした値を渡す。終端関数は HP を書き換えない。
 ///
+/// まもる・てだすけ・ワイドガードは `double_guard.mbt`。優先度は技の
+/// `priority` を `effective_priority` に通す。名前では上書きしない。
+/// 1 ターン評価の直前の連続使用は `scripted_value_and_hp_stall` の
+/// `opening_stall`（自陣左、自陣右、相手左、相手右）。空なら全員 0。
+///
 /// 入れないもの: 状態異常、設置、メガ、ばけのかわ、反動、自滅、回復、追加効果、
-/// てだすけ、ワイドガード、このゆびとまれ、いかく。L2 ディスクには書かない。
+/// ファストガード、このゆびとまれ、いかく。キングシールドの攻撃低下、
+/// トーチカのどく、ゴーストダイブの溜めは入れない。L2 ディスクには書かない。
 
 ///|
 priv struct DoubleActor {
@@ -48,6 +54,11 @@ priv struct DoubleFieldHp {
   pos : Array[Int]
   my_hp : Array[Int]
   opp_hp : Array[Int]
+  stall : Array[Int]
+  shield : Array[Int]
+  wide : Array[Int]
+  hand : Array[Int]
+  broken : Array[Int]
 }
 
 ///|
@@ -134,7 +145,16 @@ fn copy_hp_row(xs : Array[Int]) -> Array[Int] {
 
 ///|
 fn copy_field(s : DoubleFieldHp) -> DoubleFieldHp {
-  { pos: copy_hp_row(s.pos), my_hp: copy_hp_row(s.my_hp), opp_hp: copy_hp_row(s.opp_hp) }
+  {
+    pos: copy_hp_row(s.pos),
+    my_hp: copy_hp_row(s.my_hp),
+    opp_hp: copy_hp_row(s.opp_hp),
+    stall: copy_hp_row(s.stall),
+    shield: copy_hp_row(s.shield),
+    wide: copy_hp_row(s.wide),
+    hand: copy_hp_row(s.hand),
+    broken: copy_hp_row(s.broken),
+  }
 }
 
 ///|
@@ -595,9 +615,26 @@ fn apply_hit(
     return
   }
   let mv = atk.moves[actor.move_idx]
+  let boosted = if hand_boosted(s, actor.slot) {
+    helping_hand_move(mv)
+  } else {
+    mv
+  }
   let def = defender_of(s, target, my, opp)
-  let dmg = cached_move_mean(cache, atk, def, mv)
-  set_hp(s, target, hp_at(s, target) - dmg)
+  match double_guard_hit(s, actor, target, mv, atk.ability) {
+    GuardThrough => {
+      let dmg = cached_move_mean(cache, atk, def, boosted)
+      set_hp(s, target, hp_at(s, target) - dmg)
+    }
+    GuardQuarter => {
+      let dmg = @damage.round5(
+        cached_move_mean(cache, atk, def, boosted),
+        1024,
+      )
+      set_hp(s, target, hp_at(s, target) - dmg)
+    }
+    GuardBlock(kind) => apply_spiky_chip(s, actor, atk, mv, kind)
+  }
 }
 
 ///|
@@ -663,6 +700,7 @@ fn eval_turn(
     return p * v_hit + (1.0 - p) * v_miss
   }
   if actor_idx >= actors.length() {
+    settle_double_guard(state)
     return finish(state)
   }
   let actor = actors[actor_idx]
@@ -670,6 +708,25 @@ fn eval_turn(
     return eval_turn(
       cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
     )
+  }
+  match move_of_actor(actor, my, opp) {
+    Some(mv) =>
+      if is_helping_hand(mv.name) {
+        mark_helping_hand(state, actor)
+        return eval_turn(
+          cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+        )
+      } else if is_wide_guard(mv.name) {
+        mark_wide_guard(state, actor.slot)
+        return eval_turn(
+          cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+        )
+      } else if is_protect_move(mv.name) {
+        return eval_protect_turn(
+          cache, state, actors, actor_idx, my, opp, finish, mv,
+        )
+      }
+    None => ()
   }
   match strike_plan(state, actor, my, opp) {
     Miss =>
@@ -879,7 +936,7 @@ fn apply_switch(
       } else {
         3
       }
-      s.pos[idx] = squad
+      set_slot_squad(s, idx, squad)
     }
     _ => ()
   }
@@ -895,7 +952,16 @@ fn fresh_field(my : Array[Combatant], opp : Array[Combatant]) -> DoubleFieldHp {
   for i in 0..<opp.length() {
     opp_hp[i] = opp[i].pokemon.hp
   }
-  { pos: [0, 1, 0, 1], my_hp, opp_hp }
+  {
+    pos: [0, 1, 0, 1],
+    my_hp,
+    opp_hp,
+    stall: guard_zeros(4),
+    shield: guard_zeros(4),
+    wide: guard_zeros(2),
+    hand: guard_zeros(4),
+    broken: guard_zeros(4),
+  }
 }
 
 ///|
@@ -910,7 +976,49 @@ fn scripted_value_and_hp(
   opp_left : @doubles.DoubleAction?,
   opp_right : @doubles.DoubleAction?,
 ) -> (Double, Array[Int], Array[Int]) {
+  scripted_value_and_hp_stall(
+    cache, my, opp, my_targets, opp_targets, my_left, my_right, opp_left,
+    opp_right, [],
+  )
+}
+
+///|
+/// `opening_stall` は交代の前に載せる。交代したスロットは 0 に戻る。
+/// 返り値の HP は同速グループの先頭順列で、確率分岐では失敗側。
+fn scripted_value_and_hp_stall(
+  cache : DoubleEvalCache,
+  my : Array[Combatant],
+  opp : Array[Combatant],
+  my_targets : Array[Array[Int]],
+  opp_targets : Array[Array[Int]],
+  my_left : @doubles.DoubleAction?,
+  my_right : @doubles.DoubleAction?,
+  opp_left : @doubles.DoubleAction?,
+  opp_right : @doubles.DoubleAction?,
+  opening_stall : Array[Int],
+) -> (Double, Array[Int], Array[Int]) {
+  let (v, field) = scripted_turn_field(
+    cache, my, opp, my_targets, opp_targets, my_left, my_right, opp_left,
+    opp_right, opening_stall,
+  )
+  (v, copy_hp_row(field.my_hp), copy_hp_row(field.opp_hp))
+}
+
+///|
+fn scripted_turn_field(
+  cache : DoubleEvalCache,
+  my : Array[Combatant],
+  opp : Array[Combatant],
+  my_targets : Array[Array[Int]],
+  opp_targets : Array[Array[Int]],
+  my_left : @doubles.DoubleAction?,
+  my_right : @doubles.DoubleAction?,
+  opp_left : @doubles.DoubleAction?,
+  opp_right : @doubles.DoubleAction?,
+  opening_stall : Array[Int],
+) -> (Double, DoubleFieldHp) {
   let state = fresh_field(my, opp)
+  apply_opening_stall(state, opening_stall)
   apply_switch(state, true, true, my_left)
   apply_switch(state, true, false, my_right)
   apply_switch(state, false, true, opp_left)
@@ -922,12 +1030,12 @@ fn scripted_value_and_hp(
   push_mover(actors, false, false, opp_right, opp, opp_targets)
   let orders = action_orders(actors)
   if orders.length() == 0 {
+    settle_double_guard(state)
     let v = double_terminal(state, my, opp)
-    return (v, copy_hp_row(state.my_hp), copy_hp_row(state.opp_hp))
+    return (v, state)
   }
   let mut sum = 0.0
-  let mut first_my = copy_hp_row(state.my_hp)
-  let mut first_opp = copy_hp_row(state.opp_hp)
+  let mut first = copy_field(state)
   for i in 0..<orders.length() {
     let branch = copy_field(state)
     let v = eval_turn(
@@ -935,12 +1043,11 @@ fn scripted_value_and_hp(
       fn(s) { double_terminal(s, my, opp) },
     )
     if i == 0 {
-      first_my = copy_hp_row(branch.my_hp)
-      first_opp = copy_hp_row(branch.opp_hp)
+      first = branch
     }
     sum = sum + v
   }
-  (sum / orders.length().to_double(), first_my, first_opp)
+  (sum / orders.length().to_double(), first)
 }
 
 ///|

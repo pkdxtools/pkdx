@@ -107,6 +107,11 @@ fn set_slot_squad(s : DoubleFieldHp, idx : Int, squad : Int) -> Unit {
     return
   }
   s.pos[idx] = squad
+  zero_slot_ranks(s, idx)
+  if idx < s.entered.length() {
+    s.entered[idx] = 1
+  }
+  clear_draw_slot(s, slot_of_index(idx))
   if idx < s.stall.length() {
     s.stall[idx] = 0
   }
@@ -208,6 +213,7 @@ fn settle_double_guard(state : DoubleFieldHp) -> Unit {
   for i in 0..<state.broken.length() {
     state.broken[i] = 0
   }
+  clear_redirect(state)
 }
 
 ///|

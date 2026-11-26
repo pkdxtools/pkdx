@@ -11,14 +11,16 @@
 /// （交代したターンは技が使えない）と、Showdown のターン間 faint switch。
 /// 補充の選び方は段階 2 の攻撃期待貪欲ではなく、その場の Nash。自陣の補充案が
 /// 行、相手が列。両スロットがひんしで控えが 1 体のときは左から埋める
-/// （段階 2 と同じ）。控えが 2 体なら左右の割り当てを両方解く。いかくは掛けない。
+/// （段階 2 と同じ）。控えが 2 体なら左右の割り当てを両方解く。
+/// 入ったポケモンのいかくは、そのターンの技の前に `fire_entry_intimidate` が掛ける。
 ///
 /// 深さの終端は HP 比（`double_terminal`）。ロールアウトは終端に使わない。
 /// `turn_limit <= 1` は段階 1 の `joint_matrix_value` と同じ経路。
 ///
-/// メモはシングルの `value` と同じく、状態（位置・HP・まもるの stall・残り
-/// ターン）から値への写像。ターン内の盾・ワイドガード・てだすけはキーに
-/// 入れない。ダメージ平均は段階 1 の `DoubleEvalCache`。選出行列では
+/// メモはシングルの `value` と同じく、状態（位置・HP・まもるの stall・
+/// 5 段階のパック・未処理の登場フラグ・残りターン）から値への写像。
+/// ターン内の盾・ワイドガード・てだすけ・引きつけはキーに入れない。
+/// ダメージ平均は段階 1 の `DoubleEvalCache`。選出行列では
 /// `V(A,B) = -V(B,A)` を使い、同じ 4 対 4 を二度解かない。
 /// 葉（残り 1 ターン）では、同じ優先度・命中・範囲で、どの生存相手にも
 /// ダメージが劣る技を落とす。まもる・てだすけ・ワイドガードはダメージ 0 でも
@@ -27,8 +29,8 @@
 /// なくなる。行列を埋めたあと、厳密に支配される純戦略と純鞍点はシングル DP
 /// と同じく LP の前に処理する。
 ///
-/// 入れないもの: 状態異常、メガシンカ、ファストガード、このゆびとまれ、いかく、
-/// 設置、反動、回復、追加効果。
+/// 入れないもの: 状態異常、メガシンカ、ファストガード、ひらいしんの引きつけ、
+/// こうげき以外の能力ランク変化技、設置、反動、回復、追加効果。
 
 ///|
 const DOUBLE_DP_SADDLE_TOL : Double = 1.0e-10
@@ -51,6 +53,14 @@ priv struct DoubleDpKey {
   s1 : Int
   s2 : Int
   s3 : Int
+  k0 : Int
+  k1 : Int
+  k2 : Int
+  k3 : Int
+  e0 : Int
+  e1 : Int
+  e2 : Int
+  e3 : Int
   turns : Int
 } derive(Eq, Hash)
 
@@ -100,6 +110,14 @@ fn dp_key_of(s : DoubleFieldHp, turns : Int) -> DoubleDpKey {
     s1: at_or0(s.stall, 1),
     s2: at_or0(s.stall, 2),
     s3: at_or0(s.stall, 3),
+    k0: pack_slot_ranks(s, 0),
+    k1: pack_slot_ranks(s, 1),
+    k2: pack_slot_ranks(s, 2),
+    k3: pack_slot_ranks(s, 3),
+    e0: at_or0(s.entered, 0),
+    e1: at_or0(s.entered, 1),
+    e2: at_or0(s.entered, 2),
+    e3: at_or0(s.entered, 3),
     turns,
   }
 }
@@ -115,10 +133,22 @@ fn state_at(s : DoubleFieldHp, pos : Array[Int]) -> DoubleFieldHp {
     wide: copy_hp_row(s.wide),
     hand: copy_hp_row(s.hand),
     broken: copy_hp_row(s.broken),
+    ranks: copy_hp_row(s.ranks),
+    entered: copy_hp_row(s.entered),
+    follow: copy_hp_row(s.follow),
+    rage: copy_hp_row(s.rage),
+    follow_at: copy_hp_row(s.follow_at),
+    rage_at: copy_hp_row(s.rage_at),
+    draw_clock: copy_hp_row(s.draw_clock),
   }
   let n = if pos.length() < 4 { pos.length() } else { 4 }
   for i in 0..<n {
     if at_or0(s.pos, i) != at_or0(pos, i) {
+      zero_slot_ranks(next, i)
+      if i < next.entered.length() {
+        next.entered[i] = 1
+      }
+      clear_draw_slot(next, slot_of_index(i))
       if i < next.stall.length() {
         next.stall[i] = 0
       }
@@ -284,10 +314,17 @@ fn foe_only_code(code : Int) -> Bool {
 }
 
 ///|
-fn max_vs(cache : DoubleEvalCache, atk : Combatant, mv : @model.Move, foes : Array[Combatant]) -> Int {
+fn max_vs(
+  cache : DoubleEvalCache,
+  atk : Combatant,
+  mv : @model.Move,
+  foes : Array[Combatant],
+  ranks : Array[Int],
+) -> Int {
+  let stage = stage_for_move(mv, ranks)
   let mut best = 0
   for foe in foes {
-    let d = cached_move_mean(cache, atk, foe, mv)
+    let d = cached_move_mean(cache, atk, foe, mv, stage=stage)
     if d > best {
       best = d
     }
@@ -304,11 +341,14 @@ fn damages_cover(
   foes : Array[Combatant],
   allies : Array[Combatant],
   foe_only : Bool,
+  ranks : Array[Int],
 ) -> Int {
+  let sa = stage_for_move(a, ranks)
+  let sb = stage_for_move(b, ranks)
   let mut strict = false
   for foe in foes {
-    let da = cached_move_mean(cache, atk, foe, a)
-    let db = cached_move_mean(cache, atk, foe, b)
+    let da = cached_move_mean(cache, atk, foe, a, stage=sa)
+    let db = cached_move_mean(cache, atk, foe, b, stage=sb)
     if da < db {
       return -1
     }
@@ -318,8 +358,8 @@ fn damages_cover(
   }
   if !foe_only {
     for ally in allies {
-      let da = cached_move_mean(cache, atk, ally, a)
-      let db = cached_move_mean(cache, atk, ally, b)
+      let da = cached_move_mean(cache, atk, ally, a, stage=sa)
+      let db = cached_move_mean(cache, atk, ally, b, stage=sb)
       if da > db {
         return -1
       }
@@ -337,7 +377,8 @@ fn damages_cover(
 
 ///|
 /// 葉では劣る技と、攻撃があるときの「何もしない」を落とす。
-/// まもる・てだすけ・ワイドガードは葉でも残す。こらえるは残さない。
+/// まもる・てだすけ・ワイドガードと、このゆびとまれ・いかりのこなは葉でも残す。
+/// こらえるは残さない。ダメージ比較は今の攻撃側段階で行う。
 /// それ以外のターンは同じ効果の重複だけを落とす。
 fn prune_slot_actions(
   cache : DoubleEvalCache,
@@ -347,6 +388,7 @@ fn prune_slot_actions(
   foes : Array[Combatant],
   allies : Array[Combatant],
   leaf : Bool,
+  ranks? : Array[Int] = [],
 ) -> Array[@doubles.DoubleAction] {
   let n = actions.length()
   if n == 0 {
@@ -359,7 +401,7 @@ fn prune_slot_actions(
       None => ()
       Some(mv) =>
         if foe_only_code(action_code_of(targets, actions[i])) &&
-          max_vs(cache, mon, mv, foes) > 0 {
+          max_vs(cache, mon, mv, foes, ranks) > 0 {
           any_safe = true
         }
     }
@@ -373,10 +415,10 @@ fn prune_slot_actions(
           None => drop[i] = true
           Some(mv) => {
             let code = action_code_of(targets, actions[i])
-            let is_guard = is_double_guard_move(mv.name)
-            let blank = !is_guard &&
+            let is_keep = is_double_guard_move(mv.name) || is_redirect_move(mv.name)
+            let blank = !is_keep &&
               (mv.category == @model.Status ||
-                (foe_only_code(code) && max_vs(cache, mon, mv, foes) == 0))
+                (foe_only_code(code) && max_vs(cache, mon, mv, foes, ranks) == 0))
             if blank {
               if leaf && any_safe {
                 drop[i] = true
@@ -443,7 +485,7 @@ fn prune_slot_actions(
                   action_code_of(targets, actions[k]) == code_i &&
                   chosen_index_of(actions[k]) == chosen_i {
                   let rel = damages_cover(
-                    cache, mon, mk, mi, foes, allies, true,
+                    cache, mon, mk, mi, foes, allies, true, ranks,
                   )
                   if (rel == 0 && k < i) || (leaf && rel == 1) {
                     drop[i] = true
@@ -574,6 +616,7 @@ fn prune_one_slot(
     foes,
     allies,
     leaf,
+    ranks=read_ranks(state, slot_index(slot)),
   )
 }
 
@@ -622,6 +665,7 @@ fn turn_after_joint(
   apply_snapshot_switch(branch, true, false, my_right, my_ids)
   apply_snapshot_switch(branch, false, true, opp_left, opp_ids)
   apply_snapshot_switch(branch, false, false, opp_right, opp_ids)
+  fire_entry_intimidate(branch, my, opp)
   let actors : Array[DoubleActor] = []
   push_policy_actor(actors, branch, true, true, my_left, my_targets, my, opp)
   push_policy_actor(actors, branch, true, false, my_right, my_targets, my, opp)

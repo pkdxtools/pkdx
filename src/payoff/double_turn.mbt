@@ -1286,6 +1286,18 @@ fn double_selection_matrix(
         data.push(row)
       }
     }
+    Exact(turn_limit) =>
+      for i in 0..<n {
+        let (my_sq, my_tg) = take4(team, my_targets, brings[i])
+        let row = Array::make(n, 0.0)
+        for j in 0..<n {
+          let (op_sq, op_tg) = take4(opponent, opp_targets, brings[j])
+          row[j] = double_dp_cell(
+            cache, my_sq, op_sq, my_tg, op_tg, config, turn_limit,
+          )
+        }
+        data.push(row)
+      }
   }
   match @nash.FiniteMatrix::new(data) {
     Ok(m) => m

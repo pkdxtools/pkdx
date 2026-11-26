@@ -142,6 +142,44 @@ test "parse_team_payoff_model_rejects_double_rollout_with_zero_trials" {
 }
 
 ///|
+test "parse_team_payoff_model_recognizes_double_dp" {
+  match parse_team_payoff_model("double_dp:2") {
+    DoubleTurnGame(Exact(turn_limit)) => @debug.assert_eq(turn_limit, 2)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse_team_payoff_model_rejects_double_dp_without_limit" {
+  let errored = try {
+    let _ = parse_team_payoff_model("double_dp")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "parse_team_payoff_model_rejects_double_dp_with_zero_limit" {
+  let errored = try {
+    let _ = parse_team_payoff_model("double_dp:0")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(errored)
+}
+
+///|
+test "auto_upgrade_preserves_double_dp" {
+  match auto_upgrade_team_model(DoubleTurnGame(Exact(3))) {
+    DoubleTurnGame(Exact(3)) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
 test "auto_upgrade_preserves_double_rollout" {
   match auto_upgrade_team_model(DoubleTurnGame(Rollout(2, 8UL, 4))) {
     DoubleTurnGame(Rollout(trials, seed, turn_limit)) => {

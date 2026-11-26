@@ -817,11 +817,15 @@ fn parse_team_payoff_model(s : String) -> TeamPayoffModel raise NashCliError {
     Some(rest) => return parse_double_rollout_spec(rest.to_owned())
     None => ()
   }
+  match s.strip_prefix("double_dp:") {
+    Some(rest) => return parse_double_dp_spec(rest.to_owned())
+    None => ()
+  }
   match s.strip_prefix("screened_switching_game:") {
     Some(rest) => parse_screened_spec(rest.to_owned())
     None =>
       raise InvalidJson(
-        "team_payoff_model must be 'switching_game', 'double_turn', 'double_rollout:<trials>:<seed>:<turn_limit>', or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
+        "team_payoff_model must be 'switching_game', 'double_turn', 'double_rollout:<trials>:<seed>:<turn_limit>', 'double_dp:<turn_limit>', or 'screened_switching_game:<trials>:<seed>:<keep_top>'",
       )
   }
 }
@@ -861,6 +865,18 @@ fn parse_double_rollout_spec(rest : String) -> TeamPayoffModel raise NashCliErro
     raise InvalidJson("double_rollout turn_limit must be a positive integer")
   }
   DoubleTurnGame(Rollout(trials, seed, turn_limit))
+}
+
+///|
+/// `"<turn_limit>"` を `DoubleTurnGame(Exact(...))` にする。正の整数だけ。
+fn parse_double_dp_spec(rest : String) -> TeamPayoffModel raise NashCliError {
+  let turn_limit = @string.parse_int(rest) catch {
+    _ => raise InvalidJson("double_dp turn_limit must be a positive integer")
+  }
+  if turn_limit <= 0 {
+    raise InvalidJson("double_dp turn_limit must be a positive integer")
+  }
+  DoubleTurnGame(Exact(turn_limit))
 }
 
 ///|
@@ -1105,7 +1121,9 @@ pub fn compute_select_with_team_model(
     DoubleTurnGame(mode) => {
       match format {
         Single =>
-          raise InvalidJson("double_turn supports only format double")
+          raise InvalidJson(
+            "double_turn, double_rollout, and double_dp support only format double",
+          )
         Double => ()
       }
       let (my_t, opp_t) = match move_targets {
@@ -1592,7 +1610,7 @@ pub fn run_select_typed(
       )
     (Single, DoubleTurnGame(_)) =>
       raise InvalidJson(
-        "double_turn and double_rollout support only format double",
+        "double_turn, double_rollout, and double_dp support only format double",
       )
     _ => ()
   }
@@ -1870,7 +1888,7 @@ pub fn run_select_shard(
       )
     DoubleTurnGame(_) =>
       raise InvalidJson(
-        "__select-shard does not run double_turn or double_rollout",
+        "__select-shard does not run double_turn, double_rollout, or double_dp",
       )
   }
   // CLI overrides win when present. The orchestrator passes them so that

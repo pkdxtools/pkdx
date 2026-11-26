@@ -57,9 +57,14 @@ pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 /// - `DoubleTurnGame(Rollout(trials, seed, turn_limit))` は同じ同時行動行列の
 ///   終端を、先発 1 ターンを含めて `turn_limit` ターン先までのモンテカルロ
 ///   期待値にする。CLI は `double_rollout:<trials>:<seed>:<turn_limit>`。
+/// - `DoubleTurnGame(Exact(turn_limit))` は同じ選出を、数ターンの厳密 DP で
+///   評価する。各ノードの同時行動行列で Nash を解き、`turn_limit` で HP 比に
+///   する。CLI は `double_dp:<turn_limit>`。`turn_limit <= 1` は `AllTargets`
+///   と同じ 1 ターン。
 pub(all) enum DoubleTurnMode {
   AllTargets
   Rollout(Int, UInt64, Int)
+  Exact(Int)
 } derive(Debug, Eq)
 
 ///|

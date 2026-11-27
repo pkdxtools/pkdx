@@ -471,9 +471,11 @@ test "leaf prune keeps protect helping hand and wide guard" {
   let hand = mk_move("てだすけ", "ノーマル", @model.Status, 0, priority=5)
   let wide = mk_move("ワイドガード", "いわ", @model.Status, 0, priority=3)
   let endure = mk_move("こらえる", "ノーマル", @model.Status, 0, priority=4)
+  let fast = mk_move("ファストガード", "かくとう", @model.Status, 0, priority=3)
+  let ally_sw = mk_move("サイドチェンジ", "エスパー", @model.Status, 0, priority=2)
   let mon = mk_combatant(
     mk_pokemon("Surf", "みず", "", 180, 40, 80, 180, 80, 100),
-    [weak, strong, protect, hand, wide, endure],
+    [weak, strong, protect, hand, wide, endure, fast, ally_sw],
   )
   let foe = dt_mon(
     "Foe",
@@ -486,7 +488,7 @@ test "leaf prune keeps protect helping hand and wide guard" {
     40,
     strong,
   )
-  let targets = [5, 5, 7, 2, 12, 7]
+  let targets = [5, 5, 7, 2, 12, 7, 12, 7]
   let actions : Array[@doubles.DoubleAction] = [
     @doubles.Use(0),
     @doubles.Use(1),
@@ -494,6 +496,8 @@ test "leaf prune keeps protect helping hand and wide guard" {
     @doubles.Use(3),
     @doubles.Use(4),
     @doubles.Use(5),
+    @doubles.Use(6),
+    @doubles.Use(7),
   ]
   let cache = new_double_eval()
   let leaf = prune_slot_actions(cache, mon, targets, actions, [foe], [], true)
@@ -501,7 +505,9 @@ test "leaf prune keeps protect helping hand and wide guard" {
   assert_true(dg_has(names, "まもる"))
   assert_true(dg_has(names, "てだすけ"))
   assert_true(dg_has(names, "ワイドガード"))
-  assert_true(!dg_has(names, "こらえる"))
+  assert_true(dg_has(names, "こらえる"))
+  assert_true(dg_has(names, "ファストガード"))
+  assert_true(dg_has(names, "サイドチェンジ"))
   let mut saw_weak = false
   let mut saw_strong = false
   for action in leaf {
@@ -519,6 +525,8 @@ test "leaf prune keeps protect helping hand and wide guard" {
   let kept = prune_slot_actions(cache, mon, targets, actions, [foe], [], false)
   let early = dg_names(mon, kept)
   assert_true(dg_has(early, "こらえる"))
+  assert_true(dg_has(early, "ファストガード"))
+  assert_true(dg_has(early, "サイドチェンジ"))
   let mut early_weak = false
   for action in kept {
     match double_slot_move(mon, action) {

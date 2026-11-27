@@ -28,17 +28,19 @@
 /// ここへ HP 比を渡す。`double_rollout` は同じ解決のあと、その状態から
 /// ロールアウトした値を渡す。終端関数は HP を書き換えない。
 ///
-/// まもる・てだすけ・ワイドガードは `double_guard.mbt`。優先度は技の
-/// `priority` を `effective_priority` に通す。名前では上書きしない。
-/// 1 ターン評価の直前の連続使用は `scripted_value_and_hp_stall` の
-/// `opening_stall`（自陣左、自陣右、相手左、相手右）。空なら全員 0。
+/// まもる・てだすけ・ワイドガード・ファストガード・こらえる・サイドチェンジは
+/// `double_guard.mbt`。優先度は技の `priority` を `effective_priority` に通す。
+/// 名前では上書きしない。1 ターン評価の直前の連続使用は
+/// `scripted_value_and_hp_stall` の `opening_stall`（自陣左、自陣右、相手左、
+/// 相手右）と `opening_switch`（サイドチェンジ専用のカウンタ）。空なら全員 0。
 ///
 /// このゆびとまれ・いかりのこなといかくは `double_entry.mbt`。優先度は技の
 /// `priority` を `effective_priority` に通す。ランクはスロットの 5 段階。
 /// ダメージの攻撃側段階は、その技が参照する能力だけを渡す。
+/// サイドチェンジのあと、このゆびとまれの引きつけ先は使った体を追う。
 ///
 /// 入れないもの: 状態異常、設置、メガ、ばけのかわ、反動、自滅、回復、追加効果、
-/// ファストガード、ひらいしんの引きつけ、こうげき以外の能力ランク変化技。
+/// ひらいしんの引きつけ、こうげき以外の能力ランク変化技。
 /// キングシールドの攻撃低下、トーチカのどく、ゴーストダイブの溜めは入れない。
 /// L2 ディスクには書かない。
 
@@ -62,8 +64,12 @@ priv struct DoubleFieldHp {
   stall : Array[Int]
   shield : Array[Int]
   wide : Array[Int]
+  fast : Array[Int]
   hand : Array[Int]
   broken : Array[Int]
+  endure : Array[Int]
+  sw_stall : Array[Int]
+  sw_held : Array[Int]
   ranks : Array[Int]
   entered : Array[Int]
   follow : Array[Int]
@@ -165,8 +171,12 @@ fn copy_field(s : DoubleFieldHp) -> DoubleFieldHp {
     stall: copy_hp_row(s.stall),
     shield: copy_hp_row(s.shield),
     wide: copy_hp_row(s.wide),
+    fast: copy_hp_row(s.fast),
     hand: copy_hp_row(s.hand),
     broken: copy_hp_row(s.broken),
+    endure: copy_hp_row(s.endure),
+    sw_stall: copy_hp_row(s.sw_stall),
+    sw_held: copy_hp_row(s.sw_held),
     ranks: copy_hp_row(s.ranks),
     entered: copy_hp_row(s.entered),
     follow: copy_hp_row(s.follow),
@@ -194,6 +204,21 @@ fn slot_is_mine(slot : @doubles.DoubleSlot) -> Bool {
     @doubles.MyRight => true
     @doubles.FoeLeft => false
     @doubles.FoeRight => false
+  }
+}
+
+///|
+/// 宣言時のスロットではなく、今その体がいるスロット。
+/// サイドチェンジは `pos` と体に付く状態を入れ替え、`DoubleActor.slot` は
+/// 固定なので、解決中はこちらを見る。選んだ対象スロット（`chosen`）は動かさない。
+fn live_slot(state : DoubleFieldHp, actor : DoubleActor) -> @doubles.DoubleSlot {
+  let base = if actor.is_me { 0 } else { 2 }
+  if base < state.pos.length() && state.pos[base] == actor.squad {
+    slot_of_index(base)
+  } else if base + 1 < state.pos.length() && state.pos[base + 1] == actor.squad {
+    slot_of_index(base + 1)
+  } else {
+    actor.slot
   }
 }
 
@@ -595,10 +620,11 @@ fn strike_plan(
     return Miss
   }
   let mv = mon.moves[actor.move_idx]
+  let origin = live_slot(s, actor)
   let resolved = @doubles.double_slots_hit(
     0,
     actor.target_code,
-    actor.slot,
+    origin,
     actor.chosen,
     field_of(s),
     false,
@@ -609,7 +635,7 @@ fn strike_plan(
     @doubles.RandomOne(cands) => OneOf(cands)
     @doubles.Battlefield(_) => Miss
     @doubles.NoStrike => {
-      let slots = redirect_fainted(s, actor.slot, actor.target_code)
+      let slots = redirect_fainted(s, origin, actor.target_code)
       if slots.length() == 0 {
         Miss
       } else {
@@ -651,26 +677,41 @@ fn apply_hit(
     return
   }
   let mv = atk.moves[actor.move_idx]
-  let boosted = if hand_boosted(s, actor.slot) {
+  let origin = live_slot(s, actor)
+  let boosted = if hand_boosted(s, origin) {
     helping_hand_move(mv)
   } else {
     mv
   }
   let def = defender_of(s, target, my, opp)
-  let stage = stage_for_move(boosted, read_ranks(s, slot_index(actor.slot)))
+  let stage = stage_for_move(boosted, read_ranks(s, slot_index(origin)))
   match double_guard_hit(s, actor, target, mv, atk.ability) {
     GuardThrough => {
       let dmg = cached_move_mean(cache, atk, def, boosted, stage=stage)
-      set_hp(s, target, hp_at(s, target) - dmg)
+      inflict(s, target, dmg)
     }
     GuardQuarter => {
       let dmg = @damage.round5(
         cached_move_mean(cache, atk, def, boosted, stage=stage),
         1024,
       )
-      set_hp(s, target, hp_at(s, target) - dmg)
+      inflict(s, target, dmg)
     }
     GuardBlock(kind) => apply_spiky_chip(s, actor, atk, mv, kind)
+  }
+}
+
+///|
+/// こらえるが立っていて、このダメージでひんしになるなら HP 1 で止める。
+fn inflict(s : DoubleFieldHp, target : @doubles.DoubleSlot, dmg : Int) -> Unit {
+  let hp = hp_at(s, target)
+  if hp <= 0 {
+    return
+  }
+  if dmg > 0 && dmg >= hp && endure_up(s, target) {
+    set_hp(s, target, 1)
+  } else {
+    set_hp(s, target, hp - dmg)
   }
 }
 
@@ -741,7 +782,8 @@ fn eval_turn(
     return finish(state)
   }
   let actor = actors[actor_idx]
-  if hp_at(state, actor.slot) <= 0 {
+  let origin = live_slot(state, actor)
+  if hp_at(state, origin) <= 0 {
     return eval_turn(
       cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
     )
@@ -754,7 +796,12 @@ fn eval_turn(
           cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
         )
       } else if is_wide_guard(mv.name) {
-        mark_wide_guard(state, actor.slot)
+        mark_wide_guard(state, origin)
+        return eval_turn(
+          cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
+        )
+      } else if is_fast_guard(mv.name) {
+        mark_fast_guard(state, origin)
         return eval_turn(
           cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
         )
@@ -762,13 +809,21 @@ fn eval_turn(
         return eval_protect_turn(
           cache, state, actors, actor_idx, my, opp, finish, mv,
         )
+      } else if is_endure(mv.name) {
+        return eval_endure_turn(
+          cache, state, actors, actor_idx, my, opp, finish,
+        )
+      } else if is_ally_switch(mv.name) {
+        return eval_ally_switch_turn(
+          cache, state, actors, actor_idx, my, opp, finish,
+        )
       } else if is_follow_me(mv.name) {
-        mark_follow(state, actor.slot)
+        mark_follow(state, origin)
         return eval_turn(
           cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
         )
       } else if is_rage_powder(mv.name) {
-        mark_rage(state, actor.slot)
+        mark_rage(state, origin)
         return eval_turn(
           cache, state, actors, actor_idx + 1, [], 0, false, my, opp, finish,
         )
@@ -1007,8 +1062,12 @@ fn fresh_field(my : Array[Combatant], opp : Array[Combatant]) -> DoubleFieldHp {
     stall: guard_zeros(4),
     shield: guard_zeros(4),
     wide: guard_zeros(2),
+    fast: guard_zeros(2),
     hand: guard_zeros(4),
     broken: guard_zeros(4),
+    endure: guard_zeros(4),
+    sw_stall: guard_zeros(4),
+    sw_held: guard_zeros(4),
     ranks: guard_zeros(20),
     entered: guard_zeros(4),
     follow: Array::make(2, -1),
@@ -1056,10 +1115,11 @@ fn scripted_value_and_hp_stall(
   opp_left : @doubles.DoubleAction?,
   opp_right : @doubles.DoubleAction?,
   opening_stall : Array[Int],
+  opening_switch? : Array[Int] = [],
 ) -> (Double, Array[Int], Array[Int]) {
   let (v, field) = scripted_turn_field(
     cache, my, opp, my_targets, opp_targets, my_left, my_right, opp_left,
-    opp_right, opening_stall,
+    opp_right, opening_stall, opening_switch~,
   )
   (v, copy_hp_row(field.my_hp), copy_hp_row(field.opp_hp))
 }
@@ -1076,9 +1136,11 @@ fn scripted_turn_field(
   opp_left : @doubles.DoubleAction?,
   opp_right : @doubles.DoubleAction?,
   opening_stall : Array[Int],
+  opening_switch? : Array[Int] = [],
 ) -> (Double, DoubleFieldHp) {
   let state = fresh_field(my, opp)
   apply_opening_stall(state, opening_stall)
+  apply_opening_switch(state, opening_switch)
   apply_switch(state, true, true, my_left)
   apply_switch(state, true, false, my_right)
   apply_switch(state, false, true, opp_left)

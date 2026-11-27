@@ -29,14 +29,15 @@
 /// 乱数は `seeded_rng`。同じ seed と同じ評価順なら同じ値になる。
 /// `turn_limit <= 1` は段階 1 の HP 比と一致する（続きを引かない）。
 ///
-/// まもるの連続成功率は場の stall。てだすけとワイドガードも `double_guard.mbt`。
+/// まもるの連続成功率は場の stall。こらえるは同じ stall。サイドチェンジは
+/// 別カウンタ。てだすけ・ワイドガード・ファストガードも `double_guard.mbt`。
 /// 分母が 1 のときは `sample_hit` を呼ばない。ε = 0 の方策はこれらの技の
 /// 期待ダメージを 0 と見る。選ばれたときの解決は `resolve_actor_sampled`。
 ///
 /// このゆびとまれ・いかりのこなといかくは `double_entry.mbt`。補充と自発交代の
 /// あと、技の前に一度だけ登場いかくを掛ける。途中で入れ替わった 1 体は撃たない。
 ///
-/// 入れないもの: 状態異常、メガシンカ、ファストガード、ひらいしんの引きつけ、
+/// 入れないもの: 状態異常、メガシンカ、ひらいしんの引きつけ、
 /// こうげき以外の能力ランク変化技、設置、反動、回復、追加効果。
 
 ///|
@@ -589,22 +590,45 @@ fn resolve_actor_sampled(
         mark_helping_hand(state, actor)
         return
       } else if is_wide_guard(mv.name) {
-        mark_wide_guard(state, actor.slot)
+        mark_wide_guard(state, live_slot(state, actor))
+        return
+      } else if is_fast_guard(mv.name) {
+        mark_fast_guard(state, live_slot(state, actor))
         return
       } else if is_protect_move(mv.name) {
-        let den = stall_denominator(stall_at(state, actor.slot))
+        let slot = live_slot(state, actor)
+        let den = stall_denominator(stall_at(state, slot))
         let ok = if den <= 1 {
           true
         } else {
           sample_hit(rng, 1.0 / den.to_double())
         }
-        mark_protect_result(state, actor.slot, ok, protect_kind(mv.name))
+        mark_protect_result(state, slot, ok, protect_kind(mv.name))
+        return
+      } else if is_endure(mv.name) {
+        let slot = live_slot(state, actor)
+        let den = stall_denominator(stall_at(state, slot))
+        let ok = if den <= 1 {
+          true
+        } else {
+          sample_hit(rng, 1.0 / den.to_double())
+        }
+        mark_endure_result(state, slot, ok)
+        return
+      } else if is_ally_switch(mv.name) {
+        let den = stall_denominator(sw_at(state, live_slot(state, actor)))
+        let ok = if den <= 1 {
+          true
+        } else {
+          sample_hit(rng, 1.0 / den.to_double())
+        }
+        commit_ally_switch(state, actor, ok)
         return
       } else if is_follow_me(mv.name) {
-        mark_follow(state, actor.slot)
+        mark_follow(state, live_slot(state, actor))
         return
       } else if is_rage_powder(mv.name) {
-        mark_rage(state, actor.slot)
+        mark_rage(state, live_slot(state, actor))
         return
       }
     None => ()
@@ -726,7 +750,7 @@ fn play_policy_turn(
   push_policy_actor(actors, state, false, false, opp_right, opp_targets, my, opp)
   let order = sample_action_order(actors, rng)
   for actor in order {
-    if hp_at(state, actor.slot) > 0 {
+    if hp_at(state, live_slot(state, actor)) > 0 {
       resolve_actor_sampled(cache, state, actor, rng, my, opp)
     }
   }

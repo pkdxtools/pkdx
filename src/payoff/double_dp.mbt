@@ -18,18 +18,20 @@
 /// `turn_limit <= 1` は段階 1 の `joint_matrix_value` と同じ経路。
 ///
 /// メモはシングルの `value` と同じく、状態（位置・HP・まもるの stall・
-/// 5 段階のパック・未処理の登場フラグ・残りターン）から値への写像。
-/// ターン内の盾・ワイドガード・てだすけ・引きつけはキーに入れない。
+/// サイドチェンジの stall・5 段階のパック・未処理の登場フラグ・残りターン）
+/// から値への写像。ターン内の盾・ワイドガード・ファストガード・てだすけ・
+/// こらえるの旗・引きつけはキーに入れない。
 /// ダメージ平均は段階 1 の `DoubleEvalCache`。選出行列では
 /// `V(A,B) = -V(B,A)` を使い、同じ 4 対 4 を二度解かない。
 /// 葉（残り 1 ターン）では、同じ優先度・命中・範囲で、どの生存相手にも
-/// ダメージが劣る技を落とす。まもる・てだすけ・ワイドガードはダメージ 0 でも
+/// ダメージが劣る技を落とす。まもる・てだすけ・ワイドガード・ファストガード・
+/// こらえる・サイドチェンジと、このゆびとまれ・いかりのこなはダメージ 0 でも
 /// 残す。零和の値は変わらない。それより前のターンでは同じ効果の重複だけを
 /// 落とす。KO すると次に強い控えが出るため、弱い技を値の前に捨てると厳密で
 /// なくなる。行列を埋めたあと、厳密に支配される純戦略と純鞍点はシングル DP
 /// と同じく LP の前に処理する。
 ///
-/// 入れないもの: 状態異常、メガシンカ、ファストガード、ひらいしんの引きつけ、
+/// 入れないもの: 状態異常、メガシンカ、ひらいしんの引きつけ、
 /// こうげき以外の能力ランク変化技、設置、反動、回復、追加効果。
 
 ///|
@@ -53,6 +55,10 @@ priv struct DoubleDpKey {
   s1 : Int
   s2 : Int
   s3 : Int
+  u0 : Int
+  u1 : Int
+  u2 : Int
+  u3 : Int
   k0 : Int
   k1 : Int
   k2 : Int
@@ -110,6 +116,10 @@ fn dp_key_of(s : DoubleFieldHp, turns : Int) -> DoubleDpKey {
     s1: at_or0(s.stall, 1),
     s2: at_or0(s.stall, 2),
     s3: at_or0(s.stall, 3),
+    u0: at_or0(s.sw_stall, 0),
+    u1: at_or0(s.sw_stall, 1),
+    u2: at_or0(s.sw_stall, 2),
+    u3: at_or0(s.sw_stall, 3),
     k0: pack_slot_ranks(s, 0),
     k1: pack_slot_ranks(s, 1),
     k2: pack_slot_ranks(s, 2),
@@ -131,8 +141,12 @@ fn state_at(s : DoubleFieldHp, pos : Array[Int]) -> DoubleFieldHp {
     stall: copy_hp_row(s.stall),
     shield: copy_hp_row(s.shield),
     wide: copy_hp_row(s.wide),
+    fast: copy_hp_row(s.fast),
     hand: copy_hp_row(s.hand),
     broken: copy_hp_row(s.broken),
+    endure: copy_hp_row(s.endure),
+    sw_stall: copy_hp_row(s.sw_stall),
+    sw_held: copy_hp_row(s.sw_held),
     ranks: copy_hp_row(s.ranks),
     entered: copy_hp_row(s.entered),
     follow: copy_hp_row(s.follow),
@@ -160,6 +174,15 @@ fn state_at(s : DoubleFieldHp, pos : Array[Int]) -> DoubleFieldHp {
       }
       if i < next.broken.length() {
         next.broken[i] = 0
+      }
+      if i < next.endure.length() {
+        next.endure[i] = 0
+      }
+      if i < next.sw_stall.length() {
+        next.sw_stall[i] = 0
+      }
+      if i < next.sw_held.length() {
+        next.sw_held[i] = 0
       }
     }
   }
@@ -377,8 +400,8 @@ fn damages_cover(
 
 ///|
 /// 葉では劣る技と、攻撃があるときの「何もしない」を落とす。
-/// まもる・てだすけ・ワイドガードと、このゆびとまれ・いかりのこなは葉でも残す。
-/// こらえるは残さない。ダメージ比較は今の攻撃側段階で行う。
+/// まもる・てだすけ・ワイドガード・ファストガード・こらえる・サイドチェンジと、
+/// このゆびとまれ・いかりのこなは葉でも残す。ダメージ比較は今の攻撃側段階で行う。
 /// それ以外のターンは同じ効果の重複だけを落とす。
 fn prune_slot_actions(
   cache : DoubleEvalCache,
@@ -415,7 +438,7 @@ fn prune_slot_actions(
           None => drop[i] = true
           Some(mv) => {
             let code = action_code_of(targets, actions[i])
-            let is_keep = is_double_guard_move(mv.name) || is_redirect_move(mv.name)
+            let is_keep = keeps_zero_damage_move(mv.name)
             let blank = !is_keep &&
               (mv.category == @model.Status ||
                 (foe_only_code(code) && max_vs(cache, mon, mv, foes, ranks) == 0))

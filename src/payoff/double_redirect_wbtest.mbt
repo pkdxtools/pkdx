@@ -260,10 +260,10 @@ test "leaf prune keeps follow me and rage powder and drops a worse hit" {
   let strong = mk_move("たいあたり", "ノーマル", @model.Physical, 110)
   let follow = mk_move("このゆびとまれ", "ノーマル", @model.Status, 0, priority=2)
   let rage = mk_move("いかりのこな", "むし", @model.Status, 0, priority=2)
-  let endure = mk_move("こらえる", "ノーマル", @model.Status, 0, priority=4)
+  let blank = mk_move("にほんばれ", "ほのお", @model.Status, 0, priority=0)
   let mon = mk_combatant(
     mk_pokemon("Both", "ノーマル", "", 180, 160, 80, 40, 80, 90),
-    [weak, strong, follow, rage, endure],
+    [weak, strong, follow, rage, blank],
   )
   let foe = de_mon("Foe", "ノーマル", 200, 40, 80, 40, 80, 40, strong)
   let targets = [0, 0, 7, 7, 7]
@@ -287,7 +287,7 @@ test "leaf prune keeps follow me and rage powder and drops a worse hit" {
   assert_true(dg_has(names, "このゆびとまれ"))
   assert_true(dg_has(names, "いかりのこな"))
   assert_true(dg_has(names, "たいあたり"))
-  assert_true(!dg_has(names, "こらえる"))
+  assert_true(!dg_has(names, "にほんばれ"))
   let mut saw_weak = false
   let mut saw_strong = false
   for action in leaf {

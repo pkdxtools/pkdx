@@ -93,8 +93,8 @@ test "select_6v6_single_outputs_3pick_distribution" {
 ///|
 test "select_6v6_double_format_currently_unsupported" {
   // `switching_game` and `screened_switching_game` stay single-active.
-  // `format = "double"` with those models still raises. Doubles go through
-  // `double_turn`.
+  // `format = "double"` with those models still raises. An omitted model
+  // uses `double_dp` (see `double_select_cli_wbtest.mbt`).
   let team_sp = [100, 95, 105, 90, 110, 85]
   let opp_sp = [100, 100, 100, 100, 100, 100]
   let errored = try {

@@ -17,7 +17,7 @@ PKDX=$REPO_ROOT/bin/pkdx
 VIZ=$REPO_ROOT/scripts/select_grid_viz.sh   # pkdx select の進捗可視化
 ```
 
-`$VIZ` は `pkdx select --progress=json` の stderr (JSON Lines) を受け取り、stdout が TTY なら 60×60 グリッドを live 描画、TTY 以外では phase 境界 + dp ノードサマリの数行ログに自動切替する。`pkdx select` を呼ぶときは原則として `2> >($VIZ)` を付ける。Phase 2b では実行主体 (エージェント / ユーザー手動) を AskUserQuestion で選ばせる。
+`$VIZ` は `pkdx select --progress=json` の stderr (JSON Lines) を受け取り、stdout が TTY なら 60×60 グリッドを live 描画、TTY 以外では phase 境界 + dp ノードサマリの数行ログに自動切替する。single の `pkdx select` を呼ぶときは原則として `2> >($VIZ)` を付ける。double はセルイベントを出さないので付けない。Phase 2b では実行主体 (エージェント / ユーザー手動) を AskUserQuestion で選ばせる。
 
 ## 用語
 
@@ -26,13 +26,13 @@ VIZ=$REPO_ROOT/scripts/select_grid_viz.sh   # pkdx select の進捗可視化
 | value | 行プレイヤーから見たゲーム値 (期待利得) |
 | exploitability | 現在の戦略 σ に対する最良応答で得られる追加利得。零和で 0 なら σ は Nash 均衡 |
 | support | 確率 > 0 の純戦略 index 集合 |
-| TeamPayoffModel | 利得の作り方 (`switching_game` / `screened_switching_game:<trials>:<seed>:<keep_top>`)。turn_limit 既定は MC=5 / DP=5 (`switching_game:<N>` で個別上書き可) |
-| BattleFormat | `single` = lead-aware 3 体選出 (60x60、`6 × C(5,2) = 60` 通りで先頭 (lead) を含む順序付きタプル) のみ対応 (`double` は現状未サポート) |
+| TeamPayoffModel | 利得の作り方。single は `switching_game` / `screened_switching_game:<trials>:<seed>:<keep_top>`（turn_limit 既定は MC=5 / DP=5。`switching_game:<N>` で個別上書き可）。double は `double_turn` / `double_dp:<turn_limit>` / `double_rollout:<trials>:<seed>:<turn_limit>`。double で省略したときの既定は `double_dp:1` |
+| BattleFormat | `single` / `singles` = 先頭 1 + 控え 2（60 通り）。`double` / `doubles` = 先発 2 + 控え 2（`double_brings` で 6 体なら 90 通り）。JSON の `selection_roles` は `["lead","lead","bench","bench"]` |
 
 詳細はまず `references/` を参照:
 - `references/theory.md` — 零和 LP / Simplex / Fictitious play / MWU の数式と根拠
 - `references/exploitability.md` — exploitability / NashConv / KL / L1 の定義と使い分け
-- `references/payoff_semantics.md` — SwitchingGame / ScreenedSwitchingGame の仕様と選択基準
+- `references/payoff_semantics.md` — SwitchingGame / ScreenedSwitchingGame と、ダブルの `double_dp` / `double_turn` / `double_rollout` の仕様と選択基準
 
 ## Phase 0: 初期化
 
@@ -136,7 +136,7 @@ JSON
 
 ### 入力の収集
 
-team (6 体), opponent (6 体), format (single のみ対応), `team_payoff_model` を取得する。
+team (6 体), opponent (6 体), format (`single` / `singles` または `double` / `doubles`), `team_payoff_model` を取得する。
 
 #### データソース
 
@@ -152,23 +152,52 @@ ls box/teams/*.meta.json
 # 2. members を team / opponent に詰め替えて select に渡す
 # skill は .meta.json の "members" を "team" キーに、
 # 相手の .meta.json の "members" を "opponent" キーに設定する。
-# battle_format は "singles" → "single" に変換。
+# battle_format は "singles" → "single"、"doubles" → "double"（または "doubles" のまま）。
+# ダブルに switching_game / screened_switching_game は付けない。
+# シングルに double_turn / double_dp / double_rollout は付けない。
 ```
 
 **重要**: `.meta.json` の `members` にはステータスが種族値 (`base_stats`) の場合と実数値 (`hp`/`atk`/...) の場合がある。Champions スクショ取り込み経由なら実数値が揃っているが、skill 手順で作成した場合は種族値のみの可能性がある。足りないデータ (実数値、priority、stat_effects 等) がある場合はユーザーに補完を促す。
 
 #### モデル選択肢 (`team_payoff_model` フィールド)
 
-- `"switching_game"` (既定) — 交代込み extensive-form ゲーム木。DP turn_limit=5 既定 (先制技 / ランク補正技に対応)。ただし turn_limit=5 は自動昇格閾値 (`N >= 4`) 以上のため、実行時は下記「CLI 側の自動フォールバック」により screening 版に置き換わる。長期戦評価が必要なら `"switching_game:<N>"` で turn_limit を上書き可
+format が single のとき:
+
+- `"switching_game"` (single の既定) — 交代込み extensive-form ゲーム木。DP turn_limit=5 既定 (先制技 / ランク補正技に対応)。ただし turn_limit=5 は自動昇格閾値 (`N >= 4`) 以上のため、実行時は下記「CLI 側の自動フォールバック」により screening 版に置き換わる。長期戦評価が必要なら `"switching_game:<N>"` で turn_limit を上書き可
 - `"screened_switching_game:<trials>:<seed>:<keep_top>"` — MC で選出行列を screening (rollout turn_limit=5)、下位を quantile cutoff で枝刈り、残存 sub-matrix だけ SwitchingGame DP (refine turn_limit=5 既定)。例: `"screened_switching_game:1000:42:0.3"`。パラメータを細かくチューニングしたいときだけ明示指定する
 
-**CLI 側の自動フォールバック**: `switching_game:<N>` で `N >= 4` のとき、`pkdx select` は内部で `ScreenedSwitchingGame(trials=1000, seed=42, keep_top=0.3, refine_turn_limit=N)` に自動昇格する。skill 側で screening をどう使うか判断する必要はなく、常に `switching_game:<N>` で turn_limit だけ指定すればよい。明示的に `screened_switching_game:...` を書いた場合はそのまま使われる。
+**CLI 側の自動フォールバック**（single のみ）: `switching_game:<N>` で `N >= 4` のとき、`pkdx select` は内部で `ScreenedSwitchingGame(trials=1000, seed=42, keep_top=0.3, refine_turn_limit=N)` に自動昇格する。skill 側で screening をどう使うか判断する必要はなく、常に `switching_game:<N>` で turn_limit だけ指定すればよい。明示的に `screened_switching_game:...` を書いた場合はそのまま使われる。double のモデルは昇格しない。
+
+format が double のとき（省略時の既定は `double_dp:1`。フィールド自体を書かなくてよい）:
+
+- `"double_dp:<turn_limit>"` — 先発 2 体の同時行動を、深さ `turn_limit` の厳密 DP で評価する。`1` は 1 ターンで、`double_turn` と同じ値
+- `"double_turn"` — 1 ターンの厳密な同時行動
+- `"double_rollout:<trials>:<seed>:<turn_limit>"` — 先発 1 ターンは厳密、その後をモンテカルロ
+
+`switching_game` / `screened_switching_game` を double に渡すとエラー。double 用の 3 つを single に渡すとエラー。
 
 詳細は `references/payoff_semantics.md`。
 
+#### ダブルで未対応のもの
+
+`double_turn` / `double_dp` / `double_rollout` は次を計算に入れない。結果を返すときに、この一覧が評価に入っていないことを一文で添える。
+
+- 状態異常
+- メガシンカ
+- こうげき以外の能力ランク変化（いかくのこうげき −1 は入る）
+- ひらいしん・よびみずの引きつけ（よびみずは tokusei に無い。スポットライトは available = 0）
+- 設置、反動、自滅、回復、追加効果、ばけのかわ
+- キングシールドの接触による攻撃低下とフォルム、トーチカのどく、ゴーストダイブの溜め
+- しろいハーブ
+- available = 0 の守り技（ブロッキング、スレッドトラップ、かえんのまもり、シャドーダイブ、トリックガード）
+
+入っているもの: まもる系（みきり / キングシールドの防止 / ニードルガード / トーチカの防止）、てだすけ、ワイドガード、ファストガード、こらえる、サイドチェンジ、このゆびとまれ、いかりのこな、登場時のいかく、交代とひんし補充。`pkdx damage --double` は範囲技の 0.75 倍だけで、選出の format ではない。
+
 #### 読みターン数の決定 (AskUserQuestion)
 
-`team_payoff_model` 文字列を構築する直前に、ユーザーに「何ターン先まで読むか」を AskUserQuestion で必ず確認する。選択結果を `switching_game:<N>` / `screened_switching_game:<trials>:<seed>:<keep_top>:<N>` の `<N>` に埋め込む。
+format が **single** のときだけ、`team_payoff_model` 文字列を構築する直前に、ユーザーに「何ターン先まで読むか」を AskUserQuestion で必ず確認する。選択結果を `switching_game:<N>` / `screened_switching_game:<trials>:<seed>:<keep_top>:<N>` の `<N>` に埋め込む。
+
+format が **double** のときはこの質問をしない。モデルは省略し、CLI の既定 `double_dp:1` に任せる。#256 後の 90×90（debug）は範囲技の深さ 1 が約 6 秒、単体技の深さ 1 が約 21 秒。深さ 2 は範囲技で約 2.2 分、単体技は外挿で約 29 分。ユーザーが深い探索を明示したときだけ `double_dp:<N>` または `double_rollout:<trials>:<seed>:<turn_limit>` を書き、単体技の 90×90 は深さが 2 以上で長くなると伝える。
 
 | # | 質問 | header | オプション |
 |---|------|--------|-----------|
@@ -212,7 +241,7 @@ cat > /tmp/pkdx_select_input.json <<'JSON'
 JSON
 ```
 
-`<N>` は直前の AskUserQuestion で得た値を埋める (おまかせ=5 / じっくり読む=10 / サクッと=3、Other 入力時はその正整数)。`screened_switching_game` を選んだ場合は `"screened_switching_game:1000:42:0.3:<N>"` のように 4 番目のフィールドとして同じ値を付ける。
+single の `<N>` は直前の AskUserQuestion で得た値を埋める (おまかせ=5 / じっくり読む=10 / サクッと=3、Other 入力時はその正整数)。`screened_switching_game` を選んだ場合は `"screened_switching_game:1000:42:0.3:<N>"` のように 4 番目のフィールドとして同じ値を付ける。double では `"format": "double"`（meta の `doubles` はそのままでも可）とし、`team_payoff_model` は書かない。技の `target` が無いときは `pokedex/champions.db` の move.target を引く。DB が無い入力は各技に `target`（0..14）を付ける。
 
 #### 2. 実行主体の決定 (AskUserQuestion)
 
@@ -225,13 +254,22 @@ JSON
 | ラベル | 挙動 | こう案内する |
 |---|---|---|
 | エージェントが実行 | skill が直接 Bash 実行 | サクッと結果だけ欲しいとき。進捗は `[viz] phase ... done` の数行ログのみ |
-| ターミナルで自分で実行 | コマンドを提示してユーザーが別ターミナルで実行 | 計算過程を 60×60 グリッドで眺めたいとき。長めの計算で進捗を視覚的に追える |
+| ターミナルで自分で実行 | コマンドを提示してユーザーが別ターミナルで実行 | single で計算過程を 60×60 グリッドで眺めたいとき。double はグリッドを出さない |
 
 #### 3a. 「エージェントが実行」を選んだ場合
+
+single:
 
 ```bash
 $PKDX select --parallel=auto --progress=json 2> >($VIZ) > /tmp/pkdx_select_result.json < /tmp/pkdx_select_input.json
 cat /tmp/pkdx_select_result.json   # ← 結果整形フェーズで使う
+```
+
+double はセル進捗を出さない。グリッドは 60×60 の single 用なので付けない。`--parallel` は double の行列を分割しない（既定の 1 のまま）。
+
+```bash
+$PKDX select > /tmp/pkdx_select_result.json < /tmp/pkdx_select_input.json
+cat /tmp/pkdx_select_result.json
 ```
 
 **進捗フィードバックを止めたい場合**: `--progress=off` (既定値) を明示するか、`2> >($VIZ)` を外す。長い `--progress-every` を渡せば dp ノードサンプル頻度を間引ける (例: `--progress-every=5000`)。
@@ -243,7 +281,7 @@ cat /tmp/pkdx_select_result.json   # ← 結果整形フェーズで使う
 - 明示的に整数を渡すこともできる (`--parallel=8` 等)。Windows 上では `MAXIMUM_WAIT_OBJECTS=64` の制約があり、それを超える明示指定はエラーになる。
 - 緊急時は `PKDX_NO_PARALLEL=1` 環境変数で `auto` 指定を強制 1 に落とせる (テスト・デバッグ用 escape hatch)。
 
-bit-exact parity は保たれているため、結果 JSON は `--parallel` 値に依存しない。
+bit-exact parity は保たれているため、single の結果 JSON は `--parallel` 値に依存しない。double の `double_dp` / `double_turn` / `double_rollout` はシャードしない。`--parallel` を付けても in-process のまま。
 
 #### 3b. 「ターミナルで自分で実行」を選んだ場合
 
@@ -258,7 +296,14 @@ bit-exact parity は保たれているため、結果 JSON は `--parallel` 値�
      > /tmp/pkdx_select_result.json
    ```
 
-   グリッドビジュアライザは並列パスでも動くが、子プロセスは `--progress=off` を強制するため細粒度の `cell_start` イベントは出ない。`PhaseStart` / `PhaseEnd` レベルの進捗だけ流れる。細粒度表示を見たい場合は `--parallel=1` を明示する (代わりに数倍遅くなる)。
+   上は single。double は次にする（グリッドも `--parallel=auto` も付けない）。
+
+   ```bash
+   cd <REPO_ROOT> && cat /tmp/pkdx_select_input.json \
+     | bin/pkdx select > /tmp/pkdx_select_result.json
+   ```
+
+   グリッドビジュアライザは single の並列パスでも動くが、子プロセスは `--progress=off` を強制するため細粒度の `cell_start` イベントは出ない。`PhaseStart` / `PhaseEnd` レベルの進捗だけ流れる。細粒度表示を見たい場合は `--parallel=1` を明示する (代わりに数倍遅くなる)。
    ````
 
 2. 提示後、AskUserQuestion で完了確認を取る:
@@ -287,11 +332,15 @@ bit-exact parity は保たれているため、結果 JSON は `--parallel` 値�
 }
 ```
 
-各 selection は `[lead, b1, b2]` の **順序付きタプル**で、**位置 0 が先頭選出 (lead)**、後ろ 2 体は控え (昇順)。シングル 6v6 では `6 × C(5,2) = 60` 通り列挙されるので `row_strategy` / `col_strategy` も長さ 60。同じメンバー集合でも先頭が違えば別エントリ扱いになる点に注意 (例: `[0,1,2]` と `[1,0,2]` は別物)。
+single の各 selection は `[lead, b1, b2]` の **順序付きタプル**で、**位置 0 が先頭選出 (lead)**、後ろ 2 体は控え (昇順)。シングル 6v6 では `6 × C(5,2) = 60` 通り列挙されるので `row_strategy` / `col_strategy` も長さ 60。同じメンバー集合でも先頭が違えば別エントリ扱いになる点に注意 (例: `[0,1,2]` と `[1,0,2]` は別物)。single の JSON に `selection_roles` は付かない。
+
+double の各 selection は `[lead, lead, bench, bench]`。6 体なら 90 通り。`selection_roles` は `["lead","lead","bench","bench"]` で、位置 0 と 1 が先発、位置 2 と 3 が控え。先発の左右は番号の小さい方が左。
 
 ### 結果整形
 
-確率 > 1% の選出のみ表示。先頭の Pokémon は **太字**で強調する:
+確率 > 1% の選出のみ表示。single は先頭の Pokémon を **太字**にする。double は先発 2 体を **太字**にし、未対応一覧を一文添える。
+
+single:
 
 ```markdown
 ## 選出分布 ({format})
@@ -303,6 +352,25 @@ bit-exact parity は保たれているため、結果 JSON は `--parallel` 値�
 | 確率 | 先頭 → 控え |
 |---|---|
 | {p:.1%} | **{names[0]}** → {names[1]}, {names[2]} |
+...
+
+### 相手の最適選出
+(同上)
+```
+
+double:
+
+```markdown
+## 選出分布 (double)
+
+- **期待勝率 (value)**: {value:.3f}
+- **exploitability**: {exploitability:.6f}
+- 評価に入っていないもの: 状態異常、メガシンカ、こうげき以外の能力ランク変化、ひらいしん・よびみずの引きつけ、設置、反動、自滅、回復、追加効果、ばけのかわ
+
+### 採用すべき選出
+| 確率 | 先発 → 控え |
+|---|---|
+| {p:.1%} | **{names[0]}**, **{names[1]}** → {names[2]}, {names[3]} |
 ...
 
 ### 相手の最適選出
@@ -417,6 +485,9 @@ dot -Tpng matchup.dot -o matchup.png
 | `invalid JSON: matrix must be non-empty` | 0 行または 0 列の行列は受け付けない |
 | `usage does not sum to 1 (got X)` | 使用率を正規化し直す |
 | `game is infeasible` / `unbounded` | 入力が退化 (LP が解けない)。対角/反対称性を確認 |
+| `switching_game does not support double format` | format が double。モデルを消すか `double_dp` / `double_turn` / `double_rollout` にする |
+| `screened_switching_game does not support double format` | 同上。screening は single 専用 |
+| `support only format double` | ダブル用モデルを single に渡している。format を double にするか、single なら `switching_game` にする |
 
 ## 計算条件の注意
 

@@ -240,7 +240,7 @@ pub fn team_payoff_matrix_with_team_model(
       match format {
         Double =>
           raise UnsupportedFormat(
-            "switching_game does not support double format (single-active model only)",
+            "switching_game does not support double format (single-active model only). Pass double_turn, double_rollout:<trials>:<seed>:<turn_limit>, or double_dp:<turn_limit>, or omit team_payoff_model",
           )
         Single => ()
       }

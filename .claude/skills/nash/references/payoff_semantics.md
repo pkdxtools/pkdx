@@ -257,9 +257,25 @@ screening は **MC phase に 3,600 cells × N trials の rollout オーバヘッ
 
 **バリデーション**: `trials > 0`, `0 < keep_top <= 1`。`keep_top=0.0` は parser で即 reject。`keep_top > 1.0` も InvalidJson (short-circuit 経路は `>= 1.0` のみで、`1.5` のような不正値は parser で弾く)。
 
-### Double format 制約
+### Double format
 
-`SwitchingGame` と同じく **Single 限定**。`Double + ScreenedSwitchingGame` は `run_select` で `InvalidJson("screened_switching_game does not support double format ...")` を raise。
+`SwitchingGame` と `ScreenedSwitchingGame` は **Single 限定**。`format=double` にこれらを渡すと `run_select` が `InvalidJson("switching_game does not support double format ...")` または `InvalidJson("screened_switching_game does not support double format ...")` を raise する。逆に `double_turn` / `double_rollout` / `double_dp` を `format=single`（`singles` も single）に渡すと `InvalidJson("... support only format double ...")`。
+
+ダブルの選出は `double_brings`（6 体で 90）。各行は `[先発, 先発, 控え, 控え]`。JSON の `selection_roles` は `["lead","lead","bench","bench"]`。single の JSON にはこのフィールドを足さない。
+
+`format` は `double` と `doubles` の両方を受け、出力の `format` は `"double"`。`team_payoff_model` を省略したときの既定は `double_dp:1`（`DOUBLE_DEFAULT_DP_TURN_LIMIT`）。`double_dp` の `turn_limit <= 1` は `double_turn` と同じ 1 ターン評価。
+
+明示指定:
+
+| 文字列 | 中身 |
+|---|---|
+| `double_turn` | 1 ターンの厳密な同時行動 |
+| `double_dp:<turn_limit>` | 深さ `turn_limit` の厳密 DP。既定は 1 |
+| `double_rollout:<trials>:<seed>:<turn_limit>` | 先発 1 ターンは厳密、続きはモンテカルロ |
+
+既定を深さ 1 にした理由は #253〜#256 の 90×90（debug）。#256 後は範囲技の深さ 1 が 5.9 秒、単体技の深さ 1 が 21 秒。深さ 2 は範囲技で 133 秒、単体技は 1 行が 12 秒を超えるため外挿で約 29 分。通常の CLI は深さ 1 に収める。深い `double_dp` と `double_rollout` は明示したときだけ。
+
+ダブルの 3 モデルが入れないもの: 状態異常、メガシンカ、こうげき以外の能力ランク変化、ひらいしん・よびみずの引きつけ、設置、反動、自滅、回復、追加効果、ばけのかわ、キングシールドの接触による攻撃低下とフォルム、トーチカのどく、ゴーストダイブの溜め、しろいハーブ、スポットライト（available = 0。ブロッキング / スレッドトラップ / かえんのまもり / シャドーダイブ / トリックガードも available = 0）。よびみずは tokusei に無い。いかくのこうげき −1、まもる系、てだすけ、ワイドガード、ファストガード、こらえる、サイドチェンジ、このゆびとまれ、いかりのこなは入っている。`pkdx damage --double` は範囲技の威力 0.75 倍だけで、この選出ではない。
 
 ### 実装の検証
 
@@ -286,9 +302,11 @@ screening は **MC phase に 3,600 cells × N trials の rollout オーバヘッ
 ```jsonc
 { "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "switching_game" }
 { "team": [...], "opponent": [...], "format": "single", "team_payoff_model": "screened_switching_game:1000:42:0.3" }
+{ "team": [...], "opponent": [...], "format": "double" }
+{ "team": [...], "opponent": [...], "format": "doubles", "team_payoff_model": "double_dp:2" }
 ```
 
-`team_payoff_model` が未指定の場合は既定で `SwitchingGame` (DP turn_limit=`DP_TURN_LIMIT`=5)。ただし 5 は自動昇格閾値 4 以上のため、実行時は下記 Auto-screening により `ScreenedSwitchingGame` に置き換わる。`payoff_model` / `pairwise:*` / `best1v1` / `nash_responses` / `monte_carlo:*` は全て**廃止済み**で、渡すと `InvalidJson` となる。DP turn_limit は `switching_game:<N>` および `screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>` で上書き可能。MC screening rollout の turn_limit は定数 (`MC_TURN_LIMIT` = 5)。
+`team_payoff_model` が未指定の場合、`format` が single（省略時も single）なら既定で `SwitchingGame` (DP turn_limit=`DP_TURN_LIMIT`=5)。ただし 5 は自動昇格閾値 4 以上のため、実行時は下記 Auto-screening により `ScreenedSwitchingGame` に置き換わる。`format` が double / doubles なら既定は `double_dp:1` で、auto-screening は通らない。`payoff_model` / `pairwise:*` / `best1v1` / `nash_responses` / `monte_carlo:*` は全て**廃止済み**で、渡すと `InvalidJson` となる。DP turn_limit は `switching_game:<N>` および `screened_switching_game:<trials>:<seed>:<keep_top>:<turn_limit>` で上書き可能。MC screening rollout の turn_limit は定数 (`MC_TURN_LIMIT` = 5)。
 
 ### Auto-screening (CLI 内部処理)
 
@@ -1062,7 +1080,7 @@ team-level MC (`team_monte_carlo.mbt`) も同一セマンティクスを実装�
 
 ## 将来拡張
 
-- `SwitchingGame` / `ScreenedSwitchingGame` の Double format 対応 (現在 Single 専用)
+- `SwitchingGame` / `ScreenedSwitchingGame` をダブルの同時行動に載せること（現在この 2 つは Single 専用。ダブル選出は `double_dp` / `double_turn` / `double_rollout`）
 - 状態異常 / 天候 / フィールドのモデル化
 - 変化技の効果拡充 — 上記 Post-hit 節 参照。`pkdx_patch/005_move_meta_posthit/data.json` に行を足すだけで追加可能。確率副次効果・特性免疫を扱う場合は `move_meta` テーブルのスキーマと `@model.Move` 側のフィールド追加が必要
 - `team_rollout` の ε-greedy から局所 Nash LP への切替 (rollout の変化技評価を精緻化)

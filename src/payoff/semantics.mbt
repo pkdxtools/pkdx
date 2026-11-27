@@ -39,6 +39,13 @@ pub const AUTO_SCREEN_SEED : UInt64 = 42
 pub const AUTO_SCREEN_KEEP_TOP : Double = 0.3
 
 ///|
+/// `format=double` で `team_payoff_model` を省略したときの `double_dp` の
+/// `turn_limit`。#256 後の 90×90（debug、技を持たない計測チーム）は、
+/// 範囲技の深さ 1 が 5.9 秒、単体技の深さ 1 が 21 秒。深さ 2 は範囲技で
+/// 133 秒、単体技は 1 行が 12 秒を超えるため外挿で約 29 分。既定は深さ 1。
+pub const DOUBLE_DEFAULT_DP_TURN_LIMIT : Int = 1
+
+///|
 /// Team-level payoff model for converting Pokemon team matchups into zero-sum
 /// selection matrices.
 ///

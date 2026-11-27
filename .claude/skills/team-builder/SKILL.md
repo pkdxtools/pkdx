@@ -988,7 +988,7 @@ AskUserQuestionで仮想敵リストを提示し、入れ替えを受付。
 
 6 体の `nature` / `stat_points` / `actual_stats` が全員分揃っていることを確認する。未設定のメンバーがいれば [メンバー確定共通: 育成データ入力](#メンバー確定共通-育成データ入力) を個別に呼び、最終的に全員 3 フィールドが埋まった状態で Phase 7-2 以降（カバー率計算 / 選出パターン決定）に進む。
 
-**理由**: Phase 7-3 の選出パターン決定は ダメージ計算 (pkdx damage) を前提としており、また Phase 8 で保存された `box/teams/*.meta.json` が `pkdx select` への入力になる。ここで未設定のまま進むと、後段の分析結果が実構築と乖離する。
+**理由**: Phase 7-3 の選出パターン決定は ダメージ計算 (pkdx damage) を前提としており、また Phase 8 で保存された `box/teams/*.meta.json` が `pkdx select` への入力になる。ここで未設定のまま進むと、後段の分析結果が実構築と乖離する。`battle_format` が `doubles` の meta を select に渡すときは nash スキルに従い `format` を `doubles` にする（モデル省略時の既定は `double_dp:1`）。シングル用の `switching_game` は付けない。
 
 埋まっていない場合の Team State Block の確定メンバー行例:
 

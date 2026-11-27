@@ -144,7 +144,7 @@ fn nash_cli_error_message(err : @payoff.NashCliError) -> String {
 fn cmd_select() -> @admiral.CommandDef {
   @admiral.command(
     name="select",
-    description="Compute Nash-optimal selection distribution from team JSON on stdin",
+    description="stdin のチーム JSON から選出のナッシュ均衡を計算する。format は single（既定）/ singles / double / doubles。team_payoff_model を省略すると single は switching_game（turn_limit が 4 以上なら screening に自動昇格）、double は double_dp:1。double_turn / double_rollout:<trials>:<seed>:<turn_limit> / double_dp:<turn_limit> は double 専用。switching_game と screened_switching_game は single 専用。double の selection は先発2＋控え2で、selection_roles は [lead, lead, bench, bench]。ダブルで未対応: 状態異常、メガシンカ、こうげき以外の能力ランク変化、ひらいしん・よびみずの引きつけ、設置、反動、自滅、回復、追加効果、ばけのかわ、キングシールドの攻撃低下とフォルム、トーチカのどく、ゴーストダイブの溜め、しろいハーブ、スポットライト（available=0 の守り技を含む）。pkdx damage --double は範囲技の 0.75 倍で、この format とは別。",
     options=[
       @admiral.string(
         "progress",

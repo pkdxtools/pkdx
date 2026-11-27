@@ -6,9 +6,13 @@
 /// {
 ///   "team":     [<combatant>, ...],
 ///   "opponent": [<combatant>, ...],
-///   "format":   "single" | "double",
+///   "format":   "single" | "singles" | "double" | "doubles",
 ///   "stat_system": "champions" | "standard",  // default: "champions"
-///   "team_payoff_model": "switching_game" | "screened_switching_game:...",
+///   "team_payoff_model": "switching_game" | "screened_switching_game:..."
+///     | "double_turn" | "double_rollout:<trials>:<seed>:<turn_limit>"
+///     | "double_dp:<turn_limit>",
+///   // omitted: single -> switching_game (auto-screened when turn_limit >= 4)
+///   //          double -> double_dp:<DOUBLE_DEFAULT_DP_TURN_LIMIT>
 ///   "my_fresh": true | false,    // optional. 省略 = 未追跡 (ねこだまし / であいがしら は従来どおり)
 ///   "opp_fresh": true | false    // optional. バトル開始のリードで撃つときは true
 /// }
@@ -732,9 +736,23 @@ fn parse_gender_field(
 ///|
 fn parse_format(s : String) -> BattleFormat raise NashCliError {
   match s {
-    "single" => Single
-    "double" => Double
-    _ => raise InvalidJson("format must be 'single' or 'double'")
+    "single" | "singles" => Single
+    "double" | "doubles" => Double
+    _ =>
+      raise InvalidJson(
+        "format must be 'single', 'singles', 'double', or 'doubles'",
+      )
+  }
+}
+
+///|
+/// `team_payoff_model` を省略したときのモデル。single は従来の
+/// `SwitchingGame(DP_TURN_LIMIT)`。double は `double_dp:1`
+/// （`DOUBLE_DEFAULT_DP_TURN_LIMIT`）。
+fn default_team_payoff_model(format : BattleFormat) -> TeamPayoffModel {
+  match format {
+    Single => SwitchingGame(DP_TURN_LIMIT)
+    Double => DoubleTurnGame(Exact(DOUBLE_DEFAULT_DP_TURN_LIMIT))
   }
 }
 
@@ -1122,7 +1140,7 @@ pub fn compute_select_with_team_model(
       match format {
         Single =>
           raise InvalidJson(
-            "double_turn, double_rollout, and double_dp support only format double",
+            "double_turn, double_rollout, and double_dp support only format double. Pass format \"double\" or \"doubles\", or use switching_game / screened_switching_game for single",
           )
         Double => ()
       }
@@ -1596,21 +1614,21 @@ pub fn run_select_typed(
   let raw_team_model = match obj.get("team_payoff_model") {
     Some(String(s)) => parse_team_payoff_model(s)
     Some(_) => raise InvalidJson("team_payoff_model must be a string")
-    None => SwitchingGame(DP_TURN_LIMIT)
+    None => default_team_payoff_model(format)
   }
   let team_model = auto_upgrade_team_model(raw_team_model)
   match (format, team_model) {
     (Double, SwitchingGame(_)) =>
       raise InvalidJson(
-        "switching_game does not support double format (single-active model only)",
+        "switching_game does not support double format (single-active model only). Pass double_turn, double_rollout:<trials>:<seed>:<turn_limit>, or double_dp:<turn_limit>, or omit team_payoff_model",
       )
     (Double, ScreenedSwitchingGame(_, _, _, _)) =>
       raise InvalidJson(
-        "screened_switching_game does not support double format (single-active model only)",
+        "screened_switching_game does not support double format (single-active model only). Pass double_turn, double_rollout:<trials>:<seed>:<turn_limit>, or double_dp:<turn_limit>, or omit team_payoff_model",
       )
     (Single, DoubleTurnGame(_)) =>
       raise InvalidJson(
-        "double_turn, double_rollout, and double_dp support only format double",
+        "double_turn, double_rollout, and double_dp support only format double. Pass format \"double\" or \"doubles\", or use switching_game / screened_switching_game for single",
       )
     _ => ()
   }
@@ -1877,7 +1895,7 @@ pub fn run_select_shard(
   let raw_team_model = match obj.get("team_payoff_model") {
     Some(String(s)) => parse_team_payoff_model(s)
     Some(_) => raise InvalidJson("team_payoff_model must be a string")
-    None => SwitchingGame(DP_TURN_LIMIT)
+    None => default_team_payoff_model(format)
   }
   let team_model = auto_upgrade_team_model(raw_team_model)
   let (mc_trials, mc_seed, json_refine_tl) = match team_model {

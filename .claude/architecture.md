@@ -197,9 +197,14 @@ stateDiagram-v2
   SEL: Phase 2b pkdx select
   note right of SEL
     stdin:  team + opponent + format + team_payoff_model
-    team_payoff_model ∈ {switching_game,
+    format: single/singles | double/doubles
+    single の team_payoff_model ∈ {switching_game,
       screened_switching_game:T:S:Q}
-    turn_limit 既定: MC=5, DP=5 (switching_game:<N> で上書き可)
+    single の turn_limit 既定: MC=5, DP=5
+    double でモデル省略時は double_dp:1
+    明示: double_turn / double_dp:N /
+      double_rollout:trials:seed:turn_limit
+    シングル用モデルとダブル用モデルの交差はエラー
   end note
   SEL --> [*]
 

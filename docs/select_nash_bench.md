@@ -262,3 +262,7 @@ production screening が「遅くなった」わけではない。以前は 180 
 5. **fictitious play を exploitability < tol で早期停止する。** 効くのは simplex が落ちた 60×60 だけで、275 ms が数十 ms になる程度。tol を変えないなら選出は tol 以内の別戦略になり得る。回帰は低〜中。DP / screening の後でよい。
 
 鞍点 fast path は既に働いている。tl=1 の 3600 ノードはすべて鞍点で LP 0。ノード内 simplex の微最適化は tl=3 の 54.8 秒をほとんど動かさない。
+
+## ダブル選出の既定
+
+この文書の表はシングルの `switching_game` / screening である。`pkdx select` の `format=double` / `doubles` で `team_payoff_model` を省略したときの既定は `double_dp:1`（`DOUBLE_DEFAULT_DP_TURN_LIMIT`）。#253 の計測では範囲技の 90×90 が深さ 1 で 2.86 秒、深さ 2 で 70.2 秒、単体技の深さ 2 は 936 秒。#254〜#256 でまもる系・引きつけ・サイドチェンジを足したあとの同じベンチ（#256）は、範囲技の深さ 1 が 5.9 秒、深さ 2 が 133 秒、単体技の深さ 1 が 21 秒、単体技の深さ 2 は 1 行 39 秒から外挿して約 29 分。深さ 2 は単体技の 6 対 6 では CLI の既定にしない。`double_rollout:1:42:4` は #252 の時点で範囲技の 90×90 が 40 秒台で、#254 以降の計測は無い。深い `double_dp` と `double_rollout` は JSON で明示したときだけ使う。
